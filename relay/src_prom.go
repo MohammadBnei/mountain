@@ -511,10 +511,12 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 			rps, eps, bps = t.req/dt, t.err/dt, t.bytes/dt
 		}
 		b, ok := p.base[name]
-		if !ok {
-			b = rps
+		if dt > 0 { // no rate on the first poll: seeding the baseline with 0 made steady traffic a spike
+			if !ok {
+				b = rps
+			}
+			p.base[name] = b + (rps-b)*math.Min(1, dt/1800)
 		}
-		p.base[name] = b + (rps-b)*math.Min(1, dt/1800)
 		river += bps
 		apps[name] = AppMetrics{RpsB: logB(rps, 10), ErrB: logB(eps, 10), Spike: b > 0.1 && rps > 3*b, BytesB: logB(bps/1024, 12)}
 	}
