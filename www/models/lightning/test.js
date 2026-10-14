@@ -49,6 +49,17 @@ export default async function test({ model, world, inject, step, fixture, assert
   [n, , , tok] = watch(fixture.fault);
   assert(n === 1 && tok === 'magma', `errB > 0: one magma bolt (${n}, ${tok})`);
 
+  // the bolt never dips under the ground (QA bolt-dusk: a chord from a base over the summit grazes the slope and the
+  // finale camera loses its lower third): a mass base 1 m over the summit, 10 strikes, every ribbon point ≥ ground
+  const { CELL, GRID } = await import('../../js/world.js'), si = world.fields.heightSolid.indexOf(world.hmax);
+  world.write('clouds', 'sky', [{ x: (si % GRID) * CELL - 100, z: ((si / GRID) | 0) * CELL - 100, y: world.hmax + 1, r: 0, mass: true }]);
+  let under = Infinity;
+  for (let t = 0; t < 10; t++) {
+    watch(fixture.spike);
+    for (let i = 0; i < bolt.geometry.drawRange.count; i++) under = Math.min(under, A[i * 3 + 1] - world.heightAt(A[i * 3], A[i * 3 + 2]));
+  }
+  assert(under > -1e-3, `bolt stays above the ground all the way to the site (min clearance ${under.toFixed(2)} m)`);
+
   world.write('clouds', 'sky', []);
   [n, a] = watch(fixture.spike);
   assert(n === 1 && near(a, [-50, H + model.params.above, 5]), `no clouds: bolt from params.above over the site (${a})`);

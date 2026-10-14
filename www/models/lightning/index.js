@@ -33,13 +33,14 @@ export default async function build({ THREE, kit, world, rng }) {
   root.add(glows, arcs, bolt);
 
   const P = new Float32Array(((1 << DB) + 1) * 3);
-  /** Midpoint displacement a→b into P (2^depth + 1 points); each midpoint moves up to amp × its span. */
+  /** Midpoint displacement a→b into P (2^depth + 1 points); each midpoint moves up to amp × its span, kept ≥ 0.5 m over the ground. */
   function ribbon(ax, ay, az, bx, by, bz, depth, amp) {
     const n = 1 << depth;
     P[0] = ax; P[1] = ay; P[2] = az; P[n * 3] = bx; P[n * 3 + 1] = by; P[n * 3 + 2] = bz;
     for (let s = n >> 1; s >= 1; s >>= 1) for (let i = s; i < n; i += 2 * s) {
       const a = (i - s) * 3, b = (i + s) * 3, d = Math.hypot(P[b] - P[a], P[b + 1] - P[a + 1], P[b + 2] - P[a + 2]) * amp;
       for (let k = 0; k < 3; k++) P[i * 3 + k] = (P[a + k] + P[b + k]) / 2 + (rng() - 0.5) * d;
+      P[i * 3 + 1] = Math.max(P[i * 3 + 1], world.heightAt(P[i * 3], P[i * 3 + 2]) + 0.5); // never under the slope (QA bolt-dusk)
     }
     return n;
   }
@@ -51,7 +52,8 @@ export default async function build({ THREE, kit, world, rng }) {
     at = put(A, at, n);
     if (rng() >= fork) return at;
     const o = ((n * (0.3 + 0.4 * rng())) | 0) * 3, fx = P[o], fy = P[o + 1], fz = P[o + 2], L = Math.hypot(bx - ax, by - ay, bz - az) * 0.4;
-    return put(A, at, ribbon(fx, fy, fz, (fx + bx) / 2 + (rng() - 0.5) * L, (fy + by) / 2, (fz + bz) / 2 + (rng() - 0.5) * L, depth - 2, amp));
+    const ex = (fx + bx) / 2 + (rng() - 0.5) * L, ez = (fz + bz) / 2 + (rng() - 0.5) * L;
+    return put(A, at, ribbon(fx, fy, fz, ex, Math.max((fy + by) / 2, world.heightAt(ex, ez) + 0.5), ez, depth - 2, amp));
   }
 
   const O = new THREE.Object3D();
