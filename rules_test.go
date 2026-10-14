@@ -64,6 +64,9 @@ func TestRules(t *testing.T) {
 	}
 
 	if _, err := exec.LookPath("promtool"); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("promtool not on PATH in CI: the rule unit tests must run before deploy")
+		}
 		t.Skip("promtool not on PATH: rule unit tests not run")
 	}
 	var spec struct {
