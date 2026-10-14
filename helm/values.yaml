@@ -1,0 +1,78 @@
+# mountain on infra-bootstrap's common-app-chart (ADR-0001). Read by ArgoCD through
+# infra-bootstrap gitops/apps/registry.yaml (`valuesPath: [helm/values.yaml]`, W1a lane D),
+# which also sets ingress.hostname: mountain.bnei.dev. Modelled on hq app/helm/values.yaml.
+
+# One relay owns the world (06): never two writers, never a rolling overlap.
+replicaCount: 1
+strategy:
+  type: Recreate
+
+image:
+  repository: registry.bnei.lan:5000/mountain
+  # Bumped by .github/workflows/app.yml to the commit's short SHA.
+  #
+  # `unreleased` is a placeholder that fails loudly. The registry entry in
+  # infra-bootstrap belongs after this repo's first CI run has replaced this
+  # line, or the first sync is an ImagePullBackOff against a tag that was
+  # never built (hq/wird have the same rule).
+  tag: "unreleased"
+
+service:
+  port: 8080
+  # :9090 /metrics for the in-cluster ServiceMonitor only. The IngressRoute
+  # routes service.port alone, so this port is never public (06).
+  extraPorts:
+    - name: metrics
+      port: 9090
+
+# Public page: no forwardAuth. The chart's baseline (origin lock, rate limit,
+# headers) stays on (infra-bootstrap ADR-0053 Decision 5). CSP is set by the
+# Go relay, where a test pins it. Traefik overwrites the backend's
+# Referrer-Policy, so it is set here to match the relay's.
+ingress:
+  baseline:
+    headers:
+      referrerPolicy: no-referrer
+
+livenessProbe:
+  enabled: true
+  path: /healthz
+readinessProbe:
+  enabled: true
+  path: /healthz
+
+# distroless static:nonroot runs as 65532. Nothing writes to disk until W2
+# (Postgres, DATABASE_URL via gitops/bootstrap/mountain-secret.yaml).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+# common-app-chart has no ServiceMonitor template; Prometheus'
+# serviceMonitorSelectorNilUsesHelmValues is false, so this one is picked up
+# (same pattern as platform/values/zot). The PrometheusRule (MountainSourceStale,
+# MountainTokenExpiring, MountainUnmapped; severity info) lands here in W1b.
+extraManifests:
+  - |
+    apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: mountain
+      namespace: {{ .Release.Namespace }}
+      labels:
+        {{- include "common-app-chart.labels" . | nindent 8 }}
+    spec:
+      selector:
+        matchLabels:
+          {{- include "common-app-chart.selectorLabels" . | nindent 10 }}
+      endpoints:
+        - port: metrics
+          path: /metrics
+          interval: 15s

@@ -1,0 +1,65 @@
+# Static relay config (02-data "Static relay config"). Orchestrator-owned.
+# Rot guard: mountain_unmapped_total{kind} + a CI diff against
+# infra-bootstrap gitops/apps/registry.yaml (W1a lane A/D).
+#
+# Built by allowlist, never by deletion: anything not listed here reaches the
+# public wire only as the "other" aggregate, with no site and no name.
+
+# Public app allowlist (registry.yaml, 2026-10-14). group: platform|user.
+# Deliberately absent: agent-fleet-core (fleet, excluded by plan), has-journal
+# (forwardAuth-gated, internal data), wird-adminweb (platform-admins only),
+# hq (private dashboard).
+apps:
+  mountain:        { group: platform, display: mountain }
+  editable-blog:   { group: user, display: blog }
+  dream-analyst:   { group: user, display: dreamer }
+  vos-monolith:    { group: user, display: vos }
+  vos-monolith-dev: { group: user, display: vos dev }
+  wedding-2026:    { group: user, display: wedding }
+  ukubi-stt:       { group: platform, display: stt }
+  wird:            { group: user, display: wird }
+
+# namespace (or namespace/deployment, which wins) -> app. "" = known but not
+# public: dropped into "other" without counting as unmapped.
+namespaces:
+  mountain: mountain
+  editable-blog: editable-blog
+  dream-analyst: dream-analyst
+  vos: vos-monolith
+  vos-dev: vos-monolith-dev
+  wedding-2026: wedding-2026
+  ukubi-stt: ukubi-stt
+  wird: wird
+  wird/wird-adminweb: ""
+  has-journal: ""
+  hq: ""
+  agent-fleet: ""
+
+# Kubernetes node -> Proxmox host bucket (terraform.tfvars k8s_nodes node_name).
+# h1 = the .165 PVE node (default pve_node_name), h2 = server1, h3 = ex-laptop.
+nodes:
+  k8s-cp-01: h1
+  k8s-worker-01: h1
+  k8s-cp-02: h2
+  k8s-worker-02: h2
+  k8s-cp-03: h3
+
+# Alert -> stratum layer, first match on alertname (Go regexp, anchored).
+# Layers: bedrock (Proxmox/hosts), k8s (cluster), apps.
+alertLayers:
+  - { match: "Node.*|PVE.*|Proxmox.*|Host.*|Probe.*", layer: bedrock }
+  - { match: "Kube.*|Etcd.*|CoreDNS.*|Cilium.*|Longhorn.*|Prometheus.*|Alertmanager.*|ArgoCD.*|Traefik.*", layer: k8s }
+  - { match: ".*", layer: apps }
+
+# GitHub repo -> app (builds, W3).
+repos:
+  MohammadBnei/mountain: mountain
+  MohammadBnei/editable-blog: editable-blog
+  MohammadBnei/dream-analyst: dream-analyst
+  MohammadBnei/vos-monolith: vos-monolith
+  MohammadBnei/wedding-2026: wedding-2026
+  MohammadBnei/ukubi-stt: ukubi-stt
+  MohammadBnei/wird: wird
+
+# Public commit/ADR titles (Go regexp, anchored). Everything else is date only.
+titles: []

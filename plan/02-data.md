@@ -90,7 +90,7 @@ Rot guard:
 - Schema: `www/dev/schema/{hello,ev,metrics,world}.json` (JSON Schema). The relay and the www tests both validate frames against it.
 - int16 grids (`h.base`, `h.land`, deposit `cells`): **base64 of little-endian int16, row-major, z outer, x inner**.
 - Cell 0 sits at world **(−100, −100)**. Cell size = 200 / N.
-- Heights are millimetres: world units = **mm / 1000**.
+- Heights are int16 steps of `units.json` `HEIGHT_Q` = 0.01: world units = **value × 0.01** (cm; W1a seam: int16 mm cannot hold the −67…+68 m massif).
 
 ## Public allowlist (built by allowlist, never by deletion; also used for `/api/topology` and replays)
 - Apps from the allowlist only; others go into an "other" aggregate with no site. Hosts appear as `h1..h3`. Group = `platform|user`.

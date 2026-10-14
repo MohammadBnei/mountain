@@ -8,7 +8,8 @@ mountain/
   Dockerfile helm/values.yaml .github/workflows/   orchestrator (seam); CI pins :sha in helm/values.yaml
   relay/
     main.go hub.go config.yaml   orchestrator-only
-    sanitize.go store.go worldcore.go   owner per wave (W1a, W2, W1a)
+    sanitize.go store.go   owner per wave (W1a, W2)
+    worldcore/          package (W1a seam): base.go = Base(seed) + wire encoding (orchestrator, frozen); other files lane A
     src_prom.go src_alerts.go src_github.go   one owner each; registered in sources.go (frozen W2)
     toy_<name>.go       one per toy (W4), registered in validators.go (frozen W2)
     sources.go metrics.go   orchestrator (W1a seam)
@@ -37,7 +38,7 @@ mountain/
   - `GRID = 128` (heightSolid, collider, render)
   - `GRID_LOW = 96` (render only; sampled from 128)
   - `ICE = 64`
-- Heights are int16 millimetres. Mark x/z are quantised to `GRID` cells, and y is recomputed by the relay.
+- Heights are int16 in steps of `HEIGHT_Q` = 0.01 units (cm; **W1a seam**: int16 mm caps at ±32.8 m, the approved massif spans −67…+68 m). Mark x/z are quantised to `GRID` cells, and y is recomputed by the relay.
 
 ## Model contract (`contract.js`)
 ```js
@@ -52,7 +53,7 @@ Every model folder ships `fixture.json` (a scripted event and world-delta timeli
 
 | Field | Writer | Use |
 |---|---|---|
-| `h.base` | **world.js**, from `hello.snapshot` | Go-generated terrain base, int16 mm, spiral walkway + cave niches already carved (06); `bench` mask (u8) and `caves[]` alongside |
+| `h.base` | **world.js**, from `hello.snapshot` | Go-generated terrain base, int16 (HEIGHT_Q steps), spiral walkway + cave niches already carved (06); `bench` mask (u8) and `caves[]` alongside |
 | `h.land` | **world.js**, from `world:deposit` raster cells | ramps over 3 s so lava arrives first |
 | `heightSolid` | — (`h.base + h.land`) | physics, picking, snowline, relay validation |
 | `h.talus` | scree | visual only |
@@ -101,7 +102,7 @@ Every model folder ships `fixture.json` (a scripted event and world-delta timeli
 ## Wire encoding (R4)
 - JSON Schema for the `hello`, `ev`, `metrics` and `world` frames lives in `www/dev/schema/*.json`. Go and JS tests both validate against it.
 - int16 grids: **base64, little-endian, row-major (z outer, x inner)**. Cell 0 sits at world (−100, −100).
-- Heights: int16 mm; units = mm / 1000.
+- Heights: int16 steps of `units.json` `HEIGHT_Q` (0.01, cm); units = value × HEIGHT_Q (W1a seam, was mm / 1000).
 - The hello fixture comes from `relay dump-hello` (real Go), never by hand.
 
 ## Kit (`kit.js`, orchestrator-owned; see `09-style.md`)

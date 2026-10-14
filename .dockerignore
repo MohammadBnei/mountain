@@ -1,0 +1,6 @@
+.git
+.github
+plan
+helm
+www/dev
+**/*_test.go
