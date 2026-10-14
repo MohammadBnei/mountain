@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
-const schemas = Object.fromEntries(['hello', 'ev', 'metrics', 'world'].map((n) => [n, JSON.parse(readFileSync(join(DIR, `${n}.json`), 'utf8'))]));
+const schemas = Object.fromEntries(['hello', 'ev', 'metrics', 'world', 'replay', 'scrub'].map((n) => [n, JSON.parse(readFileSync(join(DIR, `${n}.json`), 'utf8'))]));
 const typeOf = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : Number.isInteger(v) ? 'integer' : typeof v);
 
 function check(s, v, root, path, errs) {
@@ -78,6 +78,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const { valid, invalid } = JSON.parse(readFileSync(join(fx, 'frames.json'), 'utf8'));
     valid.forEach((f, i) => report(`frames.valid[${i}] ${f.t}:${f.kind || ''}`, validate(f)));
     invalid.forEach((f, i) => report(`frames.invalid[${i}] ${f.t}:${f.kind || ''}`, validate(f), false));
+    const replay = { t: 'replay', day: '2026-10-13', snapshot: hello.snapshot, state: hello.state, frames: valid.filter((f) => f.t === 'ev' || f.t === 'world'), metrics: [hello.metrics] };
+    report('replay built from hello + the valid ev/world frames', validate(replay));
+    report('replay with a metrics frame among its frames', validate({ ...replay, frames: [hello.metrics] }), false);
     const dw = createWorld({ dev: true }), seen = []; // dev world throws on an unknown bus type
     for (const k of ['deposit', 'site', 'mark']) dw.on(`world:${k}`, (p, type) => seen.push(type));
     for (const f of valid.filter((f) => f.t === 'world')) { try { dw.applyFrame(f); } catch (e) { seen.push(e.message); } }

@@ -1,6 +1,6 @@
 package main
 
-// Self-observability on :9090 (06). Stdlib text exposition: four series do not need client_golang.
+// Self-observability on :9090 (06). Stdlib text exposition: six series do not need client_golang.
 
 import (
 	"fmt"
@@ -28,7 +28,9 @@ var (
 	Unmapped          = newVec("mountain_unmapped_total", "counter", "kind", "Series dropped for lack of a static map entry (node|app|repo|ns).")
 	TokenDaysLeft     = newVec("mountain_github_token_days_left", "gauge", "", "Days until the GitHub token expires.")
 	WSConnections     = newVec("mountain_ws_connections", "gauge", "", "Open /ws connections.")
-	allVecs           = []*vec{SourceLastSuccess, Unmapped, TokenDaysLeft, WSConnections}
+	DBDropped         = newVec("mountain_db_dropped_total", "counter", "reason", "Persistence writes lost (full = queue full, error = write failed).")
+	ScrubDropped      = newVec("mountain_scrub_dropped_total", "counter", "", "Scrub replies lost to a full client send buffer (the connection is dropped).")
+	allVecs           = []*vec{SourceLastSuccess, Unmapped, TokenDaysLeft, WSConnections, DBDropped, ScrubDropped}
 )
 
 func init() { WSConnections.Set("", 0) }

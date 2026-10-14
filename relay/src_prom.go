@@ -253,12 +253,7 @@ func (p *promSource) deposit(o *Out, app string, heat float64) {
 	g := a.Cfg.Apps[app].Group
 	s := worldcore.PlaceSite(app, g, solid)
 	d := worldcore.RasterDeposit(id, s.X, s.Z, heat, solid)
-	for j := 0; j < d.H; j++ {
-		for i := 0; i < d.W; i++ {
-			c := (d.Z0+j)*worldcore.Grid + d.X0 + i
-			a.Land[c] = worldcore.AddQ(a.Land[c], d.Cells[j*d.W+i])
-		}
-	}
+	d.AddTo(a.Land)
 	s = worldcore.PlaceSite(app, g, worldcore.Solid(a.World.Base, a.Land))
 	a.mu.Unlock()
 	a.Hub.broadcastLocked(ev,

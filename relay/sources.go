@@ -131,7 +131,7 @@ func (a *App) FP(amFingerprint string) string {
 	return hex.EncodeToString(h[:8])
 }
 
-// Alert is one firing alert in hello.state.alerts (02 alerts row; in memory until W2 persists it).
+// Alert is one firing alert in hello.state.alerts (02 alerts row; persisted through the alert.fire/resolve events and snapshots).
 type Alert struct {
 	FP       string `json:"fp"`       // salted hash, 16 hex (never the raw fingerprint)
 	Sev      string `json:"sev"`      // info | warning | critical
@@ -139,7 +139,8 @@ type Alert struct {
 	StartsAt int64  `json:"startsAt"` // unix ms, Alertmanager startsAt
 }
 
-// State is hello.state (www/dev/schema/hello.json). W2 adds health, replicas, nodes, quorum, builds.
+// State is hello.state (www/dev/schema/hello.json). ponytail: alerts only; health, replicas, nodes, quorum and
+// builds join it when a model needs them after a reload (they are re-derived within one poll today).
 type State struct {
 	Alerts []Alert `json:"alerts"`
 }
@@ -149,16 +150,20 @@ type State struct {
 // Hub lock held across both: a connecting client sees the alert in its hello or as the event, never neither.
 // Returns the ev id ("" if sanitize dropped it; state is then unchanged).
 func (o *Out) Fire(a Alert) string {
-	return o.stateEv("alert.fire", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "startsAt": int(a.StartsAt)}, func(s *State) {
-		s.Alerts = append(slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == a.FP }), a)
-	})
+	return o.stateEv("alert.fire", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "startsAt": int(a.StartsAt)}, func(s *State) { s.set(a) })
 }
 
 // Resolve removes a from hello.state.alerts and broadcasts ev alert.resolve{fp, sev, layer, durS}; same lock rule.
 func (o *Out) Resolve(a Alert, durS int) string {
-	return o.stateEv("alert.resolve", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "durS": durS}, func(s *State) {
-		s.Alerts = slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == a.FP })
-	})
+	return o.stateEv("alert.resolve", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "durS": durS}, func(s *State) { s.drop(a.FP) })
+}
+
+// set adds a, replacing the same fp; drop removes fp. Shared by Fire/Resolve and the DB restore (store.go).
+func (s *State) set(a Alert) {
+	s.Alerts = append(slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == a.FP }), a)
+}
+func (s *State) drop(fp string) {
+	s.Alerts = slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == fp })
 }
 
 func (o *Out) stateEv(kind string, fields map[string]any, mut func(*State)) string {

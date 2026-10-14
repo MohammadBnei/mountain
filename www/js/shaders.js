@@ -11,7 +11,7 @@ const afterIf = (src, anchor, code) => (src.includes(anchor) ? src.replace(ancho
 
 // Terrain. Uniform slots (kit-owned, shared by every terrain material):
 //   uClip vec4 (plane n.xyz, constant w; fragment discarded where n·p + w < 0; closed = (0,1,0,1e4))
-//   uSnowline (world y), uHMax (summit y), uWobble, uHeat, uStale, uSnowLift, uEmber,
+//   uSnowline (world y), uHMax (summit y), uWobble, uHeat, uStale, uSnowLift, uEmber, uPoolK (ember-pool weight per key),
 //   uPool vec4 (centre xz, radii xz), uPoolCol, uVeins (64×3 float capsule texture), uVeinN,
 //   uFootprint (kit 512² RT only), uCaves vec4[5] (cave() mouth centres, w = 1 live), stop colours uRock0 uRock1 uEmberRoot uSnow uIce uTrail uGold uVeinRef.
 // Attribute: bench (0..1, Go bench mask / 255).
@@ -22,7 +22,7 @@ export function patchTerrain(sh, U, { veins = true } = {}) {
     '#include <begin_vertex>',
     'transformed.y += uWobble * sin(position.x * .7 + position.z * .5);\nvKBench = bench; vKObj = transformed;\nvKWorld = (modelMatrix * vec4(transformed, 1.)).xyz; vKFaceH = vKWorld.y;',
   );
-  let f = `uniform vec4 uClip, uPool; uniform float uSnowline, uHMax, uHeat, uStale, uSnowLift, uEmber; uniform int uVeinN;
+  let f = `uniform vec4 uClip, uPool; uniform float uSnowline, uHMax, uHeat, uStale, uSnowLift, uEmber, uPoolK; uniform int uVeinN;
 uniform vec3 uRock0, uRock1, uEmberRoot, uSnow, uIce, uTrail, uGold, uVeinRef, uPoolCol;
 uniform sampler2D uVeins, uFootprint; uniform vec4 uCaves[5];
 varying float vKBench; varying vec3 vKWorld; varying vec3 vKObj; flat varying float vKFaceH;
@@ -59,7 +59,7 @@ void kVeins(vec3 p) {
   for (int i = 0; i < 5; i++) kCave = max(kCave, uCaves[i].w * (1. - smoothstep(8., 24., distance(vKWorld, uCaves[i].xyz))));
   totalEmissiveRadiance += max(kSnow, kCave) * uSnowLift * diffuseColor.rgb
     + uGold * kVein * .12 + mix(uGold * .7, uVeinRef * 1.4, kRef) * kCore
-    + uPoolCol * max(uHeat, .45) * uEmber * (1. - smoothstep(.25, 1., length((vKWorld.xz - uPool.xy) / uPool.zw)))
+    + uPoolCol * max(uHeat, .45) * uPoolK * (1. - smoothstep(.25, 1., length((vKWorld.xz - uPool.xy) / uPool.zw)))
       * smoothstep(.45, .75, abs(kN.y)) * (1. - smoothstep(.1, .16, kH)); // the foot band (h < ~10 % of the summit), gentle faces only, never up the face`);
   // Rim (09 Freeze item 2): below y = -4 the terrain dissolves into the fog/haze colour, fully at the
   // valley haze floor (y = -16), so the dropped rim never shows a hard mesa edge against the floor.

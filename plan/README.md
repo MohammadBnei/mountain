@@ -8,7 +8,9 @@ pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compos
 
 ## Status (2026-10-14)
 
-**W0, W0.5, W1a and W1b are done (2026-10-14).** mountain.bnei.dev is live (image `34c952f`, infra-bootstrap #300). Next: W2.
+**W0, W0.5, W1a and W1b are done (2026-10-14).** mountain.bnei.dev is live (image `34c952f`, infra-bootstrap #300).
+
+**W2 is implemented on branch `feat/w2` (2026-10-14), verified locally; the live exit gate waits for the deploy.** Done: Postgres persistence (`relay/store.go`, 02 "Persistence"), restart survival, `hello` = snapshot + deltas + `state` + metrics, scrub → replay (06), sandbox scrub controls, the freeze (`FROZEN.sha256` + `freeze_test.go`: contract.js, world.js, layout.js with a profile for every model, units.json, kit.js + tokens, the wire schema), the two carried style items, a GitHub-hosted `db-test` CI job, helm `envFrom` `mountain-config` (optional). Local checks: `go test ./...` with `MOUNTAIN_TEST_DSN` against `postgres:17`, core test, schema check, gate selftest + every model (dusk and day) + page + styleboard, pose gate on a hello restored from the DB. Not in W2: `marks`/`limits` tables (W4), snapshot veins/glacier/ash/clouds columns (W3, with their models), `events.detail` (detail mode). Live checks still to run after deploy: restart survival on the pod, websocat `scrub{day}` yesterday through Cloudflare, the `db` source in Prometheus.
 
 **W1a exit gate (live, 2026-10-14):** a `wird` ArgoCD resync finished at 17:21:00Z and `ev:argo.sync` + `world:deposit` reached a client through Cloudflare at 17:21:26Z (26 s, target 45 s). A WebSocket held 380 s through Cloudflare. `/metrics` returns 404 publicly and `:9090` is unreachable. A foreign Origin gets 403. The CSP has no dev origin. Live `/ws` showed no IP, node, internal namespace or version. Dev loop: `scripts/devpod.sh` (infra-bootstrap #301 makes it a skill).
 
@@ -24,9 +26,9 @@ Post-deploy fixes:
 - Spike storm after relay start: no traffic baseline from the first poll.
 - Cloudflare's 4 h browser TTL mixed module versions after a deploy: assets are now served under `/v/<build>/` as immutable, and `index.html` uses `no-cache` (PRs #2, #3). `boot.js` now tells a load error from a missing WebGL2.
 
-Carried into W2:
-- The ember pool is not visible in the day key.
-- Lightning bolts at the day key are thin and have little contrast.
+Carried into W2 (both fixed in W2):
+- The ember pool is not visible in the day key. → own rig key `pool` (`uPoolK`, day 2.4), no longer tied to `uEmber` (09).
+- Lightning bolts at the day key are thin and have little contrast. → the bolt is sheathed by the elmo halo quads along its ribbon (03-model-lightning).
 
 
 **Carried into the W1b seam (done):** the ember pool sits under the fog from the default camera (Freeze item 3); the cave close-up clip check misses by 1–2 %; the 'other' world deltas still re-emit on reconnect; it is unconfirmed whether the build runner has Chrome for the CI gate.
@@ -49,7 +51,7 @@ Carried into W2:
 
 What the W1a lanes need to know:
 - Build workflow: copy hq's `.github/workflows/app.yml` pattern. `runs-on: [self-hosted, ukubi-build]`. Registry creds come from `platform-commons-76pb` over GitHub OIDC (ADR-0049). Only `push` and `workflow_dispatch` can read them, so guard that step with an `if` for PRs. Image: `registry.bnei.lan:5000/mountain`.
-- DB is not needed until W2. When it is: `DATABASE_URL=postgres://dbuser_mountain:<pw>@postgres.bnei.lan:5432/mountaindb` (5432, not 6432, because pgbouncer is off). It is assembled in infra-bootstrap by a `gitops/bootstrap/mountain-secret.yaml` modelled on `hq-secret.yaml`. Keep the password urlsafe. **pgxpool `MaxConns` must be set ≤ 8** (connlimit 10).
+- DB (W2, wired): `DATABASE_URL=postgres://dbuser_mountain:<pw>@postgres.bnei.lan:5432/mountaindb` (5432, not 6432, because pgbouncer is off). It is assembled in infra-bootstrap by a `gitops/bootstrap/mountain-secret.yaml` modelled on `hq-secret.yaml`. Keep the password urlsafe. **pgxpool `MaxConns` must be set ≤ 8** (connlimit 10).
 - `/add-app` lands with the first image (**W1a lane D**, 07): the ArgoCD app points at **this repo's `helm/`**, CI pins the `:sha` tag in `helm/values.yaml`, replicas 1, `Recreate`, baseline middleware on, metrics on a separate `service.extraPorts` port that is never routed, **ServiceMonitor in `extraManifests`**.
 
 ## Section index
@@ -73,7 +75,7 @@ What the W1a lanes need to know:
 | **W0.5** (R4) | Orchestrator + ~4 agents | Stack verification: facts (hard gate) + fit (advisory), live read-only PromQL probes. `09-style.md` + R4 plan edits. Swatches + lit styleboard for the 4 time keys | Facts table green, probes return series, **user approves the swatches + styleboard** |
 | **W1a** ✅ | Orchestrator seam commit, then parallel lanes: (A) relay, (B) www, (C) models, (D) infra PR | Relay: `src_prom` (sync, metrics), worldcore (`h.base`, sites, deposits), `hello`, `/ws`, `/api/topology`, `/metrics` on its own port. www: kit, world, socket, sandbox, gate. Models: **mountain** (body + plain slabs), **eruption**. Deployed | A real ArgoCD sync makes land appear on the live site within 45 s |
 | **W1b** ✅ | Orchestrator seam commit (incl. `post.js`), then parallel lanes: (A) `src_alerts`, (B) cauldron, (C) sky-min, (D) lightning, (E) infra PR | `src_alerts`. Models: **cauldron** (own sag-ring mesh), **sky-min** (dome + cloud floor; owns `world.clouds`), **lightning**. post.js on desktop. Stale label | W1 verification passes |
-| **W2** | 1 agent | **Freeze** `contract.js`, `world.js`, `units.json`, `layout.js` (every profile), the bus registry, the event enum and the metrics frame, as revised by what W1 taught. Pigsty DB, persistence, scrub, `hello.state` | W2 verification passes |
+| **W2** (implemented, live gate pending) | 1 agent | **Freeze** `contract.js`, `world.js`, `units.json`, `layout.js` (every profile), the bus registry, the event enum and the metrics frame, as revised by what W1 taught. Pigsty DB, persistence, scrub, `hello.state` | W2 verification passes |
 | **W3** | Parallel | Wave start, serial: **`cut.js` + strata** as the reference field provider (1 agent). Then parallel: aquifers, magma, veins (providers); glacier, summit, scree, sky (full), river, shimmer; story mechanism; `src_github`; detail-mode OIDC | Every model passes `gate.mjs <name>` + its fixture assertion; the page stays within budget |
 | **W4** | M BN + agents | **ADR-B** (visitor enrollment). Hardening PRs (08). Then, in parallel: toy-clouds, cairns, footprints, toss + the relay `toy_<name>.go` validators | W4 verification passes |
 

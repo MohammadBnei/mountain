@@ -1,5 +1,5 @@
-// World: fields, shared state and the bus (01 "World"). FROZEN W2; bodies may grow in W1a lane B
-// behind THIS interface.
+// World: fields, shared state and the bus (01 "World"). FROZEN W2 (FROZEN.sha256): interface, bus registry,
+// writers, event enum and world.rig change only by an announced orchestrator change.
 //
 //   createWorld({dev}) → world
 //   world.fields      {'h.base': Int16Array, 'h.land': Int16Array (HEIGHT_Q steps), heightSolid: Float32Array (units),
@@ -19,6 +19,11 @@
 //   world.as(name) → view whose write()/emit() are bound to name (what models get)
 //   decodeI16(b64) / encodeI16(array) / decodeU8(b64): wire grids (little-endian, z outer, x inner)
 //   world.applyHello(hello);  world.applyFrame(frame, silent?) (silent: state only, no bus emit; hello deltas);  world.step(dt);  world.ready → Promise (first hello)
+//   world.scrub(day 'YYYY-MM-DD') → Promise<replay frame> (rejects on {error}, with no socket, after 10 s without a reply,
+//                or on a hello): sends scrub{day}; from then live frames are dropped (release or a hello resyncs). The replay rebuilds land + state from its snapshot,
+//                then step() plays the day's frames, not silent, spread over ≤ 20 s.  world.replay null | {day, frames, metrics, left}
+//   world.release() → leaves the replay and resyncs to live (world.resync: a fresh hello)
+//   world.send(frame) / world.resync()   wired by socket.connect (absent without a socket)
 // Dev mode throws on a write by a non-writer and on an emit by a non-emitter or of an unknown bus type.
 import U from './units.json' with { type: 'json' };
 
@@ -52,6 +57,7 @@ export function createWorld({ dev = false } = {}) {
   const N = GRID * GRID, subs = new Map();
   let resolveReady;
   const pending = []; // deposits ramping into h.land over 3 s
+  let play = null; // replay playback: {day, queue, gap, t, timer, done: [resolve, reject]}
   const w = {
     dev,
     fields: {
@@ -61,7 +67,7 @@ export function createWorld({ dev = false } = {}) {
     bench: new Uint8Array(N), caves: [], hmax: 0, day: null, seed: null,
     metrics: null, state: { alerts: [] }, sites: new Map(), wind: { x: 0, z: 0 }, snowline: 1e4, clouds: [], sun: null,
     rig: { elev: 0, rising: false }, // dusk until sky-full (W3)
-    clip: { plane: [0, 1, 0, 1e4], depth: 0 }, stale: null,
+    clip: { plane: [0, 1, 0, 1e4], depth: 0 }, stale: null, replay: null,
     ready: new Promise((r) => (resolveReady = r)),
 
     cell(x, z) { const i = Math.round((x + 100) / CELL), j = Math.round((z + 100) / CELL); return Math.min(GRID - 1, Math.max(0, j)) * GRID + Math.min(GRID - 1, Math.max(0, i)); },
@@ -105,42 +111,40 @@ export function createWorld({ dev = false } = {}) {
       solid();
       w.write('state', 'socket', { alerts: [], ...h.state });
       // Every other delta is history too: its state applies, nothing re-emits as a live event.
-      for (const d of h.deltas || []) if (!(d.t === 'world' && d.kind === 'deposit')) w.applyFrame(d, true);
-      if (h.metrics) w.applyFrame(h.metrics);
+      for (const d of h.deltas || []) if (!(d.t === 'world' && d.kind === 'deposit')) apply(d, true);
+      if (h.metrics) apply(h.metrics);
       resolveReady(w);
     },
-    applyFrame(f, silent = false) {
-      const emit = silent ? () => {} : w.emit;
-      if (f.t === 'hello') return w.applyHello(f);
-      if (f.t === 'metrics') {
-        w.write('metrics', 'socket', f);
-        w.write('wind', 'socket', f.wind);
-        w.write('snowline', 'socket', f.snowline);
-        const st = Object.values(f.stale || {});
-        w.write('stale', 'socket', st.length ? Math.min(...st) : null);
-        return;
-      }
-      if (f.t === 'ev') {
-        if (f.kind === 'app.gone') w.write('sites', 'world', (m) => m.delete(f.app));
-        if (f.kind === 'alert.fire' || f.kind === 'alert.resolve') w.write('state', 'socket', (s) => {
-          s.alerts = (s.alerts || []).filter((a) => a.fp !== f.fp);
-          if (f.kind === 'alert.fire') s.alerts.push({ fp: f.fp, sev: f.sev, layer: f.layer, startsAt: f.startsAt });
-        });
-        return emit(`ev:${f.kind}`, f, 'socket');
-      }
-      if (f.t === 'world') {
-        const { t, kind, ...p } = f;
-        if (kind === 'deposit') {
-          const cells = decodeI16(p.cells);
-          pending.push({ ...p, cells, done: new Int16Array(cells.length), age: 0 });
-          return emit('world:deposit', { ...p, cells }, 'world');
-        }
-        if (kind === 'site') w.write('sites', 'world', (m) => m.set(p.app, p));
-        return emit(`world:${kind}`, p, 'world');
-      }
+    scrub(day) {
+      if (!w.send) return Promise.reject(new Error('world: scrub needs a socket'));
+      play?.done[1](new Error('world: superseded'));
+      return new Promise((resolve, reject) => {
+        const p = play = { day, queue: [], gap: 0, t: 0, done: [resolve, reject] };
+        // no reply (lost frame, relay never answers): give up and resync to live
+        p.timer = setTimeout(() => { if (play === p) { play = null; w.replay = null; reject(new Error('world: scrub timeout')); w.resync?.(); } }, 10000);
+        w.replay = { day, frames: [], metrics: [], left: 0 };
+        w.send({ t: 'scrub', day });
+      });
     },
-    /** Advance the h.land deposit ramps (3 s each). */
+    release() {
+      const p = play;
+      play = null; w.replay = null;
+      p?.done[1](new Error('world: released'));
+      w.resync?.();
+    },
+    // ponytail: live frames during a scrub are dropped, not buffered: release() resyncs through a fresh hello anyway.
+    // A hello (reconnect) ends the scrub: the socket has resynced, so the world follows it.
+    applyFrame(f, silent = false) {
+      if (f.t === 'replay') return replay(f);
+      if (f.t === 'hello' && play) { const p = play; play = null; w.replay = null; clearTimeout(p.timer); p.done[1](new Error('world: resynced')); }
+      if (!play) apply(f, silent);
+    },
+    /** Advance the h.land deposit ramps (3 s each) and the replay playback. */
     step(dt) {
+      if (play?.queue.length && (play.t += dt) >= play.gap) {
+        for (; play.t >= play.gap && play.queue.length; play.t -= play.gap) apply(play.queue.shift());
+        w.replay.left = play.queue.length;
+      }
       if (!pending.length) return;
       for (let n = pending.length - 1; n >= 0; n--) {
         const d = pending[n], k = Math.min(1, (d.age += dt) / 3);
@@ -150,6 +154,49 @@ export function createWorld({ dev = false } = {}) {
       hmax(); // ponytail: full 128² rescan per ramping step (negative cells can lower the max); cheap at GRID 128
     },
   };
+  /** One server frame into the world (applyFrame minus the scrub gate). */
+  function apply(f, silent = false) {
+    const emit = silent ? () => {} : w.emit;
+    if (f.t === 'hello') return w.applyHello(f);
+    if (f.t === 'metrics') {
+      w.write('metrics', 'socket', f);
+      w.write('wind', 'socket', f.wind);
+      w.write('snowline', 'socket', f.snowline);
+      const st = Object.values(f.stale || {});
+      w.write('stale', 'socket', st.length ? Math.min(...st) : null);
+      return;
+    }
+    if (f.t === 'ev') {
+      if (f.kind === 'app.gone') w.write('sites', 'world', (m) => m.delete(f.app));
+      if (f.kind === 'alert.fire' || f.kind === 'alert.resolve') w.write('state', 'socket', (s) => {
+        s.alerts = (s.alerts || []).filter((a) => a.fp !== f.fp);
+        if (f.kind === 'alert.fire') s.alerts.push({ fp: f.fp, sev: f.sev, layer: f.layer, startsAt: f.startsAt });
+      });
+      return emit(`ev:${f.kind}`, f, 'socket');
+    }
+    if (f.t === 'world') {
+      const { t, kind, ...p } = f;
+      if (kind === 'deposit') {
+        const cells = decodeI16(p.cells);
+        pending.push({ ...p, cells, done: new Int16Array(cells.length), age: 0 });
+        return emit('world:deposit', { ...p, cells }, 'world');
+      }
+      if (kind === 'site') w.write('sites', 'world', (m) => m.set(p.app, p));
+      return emit(`world:${kind}`, p, 'world');
+    }
+  }
+  /** A replay frame: rebuild land + state from its snapshot, then step() plays its frames (ev/world, live, not silent). */
+  function replay(f) {
+    if (!play) return; // released before it came
+    if (f.day ? f.day !== play.day : !f.error) return; // an earlier, superseded request's reply
+    const [ok, no] = play.done;
+    clearTimeout(play.timer);
+    if (f.error) { play = null; w.release(); return no(new Error(`world: scrub ${f.error}`)); } // live frames were dropped: resync
+    w.applyHello({ snapshot: f.snapshot, state: f.state });
+    play.queue = f.frames.slice(); play.gap = Math.min(0.25, 20 / Math.max(1, f.frames.length));
+    w.replay = { day: f.day, frames: f.frames, metrics: f.metrics, left: f.frames.length };
+    ok(f);
+  }
   /** Move d's cells to fraction k of their value in h.land and heightSolid (done = what is already applied). */
   function deposit(d, cells, k, done = new Int16Array(cells.length)) {
     const land = w.fields['h.land'], hs = w.fields.heightSolid, base = w.fields['h.base'];

@@ -5,6 +5,8 @@
 //   connect({ url, world, onStatus }) → { close() }
 //     every server frame goes to world.applyFrame; reconnects with jittered backoff (1 s → 30 s) and
 //     resyncs through the hello the relay sends on connect. onStatus('open'|'closed').
+//     Wires world.send(frame) (false while not open) and world.resync() (drop this connection, reconnect at once:
+//     the new hello is the resync; world.release uses it).
 //
 // Body (lane B): backoff resets only once a hello has resynced the world (a relay that accepts then drops
 // never gets a 1 s storm). While disconnected world.stale = the since-timestamp of the drop; the hello's
@@ -14,6 +16,8 @@ export const wsURL = (loc = location) => `${loc.protocol === 'https:' ? 'wss' : 
 
 export function connect({ url = wsURL(), world, onStatus = () => {} }) {
   let ws, closed = false, backoff = 1000, timer, fresh = new Set(); // fresh: apps with a world:site since the last hello
+  world.send = (f) => ws?.readyState === 1 && (ws.send(JSON.stringify(f)), true);
+  world.resync = () => { if (closed) return; clearTimeout(timer); ws.onclose = ws.onmessage = null; ws.close(); open(); };
   const open = () => {
     ws = new WebSocket(url);
     ws.onopen = () => onStatus('open');

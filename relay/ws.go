@@ -1,7 +1,7 @@
 package main
 
 // Lane A plug-ins to the seam hub/mux: the client-IP rule for the per-IP /ws limit and /api/topology.
-// Client -> server frames (subscribe, scrub W2, mark W4) are not handled in W1a: onClientMsg stays the seam no-op.
+// Client -> server frames: scrub.go sets onClientMsg (scrub, W2); subscribe and mark arrive later.
 
 import (
 	"encoding/json"

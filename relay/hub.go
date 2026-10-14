@@ -38,9 +38,10 @@ var onClientMsg = func(c *Client, msg []byte) {}
 
 // Client is one /ws connection. Send queues a frame to it alone (e.g. a scrub replay).
 type Client struct {
-	IP   string
-	conn *websocket.Conn
-	send chan []byte
+	IP      string
+	conn    *websocket.Conn
+	send    chan []byte
+	scrubAt time.Time // last scrub (scrub.go); the reader goroutine only
 }
 
 func (c *Client) Send(b []byte) bool {
@@ -56,6 +57,7 @@ func (c *Client) Send(b []byte) bool {
 type Hub struct {
 	dev   bool
 	hello func() []byte
+	tap   func([]byte) // sees every broadcast frame, under h.mu (App.record: persistence); may be nil
 
 	mu      sync.Mutex
 	clients map[*Client]struct{}
@@ -78,6 +80,9 @@ func (h *Hub) broadcastLocked(bs ...[]byte) {
 	for _, b := range bs {
 		if b == nil {
 			continue
+		}
+		if h.tap != nil {
+			h.tap(b)
 		}
 		for c := range h.clients {
 			if !c.Send(b) {

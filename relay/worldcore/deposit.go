@@ -16,6 +16,18 @@ type Deposit struct {
 	Cells []int16 `json:"-"`
 }
 
+// AddTo adds the deposit's cells into land (h.land, Grid²), clamped; cells outside the grid are skipped.
+func (d Deposit) AddTo(land []int16) {
+	for j := 0; j < d.H; j++ {
+		for i := 0; i < d.W; i++ {
+			x, z, k := d.X0+i, d.Z0+j, j*d.W+i
+			if x >= 0 && z >= 0 && x < Grid && z < Grid && k < len(d.Cells) {
+				land[z*Grid+x] = AddQ(land[z*Grid+x], d.Cells[k])
+			}
+		}
+	}
+}
+
 // RasterDeposit rasterises the deposit of event id at world (x, z), seeded by FNV-1a of id,
 // size = f(heat), on top of solid = h.base + h.land. SIGNATURE IS SEAM; body: W1a lane A.
 //

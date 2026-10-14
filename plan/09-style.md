@@ -57,8 +57,8 @@
 | `unmeasured` | HSL saturation ×0.3, lightness ×0.6, static. Water → `#5c7380`, gold → `#6e6249`, local → `#444649` | any token |
 | vein inlay / `ref` boost | albedo `#ddb153` × .55, metallic; emissive .12 + core .7 / core `#ffd59a` × 1.4 | gold / sunHalo |
 | crystal body | `#8397a2` | mix(ice@dusk, stone2@dusk, .35) |
-| lightning core / halo | `#ece6dc` × 3 / `#d9c8ff` | ink / elmo |
-| ember pool (magma vent, cut closed) | **terrain-shader emissive term**, so it hugs the ground at the mountain foot: `magma × .6 × max(heat, .45) × uEmber × (1 − smoothstep(.25, 1, ‖(xz − c)/r‖))`, centre `c` at the foot facing the story camera (board: (0, 86)), radii `r` ≈ (30, 9). Kit uniforms `uPool` (centre, radii) + `uPoolCol`, written only by magma via kit. Never a sprite | magma |
+| lightning core / halo (W2: the halo also sheathes the bolt, 7 m quads along its ribbon, so it reads on the day sky) | `#ece6dc` × 3 / `#d9c8ff` | ink / elmo |
+| ember pool (magma vent, cut closed) | **terrain-shader emissive term**, so it hugs the ground at the mountain foot: `magma × .6 × max(heat, .45) × uPoolK × (1 − smoothstep(.25, 1, ‖(xz − c)/r‖))`, centre `c` at the foot facing the story camera (board: (0, 86)), radii `r` ≈ (30, 9). Kit uniforms `uPool` (centre, radii) + `uPoolCol`, written only by magma via kit. Never a sprite | magma |
 
 Semantic colours encode data, so they do **not** shift with the time key.
 
@@ -132,7 +132,8 @@ three r186 lights are physically based (diffuse = albedo/π × irradiance), and 
 | exposure | 1 | 1 | 1.25 | 1 | — |
 | `uSnowLift` (terrain snow term) | 0.12 | 0.30 | 0.05 | 0.45 | — |
 | `uStars` (dome star field) | 1 | 0.15 | 0 | 0.3 | — |
-| `uEmber` (ember pool × rock-ramp root) | 1 | 0.5 | 0.12 | 1 | — |
+| `uEmber` (rock-ramp root warmth) | 1 | 0.5 | 0.12 | 1 | — |
+| `uPoolK` (ember pool weight; W2: was `uEmber`, which hid the pool by day) | 1 | 1.2 | 2.4 | 1 | — |
 | styleboard terrain p50 / max linear luminance (HDR, before exposure) | 0.0055 / 0.37 | 0.019 / 0.71 | 0.091 / 0.94 | 0.0055 / 0.66 | (measured, round 3) |
 
 The R4 first-draft rig (hemi 0.35–1.1, dir 0.25–1.4, fog 0.004–0.010, ACES) rendered dusk terrain at p50 0.0022 linear: fully fog-coloured, no form. Rejected.

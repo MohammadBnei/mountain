@@ -10,6 +10,9 @@ tests:
         values: '0+15x40'
       - series: 'mountain_source_last_success{namespace="mountain", source="alerts"}'
         values: '0+0x40'
+      # db in memory-only mode (DATABASE_URL unset): seeded at start, never refreshed
+      - series: 'mountain_source_last_success{namespace="mountain", source="db"}'
+        values: '0+0x40'
       - series: 'mountain_github_token_days_left{namespace="mountain"}'
         values: '13x300'
       - series: 'mountain_unmapped_total{namespace="mountain", kind="app"}'
@@ -26,7 +29,11 @@ tests:
           - exp_labels: { severity: notice, source: alerts }
             exp_annotations:
               summary: "mountain: a relay source has not polled successfully for 5 min"
-              description: 'The live page shows "stale since" and the sky dims. The relay keeps serving the last world; check the relay logs for the source label.'
+              description: 'prom/alerts: the live page shows "stale since" and the sky dims; the relay keeps serving the last world. db: the page stays live, but frames and snapshots are not stored (restart survival, scrub); unset DATABASE_URL (memory-only) looks the same. Check the relay logs for the source label.'
+          - exp_labels: { severity: notice, source: db }
+            exp_annotations:
+              summary: "mountain: a relay source has not polled successfully for 5 min"
+              description: 'prom/alerts: the live page shows "stale since" and the sky dims; the relay keeps serving the last world. db: the page stays live, but frames and snapshots are not stored (restart survival, scrub); unset DATABASE_URL (memory-only) looks the same. Check the relay logs for the source label.'
       - eval_time: 50m
         alertname: MountainTokenExpiring
         exp_alerts: []

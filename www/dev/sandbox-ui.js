@@ -1,5 +1,6 @@
 // Sandbox controls (04): P slider, play/step, dt multiplier, key, tier toggle, params sliders, injectors for every
-// ev / world:* / bus type, field heatmaps, bus log, drag-orbit + wheel zoom. Loaded by sandbox.js unless ?ui=0.
+// ev / world:* / bus type, scrub (live socket + day replay + release), field heatmaps, bus log, drag-orbit + wheel zoom.
+// Loaded by sandbox.js unless ?ui=0.
 // No inline styles in markup (relay CSP: style-src 'self'); the look lives in sandbox.css.
 const TPL = {
   'ev:argo.sync': { app: 'wird', ok: true }, 'ev:argo.health': { app: 'wird', status: 'Degraded' },
@@ -90,6 +91,21 @@ export default function ui({ THREE, kit, world, loaded, renderer, scene, camera,
   };
   setInterval(heat, 500);
 
+  // scrub (06, W2): live = socket.js to this page's relay (sandbox served by `relay --dev`); scrub asks for one UTC day's
+  // replay (frames play while stepping); release resyncs to live. The finale timeline bar is W3 (05).
+  const dayIn = el('input', { type: 'date', value: new Date(Date.now() - 864e5).toISOString().slice(0, 10) });
+  const scrubOut = el('div', { className: 'dim', textContent: 'not connected' });
+  const liveB = el('button', { textContent: 'live' }), scrubB = el('button', { textContent: 'scrub' }), relB = el('button', { textContent: 'release' });
+  liveB.onclick = async () => {
+    const { connect } = await import('../js/socket.js');
+    liveB.disabled = true;
+    connect({ world, onStatus: (st) => (scrubOut.textContent = `socket ${st}`) });
+  };
+  scrubB.onclick = () => world.scrub(dayIn.value)
+    .then((r) => (scrubOut.textContent = `replay ${r.day}: ${r.frames.length} frames, ${r.metrics.length} metrics (play to run them)`))
+    .catch((e) => (scrubOut.textContent = e.message));
+  relB.onclick = () => { world.release(); scrubOut.textContent = 'released: resyncing'; };
+
   // bus log: every registered bus type + every ev kind
   const log = el('pre', { className: 'log' }), lines = [];
   for (const t of [...Object.keys(BUS), ...EV_KINDS.map((k) => `ev:${k}`)]) world.on(t, (p) => {
@@ -104,6 +120,7 @@ export default function ui({ THREE, kit, world, loaded, renderer, scene, camera,
     row('P', pIn, pOut), el('div', { className: 'btns' }, play, stepB, dt, key, tier),
     ...(params.length ? [el('h2', { textContent: 'params' }), ...params] : []),
     el('h2', { textContent: 'inject' }), sel, body, go, injErr,
+    el('h2', { textContent: 'scrub' }), el('div', { className: 'btns' }, dayIn, liveB, scrubB, relB), scrubOut,
     el('h2', { textContent: 'fields' }), fSel, cv, range,
     el('h2', { textContent: 'bus' }), log));
 

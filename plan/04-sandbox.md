@@ -1,8 +1,8 @@
 # 04-sandbox — Sandbox
 
 - `dev/sandbox.html?m=a,b&seed=&script=&snapshot=` is grown from pi-lab `object.html`. It uses the **kit rig** (never `object.html`'s white lights or shadows).
-- Controls: P slider, play/step, dt multiplier, `params` sliders, injectors for every `ev`, `world:*` and `mark`, field heatmaps, bus log, tier toggle.
-- Hooks: `__setP`, `__inject`, `__gate`.
+- Controls: P slider, play/step, dt multiplier, `params` sliders, injectors for every `ev`, `world:*` and `mark`, field heatmaps, bus log, tier toggle, **scrub** (W2: `live` connects socket.js to the relay serving the sandbox, a day picker, `scrub`, `release`; the finale timeline bar is W3).
+- Hooks: `__setP`, `__inject`, `__gate`, `__world` (dev scripts).
 - `gate.mjs` per model checks:
   - budget + peak
   - `stepMs`

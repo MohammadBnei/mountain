@@ -3,6 +3,9 @@
 //	relay [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--dev] [--source live|fixture:<file>] [--seed N] [--config file]
 //	relay dump-hello [--seed N] [--day YYYY-MM-DD] [--out www/dev/fixtures/hello.json|-]
 //
+// Env: MOUNTAIN_FP_SALT (alert fp salt), DATABASE_URL (Postgres; empty = memory-only, store.go).
+// dump-hello restores from DATABASE_URL when it is set.
+//
 // main.go, hub.go, sources.go, metrics.go and config.yaml are ORCHESTRATOR-OWNED (W1a seam).
 // Lanes add files and plug in through: Register (sources.go), FixtureHook (sources.go),
 // Public (routes, from init()), clientIP / onClientMsg (hub.go), and the *App methods below.
@@ -100,8 +103,12 @@ type App struct {
 	World   *worldcore.World
 	Land    []int16 // h.land, HeightQ steps (lane A writes deposits here)
 	Metrics Metrics
-	State   State // hello.state: Out.Fire / Out.Resolve only (W2 persists it)
-	Day     string
+	State   State  // hello.state: Out.Fire / Out.Resolve only (persisted, store.go)
+	Day     string // UTC day of the latest snapshot; advanced at rollover (store.go)
+
+	snapLand []int16           // hello.snapshot.land: h.land at the latest snapshot (store.go)
+	since    []json.RawMessage // hello.deltas: the world frames broadcast since that snapshot
+	store    *Store            // nil = memory-only; set before serving, never after
 
 	base, bench string // hello's base64 h.base and bench: immutable, encoded once in newApp
 }
@@ -114,8 +121,10 @@ var Public = http.NewServeMux()
 func newApp(cfg *Config, o Opts, day string) *App {
 	w := worldcore.Base(uint32(o.Seed))
 	a := &App{Cfg: cfg, Opts: o, World: w, Land: make([]int16, len(w.Base)), State: State{Alerts: []Alert{}}, Day: day,
-		Metrics: emptyMetrics(0.8 * w.HMax), base: worldcore.EncodeI16(w.Base), bench: base64.StdEncoding.EncodeToString(w.Bench)}
+		Metrics: emptyMetrics(0.8 * w.HMax), base: worldcore.EncodeI16(w.Base), bench: base64.StdEncoding.EncodeToString(w.Bench),
+		snapLand: make([]int16, len(w.Base)), since: []json.RawMessage{}}
 	a.Hub = NewHub(o.Dev, a.Hello)
+	a.Hub.tap = a.record
 	return a
 }
 
@@ -130,19 +139,23 @@ type Snapshot struct {
 	Caves []worldcore.Cave `json:"caves"`
 }
 
-// Hello returns the hello frame sent on connect.
+// Hello returns the hello frame sent on connect: the latest snapshot + the world frames since it (02).
 func (a *App) Hello() []byte {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b, _ := json.Marshal(map[string]any{
-		"t": "hello",
-		"snapshot": Snapshot{Day: a.Day, Seed: a.World.Seed, Grid: worldcore.Grid, Base: a.base,
-			Land: worldcore.EncodeI16(a.Land), Bench: a.bench, Caves: a.World.Caves},
-		"deltas":  []any{},
-		"state":   a.State,
-		"metrics": a.Metrics,
+		"t":        "hello",
+		"snapshot": a.snap(a.Day, a.snapLand),
+		"deltas":   a.since,
+		"state":    a.State,
+		"metrics":  a.Metrics,
 	})
 	return b
+}
+
+// snap is hello.snapshot (and replay.snapshot) for land on this seed's base.
+func (a *App) snap(day string, land []int16) Snapshot {
+	return Snapshot{Day: day, Seed: a.World.Seed, Grid: worldcore.Grid, Base: a.base, Land: worldcore.EncodeI16(land), Bench: a.bench, Caves: a.World.Caves}
 }
 
 func main() {
@@ -174,7 +187,12 @@ func dumpHello(args []string) error {
 	if err != nil {
 		return err
 	}
-	b := newApp(cfg, Opts{Seed: *seed}, *day).Hello()
+	a := newApp(cfg, Opts{Seed: *seed}, *day)
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" { // a hello built from a restored snapshot (W2 pose gate)
+		a.attach(context.Background(), dsn, true)
+		defer a.store.Close(5 * time.Second)
+	}
+	b := a.Hello()
 	if *out == "-" {
 		_, err = os.Stdout.Write(append(b, '\n'))
 		return err
@@ -198,9 +216,11 @@ func serve(o Opts) error {
 		// fail closed without a crashloop: App.FP returns "", so sanitize drops every alert (no unsalted fp leaves)
 		log.Printf("relay: MOUNTAIN_FP_SALT unset: alerts are dropped until it is set")
 	}
-	app = newApp(cfg, o, time.Now().UTC().Format(time.DateOnly))
+	app = newApp(cfg, o, utcDay(time.Now()))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	app.attach(ctx, os.Getenv("DATABASE_URL"), false) // before the sources: src_alerts seeds from the restored state
+	go app.persist(ctx)
 	if err := startSources(ctx, app); err != nil {
 		return err
 	}
@@ -227,6 +247,8 @@ func serve(o Opts) error {
 	defer cancel()
 	pub.Shutdown(sc)
 	met.Shutdown(sc)
+	app.snapshot(time.Now()) // SIGTERM: the last world reaches the DB before the pod goes
+	app.store.Close(5 * time.Second)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}

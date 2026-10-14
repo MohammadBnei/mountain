@@ -44,6 +44,13 @@ func newAlerts(a *App) (*alertsSource, error) {
 		}
 		s.layers = append(s.layers, layerRule{re, l.Layer})
 	}
+	// Alerts restored from the DB (store.go) count as firing: still active = no second alert.fire, and the
+	// restored startsAt is kept; gone from Alertmanager = resolved on the first good poll.
+	a.mu.Lock()
+	for _, x := range a.State.Alerts {
+		s.firing[x.FP] = x
+	}
+	a.mu.Unlock()
 	return s, nil
 }
 
