@@ -36,11 +36,12 @@ const base = field('', { uCutDeep: 'deep' });
 // cap quad (fill cost): centred at y 28, ±48 up a vertical plane (the solid above the haze floor, −20…76), ±142 across (the chord)
 const QUAD = { value: new THREE.Vector3(28, 48, 142) };
 
-const PARS = `uniform sampler2D uCutH; uniform vec3 uCutDeep;
+const PARS = `uniform sampler2D uCutH; uniform vec3 uCutDeep; uniform float uWobble;
 float kCutH(vec2 xz) { // heightSolid as the G² body mesh interpolates it: quad (i, j) = tris (a, b, c), (c, b, d)
   vec2 g = (xz - ${f(X0)}) / ${f(S)}; ivec2 i = ivec2(clamp(floor(g), vec2(0.), vec2(${G - 2}.))); g -= vec2(i);
   float a = texelFetch(uCutH, i, 0).r, b = texelFetch(uCutH, i + ivec2(0, 1), 0).r, c = texelFetch(uCutH, i + ivec2(1, 0), 0).r, d = texelFetch(uCutH, i + ivec2(1, 1), 0).r;
-  return g.x + g.y <= 1. ? a + g.x * (c - a) + g.y * (b - a) : d + (1. - g.x) * (b - d) + (1. - g.y) * (c - d);
+  // + the body's vertex wobble (shaders.js), per fragment: off from the per-vertex lerp by a sub-cell curvature only
+  return (g.x + g.y <= 1. ? a + g.x * (c - a) + g.y * (b - a) : d + (1. - g.x) * (b - d) + (1. - g.y) * (c - d)) + uWobble * sin(xz.x * .7 + xz.y * .5);
 }
 bool kCutIn(vec3 p) { return p.y >= ${f(YB)} && all(greaterThanEqual(p.xz, vec2(${f(X0)}))) && all(lessThanEqual(p.xz, vec2(${f(X1)}))) && p.y <= kCutH(p.xz); }
 `;
