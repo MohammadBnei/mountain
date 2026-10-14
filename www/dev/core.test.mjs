@@ -127,5 +127,10 @@ c.close();
 await sleep(1200);
 ok(socks.length === 3, 'close() stops reconnecting');
 
+// ---- scripts/devpod.sh: the dev loop sees alerts (salted fp) and survives a push restart ----
+const dp = readFileSync(new URL('../../scripts/devpod.sh', import.meta.url), 'utf8');
+ok(/name: MOUNTAIN_FP_SALT, value: \S+/.test(dp), 'devpod: pod env sets MOUNTAIN_FP_SALT (else src_alerts drops every alert)');
+ok(/while :; do \$K port-forward [^;]*\|\|/.test(dp), 'devpod: port-forward is looped and its failure tolerated under set -e (a push restart kills it)');
+
 console.log(bad ? `CORE FAIL (${bad})` : 'CORE PASS');
 process.exit(bad ? 1 : 0);

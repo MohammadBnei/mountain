@@ -12,7 +12,7 @@
 #
 #   ARGS='--prom-url=http://invalid' scripts/devpod.sh push     extra relay flags (reset on every push/up)
 #   CONFIG=path/config.yaml scripts/devpod.sh push              copied to /app/config.yaml, adds --config
-#   (a pod from before ARGS support ignores them: `down` + `up` once)
+#   (a pod from before ARGS / MOUNTAIN_FP_SALT support lacks them: `down` + `up` once)
 #
 # ponytail: one pod, no Service/Deployment; the real chart is tested by the
 # ArgoCD deploy, this only shortens the code -> live-data loop.
@@ -48,6 +48,8 @@ spec:
       image: docker.io/library/alpine:3.20
       # Supervisor loop: pkill relay => restart with the new binary.
       command: [sh, -c, 'while true; do [ -x /app/relay ] && /app/relay --dev --listen :8080 --metrics :9090 $(cat /app/args 2>/dev/null); sleep 1; done']
+      # Dev-only salt (reached only via port-forward): without one src_alerts drops every alert.
+      env: [{ name: MOUNTAIN_FP_SALT, value: dev-pod-salt }]
       ports: [{ containerPort: 8080 }, { containerPort: 9090 }]
       resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { memory: 256Mi } }
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
@@ -57,7 +59,7 @@ EOF
   $K wait --for=condition=Ready pod/relay --timeout=120s
   push
   echo "port-forward: http://127.0.0.1:18080  metrics http://127.0.0.1:19090/metrics"
-  exec $K port-forward pod/relay 18080:8080 19090:9090
+  while :; do $K port-forward pod/relay 18080:8080 19090:9090 || sleep 1; done # push restarts the relay: re-forward
 }
 
 case "${1:-}" in
