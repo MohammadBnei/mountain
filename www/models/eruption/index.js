@@ -58,10 +58,8 @@ export default async function build({ THREE, kit, world, rng }) {
     if (!p.ev.ok) { pend.delete(id); return puff(p.ev.app); }
     if (p.dep) { pend.delete(id); start(p.dep); }
   };
-  let summit = 0;
-  world.fields.heightSolid.forEach((v, i, a) => v > a[summit] && (summit = i));
   function puff(app) {
-    const s = world.sites.get(app);
+    const s = world.sites.get(app), summit = world.fields.heightSolid.indexOf(world.hmax); // now: deposits and resyncs move it
     const [x, z] = s ? [s.x, s.z] : cellXZ(summit % GRID, Math.floor(summit / GRID));
     ash.position.set(x, H(x, z), z);
     ashAge = 0;
