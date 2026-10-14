@@ -6,7 +6,7 @@ package main
 //	{"step_s": 2, "steps": [{"prom": {"<promQ name>": [{"m": {labels}, "v": 1}]}, "am": [alerts]}, ...]}
 //
 // Steps are sparse: a query or "am" not named in a step keeps its previous answer. The timeline
-// advances one step every step_s and holds on the last one. The prom source polls at step_s.
+// advances one step after each prom poll (polls are step_s apart) and holds on the last one.
 
 import (
 	"context"
@@ -70,6 +70,13 @@ func loadFixture(file string) (*fixture, error) {
 	return &f, nil
 }
 
+// advance moves to the next step, holding on the last one.
+func (f *fixture) advance() {
+	if n := f.step.Load(); n < int64(len(f.prom)-1) {
+		f.step.Store(n + 1)
+	}
+}
+
 func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	i := f.step.Load()
 	w.Header().Set("Content-Type", "application/json")
@@ -114,22 +121,8 @@ func init() {
 		if err != nil {
 			return "", "", err
 		}
-		d := time.Duration(f.StepS * float64(time.Second))
-		promEvery = d
-		go func() {
-			t := time.NewTicker(d)
-			defer t.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-t.C:
-					if n := f.step.Load(); n < int64(len(f.prom)-1) {
-						f.step.Store(n + 1)
-					}
-				}
-			}
-		}()
+		promEvery = time.Duration(f.StepS * float64(time.Second))
+		afterPoll = f.advance // one clock: the poll ticker; each step is seen by exactly one poll
 		return u, u, nil
 	}
 }

@@ -34,6 +34,10 @@ func TestClientIP(t *testing.T) {
 func TestPublicMux(t *testing.T) {
 	a, _ := testApp(t)
 	app = a
+	for name := range a.Cfg.Apps {
+		liveApps[name] = true
+	}
+	liveApps["has-journal"] = true  // live but not allowlisted: no site
 	Public.Handle("GET /ws", a.Hub) // serve() registers it at startup
 	srv := httptest.NewServer(Public)
 	defer srv.Close()

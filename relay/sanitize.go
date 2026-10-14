@@ -22,18 +22,16 @@ func unmapped(kind, v string) {
 }
 
 // appOfNS maps a namespace (+ workload name, matched as "<ns>/<deployment>" key or pod-name prefix)
-// to an allowlisted app; "" = other. Unknown namespaces count as unmapped.
+// to an allowlisted app; "" = other. Not counted as unmapped: pod/PVC namespaces are mostly infra
+// (kube-system, monitoring, ...); the rot guard counts what can be public instead: Traefik routers
+// (appOfService) and Argo apps (appOfArgo).
 func (c *Config) appOfNS(ns, workload string) string {
 	for k, app := range c.Namespaces {
 		if dep, ok := strings.CutPrefix(k, ns+"/"); ok && (workload == dep || strings.HasPrefix(workload, dep+"-")) {
 			return app
 		}
 	}
-	app, ok := c.Namespaces[ns]
-	if !ok {
-		unmapped("ns", ns)
-	}
-	return app
+	return c.Namespaces[ns]
 }
 
 // appOfArgo maps an ArgoCD Application name (argocd_app_* have no dest_namespace, 02 gotchas).
@@ -51,7 +49,7 @@ func (c *Config) appOfArgo(name string) string {
 // appOfService maps Traefik exported_service "<ns>-<route>-<hash>@kubernetescrd" (02 gotchas) by
 // the longest "<ns>-" or "<ns>-<deployment>-" prefix (namespaces contain dashes, so a split cannot work).
 func (c *Config) appOfService(svc string) string {
-	s, _, _ := strings.Cut(svc, "@")
+	s, provider, _ := strings.Cut(svc, "@")
 	best := ""
 	for k := range c.Namespaces {
 		if strings.HasPrefix(s, strings.Replace(k, "/", "-", 1)+"-") && len(k) > len(best) {
@@ -59,7 +57,9 @@ func (c *Config) appOfService(svc string) string {
 		}
 	}
 	if best == "" {
-		unmapped("ns", svc)
+		if provider != "internal" { // Traefik's own api/dashboard/ping
+			unmapped("ns", svc)
+		}
 		return ""
 	}
 	return c.Namespaces[best]

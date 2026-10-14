@@ -79,3 +79,19 @@ func TestSanitizeCorpus(t *testing.T) {
 		}
 	}
 }
+
+// TestRotGuard: infra namespaces and Traefik's @internal services are not rot; an unknown router is.
+func TestRotGuard(t *testing.T) {
+	cfg, _ := loadConfig(configYAML)
+	n := func() float64 { Unmapped.mu.Lock(); defer Unmapped.mu.Unlock(); return Unmapped.v["ns"] }
+	before := n()
+	cfg.appOfNS("kube-system-rotguard", "coredns-1")
+	cfg.appOfService("api-rotguard@internal")
+	if n() != before {
+		t.Fatal("infra namespace or @internal service counted as unmapped")
+	}
+	cfg.appOfService("newapp-rotguard-web-1a2b@kubernetescrd")
+	if n() != before+1 {
+		t.Fatal("an unknown Traefik router must count as unmapped")
+	}
+}

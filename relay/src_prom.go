@@ -5,17 +5,18 @@ package main
 // sanitize.go (allowlist lookups + the closed field spec) before it leaves.
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"math"
 	"math/bits"
 	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +30,16 @@ const (
 	goneAfter  = 10 * time.Minute
 	heatWindow = 5 * time.Minute
 	gib        = 1 << 30
+	staleAfter = 40 // polls (10 min) before a vanished counter series is forgotten
 )
+
+// afterPoll runs after each successful poll: the fixture source advances its timeline here, so
+// the fake Prometheus and the poll share one clock and no step goes unseen.
+var afterPoll = func() {}
+
+// liveApps: allowlisted apps seen in argocd_app_info and not gone (/api/topology). Guarded by app.mu.
+// ponytail: package-level like `app`; one relay, one prom source.
+var liveApps = map[string]bool{}
 
 // promQ: name -> PromQL. The fixture server keys its timeline by these names.
 var promQ = map[string]string{
@@ -65,13 +75,14 @@ type sample struct {
 }
 
 type promSource struct {
-	a    *App
-	url  string
-	hc   *http.Client
-	warm bool      // a first poll has set the baselines
-	last time.Time // previous successful poll
+	a     *App
+	url   string
+	hc    *http.Client
+	warm  bool      // a first poll has set the baselines
+	last  time.Time // previous successful poll
+	polls int
 
-	ctr    map[string]float64   // raw counter per series
+	ctr    map[string]counter   // raw counter per series
 	health map[string]string    // app -> ArgoCD health
 	seen   map[string]bool      // apps seen in argocd_app_info
 	gone   map[string]time.Time // app -> absent since (controller up)
@@ -79,13 +90,18 @@ type promSource struct {
 	repl   map[string]int       // app -> replicas bucket
 	ready  map[string]bool      // host -> Ready
 	quorum string
-	base   map[string]float64 // app -> rps baseline (30 min EWMA)
+	base   map[string]float64 // app -> rps baseline (30 min EWMA); keyed by allowlist, bounded
 	syncs  []time.Time        // syncs in the heat window
+}
+
+type counter struct {
+	v    float64
+	poll int // last poll that saw it
 }
 
 func newProm(a *App) *promSource {
 	return &promSource{a: a, url: strings.TrimRight(a.Opts.PromURL, "/"), hc: &http.Client{Timeout: 10 * time.Second},
-		ctr: map[string]float64{}, health: map[string]string{}, seen: map[string]bool{}, gone: map[string]time.Time{},
+		ctr: map[string]counter{}, health: map[string]string{}, seen: map[string]bool{}, gone: map[string]time.Time{},
 		crash: map[string]bool{}, repl: map[string]int{}, ready: map[string]bool{}, base: map[string]float64{}}
 }
 
@@ -104,6 +120,7 @@ func (p *promSource) Run(ctx context.Context, out *Out) error {
 			})
 		} else {
 			out.OK()
+			afterPoll()
 		}
 		select {
 		case <-ctx.Done():
@@ -153,7 +170,7 @@ func key(name string, l map[string]string) string {
 	for k, v := range l {
 		ks = append(ks, k+"="+v)
 	}
-	sort.Strings(ks)
+	slices.Sort(ks)
 	return name + "{" + strings.Join(ks, ",") + "}"
 }
 
@@ -162,16 +179,22 @@ func key(name string, l map[string]string) string {
 // is only a baseline.
 func (p *promSource) diff(k string, v float64) float64 {
 	last, ok := p.ctr[k]
-	p.ctr[k] = v
+	p.ctr[k] = counter{v, p.polls}
 	switch {
 	case !ok && p.warm:
 		return v
 	case !ok:
 		return 0
-	case v < last:
+	case v < last.v:
 		return v
 	}
-	return v - last
+	return v - last.v
+}
+
+// prune ends a poll: counter series unseen for staleAfter polls (pods come and go) are dropped.
+func (p *promSource) prune() {
+	maps.DeleteFunc(p.ctr, func(_ string, c counter) bool { return p.polls-c.poll >= staleAfter })
+	p.polls++
 }
 
 // emit sanitises and broadcasts an ev frame and returns its id ("" if dropped).
@@ -188,34 +211,41 @@ func emit(o *Out, kind string, fields map[string]any) string {
 	return id
 }
 
-// emitWorld sanitises a world payload, then broadcasts it through Out.World.
-func emitWorld(o *Out, kind string, payload map[string]any) {
-	if f, ok := o.app.Cfg.clean("world:"+kind, payload); ok {
-		o.World(kind, f)
-	} else {
+// worldFrame sanitises a world payload into a {t:"world", kind, ...} frame (nil if dropped).
+func worldFrame(c *Config, kind string, payload map[string]any) []byte {
+	f, ok := c.clean("world:"+kind, payload)
+	if !ok {
 		log.Printf("sanitize: dropped world %s", kind)
+		return nil
 	}
+	f["t"], f["kind"] = "world", kind
+	return mustJSON(f)
 }
 
 func siteMap(s worldcore.Site) map[string]any {
 	return map[string]any{"app": s.App, "x": s.X, "z": s.Z, "y": s.Y, "tier": s.Tier, "group": s.Group}
 }
 
-// sites places every allowlisted app on the current solid. Caller holds a.mu.
+// sites places every live allowlisted app on the current solid. Caller holds a.mu.
 func (a *App) sites() []worldcore.Site {
 	solid := worldcore.Solid(a.World.Base, a.Land)
-	s := make([]worldcore.Site, 0, len(a.Cfg.Apps))
-	for name, c := range a.Cfg.Apps {
-		s = append(s, worldcore.PlaceSite(name, c.Group, solid))
+	s := []worldcore.Site{}
+	for _, name := range slices.Sorted(maps.Keys(liveApps)) {
+		if c, ok := a.Cfg.Apps[name]; ok {
+			s = append(s, worldcore.PlaceSite(name, c.Group, solid))
+		}
 	}
-	slices.SortFunc(s, func(x, y worldcore.Site) int { return strings.Compare(x.App, y.App) })
 	return s
 }
 
 // deposit rasterises the land of a successful sync at the app's site, adds it to h.land and
-// broadcasts world:deposit (id = the sync's ev id) and the site's new y.
-func (p *promSource) deposit(o *Out, id, app string, heat float64) {
+// broadcasts world:deposit (id = the sync's ev id) and the site's new y. It holds the hub lock across
+// the land change and the broadcast (lock order h.mu -> a.mu, hub.go): a client connecting meanwhile
+// gets either the old land plus the deposit frame or the new land without it, never the deposit twice.
+func (p *promSource) deposit(id, app string, heat float64) {
 	a := p.a
+	a.Hub.mu.Lock()
+	defer a.Hub.mu.Unlock()
 	a.mu.Lock()
 	solid := worldcore.Solid(a.World.Base, a.Land)
 	g := a.Cfg.Apps[app].Group
@@ -229,8 +259,17 @@ func (p *promSource) deposit(o *Out, id, app string, heat float64) {
 	}
 	s = worldcore.PlaceSite(app, g, worldcore.Solid(a.World.Base, a.Land))
 	a.mu.Unlock()
-	emitWorld(o, "deposit", map[string]any{"id": id, "x0": d.X0, "z0": d.Z0, "w": d.W, "h": d.H, "cells": worldcore.EncodeI16(d.Cells)})
-	emitWorld(o, "site", siteMap(s))
+	for _, b := range [][]byte{
+		worldFrame(a.Cfg, "deposit", map[string]any{"id": id, "x0": d.X0, "z0": d.Z0, "w": d.W, "h": d.H, "cells": worldcore.EncodeI16(d.Cells)}),
+		worldFrame(a.Cfg, "site", siteMap(s)),
+	} {
+		// ponytail: Hub.Broadcast's body, inlined because Broadcast takes h.mu itself.
+		for c := range a.Hub.clients {
+			if b != nil && !c.Send(b) {
+				c.conn.CloseNow()
+			}
+		}
+	}
 }
 
 var code5xx = regexp.MustCompile(`^5\d\d$`)
@@ -288,7 +327,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		p.syncs = append(p.syncs, now)
 		heat := math.Min(1, float64(len(p.syncs))/5)
 		if id := emit(o, "argo.sync", map[string]any{"app": s.app, "ok": s.ok}); id != "" && s.ok {
-			p.deposit(o, id, s.app, heat)
+			p.deposit(id, s.app, heat)
 		}
 	}
 
@@ -364,7 +403,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		}
 	}
 	p.crash = crash
-	for _, app := range sortedKeys(ch) {
+	for _, app := range slices.Sorted(maps.Keys(ch)) {
 		c := ch[app]
 		emit(o, "pod.churn", map[string]any{"app": app, "restarts": c.restarts, "oom": c.oom, "crashloop": c.crashloop})
 	}
@@ -376,7 +415,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 			reps[app] += int(s.V)
 		}
 	}
-	for _, app := range sortedKeys(reps) {
+	for _, app := range slices.Sorted(maps.Keys(reps)) {
 		b := replicaB(reps[app])
 		if old, ok := p.repl[app]; ok && old != b {
 			emit(o, "replicas", map[string]any{"app": app, "bucket": b})
@@ -426,7 +465,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 			up = append(up, h)
 		}
 	}
-	sort.Strings(up)
+	slices.Sort(up)
 	if q := strings.Join(up, ","); q != p.quorum {
 		if p.warm {
 			emit(o, "quorum", map[string]any{"up": up})
@@ -495,6 +534,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	rx := norm(one("rx"), 100e6)
 	ang := 2 * math.Pi * float64(now.UTC().Hour()) / 24 // ponytail: wind direction turns with the hour; magnitude is real (net rx)
 	o.Metrics(func(m *Metrics) {
+		liveApps = maps.Clone(p.seen)
 		m.Apps, m.Storage.Pools, m.Heat = apps, pools, heat
 		m.CPU, m.Mem = math.Round(one("cpu")*100)/100, math.Round(one("mem")*100)/100
 		m.Rx, m.River = rx, norm(river, 10e6)
@@ -513,6 +553,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		delete(m.Stale, "prom")
 	})
 	p.last, p.warm = now, true
+	p.prune()
 	return nil
 }
 
@@ -571,8 +612,18 @@ func (p *promSource) pools(r map[string][]sample) []Pool {
 			g.measured = true
 		}
 	}
+	// allowlisted pools first, then the other-* aggregates, so the cap never drops an app's pool
+	rank := func(id string) int {
+		if byID[id].app == "other" {
+			return 1
+		}
+		return 0
+	}
+	ids := slices.SortedFunc(maps.Keys(byID), func(x, y string) int {
+		return cmp.Or(cmp.Compare(rank(x), rank(y)), strings.Compare(x, y))
+	})
 	out := []Pool{}
-	for _, id := range sortedKeys(byID) {
+	for _, id := range ids {
 		g := byID[id]
 		pl := Pool{ID: id, App: g.app, Class: g.class, Host: g.host, CapB: logB(g.cap/gib, 12)}
 		if g.measured && g.cap > 0 {
@@ -582,13 +633,4 @@ func (p *promSource) pools(r map[string][]sample) []Pool {
 		out = append(out, pl)
 	}
 	return out[:min(16, len(out))]
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	k := make([]string, 0, len(m))
-	for x := range m {
-		k = append(k, x)
-	}
-	sort.Strings(k)
-	return k
 }

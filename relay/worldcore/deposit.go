@@ -56,8 +56,8 @@ func RasterDeposit(id string, x, z, heat float64, solid []int16) Deposit {
 // cell is the grid index of world coordinate c, clamped to the grid.
 func cell(c float64) int { return max(0, min(Grid-1, int(math.Round((c+100)/Cell)))) }
 
-// HeightAt is solid (h.base + h.land, HeightQ steps) at the cell nearest world (x, z), in world units.
-func HeightAt(solid []int16, x, z float64) float64 {
+// heightAt is solid (h.base + h.land, HeightQ steps) at the cell nearest world (x, z), in world units.
+func heightAt(solid []int16, x, z float64) float64 {
 	return float64(solid[cell(z)*Grid+cell(x)]) * HeightQ
 }
 
@@ -66,8 +66,8 @@ func grad(solid []int16, x, z float64) (float64, float64) {
 	if len(solid) != Grid*Grid {
 		return 0, 0
 	}
-	return (HeightAt(solid, x+Cell, z) - HeightAt(solid, x-Cell, z)) / (2 * Cell),
-		(HeightAt(solid, x, z+Cell) - HeightAt(solid, x, z-Cell)) / (2 * Cell)
+	return (heightAt(solid, x+Cell, z) - heightAt(solid, x-Cell, z)) / (2 * Cell),
+		(heightAt(solid, x, z+Cell) - heightAt(solid, x, z-Cell)) / (2 * Cell)
 }
 
 // Solid returns h.base + h.land (clamped).
@@ -86,12 +86,9 @@ func AddQ(a, b int16) int16 {
 
 // Site is a world:site payload: where an allowlisted app's land grows.
 type Site struct {
-	App   string  `json:"app"`
-	X     float64 `json:"x"`
-	Z     float64 `json:"z"`
-	Y     float64 `json:"y"`
-	Tier  int     `json:"tier"`
-	Group string  `json:"group"`
+	App, Group string
+	X, Z, Y    float64
+	Tier       int
 }
 
 // PlaceSite places app deterministically: azimuth from FNV-1a of the name, ring by tier
@@ -107,5 +104,5 @@ func PlaceSite(app, group string, solid []int16) Site {
 	}
 	th, rad := r()*2*math.Pi, rad+(r()-0.5)*8
 	x, z := math.Round(math.Sin(th)*rad*100)/100, math.Round(math.Cos(th)*rad*100)/100
-	return Site{App: app, X: x, Z: z, Y: math.Round(HeightAt(solid, x, z)*100) / 100, Tier: tier, Group: group}
+	return Site{App: app, X: x, Z: z, Y: math.Round(heightAt(solid, x, z)*100) / 100, Tier: tier, Group: group}
 }

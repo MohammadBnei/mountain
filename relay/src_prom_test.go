@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,9 +21,8 @@ func testApp(t *testing.T) (*App, *Client) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// ponytail: config.yaml (seam) lacks the PVE probe targets; reported to the orchestrator.
-	cfg.Nodes["pve-bnei"], cfg.Nodes["pve-server1"], cfg.Nodes["pve-ex-laptop"] = "h1", "h2", "h3"
 	a := newApp(cfg, Opts{Seed: 1}, "2026-10-14")
+	liveApps = map[string]bool{}
 	c := &Client{send: make(chan []byte, 1<<14)}
 	a.Hub.clients[c] = struct{}{}
 	return a, c
@@ -209,6 +210,20 @@ func TestFixtureTimeline(t *testing.T) {
 		t.Errorf("pools: %v", pools)
 	}
 
+	// /api/topology: live apps only (never-seen and gone apps have no site)
+	app = a
+	rec := httptest.NewRecorder()
+	topology(rec, httptest.NewRequest("GET", "/api/topology", nil))
+	var topo struct{ Sites []struct{ App string } }
+	json.Unmarshal(rec.Body.Bytes(), &topo)
+	var names []string
+	for _, x := range topo.Sites {
+		names = append(names, x.App)
+	}
+	if got := strings.Join(names, ","); got != "editable-blog,mountain,vos-monolith,wird" {
+		t.Errorf("topology sites: %s", got)
+	}
+
 	validate(t, steps) // before the leak scan, which strips cells
 
 	// nothing hostile leaves the relay
@@ -250,4 +265,86 @@ func validate(t *testing.T, steps [][]map[string]any) {
 		t.Fatalf("schema check (%d frames): %v\n%s", n, err, out)
 	}
 	t.Logf("schema: %d frames, SCHEMA PASS", n)
+}
+
+// TestDepositHubLock: the land must not change while the hub lock is held (a client registering
+// then would get the deposit in its hello AND as a frame).
+func TestDepositHubLock(t *testing.T) {
+	a, c := testApp(t)
+	p := newProm(a)
+	a.Hub.mu.Lock()
+	done := make(chan struct{})
+	go func() { p.deposit(ULID(), "wird", 1); close(done) }()
+	time.Sleep(50 * time.Millisecond)
+	a.mu.Lock()
+	changed := slices.ContainsFunc(a.Land, func(v int16) bool { return v != 0 })
+	a.mu.Unlock()
+	a.Hub.mu.Unlock()
+	<-done
+	if changed {
+		t.Fatal("deposit changed h.land outside the hub lock")
+	}
+	if n := len(drain(c)); n != 2 {
+		t.Fatalf("want world:deposit + world:site, got %d frames", n)
+	}
+}
+
+func TestCounterPrune(t *testing.T) {
+	p := newProm(&App{})
+	p.diff("gone", 5)
+	for range staleAfter + 1 {
+		p.diff("live", 1)
+		p.prune()
+	}
+	if _, ok := p.ctr["gone"]; ok || len(p.ctr) != 1 {
+		t.Fatalf("stale series must be pruned, live kept: %v", p.ctr)
+	}
+}
+
+// TestPoolsOrder: the 16 cap drops other-* aggregates before any allowlisted pool.
+func TestPoolsOrder(t *testing.T) {
+	a, _ := testApp(t)
+	pvc := func(ns, name, class string) sample {
+		return sample{L: map[string]string{"namespace": ns, "persistentvolumeclaim": name, "storageclass": class}, V: 1}
+	}
+	r := map[string][]sample{"pvcnode": {{L: map[string]string{"namespace": "kube-system", "persistentvolumeclaim": "x", "node": "k8s-cp-01"}}}}
+	r["pvc"] = []sample{pvc("kube-system", "x", "local-path"), pvc("monitoring", "y", "longhorn")}
+	for i := range 15 {
+		r["pvc"] = append(r["pvc"], pvc("wird", fmt.Sprint("d", i), "longhorn"))
+	}
+	var ids []string
+	for _, pl := range newProm(a).pools(r) {
+		ids = append(ids, pl.ID)
+	}
+	if len(ids) != 16 || ids[0] != "wird-1" || ids[15] != "other-local-h1" {
+		t.Fatalf("pools: %v", ids)
+	}
+}
+
+// TestFixtureOneClock: with step_s far shorter than a poll, every one-step crashloop 0 -> 1 is seen.
+func TestFixtureOneClock(t *testing.T) {
+	a, c := testApp(t)
+	every, after := promEvery, afterPoll
+	t.Cleanup(func() { promEvery, afterPoll = every, after })
+	crash := `{"crash": [{"m": {"namespace": "dream-analyst", "pod": "dream-analyst-1", "container": "app"}, "v": 1}]}`
+	none := `{"crash": []}`
+	file := filepath.Join(t.TempDir(), "f.json")
+	os.WriteFile(file, []byte(`{"step_s": 0.001, "steps": [{"prom": `+strings.Join([]string{none, crash, none, crash, none, crash}, `}, {"prom": `)+`}]}`), 0o644)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	u, _, err := FixtureHook(ctx, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Opts.PromURL = u
+	go newProm(a).Run(ctx, &Out{app: a, name: "prom"})
+	var got []map[string]any
+	for deadline := time.Now().Add(3 * time.Second); len(got) < 3 && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		got = append(got, evs(drain(c), "pod.churn")...)
+	}
+	time.Sleep(50 * time.Millisecond)
+	got = append(got, evs(drain(c), "pod.churn")...)
+	if len(got) != 3 {
+		t.Fatalf("want 3 crashloop events (steps 1, 3, 5), got %d: %v", len(got), got)
+	}
 }
