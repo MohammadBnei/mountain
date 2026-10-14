@@ -4,6 +4,7 @@
     { "t": "ev", "id": "01JA0000000000000000000000", "ts": 1760450000000, "kind": "argo.sync", "app": "wird", "ok": true },
     { "t": "ev", "id": "01JA0000000000000000000001", "ts": 1760450000000, "kind": "argo.sync", "app": "wird", "ok": false },
     { "t": "ev", "id": "01JA0000000000000000000002", "ts": 1760450000000, "kind": "pod.churn", "app": "editable-blog", "restarts": 2, "oom": true, "crashloop": false },
+    { "t": "ev", "id": "01JA0000000000000000000006", "ts": 1760450000000, "kind": "alert.fire", "fp": "0123456789abcdef", "sev": "critical", "layer": "k8s" },
     { "t": "ev", "id": "01JA0000000000000000000003", "ts": 1760450000000, "kind": "alert.resolve", "fp": "0123456789abcdef", "sev": "warning", "layer": "k8s", "durS": 900 },
     { "t": "ev", "id": "01JA0000000000000000000004", "ts": 1760450000000, "kind": "quorum", "up": ["h1", "h2"] },
     { "t": "ev", "id": "01JA0000000000000000000005", "ts": 1760450000000, "kind": "adr.merge", "day": "2026-10-14" },

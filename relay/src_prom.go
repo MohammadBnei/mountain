@@ -121,11 +121,7 @@ func (p *promSource) Run(ctx context.Context, out *Out) error {
 	for {
 		if err := p.poll(ctx, out, time.Now()); err != nil {
 			log.Printf("prom: %v", err)
-			out.Metrics(func(m *Metrics) {
-				if _, ok := m.Stale["prom"]; !ok {
-					m.Stale["prom"] = time.Now().UnixMilli()
-				}
-			})
+			out.Stale()
 		} else {
 			out.OK()
 			afterPoll()

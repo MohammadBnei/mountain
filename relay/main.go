@@ -90,7 +90,7 @@ type App struct {
 	World   *worldcore.World
 	Land    []int16 // h.land, HeightQ steps (lane A writes deposits here)
 	Metrics Metrics
-	State   map[string]any // hello.state (W2)
+	State   State // hello.state: Out.Fire / Out.Resolve only (W2 persists it)
 	Day     string
 
 	base, bench string // hello's base64 h.base and bench: immutable, encoded once in newApp
@@ -103,7 +103,7 @@ var Public = http.NewServeMux()
 
 func newApp(cfg *Config, o Opts, day string) *App {
 	w := worldcore.Base(uint32(o.Seed))
-	a := &App{Cfg: cfg, Opts: o, World: w, Land: make([]int16, len(w.Base)), State: map[string]any{}, Day: day,
+	a := &App{Cfg: cfg, Opts: o, World: w, Land: make([]int16, len(w.Base)), State: State{Alerts: []Alert{}}, Day: day,
 		Metrics: emptyMetrics(0.8 * w.HMax), base: worldcore.EncodeI16(w.Base), bench: base64.StdEncoding.EncodeToString(w.Bench)}
 	a.Hub = NewHub(o.Dev, a.Hello)
 	return a

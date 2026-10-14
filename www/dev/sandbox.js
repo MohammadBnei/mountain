@@ -296,8 +296,9 @@ try {
   };
 
   // ---------- step (audited during __test): peak budget, stepMs, rig/dome untouched, foreign field writes ----------
+  // uStale is sky's (kit.setStale), not the rig's: excluded
   const rigSnap = () => JSON.stringify([RIG.hemi.color, RIG.hemi.groundColor, RIG.hemi.intensity, RIG.dir.color, RIG.dir.intensity, RIG.dir.position, scene.fog.color, scene.fog.density,
-    renderer.toneMapping, renderer.toneMappingExposure, Object.values(RIG.dome.material.uniforms).map((u) => u.value), kit.phase(), kit.U.uFootprint.value === kit.footprintRT.texture]);
+    renderer.toneMapping, renderer.toneMappingExposure, Object.entries(RIG.dome.material.uniforms).filter(([k]) => k !== 'uStale').map(([, u]) => u.value), kit.phase(), kit.U.uFootprint.value === kit.footprintRT.texture]);
   // Every WRITERS slot the model does not own (fields by checksum, shared state by JSON) must be unchanged after its
   // step() and after each of its bus/ev handlers. A nested call (a handler run by an emit inside step) may write its
   // own slots: those are re-baselined in every enclosing snapshot, so the outer caller is not blamed.

@@ -1,0 +1,49 @@
+# promtool unit tests for the PrometheusRule in helm/values.yaml extraManifests.
+# Run by rules_test.go, which extracts the rules (namespace "mountain") to rules.yaml next to a copy of this file.
+rule_files: [rules.yaml]
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      # prom polls fine (gauge follows the clock); alerts never succeeded: seeded at start (t=0) and stuck
+      - series: 'mountain_source_last_success{namespace="mountain", source="prom"}'
+        values: '0+15x40'
+      - series: 'mountain_source_last_success{namespace="mountain", source="alerts"}'
+        values: '0+0x40'
+      - series: 'mountain_github_token_days_left{namespace="mountain"}'
+        values: '13x300'
+      - series: 'mountain_unmapped_total{namespace="mountain", kind="app"}'
+        values: '0x60 1x200'
+      - series: 'mountain_unmapped_total{namespace="other", kind="node"}'
+        values: '5x300'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: MountainSourceStale
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: MountainSourceStale
+        exp_alerts:
+          - exp_labels: { severity: info, source: alerts }
+            exp_annotations:
+              summary: "mountain: a relay source has not polled successfully for 5 min"
+              description: 'The live page shows "stale since" and the sky dims. The relay keeps serving the last world; check the relay logs for the source label.'
+      - eval_time: 50m
+        alertname: MountainTokenExpiring
+        exp_alerts: []
+      - eval_time: 61m
+        alertname: MountainTokenExpiring
+        exp_alerts:
+          - exp_labels: { severity: info }
+            exp_annotations:
+              summary: "mountain: the GitHub token expires in under 14 days"
+              description: Rotate the token in Infisical (mountain-8c-cz) before builds and commits go dark.
+      - eval_time: 40m
+        alertname: MountainUnmapped
+        exp_alerts: []
+      - eval_time: 46m
+        alertname: MountainUnmapped
+        exp_alerts:
+          - exp_labels: { severity: info, kind: app }
+            exp_annotations:
+              summary: "mountain: series dropped for lack of a relay/config.yaml map entry"
+              description: A new app, node, repo or namespace is not in relay/config.yaml, so it is missing from the mountain. Add it to the static maps (02 rot guard).

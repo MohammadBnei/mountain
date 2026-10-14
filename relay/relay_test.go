@@ -161,3 +161,59 @@ func TestHelloRegisterAtomic(t *testing.T) {
 		}
 	}
 }
+
+func TestAlertState(t *testing.T) {
+	cfg, err := loadConfig(configYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := newApp(cfg, Opts{Seed: 1}, "2026-10-14")
+	out := &Out{app: a, name: "alerts"}
+	state := func() string {
+		var h struct{ State json.RawMessage }
+		json.Unmarshal(a.Hello(), &h)
+		return string(h.State)
+	}
+	if s := state(); s != `{"alerts":[]}` {
+		t.Fatalf("empty state must be {\"alerts\":[]}, got %s", s)
+	}
+	al := Alert{FP: "0123456789abcdef", Sev: "critical", Layer: "k8s", StartsAt: 1760450000000}
+	if out.Fire(al) == "" || out.Fire(al) == "" {
+		t.Fatal("fire dropped")
+	}
+	if s := state(); s != `{"alerts":[{"fp":"0123456789abcdef","sev":"critical","layer":"k8s","startsAt":1760450000000}]}` {
+		t.Fatalf("fire (twice, same fp) -> one alert in hello.state, got %s", s)
+	}
+	if out.Fire(Alert{FP: "raw-fingerprint", Sev: "critical", Layer: "k8s"}) != "" || out.Fire(Alert{FP: "0123456789abcde0", Sev: "page", Layer: "k8s"}) != "" {
+		t.Fatal("an unhashed fp or unknown severity must be dropped")
+	}
+	if out.Resolve(al, 900) == "" || state() != `{"alerts":[]}` {
+		t.Fatalf("resolve must empty hello.state.alerts, got %s", state())
+	}
+	out.Stale()
+	if a.Metrics.Stale["alerts"] == 0 {
+		t.Fatal("Out.Stale must set metrics stale[source]")
+	}
+}
+
+type failing struct{}
+
+func (failing) Name() string                    { return "never" }
+func (failing) Run(context.Context, *Out) error { return io.ErrUnexpectedEOF }
+
+func TestSourceSeeded(t *testing.T) {
+	old := registry
+	defer func() { registry = old }()
+	registry = map[string]func(*App) (Source, error){"never": func(*App) (Source, error) { return failing{}, nil }}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := startSources(ctx, &App{Opts: Opts{Source: "live"}}); err != nil {
+		t.Fatal(err)
+	}
+	SourceLastSuccess.mu.Lock()
+	v := SourceLastSuccess.v["never"]
+	SourceLastSuccess.mu.Unlock()
+	if v < float64(time.Now().Add(-time.Minute).Unix()) {
+		t.Fatalf("a source that never succeeds must still export mountain_source_last_success (start time), got %v", v)
+	}
+}

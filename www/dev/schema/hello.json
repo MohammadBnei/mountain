@@ -35,7 +35,24 @@
       }
     },
     "deltas": { "type": "array", "items": { "type": "object", "required": ["t"], "properties": { "t": { "enum": ["ev", "world"] } } } },
-    "state": { "type": "object" },
+    "state": {
+      "description": "Live state a reload must not lose (W1b: firing alerts, in memory; W2 persists it and adds health, replicas, nodes, quorum, builds).",
+      "type": "object", "required": ["alerts"], "additionalProperties": false,
+      "properties": {
+        "alerts": {
+          "type": "array", "maxItems": 256,
+          "items": {
+            "type": "object", "required": ["fp", "sev", "layer", "startsAt"], "additionalProperties": false,
+            "properties": {
+              "fp": { "$ref": "ev.json#/$defs/fp" },
+              "sev": { "$ref": "ev.json#/$defs/sev" },
+              "layer": { "$ref": "ev.json#/$defs/layer" },
+              "startsAt": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
     "metrics": { "$ref": "metrics.json" }
   },
   "$defs": {
