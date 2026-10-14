@@ -15,7 +15,7 @@ import (
 )
 
 // testDSN returns MOUNTAIN_TEST_DSN (a URL) pointed at a fresh schema, or skips: DB tests need a real Postgres
-// (CI job db-test; locally: docker run -d --rm -p 55432:5432 -e POSTGRES_PASSWORD=x postgres:17 and
+// (TestDB*, CI job db-test; locally: docker run -d --rm -p 55432:5432 -e POSTGRES_PASSWORD=x postgres:17 and
 // MOUNTAIN_TEST_DSN=postgres://postgres:x@127.0.0.1:55432/postgres?sslmode=disable).
 func testDSN(t *testing.T) string {
 	t.Helper()
@@ -54,9 +54,9 @@ func storedApp(t *testing.T, dsn string) *App {
 	return a
 }
 
-// TestRestartSurvival: deposits (before and after a snapshot) and a firing alert survive a close and a
+// TestDBRestartSurvival: deposits (before and after a snapshot) and a firing alert survive a close and a
 // reopen from the same DB; the hello rebuilt from it is the same world.
-func TestRestartSurvival(t *testing.T) {
+func TestDBRestartSurvival(t *testing.T) {
 	dsn := testDSN(t)
 	a := storedApp(t, dsn)
 	p, out := newProm(a), &Out{app: a, name: "alerts"}
@@ -97,9 +97,9 @@ func TestRestartSurvival(t *testing.T) {
 	}
 }
 
-// TestReplay: scrub yesterday and today from stored frames; the start-of-day land folds in the frames
+// TestDBReplay: scrub yesterday and today from stored frames; the start-of-day land folds in the frames
 // after yesterday's last snapshot; the frame validates against www/dev/schema/replay.json.
-func TestReplay(t *testing.T) {
+func TestDBReplay(t *testing.T) {
 	dsn := testDSN(t)
 	a := storedApp(t, dsn) // boots on an empty DB: no snapshot of seed 1 yet, so it writes today's
 	s := a.store

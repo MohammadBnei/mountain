@@ -95,8 +95,36 @@ jobs:
             echo "::notice::no Chrome on this runner: run 'node www/dev/gate.mjs selftest' locally before merge (04)"
           fi
 
+  # Persistence tests need a real Postgres: TestDB* skip without MOUNTAIN_TEST_DSN (the self-hosted
+  # test job above has none). GitHub-hosted, so the service container needs no runner change.
+  db-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: mountain
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      MOUNTAIN_TEST_DSN: postgres://postgres:mountain@localhost:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      # the replay frame is validated by www/dev/schema/check.mjs
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: DB tests
+        run: go test -run '^TestDB' -v ./relay/
+
   build-push:
-    needs: test
+    needs: [test, db-test]
     # Registry creds are readable only on push/workflow_dispatch (OIDC claim).
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, ukubi-build]
