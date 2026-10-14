@@ -1,0 +1,7 @@
+{
+  "_": "mountain behaviour fixture: one deposit (+3 m on a 3x3 patch, cells x 60..62, z 70..72), then a metrics frame: h1 ready at full alloc/load, h2 not ready, h3 half alloc.",
+  "deposit": { "id": "01JA0000000000000000000010", "x0": 60, "z0": 70, "w": 3, "h": 3, "cells": [300, 300, 300, 300, 300, 300, 300, 300, 300] },
+  "metrics": { "t": "metrics", "apps": {}, "storage": { "pools": [], "garage": null, "pigsty": null }, "cpu": 0, "mem": 0, "heat": 0, "buildsInFlight": 0,
+    "wind": { "x": 0, "z": 0 }, "snowline": 54.47, "rx": 0, "river": 0,
+    "hosts": { "h1": { "alloc": 1, "ready": true, "load": 1 }, "h2": { "alloc": 0, "ready": false, "load": 0 }, "h3": { "alloc": 0.5, "ready": true, "load": 0 } }, "stale": {} }
+}
