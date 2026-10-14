@@ -34,6 +34,26 @@ namespaces:
   has-journal: ""
   hq: ""
   agent-fleet: ""
+  # Platform and third-party namespaces (argocd_app_info dest_namespace and Traefik
+  # routers, live 2026-10-14): known, never public, not rot.
+  actions-runner: ""
+  argocd: ""
+  authentik: ""
+  default: ""
+  ente: ""
+  garage: ""
+  infisical: ""
+  kube-system: ""
+  local-path-storage: ""
+  longhorn-system: ""
+  monitoring: ""
+  netbird: ""
+  pgweb: ""
+  proxmox: ""
+  searxng: ""
+  thot: ""
+  traefik: ""
+  zot: ""
 
 # Kubernetes node -> Proxmox host bucket (terraform.tfvars k8s_nodes node_name).
 # h1 = the .165 PVE node (default pve_node_name), h2 = server1, h3 = ex-laptop.

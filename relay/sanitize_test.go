@@ -29,7 +29,7 @@ func TestSanitizeCorpus(t *testing.T) {
 		"wird": "wird", "vos-monolith": "vos-monolith", "has-journal": "", "hq": "", "agent-fleet-core": "",
 		"10.0.3.17": "", "wird-adminweb": "", "v1.2.3": "", "platform-prometheus": "", "WIRD": "",
 	} {
-		if got := cfg.appOfArgo(in); got != want {
+		if got := cfg.appOfArgo(in, ""); got != want {
 			t.Errorf("appOfArgo(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -93,5 +93,30 @@ func TestRotGuard(t *testing.T) {
 	cfg.appOfService("newapp-rotguard-web-1a2b@kubernetescrd")
 	if n() != before+1 {
 		t.Fatal("an unknown Traefik router must count as unmapped")
+	}
+
+	// live label values (2026-10-14): platform and third-party things in known namespaces are not rot
+	all := func() float64 {
+		Unmapped.mu.Lock()
+		defer Unmapped.mu.Unlock()
+		return Unmapped.v["ns"] + Unmapped.v["app"] + Unmapped.v["node"]
+	}
+	before = all()
+	for name, ns := range map[string]string{"platform-grafana": "monitoring", "platform-longhorn": "longhorn-system", "argocd": "argocd",
+		"netbird-dashboard": "netbird", "redirectors": "default", "zot": "zot", "wird-adminweb": "wird", "agent-fleet-core": "agent-fleet"} {
+		cfg.appOfArgo(name, ns)
+	}
+	cfg.appOfArgo("rotguard-sync-only", "") // argocd_app_sync_total has no dest_namespace: info decides
+	for _, svc := range []string{"authentik-authentik-4fb0@kubernetescrd", "netbird-netbird-dashboard-a9e4@kubernetescrd",
+		"proxmox-proxmox-b25f@kubernetescrd", "garage-garage-s3-4e25@kubernetescrd", "argocd-argocd-2555@kubernetescrd"} {
+		cfg.appOfService(svc)
+	}
+	cfg.host("") // an unmounted PVC's node
+	if all() != before {
+		t.Fatal("platform / third-party value counted as unmapped")
+	}
+	cfg.appOfArgo("rotguard-newapp", "rotguard-newapp")
+	if all() != before+1 {
+		t.Fatal("an Argo app in an unknown namespace must count as unmapped")
 	}
 }

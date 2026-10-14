@@ -313,7 +313,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	var syncs []syncEv
 	for _, s := range r["sync"] {
 		if p.diff(key("sync", s.L), s.V) > 0 {
-			if app := cfg.appOfArgo(s.L["name"]); app != "" {
+			if app := cfg.appOfArgo(s.L["name"], ""); app != "" {
 				syncs = append(syncs, syncEv{app, s.L["phase"] == "Succeeded"})
 			}
 		}
@@ -331,7 +331,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	// argo.health + app.gone (absent 10 min while the controller is up; an empty answer is no answer).
 	present := map[string]bool{}
 	for _, s := range r["info"] {
-		app := cfg.appOfArgo(s.L["name"])
+		app := cfg.appOfArgo(s.L["name"], s.L["dest_namespace"])
 		if app == "" {
 			continue
 		}

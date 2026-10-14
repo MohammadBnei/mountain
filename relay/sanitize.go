@@ -24,7 +24,7 @@ func unmapped(kind, v string) {
 // appOfNS maps a namespace (+ workload name, matched as "<ns>/<deployment>" key or pod-name prefix)
 // to an allowlisted app; "" = other. Not counted as unmapped: pod/PVC namespaces are mostly infra
 // (kube-system, monitoring, ...); the rot guard counts what can be public instead: Traefik routers
-// (appOfService) and Argo apps (appOfArgo).
+// (appOfService) and Argo apps (appOfArgo) outside every namespace config.yaml knows.
 func (c *Config) appOfNS(ns, workload string) string {
 	for k, app := range c.Namespaces {
 		if dep, ok := strings.CutPrefix(k, ns+"/"); ok && (workload == dep || strings.HasPrefix(workload, dep+"-")) {
@@ -34,15 +34,19 @@ func (c *Config) appOfNS(ns, workload string) string {
 	return c.Namespaces[ns]
 }
 
-// appOfArgo maps an ArgoCD Application name (argocd_app_* have no dest_namespace, 02 gotchas).
-func (c *Config) appOfArgo(name string) string {
+// appOfArgo maps an ArgoCD Application name (argocd_app_sync_total has no dest_namespace, 02 gotchas).
+// destNS (argocd_app_info's dest_namespace, "" when unknown) decides rot: an app deploying into a
+// namespace config.yaml knows (public or not) is mapped on purpose; only an unknown one counts.
+func (c *Config) appOfArgo(name, destNS string) string {
 	if _, ok := c.Apps[name]; ok {
 		return name
 	}
 	if app, ok := c.Namespaces[name]; ok {
 		return app
 	}
-	unmapped("app", name)
+	if _, known := c.Namespaces[destNS]; destNS != "" && !known {
+		unmapped("app", name)
+	}
 	return ""
 }
 
@@ -70,7 +74,9 @@ func (c *Config) host(node string) string {
 	if h := c.Nodes[node]; hosts[h] {
 		return h
 	}
-	unmapped("node", node)
+	if node != "" { // "": a PVC no pod mounts has no node, nothing to map
+		unmapped("node", node)
+	}
 	return ""
 }
 
