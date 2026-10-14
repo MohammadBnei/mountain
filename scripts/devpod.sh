@@ -24,7 +24,7 @@ build() { (cd "$ROOT" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$BIN
 push() {
   build
   $K cp "$BIN" relay:/app/relay.new -c relay
-  $K exec relay -c relay -- sh -c 'chmod +x /app/relay.new && mv /app/relay.new /app/relay && pkill -x relay || true'
+  $K exec relay -c relay -- sh -c 'chmod +x /app/relay.new && mv /app/relay.new /app/relay && { p=$(pidof relay) && kill $p || true; }'
   echo "pushed $(shasum -a 256 "$BIN" | cut -c1-12)"
 }
 
