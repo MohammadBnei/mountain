@@ -251,6 +251,18 @@ func csp(html []byte, dev bool) string {
 
 func static(www fs.FS, dev bool) http.Handler {
 	files := http.FileServerFS(www)
+	// Content-hash ETags + no-cache: browsers revalidate every load (304 when unchanged), so a deploy
+	// never mixes module versions (Cloudflare's default 4 h TTL did: old kit.js + new post.js).
+	etags := map[string]string{}
+	fs.WalkDir(www, ".", func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			if b, err := fs.ReadFile(www, p); err == nil {
+				s := sha256.Sum256(b)
+				etags["/"+p] = `"` + base64.RawURLEncoding.EncodeToString(s[:12]) + `"`
+			}
+		}
+		return nil
+	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
 		if strings.HasPrefix(p, "/dev/") && !dev {
@@ -260,6 +272,14 @@ func static(www fs.FS, dev bool) http.Handler {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Cache-Control", "no-cache")
+		key := p
+		if strings.HasSuffix(key, "/") {
+			key += "index.html"
+		}
+		if e, ok := etags[key]; ok {
+			h.Set("ETag", e)
+		}
 		if p == "/" || strings.HasSuffix(p, ".html") {
 			name := strings.TrimPrefix(p, "/")
 			if name == "" {
