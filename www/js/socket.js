@@ -13,7 +13,7 @@
 export const wsURL = (loc = location) => `${loc.protocol === 'https:' ? 'wss' : 'ws'}://${loc.host}/ws`;
 
 export function connect({ url = wsURL(), world, onStatus = () => {} }) {
-  let ws, closed = false, backoff = 1000, timer;
+  let ws, closed = false, backoff = 1000, timer, fresh = new Set(); // fresh: apps with a world:site since the last hello
   const open = () => {
     ws = new WebSocket(url);
     ws.onopen = () => onStatus('open');
@@ -21,11 +21,18 @@ export function connect({ url = wsURL(), world, onStatus = () => {} }) {
       let f;
       try { f = JSON.parse(e.data); } catch { return console.warn('socket: dropped a non-JSON frame'); }
       world.applyFrame(f);
+      if (f.t === 'world' && f.kind === 'site') fresh.add(f.app);
       if (f.t !== 'hello') return;
       backoff = 1000;
       // world.sites = /api/topology + world:site deltas (01): apps with no deposit yet still get a site.
-      fetch(new URL('/api/topology', url.replace(/^ws/, 'http'))).then((r) => r.json())
-        .then((t) => world.write('sites', 'world', (m) => { for (const x of t.sites || []) m.set(x.app, x); }))
+      // A resync REPLACES the sites (gone apps drop out), except those a world:site set after this hello:
+      // the answer may be older than them. A newer hello's answer supersedes this one.
+      const mine = fresh = new Set();
+      fetch(new URL('/api/topology', url.replace(/^ws/, 'http')), { cache: 'no-store' }).then((r) => r.json())
+        .then((t) => mine === fresh && world.write('sites', 'world', (m) => {
+          for (const k of [...m.keys()]) if (!mine.has(k)) m.delete(k);
+          for (const x of t.sites || []) if (!mine.has(x.app)) m.set(x.app, x);
+        }))
         .catch((e) => console.warn('socket: /api/topology', e.message));
     };
     ws.onclose = () => {

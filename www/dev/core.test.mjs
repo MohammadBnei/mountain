@@ -63,7 +63,8 @@ globalThis.WebSocket = class {
   recv(f) { this.onmessage({ data: typeof f === 'string' ? f : JSON.stringify(f) }); }
 };
 const fetched = [];
-globalThis.fetch = async (u) => { fetched.push(String(u)); return { json: async () => ({ sites: [{ app: 'vos-monolith', x: -40.7, z: 1.4 }] }) }; };
+let topo = { sites: [{ app: 'vos-monolith', x: -40.7, z: 1.4 }] }, gate = null;
+globalThis.fetch = async (u, o) => { fetched.push(`${u} ${o?.cache}`); await gate; return { json: async () => topo }; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const w2 = createWorld({ dev: true }), status = [];
 Math.random = () => 0; // jitter factor 0.5
@@ -72,7 +73,16 @@ await sleep(10);
 socks[0].recv({ ...hello, t: 'hello' });
 ok(w2.stale === null && status.join() === 'open', 'hello applied, not stale');
 await sleep(1);
-ok(fetched[0] === 'http://x/api/topology' && w2.sites.get('vos-monolith')?.x === -40.7, 'hello fetches /api/topology into world.sites');
+ok(fetched[0] === 'http://x/api/topology no-store' && w2.sites.get('vos-monolith')?.x === -40.7, 'hello fetches /api/topology (no-store) into world.sites');
+socks[0].recv({ t: 'world', kind: 'site', app: 'wird', x: 3, z: 0, y: 0, tier: 0, group: 'user' });
+let open_; gate = new Promise((r) => (open_ = r));
+topo = { sites: [{ app: 'dream-analyst', x: 5 }, { app: 'editable-blog', x: 1 }] };
+socks[0].recv({ ...hello, t: 'hello' }); // resync; its topology answer is held back...
+socks[0].recv({ t: 'world', kind: 'site', app: 'editable-blog', x: 9, z: 0, y: 0, tier: 0, group: 'user' }); // ...behind a newer site
+open_(); gate = null;
+await sleep(1);
+ok(!w2.sites.has('vos-monolith') && !w2.sites.has('wird') && w2.sites.get('dream-analyst')?.x === 5, 'resync topology replaces world.sites (gone apps drop out)');
+ok(w2.sites.get('editable-blog')?.x === 9, 'a world:site after the hello wins over the older topology answer');
 const t0 = Date.now();
 socks[0].close();
 ok(typeof w2.stale === 'number' && w2.stale >= t0 - 5, 'disconnect sets world.stale = since-timestamp');
