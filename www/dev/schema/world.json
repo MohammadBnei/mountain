@@ -223,11 +223,14 @@
      "const": "world"
     },
     "kind": {
-     "type": "string",
-     "pattern": "^[a-z-]{1,24}$"
+     "const": "mark"
     },
     "id": {
      "type": "string"
+    },
+    "mark": {
+     "type": "string",
+     "pattern": "^[a-z-]{1,24}$"
     },
     "pose": {
      "type": "object"
@@ -240,7 +243,7 @@
     "t",
     "kind",
     "id",
-    "kind",
+    "mark",
     "pose",
     "weight"
    ],

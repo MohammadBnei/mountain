@@ -73,19 +73,22 @@ type Out struct {
 
 // Ev broadcasts {t:"ev", id, ts, kind, ...fields} (02 event enum). Fields must already be sanitised.
 func (o *Out) Ev(kind string, fields map[string]any) {
-	f := map[string]any{"t": "ev", "id": ULID(), "ts": time.Now().UnixMilli(), "kind": kind}
+	f := map[string]any{}
 	for k, v := range fields {
 		f[k] = v
 	}
+	f["t"], f["id"], f["ts"], f["kind"] = "ev", ULID(), time.Now().UnixMilli(), kind // after fields: a field can't overwrite them
 	o.app.Hub.Broadcast(mustJSON(f))
 }
 
 // World broadcasts {t:"world", kind, ...payload} (kind = deposit|vein|glacier|ash|site|mark|cloud|rain).
+// A payload never carries its own "kind" (world:mark uses "mark"); t/kind are written last regardless.
 func (o *Out) World(kind string, payload map[string]any) {
-	f := map[string]any{"t": "world", "kind": kind}
+	f := map[string]any{}
 	for k, v := range payload {
 		f[k] = v
 	}
+	f["t"], f["kind"] = "world", kind
 	o.app.Hub.Broadcast(mustJSON(f))
 }
 

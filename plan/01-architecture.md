@@ -87,7 +87,7 @@ Every model folder ships `fixture.json` (a scripted event and world-delta timeli
 | `world:glacier` | `{mass, tongues:[{app, len}], ash:[day]}` | world.js | glacier |
 | `world:ash` | `{day, title?}` | world.js | strata |
 | `world:site` | `{app, x, z, y, tier, group}` | world.js | summit, eruption, magma |
-| `world:mark` | `{id, kind, pose, weight}` | world.js | cairns, footprints, toss |
+| `world:mark` | `{id, mark, pose, weight}` | world.js | cairns, footprints, toss |
 | `world:cloud` | `{id, pos, state, credits[]}` | world.js | toy-clouds, sky |
 | `world:rain` | `{x, z, r}` | world.js | footprints, cairns |
 | `magma.dyke` | `{app, x, z, heat}` | magma | eruption (size boost only) |

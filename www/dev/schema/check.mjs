@@ -69,12 +69,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const fx = join(DIR, '../fixtures');
     const hello = JSON.parse(readFileSync(join(fx, 'hello.json'), 'utf8'));
     report('fixtures/hello.json', validate(hello));
-    const { decodeI16 } = await import('../../js/world.js');
+    const { decodeI16, createWorld } = await import('../../js/world.js');
     const base = decodeI16(hello.snapshot.base);
     report('hello.base decodes to 128² int16', base.length === 128 * 128 && Math.max(...base) > 3000 ? [] : [`len ${base.length}`]);
     const { valid, invalid } = JSON.parse(readFileSync(join(fx, 'frames.json'), 'utf8'));
     valid.forEach((f, i) => report(`frames.valid[${i}] ${f.t}:${f.kind || ''}`, validate(f)));
     invalid.forEach((f, i) => report(`frames.invalid[${i}] ${f.t}:${f.kind || ''}`, validate(f), false));
+    const dw = createWorld({ dev: true }), seen = []; // dev world throws on an unknown bus type
+    for (const k of ['deposit', 'site', 'mark']) dw.on(`world:${k}`, (p, type) => seen.push(type));
+    for (const f of valid.filter((f) => f.t === 'world')) { try { dw.applyFrame(f); } catch (e) { seen.push(e.message); } }
+    report('valid world frames → world:<kind> bus', seen.join() === 'world:deposit,world:site,world:mark' ? [] : [seen.join()]);
   }
   console.log(bad ? `SCHEMA FAIL (${bad})` : 'SCHEMA PASS');
   process.exit(bad ? 1 : 0);

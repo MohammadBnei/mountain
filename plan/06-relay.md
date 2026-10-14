@@ -27,7 +27,7 @@
 - Client → server:
   - `subscribe{filter}`
   - `scrub{day}` → `replay{snapshot, frames}`
-  - `mark{kind, pose}` (session in `mountain-visitors` or `platform-admins`)
+  - `mark{mark, pose}` (session in `mountain-visitors` or `platform-admins`)
 - `action`: v2.
 
 **Dev and fixture modes (R4):**

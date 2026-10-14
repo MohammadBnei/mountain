@@ -87,9 +87,9 @@ func TestHub(t *testing.T) {
 		if err != nil || json.Unmarshal(b, &f) != nil || f.T != "hello" {
 			t.Fatalf("first frame: %v %.80s", err, b)
 		}
-		(&Out{app: a, name: "test"}).Ev("argo.sync", map[string]any{"app": "wird", "ok": true})
+		(&Out{app: a, name: "test"}).Ev("argo.sync", map[string]any{"app": "wird", "ok": true, "kind": "hostile", "t": "x"})
 		_, b, err = c.Read(context.Background())
-		if err != nil || !strings.Contains(string(b), `"kind":"argo.sync"`) {
+		if err != nil || !strings.Contains(string(b), `"kind":"argo.sync"`) || !strings.Contains(string(b), `"t":"ev"`) {
 			t.Fatalf("broadcast: %v %s", err, b)
 		}
 		c.CloseNow()
