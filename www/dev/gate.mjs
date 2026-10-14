@@ -86,7 +86,7 @@ async function scan(files) {
 }
 const jsUnder = async (dir) => (existsSync(dir) ? (await readdir(dir, { recursive: true })).filter((f) => f.endsWith('.js')).map((f) => join(dir, f)) : []);
 
-// A layout.page model whose folder does not exist yet (another lane's) 404s on import: noted, not failed.
+// A page.js model whose folder does not exist yet (another lane's) 404s on import: noted, not failed.
 const unbuilt = (s) => [...s.matchAll(/\/models\/([^/]+)\/index\.js/g)].some((m) => !existsSync(join(ROOT, 'models', m[1])));
 /** Console errors and warnings, exceptions, HTTP ≥ 400, failed and foreign requests → failures (unless allow(text)). */
 function watch(page, origin, { allow = () => false } = {}) {
@@ -212,9 +212,9 @@ async function pageMode() {
   const stop = () => new Promise((r) => { relay.once('exit', r); relay.kill('SIGTERM'); });
   if (!(await start())) { fail(`relay did not answer /healthz: ${relayLog.slice(-300)}`); relay.kill('SIGKILL'); return finish(); }
   console.log(`relay ${bin} --dev --source=fixture:${fx} on ${origin}`);
-  // Every built model is on the page: a landed lane left out of layout.page would ship invisible.
-  const { page: onPage } = await import(join(ROOT, 'js/layout.js'));
-  for (const m of await readdir(join(ROOT, 'models'))) if (!onPage.includes(m)) fail(`page: models/${m}/ is not in layout.page`);
+  // Every built model is on the page: a landed lane left out of page.js would ship invisible.
+  const { page: onPage } = await import(join(ROOT, 'js/page.js'));
+  for (const m of await readdir(join(ROOT, 'models'))) if (!onPage.includes(m)) fail(`page: models/${m}/ is not in page.js`);
 
   // CSP: exactly one source (the Go relay); importmap hash, connect-src, no third-party origins
   const res = await fetch(`${origin}/`), csp = res.headers.get('content-security-policy') || '', html = await res.text();

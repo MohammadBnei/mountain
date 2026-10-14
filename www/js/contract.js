@@ -1,4 +1,4 @@
-// Model contract (01). FROZEN W2.
+// Model contract (01). FROZEN W2 (FROZEN.sha256).
 //
 //   export default async function build(ctx) → Model
 //   ctx   = { THREE, kit, world, plot: {x, z, r, yRange}, params, rng, name }

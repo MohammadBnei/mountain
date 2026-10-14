@@ -1,5 +1,5 @@
 // Kit: the only source of materials, colours, the light rig and procedural helpers (09-style).
-// ORCHESTRATOR-OWNED, style FROZEN. Colours come from tokens.json (byte copy of plan/style/tokens.json,
+// ORCHESTRATOR-OWNED, style FROZEN; tokens + factories FROZEN W2 (FROZEN.sha256). Colours come from tokens.json (byte copy of plan/style/tokens.json,
 // a Go test keeps them equal); nothing here invents a colour. Every factory tags userData.kit.
 //
 // Exported interface (models use only these):

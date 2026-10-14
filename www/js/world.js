@@ -1,5 +1,5 @@
-// World: fields, shared state and the bus (01 "World"). FROZEN W2; bodies may grow in W1a lane B
-// behind THIS interface.
+// World: fields, shared state and the bus (01 "World"). FROZEN W2 (FROZEN.sha256): interface, bus registry,
+// writers, event enum and world.rig change only by an announced orchestrator change.
 //
 //   createWorld({dev}) → world
 //   world.fields      {'h.base': Int16Array, 'h.land': Int16Array (HEIGHT_Q steps), heightSolid: Float32Array (units),

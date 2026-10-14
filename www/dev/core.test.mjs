@@ -132,6 +132,22 @@ c.close();
 await sleep(1200);
 ok(socks.length === 4, 'close() stops reconnecting');
 
+// ---- layout (frozen W2): every model's profile agrees with the world's writers and bus registry; page budget ----
+{
+  const { profiles } = await import('../js/layout.js'), { WRITERS, BUS, EV_KINDS } = await import('../js/world.js');
+  const real = Object.entries(profiles).filter(([k]) => !k.startsWith('_')), bad = [];
+  for (const [n, p] of real) {
+    for (const s of p.writes) if (WRITERS[s] !== n) bad.push(`${n} writes ${s} (writer ${WRITERS[s]})`);
+    for (const t of p.emits) if (!BUS[t]?.includes(n)) bad.push(`${n} emits ${t}`);
+    for (const t of p.listens) if (!BUS[t] && !EV_KINDS.includes(t.slice(3))) bad.push(`${n} listens ${t}`);
+  }
+  for (const [s, wr] of Object.entries(WRITERS)) if (!['world', 'socket', 'story'].includes(wr) && !real.some(([n, p]) => n === wr && p.writes.includes(s))) bad.push(`no profile writes ${s}`);
+  for (const [t, em] of Object.entries(BUS)) for (const e of em) if (e !== 'world' && !profiles[e]?.emits.includes(t)) bad.push(`${e} emits ${t} but its profile does not`);
+  ok(!bad.length, `layout profiles ⊆ world WRITERS / BUS (${bad.join('; ') || 'all consistent'})`);
+  const t = real.reduce((a, [, p]) => a + p.peak.tris, 0), d = real.reduce((a, [, p]) => a + p.peak.draws, 0);
+  ok(t <= 200000 && d <= 220, `every profile at peak fits the page budget (${t} tris ≤ 200k, ${d} draws ≤ 220)`);
+}
+
 // ---- scrub: replay rebuilds land + state, plays the day's frames, drops live frames; release resyncs ----
 const w4 = createWorld({ dev: true }), sent = [], heard = [];
 let resyncs = 0;

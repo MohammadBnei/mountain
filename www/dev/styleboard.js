@@ -1,4 +1,4 @@
-// Styleboard (09): the models of layout.page on the kit rig, 4 time keys (rows) × 4 orbit angles (columns),
+// Styleboard (09): the models of page.js on the kit rig, 4 time keys (rows) × 4 orbit angles (columns),
 // one canvas, scissored viewports. Models not built yet are listed as missing; with none, the Go h.base
 // terrain fixture stands in so the rig is still judged on the real kit render. ?q=low  Hook: __board.
 const q = new URLSearchParams(location.search);
@@ -8,7 +8,8 @@ try {
   const THREE = await import('three');
   const kit = await import('../js/kit.js');
   const { createWorld } = await import('../js/world.js');
-  const { profiles, page, finale } = await import('../js/layout.js');
+  const { profiles, finale } = await import('../js/layout.js');
+  const { page } = await import('../js/page.js');
   const { makeCtx, checkModel, wire } = await import('../js/contract.js');
 
   const canvas = document.getElementById('c');

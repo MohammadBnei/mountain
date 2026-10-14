@@ -1,4 +1,4 @@
-// Page: kit rig + world + socket + the models of layout.page, live finale camera (story is W3), post on desktop.
+// Page: kit rig + world + socket + the models of page.js, live finale camera (story is W3), post on desktop.
 // Orchestrator-owned. ?fixture=1 loads dev/fixtures/hello.json instead of /ws (static serving).
 // Host duties: world.rig → kit.setPhase on change; world.stale → the "stale since" label (sky dims via kit.setStale).
 // Dev (127.0.0.1): globalThis.__page = {renderer, scene, camera, post, world, kit} for the gate.
@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import * as kit from './kit.js';
 import { createWorld } from './world.js';
 import { connect } from './socket.js';
-import { profiles, page, finale } from './layout.js';
+import { profiles, finale } from './layout.js';
+import { page } from './page.js';
 import { makeCtx, checkModel, wire } from './contract.js';
 import { createPost } from './post.js';
 
