@@ -1,0 +1,1467 @@
+{
+ "_": "Hostile relay timeline for --source=fixture: (06, 04). Labels carry IPs, namespaces, hostnames, versions and non-allowlisted apps; none may reach /ws. Steps are sparse (unnamed queries keep their last answer).",
+ "step_s": 2,
+ "steps": [
+  {
+   "prom": {
+    "sync": [
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "wird",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 5
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "vos-monolith",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "has-journal",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "10.0.3.17",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "editable-blog",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 2
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "agent-fleet-core",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 7
+     }
+    ],
+    "info": [
+     {
+      "m": {
+       "name": "wird",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/wird",
+       "dest_namespace": "wird",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "vos-monolith",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/vos-monolith",
+       "dest_namespace": "vos-monolith",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "editable-blog",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/editable-blog",
+       "dest_namespace": "editable-blog",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "dream-analyst",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/dream-analyst",
+       "dest_namespace": "dream-analyst",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "mountain",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/mountain",
+       "dest_namespace": "mountain",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "has-journal",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/has-journal",
+       "dest_namespace": "has-journal",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "hq",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/hq",
+       "dest_namespace": "hq",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     }
+    ],
+    "ctrl": [
+     {
+      "m": {},
+      "v": 1
+     }
+    ],
+    "restarts": [
+     {
+      "m": {
+       "namespace": "editable-blog",
+       "pod": "editable-blog-7d9f8c-abcde",
+       "container": "app",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/app:v1.2.3"
+      },
+      "v": 0
+     },
+     {
+      "m": {
+       "namespace": "dream-analyst",
+       "pod": "dream-analyst-55f-x2k9q",
+       "container": "api",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/api:v1.2.3"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "coredns-6d4b75cb6d-xyz12",
+       "container": "coredns",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/coredns:v1.2.3"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "namespace": "has-journal",
+       "pod": "has-journal-0",
+       "container": "app",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/app:v1.2.3"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "pod": "wird-adminweb-6c9-qwert",
+       "container": "web",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/web:v1.2.3"
+      },
+      "v": 0
+     }
+    ],
+    "oom": [],
+    "crash": [],
+    "replicas": [
+     {
+      "m": {
+       "namespace": "wird",
+       "deployment": "wird"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "vos",
+       "deployment": "vos-monolith"
+      },
+      "v": 2
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "deployment": "coredns"
+      },
+      "v": 2
+     },
+     {
+      "m": {
+       "namespace": "has-journal",
+       "deployment": "has-journal"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "deployment": "wird-adminweb"
+      },
+      "v": 1
+     }
+    ],
+    "ready": [
+     {
+      "m": {
+       "node": "k8s-cp-01",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-cp-02",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-cp-03",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-worker-01",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-worker-02",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "evil-node.bnei.lan",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     }
+    ],
+    "alloc": [
+     {
+      "m": {
+       "node": "k8s-cp-01",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "node": "k8s-cp-02",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "node": "k8s-cp-03",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "node": "k8s-worker-01",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "node": "k8s-worker-02",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "node": "evil-node.bnei.lan",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 64
+     }
+    ],
+    "load": [
+     {
+      "m": {
+       "nodename": "k8s-cp-01",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 0.2
+     },
+     {
+      "m": {
+       "nodename": "k8s-cp-02",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 0.2
+     },
+     {
+      "m": {
+       "nodename": "k8s-cp-03",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 0.2
+     },
+     {
+      "m": {
+       "nodename": "k8s-worker-01",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 0.2
+     },
+     {
+      "m": {
+       "nodename": "k8s-worker-02",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 0.2
+     },
+     {
+      "m": {
+       "nodename": "evil-node.bnei.lan",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 0.9
+     }
+    ],
+    "quorum": [
+     {
+      "m": {
+       "target": "pve-bnei",
+       "instance": "192.168.1.165:8006"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "pve-server1",
+       "instance": "192.168.1.165:8006"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "pve-ex-laptop",
+       "instance": "192.168.1.165:8006"
+      },
+      "v": 1
+     }
+    ],
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 1000
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "502",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 10
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "0",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 50
+     },
+     {
+      "m": {
+       "exported_service": "has-journal-has-journal-7844a73ed8cf7d178ddd@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 500
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-monolith-dd4e33317329b43f479b@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 300
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-adminweb-1a2b@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 99
+     },
+     {
+      "m": {
+       "exported_service": "monitoring-grafana-7dae99210d857670c8cc@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 77
+     }
+    ],
+    "bytes": [
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 5000000.0
+     },
+     {
+      "m": {
+       "exported_service": "has-journal-has-journal-7844a73ed8cf7d178ddd@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 9000000.0
+     }
+    ],
+    "pvc": [
+     {
+      "m": {
+       "namespace": "wird",
+       "persistentvolumeclaim": "wird-pg",
+       "storageclass": "longhorn",
+       "volumename": "pvc-0b1e2f3a-4c5d-6e7f"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "has-journal",
+       "persistentvolumeclaim": "has-journal-data",
+       "storageclass": "longhorn",
+       "volumename": "pvc-0b1e2f3a-4c5d-6e7f"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "monitoring",
+       "persistentvolumeclaim": "prometheus-db-0",
+       "storageclass": "local-path",
+       "volumename": "pvc-0b1e2f3a-4c5d-6e7f"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "agent-fleet",
+       "persistentvolumeclaim": "agent-fleet-workspace",
+       "storageclass": "local-path",
+       "volumename": "pvc-0b1e2f3a-4c5d-6e7f"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "ukubi-stt",
+       "persistentvolumeclaim": "ukubi-stt",
+       "storageclass": "local-path",
+       "volumename": "pvc-0b1e2f3a-4c5d-6e7f"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "garage",
+       "persistentvolumeclaim": "garage-meta",
+       "storageclass": "nfs-client",
+       "volumename": "pvc-0b1e2f3a-4c5d-6e7f"
+      },
+      "v": 1
+     }
+    ],
+    "cap": [
+     {
+      "m": {
+       "namespace": "wird",
+       "persistentvolumeclaim": "wird-pg"
+      },
+      "v": 10737418240
+     },
+     {
+      "m": {
+       "namespace": "has-journal",
+       "persistentvolumeclaim": "has-journal-data"
+      },
+      "v": 5368709120
+     },
+     {
+      "m": {
+       "namespace": "monitoring",
+       "persistentvolumeclaim": "prometheus-db-0"
+      },
+      "v": 53687091200
+     },
+     {
+      "m": {
+       "namespace": "agent-fleet",
+       "persistentvolumeclaim": "agent-fleet-workspace"
+      },
+      "v": 21474836480
+     },
+     {
+      "m": {
+       "namespace": "ukubi-stt",
+       "persistentvolumeclaim": "ukubi-stt"
+      },
+      "v": 8589934592
+     }
+    ],
+    "used": [
+     {
+      "m": {
+       "namespace": "wird",
+       "persistentvolumeclaim": "wird-pg"
+      },
+      "v": 9663676416
+     },
+     {
+      "m": {
+       "namespace": "has-journal",
+       "persistentvolumeclaim": "has-journal-data"
+      },
+      "v": 1073741824
+     }
+    ],
+    "pvcnode": [
+     {
+      "m": {
+       "namespace": "monitoring",
+       "persistentvolumeclaim": "prometheus-db-0",
+       "node": "k8s-worker-01",
+       "pod": "prometheus-0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "agent-fleet",
+       "persistentvolumeclaim": "agent-fleet-workspace",
+       "node": "k8s-worker-02",
+       "pod": "fleet-0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "ukubi-stt",
+       "persistentvolumeclaim": "ukubi-stt",
+       "node": "k8s-worker-01",
+       "pod": "ukubi-stt-0"
+      },
+      "v": 1
+     }
+    ],
+    "cpu": [
+     {
+      "m": {},
+      "v": 0.31
+     }
+    ],
+    "mem": [
+     {
+      "m": {},
+      "v": 0.52
+     }
+    ],
+    "rx": [
+     {
+      "m": {},
+      "v": 2500000.0
+     }
+    ]
+   },
+   "am": []
+  },
+  {
+   "prom": {
+    "sync": [
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "wird",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 6
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "vos-monolith",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "has-journal",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 5
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "10.0.3.17",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 2
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "editable-blog",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 2
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "agent-fleet-core",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 7
+     }
+    ],
+    "restarts": [
+     {
+      "m": {
+       "namespace": "editable-blog",
+       "pod": "editable-blog-7d9f8c-abcde",
+       "container": "app",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/app:v1.2.3"
+      },
+      "v": 2
+     },
+     {
+      "m": {
+       "namespace": "dream-analyst",
+       "pod": "dream-analyst-55f-x2k9q",
+       "container": "api",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/api:v1.2.3"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "coredns-6d4b75cb6d-xyz12",
+       "container": "coredns",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/coredns:v1.2.3"
+      },
+      "v": 9
+     },
+     {
+      "m": {
+       "namespace": "has-journal",
+       "pod": "has-journal-0",
+       "container": "app",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/app:v1.2.3"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "pod": "wird-adminweb-6c9-qwert",
+       "container": "web",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/web:v1.2.3"
+      },
+      "v": 0
+     }
+    ],
+    "oom": [
+     {
+      "m": {
+       "namespace": "editable-blog",
+       "pod": "editable-blog-7d9f8c-abcde",
+       "container": "app",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/app:v1.2.3"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "coredns-6d4b75cb6d-xyz12",
+       "container": "coredns",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/coredns:v1.2.3"
+      },
+      "v": 1
+     }
+    ],
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 1300
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "502",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 10
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "0",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 50
+     },
+     {
+      "m": {
+       "exported_service": "has-journal-has-journal-7844a73ed8cf7d178ddd@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 500
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-monolith-dd4e33317329b43f479b@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 300
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-adminweb-1a2b@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 99
+     },
+     {
+      "m": {
+       "exported_service": "monitoring-grafana-7dae99210d857670c8cc@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 77
+     }
+    ],
+    "bytes": [
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 6000000.0
+     },
+     {
+      "m": {
+       "exported_service": "has-journal-has-journal-7844a73ed8cf7d178ddd@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 9000000.0
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "sync": [
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "wird",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 6
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "vos-monolith",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "has-journal",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 5
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "10.0.3.17",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 2
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "editable-blog",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 2
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "agent-fleet-core",
+       "namespace": "argocd",
+       "phase": "Succeeded",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 7
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "vos-monolith",
+       "namespace": "argocd",
+       "phase": "Failed",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 1
+     }
+    ],
+    "oom": [],
+    "crash": [
+     {
+      "m": {
+       "namespace": "dream-analyst",
+       "pod": "dream-analyst-55f-x2k9q",
+       "container": "api",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/api:v1.2.3"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "has-journal",
+       "pod": "has-journal-0",
+       "container": "app",
+       "uid": "6f1c2a9e-0d4b",
+       "instance": "10.233.66.49:8080",
+       "node": "k8s-worker-01.bnei.lan",
+       "image": "ghcr.io/mohammadbnei/app:v1.2.3"
+      },
+      "v": 1
+     }
+    ],
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 40
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "502",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 10
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-865ce724ee1dd18d881f@kubernetescrd",
+       "code": "0",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 50
+     },
+     {
+      "m": {
+       "exported_service": "has-journal-has-journal-7844a73ed8cf7d178ddd@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 500
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-monolith-dd4e33317329b43f479b@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 300
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-adminweb-1a2b@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 99
+     },
+     {
+      "m": {
+       "exported_service": "monitoring-grafana-7dae99210d857670c8cc@kubernetescrd",
+       "code": "200",
+       "method": "GET",
+       "protocol": "http",
+       "instance": "10.233.64.12:9100"
+      },
+      "v": 77
+     }
+    ],
+    "ready": [
+     {
+      "m": {
+       "node": "k8s-cp-01",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-cp-02",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-cp-03",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 0
+     },
+     {
+      "m": {
+       "node": "k8s-worker-01",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-worker-02",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "evil-node.bnei.lan",
+       "instance": "192.168.1.201:9100",
+       "kernel_version": "6.8.0-45-generic",
+       "kubelet_version": "v1.31.2"
+      },
+      "v": 1
+     }
+    ],
+    "replicas": [
+     {
+      "m": {
+       "namespace": "wird",
+       "deployment": "wird"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "vos",
+       "deployment": "vos-monolith"
+      },
+      "v": 6
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "deployment": "coredns"
+      },
+      "v": 2
+     },
+     {
+      "m": {
+       "namespace": "has-journal",
+       "deployment": "has-journal"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "deployment": "wird-adminweb"
+      },
+      "v": 1
+     }
+    ],
+    "info": [
+     {
+      "m": {
+       "name": "wird",
+       "namespace": "argocd",
+       "health_status": "Degraded",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/wird",
+       "dest_namespace": "wird",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "vos-monolith",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/vos-monolith",
+       "dest_namespace": "vos-monolith",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "editable-blog",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/editable-blog",
+       "dest_namespace": "editable-blog",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "dream-analyst",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/dream-analyst",
+       "dest_namespace": "dream-analyst",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "mountain",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/mountain",
+       "dest_namespace": "mountain",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "has-journal",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/has-journal",
+       "dest_namespace": "has-journal",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "hq",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/hq",
+       "dest_namespace": "hq",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "info": [
+     {
+      "m": {
+       "name": "wird",
+       "namespace": "argocd",
+       "health_status": "Degraded",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/wird",
+       "dest_namespace": "wird",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "vos-monolith",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/vos-monolith",
+       "dest_namespace": "vos-monolith",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "editable-blog",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/editable-blog",
+       "dest_namespace": "editable-blog",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "mountain",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/mountain",
+       "dest_namespace": "mountain",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "has-journal",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/has-journal",
+       "dest_namespace": "has-journal",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "hq",
+       "namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "repo": "https://github.com/MohammadBnei/hq",
+       "dest_namespace": "hq",
+       "instance": "10.233.66.30:8082"
+      },
+      "v": 1
+     }
+    ],
+    "quorum": [
+     {
+      "m": {
+       "target": "pve-bnei",
+       "instance": "192.168.1.165:8006"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "pve-server1",
+       "instance": "192.168.1.165:8006"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "pve-ex-laptop",
+       "instance": "192.168.1.165:8006"
+      },
+      "v": 0
+     }
+    ]
+   }
+  }
+ ]
+}
