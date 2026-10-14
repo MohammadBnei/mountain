@@ -87,11 +87,11 @@ const jsUnder = async (dir) => (existsSync(dir) ? (await readdir(dir, { recursiv
 
 // A layout.page model whose folder does not exist yet (another lane's) 404s on import: noted, not failed.
 const unbuilt = (s) => [...s.matchAll(/\/models\/([^/]+)\/index\.js/g)].some((m) => !existsSync(join(ROOT, 'models', m[1])));
-/** Console errors, exceptions, HTTP ≥ 400, failed and foreign requests → failures (unless allow(text)). */
+/** Console errors and warnings, exceptions, HTTP ≥ 400, failed and foreign requests → failures (unless allow(text)). */
 function watch(page, origin, { allow = () => false } = {}) {
   const ok = (...xs) => { const s = xs.join(' '); return allow(s) || unbuilt(s); };
   page.on(({ method, params }) => {
-    if (method === 'Runtime.consoleAPICalled' && (params.type === 'error' || params.type === 'assert')) fail(`console.${params.type}: ${params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 400)}`);
+    if (method === 'Runtime.consoleAPICalled' && (params.type === 'error' || params.type === 'assert' || params.type === 'warning')) fail(`console.${params.type}: ${params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 400)}`);
     if (method === 'Runtime.exceptionThrown') fail(`exception: ${(params.exceptionDetails.exception?.description || params.exceptionDetails.text).slice(0, 400)}`);
     if (method === 'Log.entryAdded' && params.entry.level === 'error' && !ok(params.entry.text, params.entry.url)) fail(`log error: ${params.entry.text.slice(0, 300)} ${params.entry.url || ''}`);
     if (method === 'Network.requestWillBeSent') { const u = params.request.url; if (!u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:')) fail(`foreign request: ${u}`); }

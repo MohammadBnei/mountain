@@ -216,7 +216,7 @@ export function mulberry(a) {
 }
 /** Icosahedron(1,1), seeded ±25 % vertex jitter, non-indexed (80 tris). */
 export function rock(seed = 1) {
-  const r = mulberry(seed), g = new THREE.IcosahedronGeometry(1, 1).toNonIndexed(), p = g.attributes.position, s = new Map();
+  const r = mulberry(seed), g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position, s = new Map();
   for (let i = 0; i < p.count; i++) {
     const k = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;
     if (!s.has(k)) s.set(k, 0.75 + r() * 0.5);
@@ -232,7 +232,7 @@ export function puff(seed = 1) {
     const s = 0.5 + r() * 0.6;
     parts.push(new THREE.IcosahedronGeometry(s, 0).translate((r() - 0.5) * 1.6, r() * 0.4, (r() - 0.5) * 1.0));
   }
-  const g = mergeGeometries(parts.map((p) => p.toNonIndexed()));
+  const g = mergeGeometries(parts);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) if (p.getY(i) < 0) p.setY(i, 0);
   g.computeVertexNormals();
