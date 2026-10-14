@@ -24,11 +24,12 @@ const keys = {
 // Rig colours are applied at unit max channel (kit normalises: c / max(r,g,b)); intensity carries the energy.
 // Phase-shifted: hemiSky (= key sky1), hemiGround (= key emberRoot), fog (= key horizon). Pinned: dir colours (fixed tokens; night = ice@dusk).
 const rig = {
-  // snowLift: terrain-shader snow term, unlit snow × lift (keeps the cap white-blue under violet hemi). stars: dome star-field weight. pool: idle ember-pool glow floor.
-  night: { hemiI: 0.5, dir: '#b6d3e0' /* ice@dusk, pinned */, dirI: 0.8, fogD: 0.0045, exposure: 1, snowLift: 0.12, stars: 1, ember: 1 },
-  dawn:  { hemiI: 1.4, dir: fixed.sunHalo, dirI: 2.4, fogD: 0.0035, exposure: 1, snowLift: 0.3, stars: 0.15, ember: 0.5 },
-  day:   { hemiI: 2.0, dir: fixed.ink, dirI: 3.2, fogD: 0.0022, exposure: 1.25, snowLift: 0.05, stars: 0, ember: 0.12 },
-  dusk:  { hemiI: 2.0, dir: fixed.sunMid, dirI: 1.6, fogD: 0.0035, exposure: 1, snowLift: 0.45, stars: 0.3, ember: 1 },
+  // snowLift: terrain-shader snow term, unlit snow × lift (keeps the cap white-blue under violet hemi). stars: dome star-field weight. ember: rock-ramp root warmth.
+  // pool: ember-pool glow weight (W2: decoupled from ember, which fades by day; lifted by day so the pool reads on lit rock).
+  night: { hemiI: 0.5, dir: '#b6d3e0' /* ice@dusk, pinned */, dirI: 0.8, fogD: 0.0045, exposure: 1, snowLift: 0.12, stars: 1, ember: 1, pool: 1 },
+  dawn:  { hemiI: 1.4, dir: fixed.sunHalo, dirI: 2.4, fogD: 0.0035, exposure: 1, snowLift: 0.3, stars: 0.15, ember: 0.5, pool: 1.2 },
+  day:   { hemiI: 2.0, dir: fixed.ink, dirI: 3.2, fogD: 0.0022, exposure: 1.25, snowLift: 0.05, stars: 0, ember: 0.12, pool: 2.4 },
+  dusk:  { hemiI: 2.0, dir: fixed.sunMid, dirI: 1.6, fogD: 0.0035, exposure: 1, snowLift: 0.45, stars: 0.3, ember: 1, pool: 1 },
 };
 
 const h2r = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
@@ -58,7 +59,7 @@ const out = {};
 for (const [k, p] of Object.entries(keys)) {
   const env = Object.fromEntries(Object.entries(dusk).map(([n, v]) => [n, p.sky?.[n] ? mix(shift(v, p), ...p.sky[n]) : shift(v, p)]));
   const r = rig[k];
-  out[k] = { ...env, ...fixed, rig: { hemiSky: env.sky1, hemiGround: env[p.hemiGround || 'emberRoot'], hemiI: r.hemiI, dir: r.dir, dirI: r.dirI, fog: env.horizon, fogD: r.fogD, exposure: r.exposure, tm: 'linear', snowLift: r.snowLift, stars: r.stars, ember: r.ember } };
+  out[k] = { ...env, ...fixed, rig: { hemiSky: env.sky1, hemiGround: env[p.hemiGround || 'emberRoot'], hemiI: r.hemiI, dir: r.dir, dirI: r.dirI, fog: env.horizon, fogD: r.fogD, exposure: r.exposure, tm: 'linear', snowLift: r.snowLift, stars: r.stars, ember: r.ember, pool: r.pool } };
 }
 out.semantic = {
   healthOk: fixed.slopes, healthDegraded: fixed.gold, healthDown: fixed.magma,

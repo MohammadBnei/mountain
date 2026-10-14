@@ -10,7 +10,7 @@
 //   clipped(material) → material (adds the uClip discard)
 //   rock(seed)  puff(seed)  shard(seed)  setRampAt(mesh, i, t)  lavaHeat(material, v)  dispose(root)
 //   rig(renderer, scene) → {hemi, dir, dome, floor};  setPhase(elev, rising);  setKey(key);  setComposed(on) (post.js);  setStale(k)
-//   U (terrain uniforms; writers: setPhase → stops/uSnowLift/uEmber, setPool → uPool/uPoolCol/uHeat, setStale (sky) → uStale,
+//   U (terrain uniforms; writers: setPhase → stops/uSnowLift/uEmber/uPoolK, setPool → uPool/uPoolCol/uHeat, setStale (sky) → uStale,
 //      setVeins → uVeins/uVeinN, main/socket → uSnowline, story → uClip);  setPool(...)  setVeins(caps)
 //   footprintRT, stampScene (W4)
 import * as THREE from 'three';
@@ -137,7 +137,7 @@ export const footprintRT = new THREE.WebGLRenderTarget(512, 512);
 export const stampScene = new THREE.Scene();
 export const U = {
   uClip: { value: new THREE.Vector4(0, 1, 0, 1e4) }, uSnowline: { value: 1e4 }, uHMax: { value: 60 },
-  uWobble: { value: 0 }, uHeat: { value: 0 }, uStale: { value: 0 }, uSnowLift: { value: 0 }, uEmber: { value: 1 },
+  uWobble: { value: 0 }, uHeat: { value: 0 }, uStale: { value: 0 }, uSnowLift: { value: 0 }, uEmber: { value: 1 }, uPoolK: { value: 1 },
   uPool: { value: new THREE.Vector4(0, 66, 30, 9) }, uPoolCol: { value: new THREE.Color() },
   uVeins: { value: veinTex }, uVeinN: { value: 0 }, uFootprint: { value: footprintRT.texture },
   uRock0: { value: new THREE.Color() }, uRock1: { value: new THREE.Color() }, uEmberRoot: { value: new THREE.Color() },
@@ -366,6 +366,7 @@ function apply() {
   color('snow', U.uSnow.value); color('ice', U.uIce.value); color('trail', U.uTrail.value);
   U.uSnowLift.value = rigAt('snowLift');
   U.uEmber.value = rigAt('ember');
+  U.uPoolK.value = rigAt('pool');
   if (lastW.a !== ph.a || lastW.b !== ph.b || Math.abs(lastW.w - ph.w) >= 0.01) {
     lastW = { ...ph };
     for (const m of rampMeshes) m.userData.kitRampT.forEach((t, i) => t !== undefined && m.setColorAt(i, rampColor(m.material.userData.kitRamp, t)));

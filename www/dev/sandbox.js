@@ -3,7 +3,7 @@
 // Hooks (gate.mjs drives them; ?ui=0 hides the panel and stops the render loop):
 //   __setP(P) → stats {tris, draws, coverage, foreignMaterials, shadows}      __step(n, dt)   __inject(type, payload)
 //   __checks() → {pose, style:{dusk, day}, facet, lum:{dusk, day}, clip, physics}   (pure measurements, state restored)
-//   __caveLum() → [lum dusk] per world.caves close-up
+//   __caveLum() → [lum dusk] per world.caves close-up      __world (the sandbox world)
 //   __test() → {ok, error, peak, stepMs, writes, emits, listens, rig, fields}       (test.js under audit)
 // Physics convention checked here (00 "Physics"): cannon-es collisionFilterGroup bit 1 = real, bit 2 = surface;
 // two bodies of different layers in one world must not be able to collide (group & mask both ways).
@@ -346,6 +346,7 @@ try {
 
   window.__inject = inject;
   window.__step = step;
+  window.__world = world; // dev scripts (frames the injectors do not cover, e.g. a metrics spike)
   window.__setP = (P) => (window.__gate = { ...stats(P), hasTest: loaded.some((l) => !l.fx || l.mod.test) });
   window.__test = async () => {
     audit = { n: 0, ms: [], peak: { tris: 0, draws: 0 }, rig: new Set(), fields: new Set() };

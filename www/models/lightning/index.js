@@ -3,9 +3,10 @@
 // site, a midpoint-displacement ribbon for ~150 ms, magma when errB > 0; an idle St. Elmo corona at the summit
 // (~11 short forking arcs re-seeded every 80–150 ms + a faint core halo), strength = total rpsB.
 // Three draws: halos (instanced kit glow quads, billboarded), corona (kit line), bolt (kit line, ink or magma).
+// While a bolt is out, the halos also run along its main ribbon (W2: a 1 px line alone was thin and lost on the day sky).
 import { CELL, GRID } from '../../js/world.js';
 
-const SITES = 64, ARCS = 11, LIFE = 0.15, QUEUE = 8;
+const SITES = 64, ARCS = 11, LIFE = 0.15, QUEUE = 8, SHEATH = 33, SHEATH_M = 7; // bolt sheath: one quad per ribbon point, 7 m (cores overlap: no beads)
 const DB = 5, DA = 3; // ribbon depths: bolt 32 segments (+ an 8-segment fork), arc 8 (+ a 2-segment fork)
 
 export default async function build({ THREE, kit, world, rng }) {
@@ -13,7 +14,7 @@ export default async function build({ THREE, kit, world, rng }) {
   const halo = kit.glow('elmo', 0.3, { mesh: true }), spr = kit.glow('elmo');
   halo.map = spr.map; // the kit sprite: soft round quads (09 glow map rule)
   spr.dispose();
-  const glows = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), halo, 3 * SITES + 1);
+  const glows = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), halo, 3 * SITES + 1 + SHEATH);
   glows.name = 'halos';
   glows.count = 0;
   const camQ = new THREE.Quaternion();
@@ -81,6 +82,10 @@ export default async function build({ THREE, kit, world, rng }) {
       // rpsB 1–10 → 1–3 stacked quads (additive: brighter core) of 3–14 m
       if (s && b > 0 && h <= 3 * SITES - 2) for (let j = 0, y = world.heightAt(s.x, s.z) + 1; j <= b >> 2; j++) halo1(s.x, y, s.z, (4 + b) * (1 - j * 0.25));
     }
+    if (bolt.visible) { // sheath: the main ribbon's points (segment i starts at array offset i * 6)
+      const B = bolt.geometry.attributes.position.array, n = 1 << DB;
+      for (let i = 0; i <= n; i++) { const o = i < n ? i * 6 : (n - 1) * 6 + 3; halo1(B[o], B[o + 1], B[o + 2], SHEATH_M); }
+    }
     glows.count = h;
     glows.instanceMatrix.needsUpdate = true;
     glows.visible = h > 0;
@@ -104,6 +109,7 @@ export default async function build({ THREE, kit, world, rng }) {
     bolt.material = world.metrics?.apps[app]?.errB > 0 ? red : white;
     bolt.visible = true;
     life = LIFE;
+    reseed();
   }
 
   const queue = []; // ponytail: one bolt at a time (one draw, one colour); a burst of spikes strikes in turn
@@ -118,7 +124,7 @@ export default async function build({ THREE, kit, world, rng }) {
         last = mt;
         for (const app in mt?.apps) if (mt.apps[app].spike && queue.length < QUEUE) queue.push(app);
       }
-      if (life > 0 && (life -= dt) <= 0) bolt.visible = false;
+      if (life > 0 && (life -= dt) <= 0) { bolt.visible = false; reseed(); }
       if (life <= 0 && queue.length) strike(queue.shift());
       if ((tick -= dt) <= 0) { tick = 0.08 + 0.07 * rng(); reseed(); }
     },
