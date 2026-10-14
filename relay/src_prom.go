@@ -190,13 +190,16 @@ func key(name string, l map[string]string) string {
 }
 
 // diff returns the counter increase since the last poll. A reset (value went down) counts the new
-// value. A series first seen is only a baseline, warm or not: a new key cannot tell a genuinely new
-// counter from an old one under a new exporter identity, and replaying the full value is the worse error
-// (a false burst); a new app's very first sync is the price.
+// value. A series first seen on the first poll is a baseline; one first seen after warm-up counts
+// from 0, because the ArgoCD controller only creates argocd_app_sync_total{name,phase} on that app's
+// first sync since the controller started (live 2026-10-14: wird appeared at 1 on its resync). A new
+// exporter identity cannot fake a new series: key() drops instance/job/endpoint/service.
 func (p *promSource) diff(k string, v float64) float64 {
 	last, ok := p.ctr[k]
 	p.ctr[k] = counter{v, p.polls}
 	switch {
+	case !ok && p.warm:
+		return v
 	case !ok:
 		return 0
 	case v < last.v:

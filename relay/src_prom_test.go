@@ -82,8 +82,9 @@ func TestCounterDiff(t *testing.T) {
 		}
 		p.warm = true
 	}
-	if got := p.diff("new-series", 1); got != 0 {
-		t.Fatalf("a series first seen after warm-up is a baseline: got %v", got)
+	// ArgoCD creates argocd_app_sync_total{name} at 1 on the app's first sync after a controller start.
+	if got := p.diff("new-series", 1); got != 1 {
+		t.Fatalf("a series first seen after warm-up counts from 0: got %v", got)
 	}
 }
 
