@@ -424,3 +424,64 @@ func TestFixtureOneClock(t *testing.T) {
 		t.Fatalf("want 3 crashloop events (steps 1, 3, 5), got %d: %v", len(got), got)
 	}
 }
+
+// TestNoMassGone (W1b verification): restarting the ArgoCD controller or Prometheus causes no
+// app.gone. Each phase lasts past goneAfter; only a real absence with the controller up and
+// Prometheus answering ends in app.gone.
+func TestNoMassGone(t *testing.T) {
+	a, c := testApp(t)
+	info := func(apps ...string) []fixtureSeries {
+		var s []fixtureSeries
+		for _, n := range apps {
+			s = append(s, fixtureSeries{M: map[string]string{"name": n, "dest_namespace": n, "health_status": "Healthy"}, V: 1})
+		}
+		return s
+	}
+	up := []fixtureSeries{{V: 1}}
+	f := &fixture{prom: []map[string][]fixtureSeries{
+		{"info": info("wird", "editable-blog"), "ctrl": up}, // 0: both live
+		{"info": info("wird"), "ctrl": {{V: 0}}},            // 1: controller down, info half gone
+		{"info": nil, "ctrl": nil},                          // 2: Prometheus restarted, nothing scraped yet
+		{"info": nil, "ctrl": up},                           // 3: controller scraped, app info not yet
+		{"info": info("wird", "editable-blog"), "ctrl": up}, // 4: back (after an unreachable phase)
+		{"info": info("wird"), "ctrl": up},                  // 5: editable-blog really gone
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	u, err := serveFixture(ctx, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Opts.PromURL = u
+	p, out, now := newProm(a), &Out{app: a, name: "prom"}, time.Unix(1_800_000_000, 0)
+	var gone []string
+	for step := range f.prom {
+		f.step.Store(int64(step))
+		if step == 4 { // Prometheus unreachable for 11 min (Run's error branch): stale, state untouched
+			p.url = "http://127.0.0.1:1"
+			for range 45 {
+				if err := p.poll(ctx, out, now); err == nil {
+					t.Fatal("poll of an unreachable Prometheus succeeded")
+				}
+				out.Stale()
+				now = now.Add(15 * time.Second)
+			}
+			if _, ok := staleOf(drain(c), "prom"); !ok {
+				t.Error("unreachable Prometheus must set stale.prom")
+			}
+			p.url = u
+		}
+		for range 45 {
+			if err := p.poll(ctx, out, now); err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range evs(drain(c), "app.gone") {
+				gone = append(gone, fmt.Sprintf("%d:%v", step, e["app"]))
+			}
+			now = now.Add(15 * time.Second)
+		}
+	}
+	if got := strings.Join(gone, ","); got != "5:editable-blog" {
+		t.Fatalf("app.gone: got %q, want only the real absence in step 5", got)
+	}
+}
