@@ -30,6 +30,14 @@ for (let i = 0; i < 30; i++) w.step(1 / 30);
 w.applyHello(hello);
 for (let i = 0; i < 120; i++) w.step(1 / 30);
 ok(w.fields['h.land'][g] === 0, 'hello resync drops in-flight ramps (the hello land is authoritative)');
+seen.length = 0;
+w.applyHello({ ...hello, deltas: [{ t: 'world', kind: 'deposit', id: 'd3', x0: 64, z0: 64, w: 1, h: 1, cells: encodeI16([700]) }] });
+ok(!seen.length, 'hello deposit deltas are silent (no world:deposit replay on reconnect)');
+ok(w.fields['h.land'][g] === 700 && Math.abs(w.fields.heightSolid[g] - (base0 + 700) * HQ) < 1e-4, 'hello deposit deltas land at full height at once');
+const top = w.fields.heightSolid.indexOf(w.hmax), tx = top % GRID, tz = (top - tx) / GRID;
+w.applyFrame({ t: 'world', kind: 'deposit', id: 'd4', x0: tx, z0: tz, w: 1, h: 1, cells: encodeI16([-20000]) });
+for (let i = 0; i < 100; i++) w.step(1 / 30);
+ok(w.hmax === Math.max(...w.fields.heightSolid) && w.hmax < w.fields.heightSolid[top] + 20000 * HQ, `hmax drops when the top cell is dug out (${w.hmax})`);
 
 // ---- world: one writer, registered emitters ----
 const m = w.as('mountain');

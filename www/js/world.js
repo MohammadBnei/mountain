@@ -93,10 +93,11 @@ export function createWorld({ dev = false } = {}) {
       w.bench = decodeU8(s.bench);
       w.caves = s.caves; w.day = s.day; w.seed = s.seed;
       pending.length = 0;
+      // Deposit deltas land at full height, silently: they are history, not live lava (no world:deposit replay).
+      for (const d of h.deltas || []) if (d.t === 'world' && d.kind === 'deposit') deposit(d, decodeI16(d.cells), 1);
       solid();
-      w.hmax = w.fields.heightSolid.reduce((a, b) => Math.max(a, b), -1e9);
       w.write('state', 'socket', h.state || {});
-      for (const d of h.deltas || []) w.applyFrame(d);
+      for (const d of h.deltas || []) if (!(d.t === 'world' && d.kind === 'deposit')) w.applyFrame(d);
       if (h.metrics) w.applyFrame(h.metrics);
       resolveReady(w);
     },
@@ -127,20 +128,27 @@ export function createWorld({ dev = false } = {}) {
     },
     /** Advance the h.land deposit ramps (3 s each). */
     step(dt) {
+      if (!pending.length) return;
       for (let n = pending.length - 1; n >= 0; n--) {
-        const d = pending[n], k = Math.min(1, (d.age += dt) / 3), land = w.fields['h.land'], hs = w.fields.heightSolid, base = w.fields['h.base'];
-        for (let z = 0; z < d.h; z++) for (let x = 0; x < d.w; x++) {
-          const c = z * d.w + x, gx = d.x0 + x, gz = d.z0 + z;
-          if (gx < 0 || gz < 0 || gx >= GRID || gz >= GRID) continue;
-          const want = Math.round(d.cells[c] * k), g = gz * GRID + gx;
-          land[g] += want - d.done[c]; d.done[c] = want;
-          hs[g] = (base[g] + land[g]) * HQ;
-          if (hs[g] > w.hmax) w.hmax = hs[g];
-        }
+        const d = pending[n], k = Math.min(1, (d.age += dt) / 3);
+        deposit(d, d.cells, k, d.done);
         if (k >= 1) pending.splice(n, 1);
       }
+      hmax(); // ponytail: full 128² rescan per ramping step (negative cells can lower the max); cheap at GRID 128
     },
   };
-  function solid() { const b = w.fields['h.base'], l = w.fields['h.land'], hs = w.fields.heightSolid; for (let i = 0; i < N; i++) hs[i] = (b[i] + l[i]) * HQ; }
+  /** Move d's cells to fraction k of their value in h.land and heightSolid (done = what is already applied). */
+  function deposit(d, cells, k, done = new Int16Array(cells.length)) {
+    const land = w.fields['h.land'], hs = w.fields.heightSolid, base = w.fields['h.base'];
+    for (let z = 0; z < d.h; z++) for (let x = 0; x < d.w; x++) {
+      const c = z * d.w + x, gx = d.x0 + x, gz = d.z0 + z;
+      if (gx < 0 || gz < 0 || gx >= GRID || gz >= GRID) continue;
+      const want = Math.round(cells[c] * k), g = gz * GRID + gx;
+      land[g] += want - done[c]; done[c] = want;
+      hs[g] = (base[g] + land[g]) * HQ;
+    }
+  }
+  function hmax() { let m = -1e9; for (const v of w.fields.heightSolid) if (v > m) m = v; w.hmax = m; }
+  function solid() { const b = w.fields['h.base'], l = w.fields['h.land'], hs = w.fields.heightSolid; for (let i = 0; i < N; i++) hs[i] = (b[i] + l[i]) * HQ; hmax(); }
   return w;
 }

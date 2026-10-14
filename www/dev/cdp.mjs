@@ -16,7 +16,8 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/jav
 /** Static server for www/ on 127.0.0.1:<random>. → {origin, close()} */
 export async function serveStatic(root = ROOT) {
   const server = createServer(async (req, res) => {
-    const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname));
+    let path;
+    try { path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)); } catch { res.writeHead(400).end(); return; }
     const file = join(root, path.endsWith('/') ? path + 'index.html' : path);
     if (!file.startsWith(root + sep) || !existsSync(file)) { res.writeHead(404).end(); return; }
     res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' }).end(await readFile(file));

@@ -107,12 +107,12 @@ export default function ui({ THREE, kit, world, loaded, renderer, scene, camera,
     el('h2', { textContent: 'fields' }), fSel, cv, range,
     el('h2', { textContent: 'bus' }), log));
 
-  // render loop: fixed 1/30 steps while playing
+  // render loop: one step per 1/30 s of real time while playing, each step dt = mult/30 (same as the step button)
   let acc = 0, last = performance.now();
   renderer.setAnimationLoop((now) => {
-    acc = Math.min(acc + ((now - last) / 1000) * mult, 0.25);
+    acc = Math.min(acc + (now - last) / 1000, 0.25);
     last = now;
-    while (playing && acc >= 1 / 30) { step(1); acc -= 1 / 30; }
+    while (playing && acc >= 1 / 30) { step(1, mult / 30); acc -= 1 / 30; }
     if (!playing) acc = 0;
     kit.U.uSnowline.value = world.snowline;
     render();

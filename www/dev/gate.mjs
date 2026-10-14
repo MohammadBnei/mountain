@@ -8,7 +8,8 @@
 //   node www/dev/gate.mjs styleboard       dev/styleboard.html renders (4 keys × 4 angles) with a clean console
 //   node www/dev/gate.mjs selftest         every fixture against its expected verdict and reason
 // Options: --P 0,3,6  --w 1280  --h 800  --key dusk  --q low  --out <dir>  --qs 'cam=cave:0&az=0.4'
-//          --fixture <relay fixture json> (page; default: first www/dev/fixtures/relay-*.json)   (env CHROME, GATE_OUT)
+//          --fixture <relay fixture json> (page; default: www/dev/fixtures/relay-hostile.json, else the first relay-*.json,
+//          else fixture:none with a WARN)   --strict (page: fail without a relay fixture)   (env CHROME, GATE_OUT)
 //
 // Model checks: build error; contract shape; draws/tris vs profile at each P and peak during test.js; coverage;
 // stepMs (mean over audited steps); writes/emits/listens ⊆ profile; no foreign field writes in step(); clipped flag
@@ -31,7 +32,7 @@ const argv = process.argv.slice(2);
 const OPTS = ['--P', '--w', '--h', '--out', '--key', '--q', '--qs', '--fixture'];
 const target = argv.find((a, i) => !a.startsWith('--') && !(i > 0 && OPTS.includes(argv[i - 1])));
 const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
-if (!target) { console.error('usage: gate.mjs <model|fixture:name|page|styleboard|selftest> [--P list] [--w px] [--h px] [--key k] [--q low] [--out dir] [--fixture file]'); process.exit(2); }
+if (!target) { console.error('usage: gate.mjs <model|fixture:name|page|styleboard|selftest> [--P list] [--w px] [--h px] [--key k] [--q low] [--out dir] [--fixture file] [--strict]'); process.exit(2); }
 
 if (target === 'selftest') {
   const want = {
@@ -54,6 +55,10 @@ if (target === 'selftest') {
   });
   const jobs = Object.entries(want), res = [];
   await Promise.all(Array.from({ length: 4 }, async () => { while (jobs.length) res.push(await run(jobs.shift())); }));
+  const rf = (fs) => relayFixture(fs).split('/').pop();
+  const pick = rf(['relay-a.json', 'relay-hostile.json']) === 'relay-hostile.json' && rf(['hello.json', 'relay-b.json', 'relay-a.json']) === 'relay-a.json' && rf(['hello.json']) === 'none';
+  console.log(`${pick ? 'ok  ' : 'BAD '} page fixture pick: relay-hostile.json > first relay-*.json > none`);
+  res.push(pick);
   const bad = res.filter((x) => !x).length;
   console.log(bad ? `SELFTEST FAIL (${bad})` : 'SELFTEST PASS');
   process.exit(bad ? 1 : 0);
@@ -109,7 +114,7 @@ else await modelMode();
 async function modelMode() {
   const isFixture = target.startsWith('fixture:');
   const { profiles } = await import(join(ROOT, 'js/layout.js'));
-  const profile = isFixture ? profiles[`_${target.slice(8)}`] || profiles._test : profiles[target];
+  let profile = isFixture ? profiles[`_${target.slice(8)}`] || profiles._test : profiles[target];
   if (!profile) { fail('no layout profile'); return finish(); }
   const Ps = opt('P') ? opt('P').split(',').map(Number) : [0, 3, 6];
   await scan(isFixture ? [join(ROOT, 'dev/fixtures', `${target.slice(8)}.js`)] : await jsUnder(join(ROOT, 'models', target)));
@@ -125,6 +130,7 @@ async function modelMode() {
   await page.s('Page.navigate', { url: `${srv.origin}/dev/sandbox.html?${qs}` });
   const g = await waitFor(page, 'window.__gate?.ready && window.__gate');
   if (!g) fail('sandbox not ready within 30 s');
+  if (g?.profile) profile = g.profile; // includes a fixture's own `profile` overrides
   await sleep(300); // let late console errors and requests land
   const pct = (n) => (n * 100).toFixed(2) + '%';
 
@@ -177,12 +183,22 @@ async function modelMode() {
 }
 
 // ---------------------------------------------------------------- page (real relay)
+/** relay-hostile.json if present, else the first relay-*.json, else 'none'. */
+function relayFixture(files) {
+  const rs = files.filter((f) => /^relay-.*\.json$/.test(f)).sort();
+  const f = rs.includes('relay-hostile.json') ? 'relay-hostile.json' : rs[0];
+  return f ? join(ROOT, 'dev/fixtures', f) : 'none';
+}
 async function freePort() { const s = createServer(); await new Promise((r) => s.listen(0, '127.0.0.1', r)); const p = s.address().port; s.close(); return p; }
 async function pageMode() {
   const repo = resolve(ROOT, '..'), bin = join(outDir, 'relay');
   const b = spawnSync('go', ['build', '-o', bin, './relay'], { cwd: repo, encoding: 'utf8' });
   if (b.status !== 0) { fail(`go build ./relay: ${b.stderr.trim().split('\n')[0]}`); return finish(); }
-  const fx = opt('fixture') || (await readdir(join(ROOT, 'dev/fixtures'))).filter((f) => /^relay-.*\.json$/.test(f)).map((f) => join(ROOT, 'dev/fixtures', f))[0] || 'none';
+  const fx = opt('fixture') || relayFixture(await readdir(join(ROOT, 'dev/fixtures')));
+  if (fx === 'none') {
+    console.warn('WARN '.repeat(3) + 'page: no www/dev/fixtures/relay-*.json, running the relay with --source=fixture:none (empty world)');
+    if (argv.includes('--strict')) { fail('page --strict: no relay fixture (www/dev/fixtures/relay-*.json)'); return finish(); }
+  }
   const port = await freePort(), origin = `http://127.0.0.1:${port}`;
   let relay, relayLog = '';
   const start = async () => {

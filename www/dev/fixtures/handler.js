@@ -5,4 +5,5 @@ export default async function build(ctx) {
   const m = await cube(ctx);
   return { ...m, on: { 'ev:argo.sync'() { ctx.world.fields.temp[5] += 1; ctx.world.wind.x = 99; } } };
 }
+export const profile = { listens: ['ev:argo.sync'] }; // declared listen (overrides _test)
 export async function test({ inject }) { inject('ev:argo.sync', { app: 'x' }); }

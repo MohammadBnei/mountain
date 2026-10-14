@@ -41,9 +41,10 @@ try {
   const loaded = [];
   for (const name of names) {
     const fx = name.startsWith('fixture:') ? name.slice(8) : null;
-    const profile = fx ? profiles[`_${fx}`] || profiles._test : profiles[name];
-    if (!profile) throw new Error(`no layout profile for ${name}`);
     const mod = await import(fx ? `./fixtures/${fx}.js` : `../models/${name}/index.js`);
+    // a fixture may export `profile` overrides on top of _test (dev-only, keeps fixture profiles out of layout.js)
+    const profile = fx ? profiles[`_${fx}`] || { ...profiles._test, ...mod.profile } : profiles[name];
+    if (!profile) throw new Error(`no layout profile for ${name}`);
     const rec = { writes: new Set(), emits: new Set(), listens: new Set() }, l = { name, fx, mod, profile, rec };
     const ctx = makeCtx({ THREE, kit, world, name: fx ? '_test' : name, profile });
     const v = ctx.world; // record what the model actually writes, emits and listens to; handlers run under the audit
@@ -317,6 +318,7 @@ try {
   const step = (k = 1, dt = 1 / 30) => {
     for (let i = 0; i < k; i++) {
       world.step(dt);
+      kit.U.uHMax.value = world.hmax; // deposits move the summit (terrain shading keys off it)
       t += dt;
       for (const l of loaded) audited(l, 'step()', () => {
         const a = performance.now();

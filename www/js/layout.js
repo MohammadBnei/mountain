@@ -39,8 +39,6 @@ export const profiles = {
   },
 };
 
-profiles._handler = { ...profiles._test, listens: ['ev:argo.sync'] }; // fixture:handler, declared listen
-
 // Page load order (main.js) and cut-face field provider order (cut.js, W3).
 export const page = ['mountain', 'eruption'];
 export const fields = ['strata', 'aquifers', 'magma', 'veins', 'caves'];
