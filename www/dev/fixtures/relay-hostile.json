@@ -82,6 +82,19 @@
        "project": "default"
       },
       "v": 7
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "vos-monolith",
+       "namespace": "argocd",
+       "phase": "Failed",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 0
      }
     ],
     "info": [
@@ -801,6 +814,19 @@
        "project": "default"
       },
       "v": 7
+     },
+     {
+      "m": {
+       "__name__": "argocd_app_sync_total",
+       "instance": "10.233.66.30:8082",
+       "job": "argocd-application-controller-metrics",
+       "name": "vos-monolith",
+       "namespace": "argocd",
+       "phase": "Failed",
+       "dest_server": "https://10.0.0.1:6443",
+       "project": "default"
+      },
+      "v": 0
      }
     ],
     "restarts": [

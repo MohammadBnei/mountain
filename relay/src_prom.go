@@ -164,25 +164,31 @@ func (p *promSource) query(ctx context.Context, q string) ([]sample, error) {
 	return s, nil
 }
 
-// key identifies a series by its sorted labels.
+// scrapeLabels name the exporter, not the thing measured: a rescheduled kube-state-metrics changes
+// them while every series it mirrors stays the same counter. (KSM is scraped with honorLabels, so its
+// pod/container/namespace are the workload's; Traefik keeps its own pod label, one counter set per replica.)
+var scrapeLabels = map[string]bool{"instance": true, "job": true, "endpoint": true, "service": true}
+
+// key identifies a series by its sorted labels, minus the scrape target's.
 func key(name string, l map[string]string) string {
 	ks := make([]string, 0, len(l))
 	for k, v := range l {
-		ks = append(ks, k+"="+v)
+		if !scrapeLabels[k] {
+			ks = append(ks, k+"="+v)
+		}
 	}
 	slices.Sort(ks)
 	return name + "{" + strings.Join(ks, ",") + "}"
 }
 
 // diff returns the counter increase since the last poll. A reset (value went down) counts the new
-// value. A series first seen after warm-up started from 0 (a new app's first sync); before warm-up it
-// is only a baseline.
+// value. A series first seen is only a baseline, warm or not: a new key cannot tell a genuinely new
+// counter from an old one under a new exporter identity, and replaying the full value is the worse error
+// (a false burst); a new app's very first sync is the price.
 func (p *promSource) diff(k string, v float64) float64 {
 	last, ok := p.ctr[k]
 	p.ctr[k] = counter{v, p.polls}
 	switch {
-	case !ok && p.warm:
-		return v
 	case !ok:
 		return 0
 	case v < last.v:

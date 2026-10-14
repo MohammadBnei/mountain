@@ -82,8 +82,24 @@ func TestCounterDiff(t *testing.T) {
 		}
 		p.warm = true
 	}
-	if got := p.diff("new-series", 1); got != 1 {
-		t.Fatalf("a series first seen after warm-up counts from 0: got %v", got)
+	if got := p.diff("new-series", 1); got != 0 {
+		t.Fatalf("a series first seen after warm-up is a baseline: got %v", got)
+	}
+}
+
+// TestExporterReschedule: kube-state-metrics moves (new instance/pod IP): its restarts series keep
+// their workload labels and values, so nothing churns.
+func TestExporterReschedule(t *testing.T) {
+	a, c := testApp(t)
+	r := func(inst string) []fixtureSeries {
+		return []fixtureSeries{{M: map[string]string{"namespace": "wird", "pod": "wird-abc-1", "container": "app", "instance": inst + ":8080",
+			"job": "kube-state-metrics", "endpoint": "http", "service": "platform-prometheus-kube-state-metrics"}, V: 7}}
+	}
+	f := &fixture{prom: []map[string][]fixtureSeries{{"restarts": r("10.0.0.1")}, {"restarts": r("10.0.0.1")}, {"restarts": r("10.0.0.2")}}}
+	for i, st := range run(t, a, c, f, 0) {
+		if e := evs(st, "pod.churn"); len(e) != 0 {
+			t.Fatalf("poll %d: false pod.churn after an exporter reschedule: %v", i, e)
+		}
 	}
 }
 
