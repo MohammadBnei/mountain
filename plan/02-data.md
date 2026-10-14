@@ -57,7 +57,7 @@ Rot guard:
 - `mountain_unmapped_total{kind=node|app|repo|ns}` plus a rule.
 - A CI check diffs the app allowlist and the ns map against `infra-bootstrap/gitops/apps/registry.yaml`.
 
-## Event enum (frozen W2)
+## Event enum (FROZEN W2)
 `Ev{id (ULID), ts, kind, …}`:
 
 | Kind | Fields |
@@ -77,7 +77,7 @@ Rot guard:
 
 `fp` = salted hash. **The salt is never rotated** (veins link to it).
 
-## Metrics frame (every 15 s; equals `world.metrics`)
+## Metrics frame (every 15 s; equals `world.metrics`; FROZEN W2)
 ```
 { apps:{[app]:{rpsB, errB, spike, bytesB}}, storage:{pools:[{id, app|'other', class:'longhorn'|'local', host?, capB, usedB|null}], garage:null, pigsty:null},
   cpu, mem, heat, buildsInFlight, wind:{x,z}, snowline, rx, river,
@@ -87,7 +87,7 @@ Rot guard:
 - `heat` = f(builds in flight, syncs in flight). It is the same value Go uses for deposit size.
 
 ## Wire encoding (R4)
-- Schema: `www/dev/schema/{hello,ev,metrics,world}.json` (JSON Schema). The relay and the www tests both validate frames against it.
+- Schema: `www/dev/schema/{hello,ev,metrics,world,replay,scrub}.json` (JSON Schema, FROZEN W2). The relay and the www tests both validate frames against it.
 - int16 grids (`h.base`, `h.land`, deposit `cells`): **base64 of little-endian int16, row-major, z outer, x inner**.
 - Cell 0 sits at world **(−100, −100)**. Cell size = 200 / N.
 - Heights are int16 steps of `units.json` `HEIGHT_Q` = 0.01: world units = **value × 0.01** (cm; W1a seam: int16 mm cannot hold the −67…+68 m massif).
@@ -99,19 +99,25 @@ Rot guard:
 - No versions. Story versions are static i18n copy.
 - Visitors: an opt-in handle passed through the moderation filter (08), otherwise "a visitor".
 
-## Persistence (W2; Pigsty side already live)
+## Persistence (W2, done: `relay/store.go`; Pigsty side live)
 **Already done (2026-10-14):** role `dbuser_mountain` + database **`mountaindb`** on cluster `pg-proxmox`, in hq's shape: committed SCRAM verifier, `pgbouncer: false`, `revokeconn`, **connlimit 10**. The password is `DBUSER_MOUNTAIN_PASSWORD` in the infra-bootstrap Infisical project.
 - DSN: `postgres://dbuser_mountain:<pw>@postgres.bnei.lan:5432/mountaindb`. It reaches the pod through an infra-bootstrap `gitops/bootstrap/mountain-secret.yaml` modelled on `hq-secret.yaml` (W2 PR).
 - pgx: set `MaxConns` ≤ 8 explicitly. The default `max(4, NumCPU)` can exceed connlimit 10.
 - Direct connection, so prepared statements and advisory-lock migrations are fine.
 
-**Tables:**
-- `events` (`public`, `detail`; detail kept 30 days)
-- `world_deltas`
-- `snapshots(day, base bytea, land bytea, veins, glacier, ash, clouds)`
-- `metrics_5m`
-- `marks`
-- `limits`
+- `DATABASE_URL` from the Secret `mountain-config` (helm `envFrom`, **optional**): unset = memory-only (logged once; the world is lost on restart). A DB unusable at boot also runs memory-only and never writes, so it cannot overwrite a stored world; restart once it is back.
+- Migrations: embedded `relay/migrations/*.sql`, applied in order under `pg_advisory_lock`, recorded in `schema_migrations`.
+- **Writes never block the hub:** every write is a closure on a buffered queue (1024) drained by one writer goroutine, so the DB sees frames and snapshots in broadcast order. A full queue drops the write (log + `mountain_db_dropped_total{reason=full}`); a failed write counts `reason=error`.
+- **Health:** `mountain_source_last_success{source="db"}` on every good write and a 30 s ping → `MountainSourceStale` covers a dead DB. Memory-only seeds it once and lets it age (the alarm for a missing Secret). The page is **not** marked stale for the DB: the live view does not depend on it.
 
-**`hello`** = latest snapshot + the deltas since it + `state` + the current metrics.
+**Tables (migration `001_init.sql`):** one sequence `frame_seq` orders every frame and snapshot.
+- `events(seq, id, ts, day, kind, public jsonb)`: every broadcast `ev` frame as sent (sanitised). `detail` (kept 30 days) arrives with detail mode (08).
+- `world_deltas(seq, ts, day, kind, frame jsonb)`: every broadcast `world` frame as sent.
+- `snapshots(day PK, seq, ts, seed, land bytea, state jsonb, metrics jsonb)`: upserted every 10 min, at UTC rollover and on SIGTERM. `land` = h.land, little-endian int16; h.base is regenerated from `seed`, never stored. `veins`, `glacier`, `ash`, `clouds` columns arrive with their models (W3) in a later migration.
+- `metrics_5m(ts, day, frame jsonb)`: the metrics frame every 5 min (scrub).
+- `marks`, `limits`: W4 (visitor layer), not created yet.
+
+**Boot:** load the latest snapshot of the seed, re-apply every frame after it (deposits add into h.land with `AddQ`; `alert.fire`/`alert.resolve` rebuild `state`), restore `metrics` (stale map cleared: sources re-mark what is down). No snapshot yet: write one at once, so later frames have a base. Restored alerts seed `src_alerts`: still active → no second `alert.fire` (startsAt kept); gone from Alertmanager → resolved on the first good poll.
+
+**`hello`** = latest snapshot (`snapshot.land` = h.land at that snapshot) + the `world` frames since it (`deltas`) + `state` + the current metrics. `snapshot.day` = the UTC day of the latest snapshot; it advances at rollover.
 

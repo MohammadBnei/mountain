@@ -4,11 +4,12 @@
 ```
 mountain/
   go.mod embed.go       repo root (R4): package `mountain`, `//go:embed www`, imported by relay
-  units.json            FROZEN W2 — shared Go/JS constants
+  units.json            FROZEN W2 (done 2026-10-14) — shared Go/JS constants
+  FROZEN.sha256 freeze_test.go   the W2 freeze, enforced: sha256 of every frozen file; CI fails on an unannounced change
   Dockerfile helm/values.yaml .github/workflows/   orchestrator (seam); CI pins :sha in helm/values.yaml
   relay/
     main.go hub.go config.yaml   orchestrator-only
-    sanitize.go store.go   owner per wave (W1a, W2)
+    sanitize.go store.go scrub.go migrations/   owner per wave (W1a, W2)
     worldcore/          package (W1a seam): base.go = Base(seed) + wire encoding (orchestrator, frozen); other files lane A
     src_prom.go src_alerts.go src_github.go   one owner each; registered in sources.go (frozen W2)
     toy_<name>.go       one per toy (W4), registered in validators.go (frozen W2)
@@ -18,10 +19,11 @@ mountain/
     index.html vendor/ (three r186 from pi-lab + SimplexNoise, RoundedBoxGeometry,
                         postprocessing chain + shaders, cannon-es 0.20.0; manifest.json regenerated)
     js/boot.js main.js story.js kit.js shaders.js post.js socket.js   orchestrator (socket.js body: W1a lane B)
-    js/contract.js world.js layout.js                              FROZEN W2
+    js/contract.js world.js layout.js kit.js tokens.json           FROZEN W2 (done; FROZEN.sha256)
+    js/page.js                                                     orchestrator: landed models, load order (not frozen)
     js/cut.js                                                      W3 serial (frozen after)
     models/<name>/{index.js, field.glsl, field.js, fixture.json, test.js}   owned by one agent
-    dev/sandbox.html gate.mjs perf.mjs fixtures/relay-*.json schema/*.json
+    dev/sandbox.html gate.mjs perf.mjs fixtures/relay-*.json schema/*.json (schema FROZEN W2)
   plan/
 ```
 
@@ -32,7 +34,7 @@ mountain/
 | W1a | `units.json`; root `go.mod` + `embed.go`; `relay/{main,hub,sources,metrics}.go`, `relay/config.yaml`; minimal `worldcore.Base(seed)` + `relay dump-hello`; `www/index.html`; `js/{boot,main,kit,shaders,socket,contract,world,layout}.js` (interfaces; `layout.js` profiles for every model of the wave); `vendor/` (re-vendored three@0.186.1 + RoundedBoxGeometry, SimplexNoise, EffectComposer/RenderPass/UnrealBloomPass/OutputPass/ShaderPass, cannon-es 0.20.0, regenerated `manifest.json`); `www/dev/schema/*.json`; Dockerfile, `helm/values.yaml`, CI; minimal `dev/gate.mjs` + `dev/sandbox.html`; kit `lava()` + interface stubs `crystal()`/`flow()`/`stamp()`/`uFootprint` (09) | (A) relay: `src_prom.go`, `worldcore.go` body, `sanitize.go`, `/ws`, `/api/topology`, `:9090`, fixture source + **relay fixtures `www/dev/fixtures/relay-*.json`**. (B) www: `world.js`/`socket.js` bodies, sandbox controls, full `gate.mjs`, **`dev/perf.mjs`**, styleboard. (C) `models/mountain/`, `models/eruption/` (each model's `fixture.json` belongs to its model owner). (D) infra-bootstrap PRs (`/add-app`, Traefik 15 s) |
 | W1b | `post.js`; `layout.js` profiles for cauldron, sky, lightning; `world.rig` slot | (A) `src_alerts.go` + stale handling. (B) `models/cauldron/`. (C) `models/sky/` (sky-min). (D) `models/lightning/`. (E) infra-bootstrap PR |
 
-## Units (`units.json`, frozen W2)
+## Units (`units.json`, FROZEN W2)
 - World extent: 200 × 200 units, origin at the centre, y up.
 - Grids, all with cell size = extent / N:
   - `GRID = 128` (heightSolid, collider, render)
@@ -72,10 +74,11 @@ Every model folder ships `fixture.json` (a scripted event and world-delta timeli
 | `world.clouds` | sky (W1b sky-min) | real floor from net rx + visitor clouds + steam |
 | `world.sun` | sky | SunCalc port, Paris |
 | `world.rig` **(R4)** | sky | `{elev, rising}` → `kit.setPhase` (09). Fixed at dusk until sky-full (W3) |
+| `world.replay` (W2) | world.js | `null` or `{day, frames, metrics, left}` while a scrub replay is held (`world.scrub(day)` / `world.release()`, 06) |
 | `world.clip` | story.js (`cut(P)`) | plane + depth; closed = `constant 1e4` |
 | `world.stale` | socket.js | since-timestamp |
 
-**Bus registry:**
+**Bus registry (FROZEN W2):**
 - Bus types may have several **emitters**, but each world/shared-state slot has exactly one writer.
 - Every `layout.js` profile declares `emits[]` and `listens[]`, and the gate checks them.
 
@@ -138,7 +141,7 @@ Every model folder ships `fixture.json` (a scripted event and world-delta timeli
 ## Post (`post.js`)
 Desktop: RenderPass → UnrealBloom (threshold 1, HalfFloat) → haze ShaderPass (enabled while `uHeat > 0`) → OutputPass. `samples: 4`. Phones skip it. Models only write uniforms; emissive above 1 means glow.
 
-## Budgets (`layout.js`)
+## Budgets (`layout.js`, FROZEN W2: a profile for every model of W1–W4)
 - 220 draws / 200k tris at peak.
 - **No shadows.**
 - Each profile: `tris`, `draws`, `peak`, `stepMs`, `writes`, `emits`, `listens`, `clipped`, `visibleFrom`, `goneFrom`, `footprint`, `yRange`.
