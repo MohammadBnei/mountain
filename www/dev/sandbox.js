@@ -131,6 +131,7 @@ try {
   const unitHex = (c) => C2.copy(c).multiplyScalar(1 / Math.max(c.r, c.g, c.b, 1e-9)).getHexString();
   const sameHue = (a, b) => near(hex255('#' + unitHex(a)), hex255('#' + unitHex(b)));
   const LIT = new Set(['lit', 'terrain', 'crystal', 'lava']);
+  const RAMP_ALSO = { slabLoad: ['slabNotReady'] }; // 09 semantic colours: "slab not ready" is the off-ramp slab state
   const SPRITE = kit.points('ink').map;
 
   function style(key) {
@@ -148,7 +149,7 @@ try {
       if (u.kitRamp) {
         if (o.isInstancedMesh && o.instanceColor) {
           const a = o.instanceColor.array;
-          for (let i = 0; i < o.count; i++) if (!onRamp(u.kitRamp, rgb255(C.setRGB(a[i * 3], a[i * 3 + 1], a[i * 3 + 2])))) { add(o, `instance ${i} #${C.getHexString()} not on ramp ${u.kitRamp}`); break; }
+          for (let i = 0; i < o.count; i++) if (!onRamp(u.kitRamp, rgb255(C.setRGB(a[i * 3], a[i * 3 + 1], a[i * 3 + 2]))) && !(RAMP_ALSO[u.kitRamp] || []).some((n) => isToken(C, n))) { add(o, `instance ${i} #${C.getHexString()} not on ramp ${u.kitRamp}`); break; }
         } else if (k !== 'crystal' && k !== 'lava') add(o, `ramp ${u.kitRamp} material without instance colours`);
         if (k === 'crystal') {
           const hA = o.geometry.attributes.aHealth, gA = o.geometry.attributes.aGlow;
