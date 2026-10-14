@@ -99,7 +99,7 @@ void main() {
   vec3 col = y < .18 ? mix(uHorizon, uSky1, y / .18) : mix(uSky1, uSky0, clamp((y - .18) / .4, 0., 1.));
   vec3 q = n * 260.; float h = hash(floor(q));
   float star = step(.992, h) * smoothstep(.45, .1, length(fract(q) - .5)) * (.5 + 2.5 * fract(h * 97.)) * smoothstep(.04, .2, n.y);
-  gl_FragColor = vec4((col + uInk * star * uStars) * (1. - .45 * uStale), 1.); // stale: the sky dims (kit.setStale)
+  gl_FragColor = vec4((col + uInk * star * uStars) * (1. - .45 * uStale * smoothstep(0., .18, y)), 1.); // stale: the sky dims (kit.setStale), fading to 0 at the horizon to meet the undimmed fog/floor
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
