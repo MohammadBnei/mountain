@@ -2,17 +2,18 @@
 // slabs follow hosts (thickness = alloc, colour = ready/load ramp).
 import * as THREE from 'three';
 import { rampColor, color, QUALITY } from '../../js/kit.js';
-import { decodeI16, encodeI16 } from '../../js/world.js';
+import { decodeI16, encodeI16, cellXZ } from '../../js/world.js';
 
 export default async function test({ model, world, inject, step, fixture, assert }) {
   const body = model.root.getObjectByName('body'), slabs = model.root.getObjectByName('slabs');
-  const d = fixture.deposit, cell = (d.z0 + 1) * 128 + d.x0 + 1, x = -100 + ((d.x0 + 1) * 200) / 128, z = -100 + ((d.z0 + 1) * 200) / 128;
+  const d = fixture.deposit, [x, z] = cellXZ(d.x0 + 1, d.z0 + 1), cell = world.cell(x, z), geo = body.geometry;
   const ray = new THREE.Raycaster(new THREE.Vector3(x, 500, z), new THREE.Vector3(0, -1, 0));
   const meshY = () => { body.updateMatrixWorld(); return ray.intersectObject(body)[0].point.y; };
 
   const tol = QUALITY === 'low' ? 0.6 : 0.05; // 96² low tier interpolates between cells
   const h0 = world.fields.heightSolid[cell], y0 = meshY();
   assert(Math.abs(y0 - h0) < tol, `body matches heightSolid before (${y0} vs ${h0})`);
+  const benchV = geo.attributes.bench.version;
   inject('world:deposit', d);
   step(1);
   assert(model.busy(), 'busy while the deposit ramps');
@@ -21,6 +22,9 @@ export default async function test({ model, world, inject, step, fixture, assert
   assert(Math.abs(h1 - h0 - 3) < 0.02, `heightSolid at the site rose 3 m (${h0} -> ${h1})`);
   assert(Math.abs(y1 - y0 - 3) < tol, `body at the site rose 3 m (${y0} -> ${y1})`);
   assert(!model.busy(), 'idle after the ramp');
+  assert(geo.attributes.bench.version > benchV, 'deposit refresh re-uploads bench');
+  const box = new THREE.Box3().setFromBufferAttribute(geo.attributes.position);
+  assert(geo.boundingBox?.equals(box) && geo.boundingSphere.center.equals(box.getCenter(new THREE.Vector3())), 'bounds recomputed after the deposit');
 
   world.applyFrame(fixture.metrics);
   step(1);
@@ -35,8 +39,11 @@ export default async function test({ model, world, inject, step, fixture, assert
   // resync hello (reconnect / relay restart) with +5 m land everywhere: the body follows heightSolid
   const hello = await (await fetch(new URL('../../dev/fixtures/hello.json', import.meta.url))).json();
   hello.snapshot.land = encodeI16(decodeI16(hello.snapshot.land).map((v) => v + 500));
+  const caves0 = model.root.getObjectByName('caves');
   world.applyHello(hello);
   step(1);
+  const caves1 = model.root.getObjectByName('caves');
+  assert(caves1 !== caves0 && !caves0.parent && caves1.children[0].count === world.caves.length, 'cave mouths rebuilt on the resync hello');
   const h2 = world.fields.heightSolid[cell], y2 = meshY();
   assert(Math.abs(y2 - h2) < tol, `body after reconnect hello: mesh ${y2} vs heightSolid ${h2}`);
 }

@@ -2,6 +2,8 @@
 // vent upslope of the deposit down to its cells (steepest descent on heightSolid, pulled to a target cell),
 // cool lavaHot → magma → emberRoot, then sink into the land world.js ramps in. ok:false → ash puff, no land.
 // Emits lava.heat {x, z, q} when a flow has fully arrived.
+import { cellXZ, GRID } from '../../js/world.js';
+
 const MAX = 200, E = 0.8, SPEED = 5, COOL = 5, HOLD = 2;
 
 export default async function build({ THREE, kit, world, rng }) {
@@ -15,22 +17,24 @@ export default async function build({ THREE, kit, world, rng }) {
   ash.name = 'ash';
   ash.userData.facet = 'cloud';
   ash.visible = false;
+  ash.scale.setScalar(1.5); // the puff's start size: puff(7) edges at scale 1 sit under the cloud facet band
   const root = new THREE.Group();
   root.add(blobs, ash);
 
   // blob state (struct of arrays; step is allocation-free)
   const bx = new Float32Array(MAX), bz = new Float32Array(MAX), tx = new Float32Array(MAX), tz = new Float32Array(MAX);
   const age = new Float32Array(MAX), cool = new Float32Array(MAX), size = new Float32Array(MAX), flow = new Int32Array(MAX);
-  const O = new THREE.Object3D(), tmp = kit.color('magma');
+  const O = new THREE.Object3D();
+  const LUT = Array.from({ length: 256 }, (_, i) => kit.rampColor('lava', i / 255)); // lava is a semantic ramp: phase-invariant
   const flows = []; // {x, z, sx, sz, targets:[x,z,...], n, spawned, left}
   let ashAge = -1;
 
   const H = world.heightAt;
   function start(dep) {
-    const { x0, z0, w, h, cells } = dep, C = 200 / 128, targets = [];
+    const { x0, z0, w, h, cells } = dep, targets = [];
     let cx = 0, cz = 0;
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (cells[j * w + i] > 0) {
-      const x = -100 + (x0 + i) * C, z = -100 + (z0 + j) * C;
+      const [x, z] = cellXZ(x0 + i, z0 + j);
       targets.push(x, z); cx += x; cz += z;
     }
     if (!targets.length) return;
@@ -58,7 +62,7 @@ export default async function build({ THREE, kit, world, rng }) {
   world.fields.heightSolid.forEach((v, i, a) => v > a[summit] && (summit = i));
   function puff(app) {
     const s = world.sites.get(app);
-    const x = s ? s.x : -100 + (summit % 128) * (200 / 128), z = s ? s.z : -100 + Math.floor(summit / 128) * (200 / 128);
+    const [x, z] = s ? [s.x, s.z] : cellXZ(summit % GRID, Math.floor(summit / GRID));
     ash.position.set(x, H(x, z), z);
     ashAge = 0;
     ash.visible = true;
@@ -67,6 +71,9 @@ export default async function build({ THREE, kit, world, rng }) {
   function kill(i) { // swap-remove blob i
     const l = --blobs.count;
     bx[i] = bx[l]; bz[i] = bz[l]; tx[i] = tx[l]; tz[i] = tz[l]; age[i] = age[l]; cool[i] = cool[l]; size[i] = size[l]; flow[i] = flow[l];
+    // the moved blob was already drawn at l this step: draw it at i too, or slot i shows the dead blob a frame
+    blobs.instanceMatrix.array.copyWithin(i * 16, l * 16, l * 16 + 16);
+    blobs.instanceColor.array.copyWithin(i * 3, l * 3, l * 3 + 3);
   }
 
   return {
@@ -104,7 +111,7 @@ export default async function build({ THREE, kit, world, rng }) {
         O.rotation.set(0, size[i] * 9, 0);
         O.updateMatrix();
         blobs.setMatrixAt(i, O.matrix);
-        blobs.setColorAt(i, kit.rampColor('lava', t, tmp));
+        blobs.setColorAt(i, LUT[Math.floor(t * 255)]);
       }
       if (!blobs.count && fi === flows.length) flows.length = 0;
       blobs.instanceMatrix.needsUpdate = true;

@@ -36,8 +36,7 @@ export default async function build({ THREE, kit, world }) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('bench', new THREE.BufferAttribute(bench, 1));
-  const mat = kit.terrain();
-  mat.side = THREE.DoubleSide; // closed body, back-face cap in cut.js (W3)
+  const mat = kit.terrain({ closed: true }); // closed body, back-face cap in cut.js (W3)
   const body = new THREE.Mesh(geo, mat);
   body.name = 'body';
 
@@ -45,12 +44,12 @@ export default async function build({ THREE, kit, world }) {
   const slabs = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), kit.lit('slabLoad'), 3);
   slabs.name = 'slabs';
   slabs.userData.facet = 'slab';
-  const O = new THREE.Object3D(), SW = SPAN / 3;
+  const O = new THREE.Object3D(), SW = SPAN / 3, HOSTS = ['h1', 'h2', 'h3'], NONE = { alloc: 0, ready: false, load: 0 }, C = kit.color('slabNotReady');
   let seen;
   const slabsFrom = (m) => {
     seen = m;
-    ['h1', 'h2', 'h3'].forEach((h, i) => {
-      const s = m?.hosts?.[h] || { alloc: 0, ready: false, load: 0 };
+    for (let i = 0; i < 3; i++) {
+      const s = m?.hosts?.[HOSTS[i]] || NONE;
       // ponytail: alloc read as a 0..1 share (bucketed by the relay); saturates if it is ever absolute
       const th = 6 + 14 * Math.min(1, Math.max(0, s.alloc));
       O.position.set(X0 + SW * (i + 0.5), YB - 0.5 - th / 2, X0 + SPAN / 2);
@@ -58,16 +57,18 @@ export default async function build({ THREE, kit, world }) {
       O.updateMatrix();
       slabs.setMatrixAt(i, O.matrix);
       if (s.ready) kit.setRampAt(slabs, i, Math.min(1, Math.max(0, s.load)));
-      else slabs.setColorAt(i, kit.color('slabNotReady'));
-    });
+      else slabs.setColorAt(i, kit.color('slabNotReady', C));
+    }
     slabs.instanceMatrix.needsUpdate = true;
     slabs.instanceColor.needsUpdate = true;
   };
   slabsFrom(world.metrics);
 
   const root = new THREE.Group();
-  let cavesSeen = world.caves;
-  root.add(body, slabs, kit.cave(world.caves, world.heightAt));
+  let cavesSeen = world.caves, caves = kit.cave(world.caves, world.heightAt);
+  caves.name = 'caves';
+  root.add(body, slabs, caves);
+  const bounds = () => { geo.computeBoundingBox(); geo.computeBoundingSphere(); };
   // resync hello (socket reconnect, relay restart) replaces h.base/h.land/caves wholesale:
   // world.applyHello reassigns world.caves every time, so its identity marks a new snapshot
   const resync = () => {
@@ -76,8 +77,14 @@ export default async function build({ THREE, kit, world }) {
     all();
     const a = geo.attributes.position;
     a.clearUpdateRanges();
+    geo.attributes.bench.clearUpdateRanges();
     a.needsUpdate = geo.attributes.bench.needsUpdate = true; // hello also replaces world.bench
-    // ponytail: cave mouths kept from build; kit.cave registers paint hooks, so rebuilding per hello would leak them
+    bounds();
+    kit.dispose(caves); // drops the old mouths' phase hooks
+    root.remove(caves);
+    caves = kit.cave(world.caves, world.heightAt);
+    caves.name = 'caves';
+    root.add(caves);
   };
 
   // deposits: re-sample + rewrite the affected quad rows while world.js ramps h.land (3 s)
@@ -89,9 +96,10 @@ export default async function build({ THREE, kit, world }) {
     const q0 = Math.max(0, j0 - 1), q1 = Math.min(Q - 1, j1);
     for (let j = q0; j <= q1; j++) for (let i = 0; i < Q; i++) quad(i, j);
     // ponytail: skirt not re-sampled; Go sites deposits on the massif, never on the rim
-    const a = geo.attributes.position;
+    const a = geo.attributes.position, b = geo.attributes.bench;
     a.addUpdateRange(q0 * Q * 18, (q1 - q0 + 1) * Q * 18);
-    a.needsUpdate = true;
+    b.addUpdateRange(q0 * Q * 6, (q1 - q0 + 1) * Q * 6);
+    a.needsUpdate = b.needsUpdate = true;
   }
 
   return {
@@ -104,11 +112,11 @@ export default async function build({ THREE, kit, world }) {
       for (let i = regions.length - 1; i >= 0; i--) {
         const r = regions[i];
         refresh(r);
-        if ((r.age += dt) > 3.1) regions.splice(i, 1);
+        if ((r.age += dt) > 3.1) { regions.splice(i, 1); bounds(); } // raycast/culling see the raised land
       }
     },
     on: { 'world:deposit': (d) => regions.push({ z0: d.z0, h: d.h, age: 0 }) },
     busy: () => regions.length > 0,
-    dispose() { root.traverse((o) => { o.geometry?.dispose(); o.material?.dispose?.(); }); },
+    dispose() { kit.dispose(root); },
   };
 }
