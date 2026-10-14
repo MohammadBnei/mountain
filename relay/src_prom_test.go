@@ -348,13 +348,15 @@ func TestFixtureOneClock(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "f.json")
 	os.WriteFile(file, []byte(`{"step_s": 0.001, "steps": [{"prom": `+strings.Join([]string{none, crash, none, crash, none, crash}, `}, {"prom": `)+`}]}`), 0o644)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	done := make(chan struct{})
+	defer func() { cancel(); <-done }() // Run must stop before Cleanup restores promEvery
 	u, _, err := FixtureHook(ctx, file)
 	if err != nil {
+		close(done)
 		t.Fatal(err)
 	}
 	a.Opts.PromURL = u
-	go newProm(a).Run(ctx, &Out{app: a, name: "prom"})
+	go func() { newProm(a).Run(ctx, &Out{app: a, name: "prom"}); close(done) }()
 	var got []map[string]any
 	for deadline := time.Now().Add(3 * time.Second); len(got) < 3 && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
 		got = append(got, evs(drain(c), "pod.churn")...)
