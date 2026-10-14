@@ -2,6 +2,7 @@
 // slabs follow hosts (thickness = alloc, colour = ready/load ramp).
 import * as THREE from 'three';
 import { rampColor, color, QUALITY } from '../../js/kit.js';
+import { decodeI16, encodeI16 } from '../../js/world.js';
 
 export default async function test({ model, world, inject, step, fixture, assert }) {
   const body = model.root.getObjectByName('body'), slabs = model.root.getObjectByName('slabs');
@@ -30,4 +31,12 @@ export default async function test({ model, world, inject, step, fixture, assert
   assert(hex(1) === color('slabNotReady').getHexString(), `h2 not ready -> ${hex(1)}`);
   model.pose(3);
   assert(meshY() === y1, 'pose leaves the body alone');
+
+  // resync hello (reconnect / relay restart) with +5 m land everywhere: the body follows heightSolid
+  const hello = await (await fetch(new URL('../../dev/fixtures/hello.json', import.meta.url))).json();
+  hello.snapshot.land = encodeI16(decodeI16(hello.snapshot.land).map((v) => v + 500));
+  world.applyHello(hello);
+  step(1);
+  const h2 = world.fields.heightSolid[cell], y2 = meshY();
+  assert(Math.abs(y2 - h2) < tol, `body after reconnect hello: mesh ${y2} vs heightSolid ${h2}`);
 }

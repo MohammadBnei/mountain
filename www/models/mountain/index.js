@@ -19,13 +19,17 @@ export default async function build({ THREE, kit, world }) {
   const v = (p, q) => put(vx(p), vh[q * G + p], vx(q), world.bench[world.cell(vx(p), vx(q))] / 255);
   // quad (i, j) → 6 vertices at ((j*Q + i) * 6): tris (a, b, c), (c, b, d), +y facing; allocation-free
   const quad = (i, j) => { k = (j * Q + i) * 6; v(i, j); v(i, j + 1); v(i + 1, j); v(i + 1, j); v(i, j + 1); v(i + 1, j + 1); };
-  for (let j = 0; j < Q; j++) for (let i = 0; i < Q; i++) quad(i, j);
-  // skirt down to YB along the 4 edges, then the bottom: a closed body (cut face, W3)
-  for (const e of [(t) => [t, 0], (t) => [t, Q], (t) => [0, t], (t) => [Q, t]]) for (let t = 0; t < Q; t++) {
-    const [pi, pj] = e(t), [qi, qj] = e(t + 1), py = vh[pj * G + pi], qy = vh[qj * G + qi];
-    put(vx(pi), py, vx(pj)); put(vx(pi), YB, vx(pj)); put(vx(qi), qy, vx(qj));
-    put(vx(qi), qy, vx(qj)); put(vx(pi), YB, vx(pj)); put(vx(qi), YB, vx(qj));
-  }
+  // whole body top + skirt down to YB along the 4 edges (closed body, cut face W3); bottom written once below
+  const all = () => {
+    for (let j = 0; j < Q; j++) for (let i = 0; i < Q; i++) quad(i, j);
+    k = TOP;
+    for (const e of [(t) => [t, 0], (t) => [t, Q], (t) => [0, t], (t) => [Q, t]]) for (let t = 0; t < Q; t++) {
+      const [pi, pj] = e(t), [qi, qj] = e(t + 1), py = vh[pj * G + pi], qy = vh[qj * G + qi];
+      put(vx(pi), py, vx(pj)); put(vx(pi), YB, vx(pj)); put(vx(qi), qy, vx(qj));
+      put(vx(qi), qy, vx(qj)); put(vx(pi), YB, vx(pj)); put(vx(qi), YB, vx(qj));
+    }
+  };
+  all();
   const x1 = vx(Q);
   put(X0, YB, X0); put(x1, YB, X0); put(X0, YB, x1); put(x1, YB, X0); put(x1, YB, x1); put(X0, YB, x1);
 
@@ -62,7 +66,19 @@ export default async function build({ THREE, kit, world }) {
   slabsFrom(world.metrics);
 
   const root = new THREE.Group();
+  let cavesSeen = world.caves;
   root.add(body, slabs, kit.cave(world.caves, world.heightAt));
+  // resync hello (socket reconnect, relay restart) replaces h.base/h.land/caves wholesale:
+  // world.applyHello reassigns world.caves every time, so its identity marks a new snapshot
+  const resync = () => {
+    cavesSeen = world.caves;
+    sample(0, Q);
+    all();
+    const a = geo.attributes.position;
+    a.clearUpdateRanges();
+    a.needsUpdate = geo.attributes.bench.needsUpdate = true; // hello also replaces world.bench
+    // ponytail: cave mouths kept from build; kit.cave registers paint hooks, so rebuilding per hello would leak them
+  };
 
   // deposits: re-sample + rewrite the affected quad rows while world.js ramps h.land (3 s)
   const regions = [];
@@ -84,6 +100,7 @@ export default async function build({ THREE, kit, world }) {
     pose() {},
     step(dt) {
       if (world.metrics !== seen) slabsFrom(world.metrics);
+      if (world.caves !== cavesSeen) resync();
       for (let i = regions.length - 1; i >= 0; i--) {
         const r = regions[i];
         refresh(r);
