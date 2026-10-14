@@ -189,7 +189,7 @@ func dumpHello(args []string) error {
 	}
 	a := newApp(cfg, Opts{Seed: *seed}, *day)
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" { // a hello built from a restored snapshot (W2 pose gate)
-		a.attach(context.Background(), dsn)
+		a.attach(context.Background(), dsn, true)
 		defer a.store.Close(5 * time.Second)
 	}
 	b := a.Hello()
@@ -219,7 +219,7 @@ func serve(o Opts) error {
 	app = newApp(cfg, o, utcDay(time.Now()))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	app.attach(ctx, os.Getenv("DATABASE_URL")) // before the sources: src_alerts seeds from the restored state
+	app.attach(ctx, os.Getenv("DATABASE_URL"), false) // before the sources: src_alerts seeds from the restored state
 	go app.persist(ctx)
 	if err := startSources(ctx, app); err != nil {
 		return err

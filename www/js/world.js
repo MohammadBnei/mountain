@@ -19,8 +19,8 @@
 //   world.as(name) → view whose write()/emit() are bound to name (what models get)
 //   decodeI16(b64) / encodeI16(array) / decodeU8(b64): wire grids (little-endian, z outer, x inner)
 //   world.applyHello(hello);  world.applyFrame(frame, silent?) (silent: state only, no bus emit; hello deltas);  world.step(dt);  world.ready → Promise (first hello)
-//   world.scrub(day 'YYYY-MM-DD') → Promise<replay frame> (rejects on {error} or with no socket): sends scrub{day}; from then
-//                live frames are dropped (release resyncs through hello). The replay rebuilds land + state from its snapshot,
+//   world.scrub(day 'YYYY-MM-DD') → Promise<replay frame> (rejects on {error}, with no socket, after 10 s without a reply,
+//                or on a hello): sends scrub{day}; from then live frames are dropped (release or a hello resyncs). The replay rebuilds land + state from its snapshot,
 //                then step() plays the day's frames, not silent, spread over ≤ 20 s.  world.replay null | {day, frames, metrics, left}
 //   world.release() → leaves the replay and resyncs to live (world.resync: a fresh hello)
 //   world.send(frame) / world.resync()   wired by socket.connect (absent without a socket)
@@ -57,7 +57,7 @@ export function createWorld({ dev = false } = {}) {
   const N = GRID * GRID, subs = new Map();
   let resolveReady;
   const pending = []; // deposits ramping into h.land over 3 s
-  let play = null; // replay playback: {queue, gap, t, done: [resolve, reject]}
+  let play = null; // replay playback: {day, queue, gap, t, timer, done: [resolve, reject]}
   const w = {
     dev,
     fields: {
@@ -119,7 +119,9 @@ export function createWorld({ dev = false } = {}) {
       if (!w.send) return Promise.reject(new Error('world: scrub needs a socket'));
       play?.done[1](new Error('world: superseded'));
       return new Promise((resolve, reject) => {
-        play = { queue: [], gap: 0, t: 0, done: [resolve, reject] };
+        const p = play = { day, queue: [], gap: 0, t: 0, done: [resolve, reject] };
+        // no reply (lost frame, relay never answers): give up and resync to live
+        p.timer = setTimeout(() => { if (play === p) { play = null; w.replay = null; reject(new Error('world: scrub timeout')); w.resync?.(); } }, 10000);
         w.replay = { day, frames: [], metrics: [], left: 0 };
         w.send({ t: 'scrub', day });
       });
@@ -131,8 +133,10 @@ export function createWorld({ dev = false } = {}) {
       w.resync?.();
     },
     // ponytail: live frames during a scrub are dropped, not buffered: release() resyncs through a fresh hello anyway.
+    // A hello (reconnect) ends the scrub: the socket has resynced, so the world follows it.
     applyFrame(f, silent = false) {
       if (f.t === 'replay') return replay(f);
+      if (f.t === 'hello' && play) { const p = play; play = null; w.replay = null; clearTimeout(p.timer); p.done[1](new Error('world: resynced')); }
       if (!play) apply(f, silent);
     },
     /** Advance the h.land deposit ramps (3 s each) and the replay playback. */
@@ -184,7 +188,9 @@ export function createWorld({ dev = false } = {}) {
   /** A replay frame: rebuild land + state from its snapshot, then step() plays its frames (ev/world, live, not silent). */
   function replay(f) {
     if (!play) return; // released before it came
+    if (f.day ? f.day !== play.day : !f.error) return; // an earlier, superseded request's reply
     const [ok, no] = play.done;
+    clearTimeout(play.timer);
     if (f.error) { play = null; w.release(); return no(new Error(`world: scrub ${f.error}`)); } // live frames were dropped: resync
     w.applyHello({ snapshot: f.snapshot, state: f.state });
     play.queue = f.frames.slice(); play.gap = Math.min(0.25, 20 / Math.max(1, f.frames.length));

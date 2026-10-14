@@ -47,7 +47,7 @@ func storedApp(t *testing.T, dsn string) *App {
 		t.Fatal(err)
 	}
 	a := newApp(cfg, Opts{Seed: 1, FPSalt: devFPSalt}, utcDay(time.Now()))
-	a.attach(context.Background(), dsn)
+	a.attach(context.Background(), dsn, false)
 	if a.store == nil {
 		t.Fatal("attach: no store")
 	}
@@ -163,11 +163,25 @@ func TestDBReplay(t *testing.T) {
 		t.Fatal("today's snapshot must be yesterday's last snapshot + the deposit after it")
 	}
 	replays.Lock()
-	_, cy := replays.m[yday]
-	_, ct := replays.m[today]
+	cy, ct := replays.m[yday], replays.m[today]
 	replays.Unlock()
-	if !cy || ct {
-		t.Fatalf("cache: yesterday %v (want true), today %v (want false)", cy, ct)
+	settled := now.Sub(now.Truncate(24*time.Hour)) >= dayGrace // yesterday is still TTL'd in the first minute of today
+	if cy.b == nil || cy.until.IsZero() != settled || ct.until != now.Add(todayTTL) {
+		t.Fatalf("cache: yesterday until %v (want none), today until %v (want +%v)", cy.until, ct.until, todayTTL)
+	}
+	// every build slot taken: today (expired) is refused, yesterday (cached) is still served
+	for range cap(scrubBuilds) {
+		scrubBuilds <- struct{}{}
+	}
+	later := now.Add(todayTTL + time.Second)
+	var busy, cached struct{ Error string }
+	json.Unmarshal(a.replay(today, later), &busy)
+	json.Unmarshal(a.replay(yday, later), &cached)
+	for range cap(scrubBuilds) {
+		<-scrubBuilds
+	}
+	if busy.Error != "rate" || (settled && cached.Error != "") {
+		t.Fatalf("builds full: today %q (want rate), yesterday %q (want served)", busy.Error, cached.Error)
 	}
 	validate(t, [][]map[string]any{{my, mt}})
 }

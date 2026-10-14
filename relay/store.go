@@ -46,6 +46,7 @@ const (
 type Store struct {
 	pool *pgxpool.Pool
 	q    chan func(context.Context) error
+	stop chan struct{} // closed by Close: run returns
 }
 
 func openStore(ctx context.Context, dsn string) (*Store, error) {
@@ -62,7 +63,7 @@ func openStore(ctx context.Context, dsn string) (*Store, error) {
 		pool.Close()
 		return nil, err
 	}
-	s := &Store{pool: pool, q: make(chan func(context.Context) error, dbQueue)}
+	s := &Store{pool: pool, q: make(chan func(context.Context) error, dbQueue), stop: make(chan struct{})}
 	go s.run()
 	return s, nil
 }
@@ -113,6 +114,8 @@ func (s *Store) run() {
 	defer t.Stop()
 	for {
 		select {
+		case <-s.stop:
+			return
 		case op := <-s.q:
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			err := op(ctx)
@@ -164,7 +167,7 @@ func (s *Store) flush(d time.Duration) bool {
 	}
 }
 
-// Close flushes the queue (up to d), then closes the pool.
+// Close flushes the queue (up to d), stops the writer, then closes the pool.
 func (s *Store) Close(d time.Duration) {
 	if s == nil {
 		return
@@ -172,6 +175,7 @@ func (s *Store) Close(d time.Duration) {
 	if !s.flush(d) {
 		log.Printf("db: shutdown flush timed out, queued writes lost")
 	}
+	close(s.stop)
 	s.pool.Close()
 }
 
@@ -294,16 +298,20 @@ func fold(land []int16, st *State, frames []json.RawMessage) []json.RawMessage {
 			X0, Z0, W, H                   int
 			StartsAt                       int64
 		}
-		if json.Unmarshal(b, &f) != nil {
+		if err := json.Unmarshal(b, &f); err != nil {
+			log.Printf("db: fold: stored frame skipped: %v", err) // the restored land/state miss it
 			continue
 		}
 		switch {
 		case f.T == "world":
 			since = append(since, b)
 			if f.Kind == "deposit" {
-				if cells, err := worldcore.DecodeI16(f.Cells); err == nil {
-					worldcore.Deposit{X0: f.X0, Z0: f.Z0, W: f.W, H: f.H, Cells: cells}.AddTo(land)
+				cells, err := worldcore.DecodeI16(f.Cells)
+				if err != nil {
+					log.Printf("db: fold: stored deposit skipped: %v", err)
+					continue
 				}
+				worldcore.Deposit{X0: f.X0, Z0: f.Z0, W: f.W, H: f.H, Cells: cells}.AddTo(land)
 			}
 		case f.Kind == "alert.fire":
 			st.set(Alert{FP: f.FP, Sev: f.Sev, Layer: f.Layer, StartsAt: f.StartsAt})
@@ -316,8 +324,8 @@ func fold(land []int16, st *State, frames []json.RawMessage) []json.RawMessage {
 
 // attach opens DATABASE_URL and restores the world from it. Empty or unusable = memory-only (logged).
 // An unusable DB is never written, so a DB that comes back is not overwritten by a world that missed it;
-// a restart after it recovers restores normally.
-func (a *App) attach(ctx context.Context, dsn string) {
+// a restart after it recovers restores normally. ro (dump-hello): restore without writing a first snapshot.
+func (a *App) attach(ctx context.Context, dsn string, ro bool) {
 	SourceLastSuccess.Set("db", float64(time.Now().Unix())) // memory-only: never refreshed, ages into MountainSourceStale
 	if dsn == "" {
 		log.Printf("relay: DATABASE_URL unset: memory-only, the world is lost on restart")
@@ -326,9 +334,9 @@ func (a *App) attach(ctx context.Context, dsn string) {
 	s, err := openStore(ctx, dsn)
 	if err == nil {
 		a.store = s
-		if err = a.restore(ctx); err != nil {
+		if err = a.restore(ctx, ro); err != nil {
 			a.store = nil
-			s.pool.Close()
+			s.Close(time.Second) // nothing queued yet: restore failed before any write
 		}
 	}
 	if err != nil {
@@ -337,14 +345,16 @@ func (a *App) attach(ctx context.Context, dsn string) {
 }
 
 // restore loads the latest snapshot and re-applies the frames after it. No snapshot yet (first boot on
-// this seed): write one now, so every later frame has a base.
-func (a *App) restore(ctx context.Context) error {
+// this seed): write one now (unless ro), so every later frame has a base.
+func (a *App) restore(ctx context.Context, ro bool) error {
 	r, err := a.store.load(ctx, a.World.Seed, nil)
 	if err != nil {
 		return err
 	}
 	if r == nil {
-		a.snapshot(time.Now())
+		if !ro {
+			a.snapshot(time.Now())
+		}
 		return nil
 	}
 	land, st := slices.Clone(r.land), r.state

@@ -54,7 +54,7 @@ Limits:
 | Scrub | 1 per 2 s, per connection |
 | Marks per account | 1/min, 20/day |
 | Active marks, global cap | 2000 |
-| Day replays | past days cached in memory (last 7 requested); today always from the DB |
+| Day replays | cached in memory (last 7 built): a day ended > 1 min ago until evicted, today 10 s; at most 2 builds at once relay-wide (else `rate`) |
 
 **Kill switch:** `VISITORS_ENABLED=false` hides the surface layer and rejects marks, with no deploy (Infisical-synced env + restart-free reload of the flag).
 
@@ -64,6 +64,7 @@ Limits:
 - `mountain_github_token_days_left` (from the `github-authentication-token-expiration` header)
 - `mountain_ws_connections`
 - `mountain_db_dropped_total{reason=full|error}` (W2)
+- `mountain_scrub_dropped_total`: scrub replies lost to a full send buffer (the connection is dropped) (W2)
 - `source="db"` in `mountain_source_last_success` (W2: Postgres writes + 30 s ping; memory-only ages)
 
 The ServiceMonitor and PrometheusRule live in **the mountain app's `extraManifests`**, since common-app-chart has no template for them.
