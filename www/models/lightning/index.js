@@ -3,7 +3,7 @@
 // site, a midpoint-displacement ribbon for ~150 ms, magma when errB > 0; an idle St. Elmo corona at the summit
 // (~11 short forking arcs re-seeded every 80–150 ms + a faint core halo), strength = total rpsB.
 // Three draws: halos (instanced kit glow quads, billboarded), corona (kit line), bolt (kit line, ink or magma).
-import { cellXZ, GRID } from '../../js/world.js';
+import { CELL, GRID } from '../../js/world.js';
 
 const SITES = 64, ARCS = 11, LIFE = 0.15, QUEUE = 8;
 const DB = 5, DA = 3; // ribbon depths: bolt 32 segments (+ an 8-segment fork), arc 8 (+ a 2-segment fork)
@@ -62,7 +62,7 @@ export default async function build({ THREE, kit, world, rng }) {
     const apps = world.metrics?.apps;
     let total = 0;
     for (const app in apps) total += apps[app].rpsB;
-    const k = Math.min(1, total / 20), i = world.fields.heightSolid.indexOf(world.hmax), [x, z] = cellXZ(i % GRID, (i / GRID) | 0), y = world.hmax;
+    const k = Math.min(1, total / 20), i = world.fields.heightSolid.indexOf(world.hmax), x = (i % GRID - GRID / 2) * CELL, z = (((i / GRID) | 0) - GRID / 2) * CELL, y = world.hmax;
     const A = arcs.geometry.attributes.position;
     let at = 0;
     for (let a = 0, m = Math.ceil(ARCS * k); a < m; a++) {

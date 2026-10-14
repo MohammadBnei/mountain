@@ -2,6 +2,9 @@
 // bolt from the base of the nearest mass cluster down to the site, ink; errB > 0 → magma; no clouds → the bolt
 // starts params.above m over the site.
 export default async function test({ model, world, inject, step, fixture, assert }) {
+  // 01 contract: step() never allocates; cellXZ returns a fresh array, so reseed() (run from step) must not call it
+  const src = await (await fetch(new URL('./index.js', import.meta.url))).text();
+  assert(!src.includes('cellXZ('), 'step() alloc-free: no cellXZ() in the step path');
   const halos = model.root.getObjectByName('halos'), arcs = model.root.getObjectByName('corona'), bolt = model.root.getObjectByName('bolt');
   const base = world.metrics, frame = (apps) => world.applyFrame({ ...base, apps });
   for (const s of fixture.sites) inject(s.type, s.payload);
