@@ -3,6 +3,7 @@
 // Hooks (gate.mjs drives them; ?ui=0 hides the panel and stops the render loop):
 //   __setP(P) → stats {tris, draws, coverage, foreignMaterials, shadows}      __step(n, dt)   __inject(type, payload)
 //   __checks() → {pose, style:{dusk, day}, facet, lum:{dusk, day}, clip, physics}   (pure measurements, state restored)
+//   __caveLum() → [lum dusk] per world.caves close-up
 //   __test() → {ok, error, peak, stepMs, writes, emits, listens, rig, fields}       (test.js under audit)
 // Physics convention checked here (00 "Physics"): cannon-es collisionFilterGroup bit 1 = real, bit 2 = surface;
 // two bodies of different layers in one world must not be able to collide (group & mask both ways).
@@ -66,21 +67,23 @@ try {
   const { profile } = loaded[0], { x, z, r } = profile.footprint, [y0, y1] = profile.yRange;
   const camera = new THREE.PerspectiveCamera(finale.fov, innerWidth / innerHeight, 0.1, 2000);
   const look = new THREE.Vector3();
-  const cam = q.get('cam') || '';
-  if (cam.startsWith('cave')) { // cave close-up (09 Freeze item 1): cam=cave:<i>[:side]
-    const [, i = 0, side = 1] = cam.split(':').map(Number), c = world.caves[i % world.caves.length], o = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw));
-    look.set(c.x - o.x * 4, c.y + 2.4, c.z - o.z * 4);
-    camera.position.copy(look).addScaledVector(o, 22).add(new THREE.Vector3(0, 5, 0)).addScaledVector(new THREE.Vector3(-o.z, 0, o.x), 10 * side);
-  } else if (r > 50) { // world-sized: the live finale camera at its sway angle (?az=)
-    const az = Number(q.get('az') || 0);
-    camera.position.set(finale.radius * Math.sin(az), finale.height, finale.radius * Math.cos(az));
-    look.set(...finale.look);
-  } else {
-    const yMid = (y0 + y1) / 2, d = Math.max(r, (y1 - y0) / 2) * 3.4 + 2;
-    camera.position.set(x + d * 0.45, yMid + d * 0.55, z + d * 0.8);
-    look.set(x, yMid, z);
-  }
-  camera.lookAt(look);
+  const place = (cam) => {
+    if (cam.startsWith('cave')) { // cave close-up (09 Freeze item 1): cam=cave:<i>[:side]
+      const [, i = 0, side = 1] = cam.split(':').map(Number), c = world.caves[i % world.caves.length], o = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw));
+      look.set(c.x - o.x * 4, c.y + 2.4, c.z - o.z * 4);
+      camera.position.copy(look).addScaledVector(o, 22).add(new THREE.Vector3(0, 5, 0)).addScaledVector(new THREE.Vector3(-o.z, 0, o.x), 10 * side);
+    } else if (r > 50) { // world-sized: the live finale camera at its sway angle (?az=)
+      const az = Number(q.get('az') || 0);
+      camera.position.set(finale.radius * Math.sin(az), finale.height, finale.radius * Math.cos(az));
+      look.set(...finale.look);
+    } else {
+      const yMid = (y0 + y1) / 2, d = Math.max(r, (y1 - y0) / 2) * 3.4 + 2;
+      camera.position.set(x + d * 0.45, yMid + d * 0.55, z + d * 0.8);
+      look.set(x, yMid, z);
+    }
+    camera.lookAt(look);
+  };
+  place(q.get('cam') || '');
 
   const gl = renderer.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight;
   const render = (buf) => {
@@ -287,6 +290,9 @@ try {
     }
     return bad;
   }
+
+  // dusk terrain luminance from each cave close-up (09 Freeze item 1), camera restored
+  window.__caveLum = () => { try { return world.caves.map((_, i) => (place(`cave:${i}`), lum('dusk'))); } finally { place(q.get('cam') || ''); } };
 
   window.__checks = (Ps = [0, 3, 6]) => {
     const P0 = window.__gate.P ?? 6;

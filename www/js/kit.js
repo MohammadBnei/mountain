@@ -143,6 +143,7 @@ export const U = {
   uRock0: { value: new THREE.Color() }, uRock1: { value: new THREE.Color() }, uEmberRoot: { value: new THREE.Color() },
   uSnow: { value: new THREE.Color() }, uIce: { value: new THREE.Color() }, uTrail: { value: new THREE.Color() },
   uGold: { value: color('gold') }, uVeinRef: { value: color('sunHalo') },
+  uCaves: { value: Array.from({ length: 5 }, () => new THREE.Vector4()) }, // cave() mouth centres (w = 1 live)
 };
 color('magma', U.uPoolCol.value).multiplyScalar(0.6);
 
@@ -268,7 +269,8 @@ export function setRampAt(mesh, i, t) {
 /**
  * Cave mouths at Go `caves[]` (09 cave()): 4 InstancedMeshes (mouth, brow, jambs, threshold rocks).
  * heightAt(x, z) → world y of heightSolid. Dusk legibility (09 Freeze item 1): the brow/jamb rocks get a
- * snowLift-style emissive lift (colour × rig.snowLift), so the dark mouth reads by contrast; no new light.
+ * snowLift-style emissive lift (colour × rig.snowLift), so the dark mouth reads by contrast; no new light. The terrain
+ * patch lifts the rock around each mouth the same way (U.uCaves, ≤ 5 = Go's max caves).
  */
 export function cave(caves, heightAt) {
   const g = new THREE.Group(), n = caves.length, W = 2.6, e = 0.5;
@@ -295,6 +297,7 @@ export function cave(caves, heightAt) {
   const jamb = new THREE.InstancedMesh(rockG, jambM, n * 3), loose = new THREE.InstancedMesh(rockG, looseM, n * 3);
   const F = new THREE.Object3D(), L = new THREE.Object3D(), M = new THREE.Matrix4();
   const put = (im, k, pos, scale, rot) => { L.position.set(...pos); L.scale.set(...scale); L.rotation.set(...rot); L.updateMatrix(); im.setMatrixAt(k, M.multiplyMatrices(F.matrix, L.matrix)); };
+  U.uCaves.value.forEach((v) => v.set(0, 0, 0, 0));
   caves.forEach((c, i) => {
     const r = mulberry(c.seed), out = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), tan = new THREE.Vector3(out.z, 0, -out.x), ym = c.y + 2.4;
     let dd = W;
@@ -302,6 +305,7 @@ export function cave(caves, heightAt) {
     const P = new THREE.Vector3(c.x - out.x * dd, ym, c.z - out.z * dd);
     const nrm = new THREE.Vector3(heightAt(P.x - e, P.z) - heightAt(P.x + e, P.z), 2 * e, heightAt(P.x, P.z - e) - heightAt(P.x, P.z + e)).normalize().lerp(out, 0.5).normalize();
     F.position.copy(P).addScaledVector(nrm, 0.35);
+    U.uCaves.value[i]?.set(P.x, P.y, P.z, 1);
     F.lookAt(F.position.clone().add(nrm));
     F.updateMatrix();
     put(mouth, i, [0, 0, 0], [1, 1, 1], [0, 0, 0]);

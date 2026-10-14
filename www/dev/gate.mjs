@@ -15,7 +15,8 @@
 // stepMs (mean over audited steps); writes/emits/listens ⊆ profile; no foreign field writes in step(); clipped flag
 // (rendered: closing uClip removes every solid iff clipped); pose(P) determinism; test.js; kit factories only;
 // shadows; style per factory at the exact dusk and day keys (colour ∈ tokens/ramps ±1/255, flatShading, no maps,
-// emissive hue); facet bands; luminance ceiling < 1 (dusk, day) and dusk terrain p50 > 0.004 on a HalfFloat RT;
+// emissive hue); facet bands; luminance ceiling < 1 (dusk, day) and dusk terrain p50 > 0.004 on a HalfFloat RT
+// (default camera and, without --qs, every cave:<i> close-up);
 // static source scan; rig/dome/fog/exposure/uFootprint unchanged around step(); no real↔surface bodies;
 // console errors, exceptions, failed or foreign requests. Checks run before and after test.js.
 import { spawn, spawnSync } from 'node:child_process';
@@ -171,6 +172,7 @@ async function modelMode() {
     for (const f of c.facet) if (f.error || !f.ok) fail(`${pre}facet ${f.mesh}: ${f.error || `class ${f.cls} median ${f.median} outside [${f.band}]`}`);
     for (const k of ['dusk', 'day']) if (!(c.lum[k].max < 1)) fail(`${pre}luminance ${k} max ${c.lum[k].max} ≥ 1 (emissives off)`);
     if (c.lum.dusk.terrainPx && !(c.lum.dusk.p50 > 0.004)) fail(`${pre}dusk terrain p50 luminance ${c.lum.dusk.p50} ≤ 0.004 (too dark)`);
+    if (!opt('qs')) (await page.evalJSON('window.__caveLum()')).forEach((l, i) => l.terrainPx && !(l.p50 > 0.004) && fail(`${pre}cave:${i} dusk terrain p50 luminance ${l.p50} ≤ 0.004 (too dark)`));
     if (c.clip.open > 0) {
       const kept = c.clip.cut / c.clip.open;
       if (profile.clipped && kept > 0.02) fail(`${pre}clipped:true but ${pct(kept)} of solid pixels ignore uClip`);
