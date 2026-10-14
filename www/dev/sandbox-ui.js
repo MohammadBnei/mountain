@@ -108,8 +108,11 @@ export default function ui({ THREE, kit, world, loaded, renderer, scene, camera,
     el('h2', { textContent: 'bus' }), log));
 
   // render loop: one step per 1/30 s of real time while playing, each step dt = mult/30 (same as the step button)
-  let acc = 0, last = performance.now();
+  // Draws at 30 fps at most (also while paused: sliders and orbit still change the view).
+  let acc = 0, last = performance.now(), drawn = 0;
   renderer.setAnimationLoop((now) => {
+    if (now - drawn < 1000 / 30 - 1) return;
+    drawn = now;
     acc = Math.min(acc + (now - last) / 1000, 0.25);
     last = now;
     while (playing && acc >= 1 / 30) { step(1, mult / 30); acc -= 1 / 30; }
