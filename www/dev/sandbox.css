@@ -1,0 +1,16 @@
+.panel { position: absolute; top: 0; right: 0; width: 300px; max-height: 100%; overflow-y: auto; box-sizing: border-box; padding: 10px 12px;
+  background: rgba(18, 11, 10, 0.82); color: #ece6dc; font: 12px/1.4 ui-monospace, Menlo, monospace; }
+.panel h1 { font-size: 13px; margin: 0 0 8px; } .panel h2 { font-size: 11px; margin: 12px 0 4px; text-transform: uppercase; opacity: 0.6; }
+.panel .row { display: grid; grid-template-columns: 110px 1fr 44px; gap: 6px; align-items: center; margin: 2px 0; }
+.panel .row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel .btns { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.panel select, .panel textarea, .panel button { font: inherit; background: #1b1e25; color: inherit; border: 1px solid #3b2a48; border-radius: 3px; }
+.panel textarea { width: 100%; box-sizing: border-box; }
+.panel .heat { width: 256px; height: 256px; image-rendering: pixelated; display: block; margin-top: 4px; }
+.panel .log { max-height: 200px; overflow: auto; white-space: pre; margin: 0; font-size: 10px; }
+.panel .err { color: #e5562f; } .panel .dim { opacity: 0.6; }
+/* styleboard: 4 × 4 labels over the scissored viewports */
+.board { position: absolute; inset: 0; display: grid; grid-template: repeat(4, 1fr) / repeat(4, 1fr); pointer-events: none; }
+.board span { padding: 6px 8px; font: 11px ui-monospace, Menlo, monospace; color: #ece6dc; opacity: 0.8; }
+.board-title { position: absolute; bottom: 4px; left: 8px; margin: 0; font: 12px ui-monospace, Menlo, monospace; }
+@media (max-width: 600px) { .panel { width: 100%; max-height: 45%; top: auto; bottom: 0; } }
