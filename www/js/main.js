@@ -12,7 +12,8 @@ import { createPost } from './post.js';
 
 const q = new URLSearchParams(location.search);
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: kit.QUALITY !== 'low' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, kit.QUALITY === 'low' ? 1.5 : 2));
+const ratioMax = Math.min(devicePixelRatio, 1.5); // bloom at DPR 2 on a retina laptop costs heat for detail fog hides
+renderer.setPixelRatio(ratioMax);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(finale.fov, 1, 1, 2000);
 kit.rig(renderer, scene);
@@ -20,7 +21,7 @@ const post = createPost(renderer, scene, camera); // null on phones (low tier)
 
 const dev = location.hostname === '127.0.0.1';
 const world = createWorld({ dev });
-if (dev) globalThis.__page = { renderer, scene, camera, post, world, kit };
+if (dev) globalThis.__page = { renderer, scene, camera, post, world, kit, quality: () => ({ rung, fps: ladder[rung][0], ratio: ladder[rung][1], charging }) };
 if (q.has('fixture')) fetch('./dev/fixtures/hello.json').then((r) => r.json()).then(world.applyHello);
 else connect({ world });
 await world.ready;
@@ -65,8 +66,35 @@ function host() {
 }
 
 const DT = 1 / 30;
-let acc = 0, t = 0, last = performance.now();
+// Adaptive draw rate (heat/battery): a ladder of [fps, pixel ratio] from cheapest to richest. 60 fps is
+// allowed only while charging on desktop (Battery API; none = never). Each ~1 s window of draws: mean
+// frame > 1.2× its budget steps one rung down and doubles that rung's retry wait; otherwise, once the
+// wait is over, it probes one rung up. The sim steps at 1/30 s either way; at 60 only the camera moves in between.
+const ladder = [[30, Math.min(1, ratioMax)], [30, Math.min(1.25, ratioMax)], [30, ratioMax], [60, ratioMax]]
+  .filter((r, i, l) => !i || r[0] !== l[i - 1][0] || r[1] !== l[i - 1][1]);
+let charging = false, rung = ladder.findLastIndex((r) => r[0] === 30), gSum = 0, gN = 0;
+const wait = ladder.map(() => 3000), upAt = ladder.map(() => 0);
+const top = () => (charging && kit.QUALITY !== 'low' ? ladder.length - 1 : ladder.findLastIndex((r) => r[0] === 30));
+const setRung = (i) => { rung = i; renderer.setPixelRatio(ladder[i][1]); post?.composer.setPixelRatio(ladder[i][1]); }; // the composer keeps its own copy
+navigator.getBattery?.().then((b) => {
+  const set = () => { charging = b.charging; if (rung > top()) setRung(top()); };
+  set();
+  b.addEventListener('chargingchange', set);
+}).catch(() => {});
+function govern(ms, now) {
+  gSum += Math.min(ms, 200); gN++;
+  if (gSum < 1000) return;
+  const late = gSum / gN > 1.2 * (1000 / ladder[rung][0]);
+  gSum = gN = 0;
+  if (late && rung > 0) { wait[rung] = Math.min(wait[rung] * 2, 120000); upAt[rung] = now + wait[rung]; setRung(rung - 1); }
+  else if (!late && rung < top() && now >= upAt[rung + 1]) setRung(rung + 1);
+}
+let acc = 0, t = 0, last = performance.now(), drawn = 0;
+addEventListener('visibilitychange', () => { drawn = gSum = gN = 0; }); // the gap of a hidden tab is not a slow frame
 renderer.setAnimationLoop((now) => {
+  if (now - drawn < 1000 / ladder[rung][0] - 2) return;
+  if (drawn) govern(now - drawn, now);
+  drawn = now;
   acc = Math.min(acc + (now - last) / 1000, 0.25);
   last = now;
   while (acc >= DT) {
@@ -78,7 +106,8 @@ renderer.setAnimationLoop((now) => {
   host();
   kit.U.uSnowline.value = world.snowline;
   kit.U.uHMax.value = world.hmax; // deposits and resyncs move the summit
-  const az = finale.sway * Math.min(1, camera.aspect) * Math.sin((2 * Math.PI * t) / finale.period); // narrower on portrait: the pool stays in frame
+  const tc = t + acc; // camera time between sim steps: smooth at 60 fps
+  const az = finale.sway * Math.min(1, camera.aspect) * Math.sin((2 * Math.PI * tc) / finale.period); // narrower on portrait: the pool stays in frame
   camera.position.set(finale.radius * Math.sin(az), finale.height, finale.radius * Math.cos(az));
   camera.lookAt(...finale.look);
   if (post) post.render(t);
