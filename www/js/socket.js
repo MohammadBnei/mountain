@@ -21,7 +21,12 @@ export function connect({ url = wsURL(), world, onStatus = () => {} }) {
       let f;
       try { f = JSON.parse(e.data); } catch { return console.warn('socket: dropped a non-JSON frame'); }
       world.applyFrame(f);
-      if (f.t === 'hello') backoff = 1000;
+      if (f.t !== 'hello') return;
+      backoff = 1000;
+      // world.sites = /api/topology + world:site deltas (01): apps with no deposit yet still get a site.
+      fetch(new URL('/api/topology', url.replace(/^ws/, 'http'))).then((r) => r.json())
+        .then((t) => world.write('sites', 'world', (m) => { for (const x of t.sites || []) m.set(x.app, x); }))
+        .catch((e) => console.warn('socket: /api/topology', e.message));
     };
     ws.onclose = () => {
       onStatus('closed');

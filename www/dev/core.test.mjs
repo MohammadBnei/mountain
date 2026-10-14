@@ -62,6 +62,8 @@ globalThis.WebSocket = class {
   close() { this.onclose?.(); }
   recv(f) { this.onmessage({ data: typeof f === 'string' ? f : JSON.stringify(f) }); }
 };
+const fetched = [];
+globalThis.fetch = async (u) => { fetched.push(String(u)); return { json: async () => ({ sites: [{ app: 'vos-monolith', x: -40.7, z: 1.4 }] }) }; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const w2 = createWorld({ dev: true }), status = [];
 Math.random = () => 0; // jitter factor 0.5
@@ -69,6 +71,8 @@ const c = connect({ url: 'ws://x/ws', world: w2, onStatus: (s) => status.push(s)
 await sleep(10);
 socks[0].recv({ ...hello, t: 'hello' });
 ok(w2.stale === null && status.join() === 'open', 'hello applied, not stale');
+await sleep(1);
+ok(fetched[0] === 'http://x/api/topology' && w2.sites.get('vos-monolith')?.x === -40.7, 'hello fetches /api/topology into world.sites');
 const t0 = Date.now();
 socks[0].close();
 ok(typeof w2.stale === 'number' && w2.stale >= t0 - 5, 'disconnect sets world.stale = since-timestamp');
