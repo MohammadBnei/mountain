@@ -1,0 +1,419 @@
+package main
+
+// Persistence (02 "Persistence", W2): Postgres through pgx v5, a direct connection (no pgbouncer), so
+// prepared statements and the advisory-lock migration are fine. Empty DATABASE_URL = memory-only.
+//
+// Writes never block the hub: record (the hub tap, under h.mu) and snapshot queue closures on a buffered
+// channel that one writer goroutine drains. The DB therefore sees frames and snapshots in broadcast
+// order, and frame_seq orders them. When the queue is full the write is dropped (log + mountain_db_dropped_total).
+// Health: mountain_source_last_success{source="db"} is set on every good write and on a 30 s ping, so
+// MountainSourceStale covers a dead DB. In memory-only mode it is seeded once and ages (the alarm for a
+// missing secret). The page is not marked stale, because the live view does not depend on the DB.
+//
+// hello = the latest snapshot (snapLand) + the world frames since it (since) + state + metrics. A snapshot
+// folds since into snapLand. Boot: load the latest snapshot and re-apply every frame after it.
+
+import (
+	"context"
+	"embed"
+	"encoding/binary"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"log"
+	"path"
+	"slices"
+	"time"
+
+	"github.com/MohammadBnei/mountain/relay/worldcore"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+//go:embed migrations/*.sql
+var migrations embed.FS
+
+const (
+	dbQueue      = 1024
+	dbPingEvery  = 30 * time.Second
+	snapEvery    = 10         // minutes
+	metricsEvery = 5          // minutes
+	migrateLock  = 0x6d6f756e // "moun"
+)
+
+// Store is the Postgres side. A nil *Store is memory-only: every method is a no-op.
+type Store struct {
+	pool *pgxpool.Pool
+	q    chan func(context.Context) error
+}
+
+func openStore(ctx context.Context, dsn string) (*Store, error) {
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+	cfg.MaxConns = 8 // connlimit 10 (02); pgx's default max(4, NumCPU) can exceed it
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := migrate(ctx, pool); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	s := &Store{pool: pool, q: make(chan func(context.Context) error, dbQueue)}
+	go s.run()
+	return s, nil
+}
+
+// migrate applies migrations/*.sql in name order, once each, under a session advisory lock (a second
+// relay or test waits instead of racing the DDL).
+func migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	c, err := pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+	if _, err := c.Exec(ctx, "SELECT pg_advisory_lock($1)", migrateLock); err != nil {
+		return err
+	}
+	defer c.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", migrateLock)
+	if _, err := c.Exec(ctx, "CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, at timestamptz NOT NULL DEFAULT now())"); err != nil {
+		return err
+	}
+	files, _ := fs.Glob(migrations, "migrations/*.sql")
+	for _, f := range files {
+		v := path.Base(f)
+		var done bool
+		if err := c.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)", v).Scan(&done); err != nil {
+			return err
+		}
+		if done {
+			continue
+		}
+		sql, _ := migrations.ReadFile(f)
+		err := pgx.BeginFunc(ctx, c, func(tx pgx.Tx) error {
+			if _, err := tx.Exec(ctx, string(sql)); err != nil {
+				return err
+			}
+			_, err := tx.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", v)
+			return err
+		})
+		if err != nil {
+			return fmt.Errorf("migration %s: %w", v, err)
+		}
+		log.Printf("db: applied migration %s", v)
+	}
+	return nil
+}
+
+func (s *Store) run() {
+	t := time.NewTicker(dbPingEvery)
+	defer t.Stop()
+	for {
+		select {
+		case op := <-s.q:
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err := op(ctx)
+			cancel()
+			if err != nil {
+				DBDropped.Add("error", 1)
+				log.Printf("db: write failed: %v", err)
+				continue
+			}
+		case <-t.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			err := s.pool.Ping(ctx)
+			cancel()
+			if err != nil {
+				log.Printf("db: ping: %v", err)
+				continue
+			}
+		}
+		SourceLastSuccess.Set("db", float64(time.Now().Unix()))
+	}
+}
+
+// save queues op without blocking (the caller may hold h.mu).
+func (s *Store) save(op func(context.Context) error) {
+	if s == nil {
+		return
+	}
+	select {
+	case s.q <- op:
+	default:
+		DBDropped.Add("full", 1)
+		log.Printf("db: queue full, write dropped")
+	}
+}
+
+// flush waits up to d for every write queued before it; false on timeout.
+func (s *Store) flush(d time.Duration) bool {
+	done, t := make(chan struct{}), time.After(d)
+	select {
+	case s.q <- func(context.Context) error { close(done); return nil }:
+	case <-t:
+		return false
+	}
+	select {
+	case <-done:
+		return true
+	case <-t:
+		return false
+	}
+}
+
+// Close flushes the queue (up to d), then closes the pool.
+func (s *Store) Close(d time.Duration) {
+	if s == nil {
+		return
+	}
+	if !s.flush(d) {
+		log.Printf("db: shutdown flush timed out, queued writes lost")
+	}
+	s.pool.Close()
+}
+
+func utcDay(t time.Time) string { return t.UTC().Format(time.DateOnly) }
+
+// frame persists one broadcast ev or world frame (b is the sanitised frame as sent).
+func (s *Store) frame(t, kind, id string, ts time.Time, b []byte) {
+	s.save(func(ctx context.Context) error {
+		var err error
+		if t == "ev" {
+			_, err = s.pool.Exec(ctx, "INSERT INTO events (id, ts, day, kind, public) VALUES ($1, $2, $3, $4, $5)", id, ts, utcDay(ts), kind, json.RawMessage(b))
+		} else {
+			_, err = s.pool.Exec(ctx, "INSERT INTO world_deltas (ts, day, kind, frame) VALUES ($1, $2, $3, $4)", ts, utcDay(ts), kind, json.RawMessage(b))
+		}
+		return err
+	})
+}
+
+func (s *Store) snapshot(day string, ts time.Time, seed uint32, land []int16, state, metrics []byte) {
+	lb := landBytes(land) // now: the caller may change land after we return
+	s.save(func(ctx context.Context) error {
+		_, err := s.pool.Exec(ctx, `INSERT INTO snapshots (day, seq, ts, seed, land, state, metrics)
+			VALUES ($1, nextval('frame_seq'), $2, $3, $4, $5, $6)
+			ON CONFLICT (day) DO UPDATE SET seq = excluded.seq, ts = excluded.ts, seed = excluded.seed,
+				land = excluded.land, state = excluded.state, metrics = excluded.metrics`,
+			day, ts, int64(seed), lb, json.RawMessage(state), json.RawMessage(metrics))
+		return err
+	})
+}
+
+func (s *Store) metrics(ts time.Time, b []byte) {
+	s.save(func(ctx context.Context) error {
+		_, err := s.pool.Exec(ctx, "INSERT INTO metrics_5m (ts, day, frame) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", ts, utcDay(ts), json.RawMessage(b))
+		return err
+	})
+}
+
+func landBytes(land []int16) []byte {
+	b, _ := binary.Append(nil, binary.LittleEndian, land)
+	return b
+}
+
+// dbSnap is a stored snapshot plus every ev/world frame after it, in order.
+type dbSnap struct {
+	land    []int16
+	state   State
+	metrics Metrics
+	frames  []json.RawMessage
+}
+
+// load returns the latest snapshot of seed (before day `before`, if not nil) and the frames after it
+// (also before that day). nil, nil = no snapshot.
+func (s *Store) load(ctx context.Context, seed uint32, before *string) (*dbSnap, error) {
+	var (
+		seq       int64
+		land      []byte
+		st, mt    []byte
+		r         dbSnap
+		beforeArg any
+	)
+	if before != nil {
+		beforeArg = *before
+	}
+	err := s.pool.QueryRow(ctx, `SELECT seq, land, state, metrics FROM snapshots
+		WHERE seed = $1 AND ($2::date IS NULL OR day < $2::date) ORDER BY seq DESC LIMIT 1`, int64(seed), beforeArg).Scan(&seq, &land, &st, &mt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	r.land = make([]int16, worldcore.Grid*worldcore.Grid)
+	if len(land) != 2*len(r.land) {
+		return nil, fmt.Errorf("snapshot seq %d: land is %d bytes", seq, len(land))
+	}
+	binary.Decode(land, binary.LittleEndian, r.land)
+	if err := json.Unmarshal(st, &r.state); err != nil {
+		return nil, fmt.Errorf("snapshot seq %d state: %w", seq, err)
+	}
+	if err := json.Unmarshal(mt, &r.metrics); err != nil {
+		return nil, fmt.Errorf("snapshot seq %d metrics: %w", seq, err)
+	}
+	r.frames, err = s.rows(ctx, `SELECT frame FROM (
+			SELECT seq, public AS frame FROM events WHERE seq > $1 AND ($2::date IS NULL OR day < $2::date)
+			UNION ALL SELECT seq, frame FROM world_deltas WHERE seq > $1 AND ($2::date IS NULL OR day < $2::date)
+		) f ORDER BY seq`, seq, beforeArg)
+	return &r, err
+}
+
+// day returns one UTC day's ev + world frames (broadcast order) and its metrics_5m frames.
+func (s *Store) day(ctx context.Context, day string) (frames, metrics []json.RawMessage, err error) {
+	frames, err = s.rows(ctx, `SELECT frame FROM (
+			SELECT seq, public AS frame FROM events WHERE day = $1
+			UNION ALL SELECT seq, frame FROM world_deltas WHERE day = $1
+		) f ORDER BY seq`, day)
+	if err != nil {
+		return nil, nil, err
+	}
+	metrics, err = s.rows(ctx, "SELECT frame FROM metrics_5m WHERE day = $1 ORDER BY ts", day)
+	return frames, metrics, err
+}
+
+func (s *Store) rows(ctx context.Context, sql string, args ...any) ([]json.RawMessage, error) {
+	rows, _ := s.pool.Query(ctx, sql, args...)
+	out, err := pgx.CollectRows(rows, pgx.RowTo[[]byte])
+	res := make([]json.RawMessage, len(out))
+	for i, b := range out {
+		res[i] = b
+	}
+	return res, err
+}
+
+// fold re-applies stored frames: deposits add into land, alert.fire/resolve update st.
+// Returns the world frames (hello deltas after a restore).
+func fold(land []int16, st *State, frames []json.RawMessage) []json.RawMessage {
+	since := []json.RawMessage{}
+	for _, b := range frames {
+		var f struct {
+			T, Kind, Cells, FP, Sev, Layer string
+			X0, Z0, W, H                   int
+			StartsAt                       int64
+		}
+		if json.Unmarshal(b, &f) != nil {
+			continue
+		}
+		switch {
+		case f.T == "world":
+			since = append(since, b)
+			if f.Kind == "deposit" {
+				if cells, err := worldcore.DecodeI16(f.Cells); err == nil {
+					worldcore.Deposit{X0: f.X0, Z0: f.Z0, W: f.W, H: f.H, Cells: cells}.AddTo(land)
+				}
+			}
+		case f.Kind == "alert.fire":
+			st.set(Alert{FP: f.FP, Sev: f.Sev, Layer: f.Layer, StartsAt: f.StartsAt})
+		case f.Kind == "alert.resolve":
+			st.drop(f.FP)
+		}
+	}
+	return since
+}
+
+// attach opens DATABASE_URL and restores the world from it. Empty or unusable = memory-only (logged).
+// An unusable DB is never written, so a DB that comes back is not overwritten by a world that missed it;
+// a restart after it recovers restores normally.
+func (a *App) attach(ctx context.Context, dsn string) {
+	SourceLastSuccess.Set("db", float64(time.Now().Unix())) // memory-only: never refreshed, ages into MountainSourceStale
+	if dsn == "" {
+		log.Printf("relay: DATABASE_URL unset: memory-only, the world is lost on restart")
+		return
+	}
+	s, err := openStore(ctx, dsn)
+	if err == nil {
+		a.store = s
+		if err = a.restore(ctx); err != nil {
+			a.store = nil
+			s.pool.Close()
+		}
+	}
+	if err != nil {
+		log.Printf("relay: database unusable, memory-only until restart: %v", err)
+	}
+}
+
+// restore loads the latest snapshot and re-applies the frames after it. No snapshot yet (first boot on
+// this seed): write one now, so every later frame has a base.
+func (a *App) restore(ctx context.Context) error {
+	r, err := a.store.load(ctx, a.World.Seed, nil)
+	if err != nil {
+		return err
+	}
+	if r == nil {
+		a.snapshot(time.Now())
+		return nil
+	}
+	land, st := slices.Clone(r.land), r.state
+	if st.Alerts == nil {
+		st.Alerts = []Alert{}
+	}
+	since := fold(land, &st, r.frames)
+	r.metrics.T, r.metrics.Stale = "metrics", map[string]int64{} // sources re-mark what is still down
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Land, a.snapLand, a.since, a.State, a.Metrics = land, r.land, since, st, r.metrics
+	log.Printf("db: restored snapshot + %d frames, %d firing alerts", len(r.frames), len(st.Alerts))
+	return nil
+}
+
+// record is the hub tap (under h.mu): every broadcast ev and world frame is persisted, and world
+// frames join the hello deltas until the next snapshot.
+func (a *App) record(b []byte) {
+	var h struct {
+		T, Kind, ID string
+		TS          int64
+	}
+	if json.Unmarshal(b, &h) != nil || (h.T != "ev" && h.T != "world") {
+		return
+	}
+	ts := time.Now()
+	if h.TS > 0 {
+		ts = time.UnixMilli(h.TS)
+	}
+	if h.T == "world" {
+		a.mu.Lock()
+		a.since = append(a.since, b)
+		a.mu.Unlock()
+	}
+	a.store.frame(h.T, h.Kind, h.ID, ts, b)
+}
+
+// snapshot folds the hello deltas into the hello base, advances App.Day and upserts the day's row.
+// h.mu then a.mu: no frame lands between the copy and the queueing, so the row's seq splits frames exactly.
+func (a *App) snapshot(now time.Time) {
+	a.Hub.mu.Lock()
+	defer a.Hub.mu.Unlock()
+	a.mu.Lock()
+	day := utcDay(now)
+	a.Day, a.snapLand, a.since = day, slices.Clone(a.Land), []json.RawMessage{}
+	land, st, m := a.snapLand, mustJSON(a.State), mustJSON(a.Metrics)
+	a.mu.Unlock()
+	a.store.snapshot(day, now, a.World.Seed, land, st, m)
+}
+
+// persist runs every minute: a metrics_5m row every 5 min, a snapshot every 10 min and at UTC rollover.
+// It also runs in memory-only mode, where the snapshot only bounds the hello deltas.
+func (a *App) persist(ctx context.Context) {
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for n := 1; ; n++ {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-t.C:
+			a.mu.Lock()
+			m, day := mustJSON(a.Metrics), a.Day
+			a.mu.Unlock()
+			if n%metricsEvery == 0 {
+				a.store.metrics(now, m)
+			}
+			if n%snapEvery == 0 || utcDay(now) != day {
+				a.snapshot(now)
+			}
+		}
+	}
+}
