@@ -1,7 +1,7 @@
-// Gate self-test: a correct kit cube. Must PASS.
+// Gate self-test: a correct kit cube (2×2 segments per face, median edge 1: inside the rock facet band). Must PASS.
 export default async function build({ THREE, kit, plot }) {
   const root = new THREE.Group();
-  const cube = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), kit.lit('rock0'));
+  const cube = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2, 2, 2, 2), kit.lit('rock0'));
   cube.position.set(plot.x, 1, plot.z);
   root.add(cube);
   return { root, params: {}, pose(P) { cube.rotation.y = P * 0.3; }, step() {}, busy: () => false, dispose() {} };

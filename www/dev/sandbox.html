@@ -4,7 +4,9 @@
      ?m=fixture:<name>      dev/fixtures/<name>.js, profile layout.profiles._test (or _<name> if present)
      ?snapshot=<url>        hello frame (default ./fixtures/hello.json, from `relay dump-hello`)
      ?key=night|dawn|day|dusk (default dusk)   ?P=<0..6> (default 6)   ?q=low
-     Hooks: __setP(P) → stats, __step(n, dt), __inject(type, payload), __test() → {ok, error}, __gate (state). -->
+     ?ui=0                  no control panel, no render loop (gate.mjs)   ?cam=cave:<i>[:side]  ?az=<rad>
+     Hooks: __setP(P) → stats, __step(n, dt), __inject(type, payload), __checks(), __test(), __gate (state): see sandbox.js.
+     Controls (sandbox-ui.js): P slider, play/step, dt ×, key, tier toggle, params, injectors, field heatmaps, bus log. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -12,6 +14,7 @@
 <title>Mountain sandbox</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="sandbox.css">
 <script type="importmap">{"imports":{"three":"../vendor/build/three.module.js","three/addons/":"../vendor/examples/jsm/","cannon-es":"../vendor/cannon-es/cannon-es.js"}}</script>
 <script type="module" src="sandbox.js"></script>
 </head>
