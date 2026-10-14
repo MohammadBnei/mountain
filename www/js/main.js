@@ -18,7 +18,6 @@ const world = createWorld({ dev: location.hostname === '127.0.0.1' });
 if (q.has('fixture')) fetch('./dev/fixtures/hello.json').then((r) => r.json()).then(world.applyHello);
 else connect({ world });
 await world.ready;
-kit.U.uHMax.value = world.hmax;
 
 const models = [];
 for (const name of page) {
@@ -59,6 +58,7 @@ renderer.setAnimationLoop((now) => {
     t += DT;
   }
   kit.U.uSnowline.value = world.snowline;
+  kit.U.uHMax.value = world.hmax; // deposits and resyncs move the summit
   const az = finale.sway * Math.min(1, camera.aspect) * Math.sin((2 * Math.PI * t) / finale.period); // narrower on portrait: the pool stays in frame
   camera.position.set(finale.radius * Math.sin(az), finale.height, finale.radius * Math.cos(az));
   camera.lookAt(...finale.look);
