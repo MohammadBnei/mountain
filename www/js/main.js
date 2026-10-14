@@ -1,6 +1,8 @@
 // Page: kit rig + world + socket + the models of page.js, live finale camera (story is W3), post on desktop.
 // Orchestrator-owned. ?fixture=1 loads dev/fixtures/hello.json instead of /ws (static serving).
-// Host duties: world.rig → kit.setPhase on change; world.stale → the "stale since" label (sky dims via kit.setStale).
+// Host duties: world.rig → kit.setPhase on change; world.stale → the "stale since" label (sky dims via kit.setStale);
+// cut.js: compose the field providers once, then world.clip → uClip every frame. Dev (127.0.0.1): ?cut=<depth>[&cutaz=<rad>]
+// opens the cut until story.js (W3) writes world.clip.
 // Dev (127.0.0.1): globalThis.__page = {renderer, scene, camera, post, world, kit, quality(), orbit()} for the gate.
 import * as THREE from 'three';
 import * as kit from './kit.js';
@@ -10,6 +12,7 @@ import { profiles, finale } from './layout.js';
 import { page } from './page.js';
 import { makeCtx, checkModel, wire } from './contract.js';
 import { createPost } from './post.js';
+import * as cut from './cut.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const q = new URLSearchParams(location.search);
@@ -45,6 +48,9 @@ for (const name of page) {
   scene.add(m.root);
   models.push(m);
 }
+
+cut.compose(models);
+if (dev && q.has('cut')) world.write('clip', 'story', cut.at(Number(q.get('cut')), Number(q.get('cutaz') || 0)));
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -119,6 +125,7 @@ renderer.setAnimationLoop((now) => {
   host();
   kit.U.uSnowline.value = world.snowline;
   kit.U.uHMax.value = world.hmax; // deposits and resyncs move the summit
+  cut.apply(world);
   const tc = t + acc; // camera time between sim steps: smooth at 60 fps
   const az = finale.sway * Math.min(1, camera.aspect) * Math.sin((2 * Math.PI * tc) / finale.period); // narrower on portrait: the pool stays in frame
   swayPos.set(finale.radius * Math.sin(az), finale.height, finale.radius * Math.cos(az));

@@ -9,6 +9,12 @@ const need = (src, anchor) => {
 const after = (src, anchor, code) => need(src, anchor).replace(anchor, `${anchor}\n${code}`);
 const afterIf = (src, anchor, code) => (src.includes(anchor) ? src.replace(anchor, `${anchor}\n${code}`) : src);
 
+// Cut face (01 "Cut"): cut.js fills it with the cap's GLSL (`bool kCutIn(vec3 p)`, `vec4 kCutField(vec3 p)`, the composed
+// field providers), their uniforms and a key that kit's terrain() appends to its program cache key. A terrain material
+// with the define K_CUT_CAP is the cap: its quad is laid on the uClip plane in the vertex shader, it keeps only the
+// fragments inside the solid and shades them from the providers, lit with the plane's normal.
+export const CUT = { pars: '', uniforms: {}, key: '' };
+
 // Terrain. Uniform slots (kit-owned, shared by every terrain material):
 //   uClip vec4 (plane n.xyz, constant w; fragment discarded where n·p + w < 0; closed = (0,1,0,1e4))
 //   uSnowline (world y), uHMax (summit y), uWobble, uHeat, uStale, uSnowLift, uEmber, uPoolK (ember-pool weight per key),
@@ -16,17 +22,29 @@ const afterIf = (src, anchor, code) => (src.includes(anchor) ? src.replace(ancho
 //   uFootprint (kit 512² RT only), uCaves vec4[5] (cave() mouth centres, w = 1 live), stop colours uRock0 uRock1 uEmberRoot uSnow uIce uTrail uGold uVeinRef.
 // Attribute: bench (0..1, Go bench mask / 255).
 export function patchTerrain(sh, U, { veins = true } = {}) {
-  Object.assign(sh.uniforms, U);
+  Object.assign(sh.uniforms, U, CUT.uniforms);
   sh.vertexShader = after(
-    'attribute float bench;\nvarying float vKBench;\nvarying vec3 vKWorld;\nvarying vec3 vKObj;\nflat varying float vKFaceH;\nuniform float uWobble;\n' + sh.vertexShader,
+    'attribute float bench;\nvarying float vKBench;\nvarying vec3 vKWorld;\nvarying vec3 vKObj;\nflat varying float vKFaceH;\nuniform float uWobble;\nuniform vec4 uClip;\n#ifdef K_CUT_CAP\nuniform vec3 uCutQuad;\n#endif\n' + sh.vertexShader,
     '#include <begin_vertex>',
-    'transformed.y += uWobble * sin(position.x * .7 + position.z * .5);\nvKBench = bench; vKObj = transformed;\nvKWorld = (modelMatrix * vec4(transformed, 1.)).xyz; vKFaceH = vKWorld.y;',
+    // the cap quad (position.xy ∈ [−1, 1]) on the plane, centred on the projection of the body centre uCutQuad (y = .x),
+    // half-extents .z across and .y up the plane (more when the plane tilts, ≤ .z): it covers the solid's cross-section only
+    '#ifdef K_CUT_CAP\nvec3 kA = abs(uClip.y) < .99 ? vec3(0., 1., 0.) : vec3(1., 0., 0.), kU = normalize(cross(kA, uClip.xyz)), kV = cross(uClip.xyz, kU);\n'
+    + 'vec3 kC = vec3(0., uCutQuad.x, 0.); kC -= (dot(uClip.xyz, kC) + uClip.w) * uClip.xyz;\n'
+    + 'transformed = kC + position.x * uCutQuad.z * kU + position.y * min(uCutQuad.z, uCutQuad.y / max(abs(kV.y), 1e-3)) * kV;\n#else\n'
+    + 'transformed.y += uWobble * sin(position.x * .7 + position.z * .5);\n#endif\nvKBench = bench; vKObj = transformed;\nvKWorld = (modelMatrix * vec4(transformed, 1.)).xyz; vKFaceH = vKWorld.y;',
   );
   let f = `uniform vec4 uClip, uPool; uniform float uSnowline, uHMax, uHeat, uStale, uSnowLift, uEmber, uPoolK; uniform int uVeinN;
 uniform vec3 uRock0, uRock1, uEmberRoot, uSnow, uIce, uTrail, uGold, uVeinRef, uPoolCol;
 uniform sampler2D uVeins, uFootprint; uniform vec4 uCaves[5];
 varying float vKBench; varying vec3 vKWorld; varying vec3 vKObj; flat varying float vKFaceH;
 float kVein = 0., kCore = 0., kRef = 0.;
+#ifdef K_CUT_CAP
+const bool kCapOn = true;
+${CUT.pars}
+#else
+const bool kCapOn = false;
+#endif
+vec4 kCutC = vec4(0.); // cap colour (linear rgb) + glow weight
 void kVeins(vec3 p) {
   for (int i = 0; i < 64; i++) {
     if (i >= uVeinN) break;
@@ -38,7 +56,7 @@ void kVeins(vec3 p) {
   }
 }
 ` + sh.fragmentShader;
-  f = after(f, '#include <clipping_planes_fragment>', 'if (dot(uClip.xyz, vKWorld) + uClip.w < 0.) discard;');
+  f = after(f, '#include <clipping_planes_fragment>', '#ifdef K_CUT_CAP\nif (!kCutIn(vKWorld)) discard;\nkCutC = kCutField(vKWorld);\n#else\nif (dot(uClip.xyz, vKWorld) + uClip.w < 0.) discard;\n#endif');
   f = after(f, '#include <color_fragment>', `
   vec3 kN = normalize(cross(dFdx(vKWorld), dFdy(vKWorld)));
   float kH = vKFaceH / max(uHMax, 1.);
@@ -49,18 +67,21 @@ void kVeins(vec3 p) {
   vec3 kSnowC = mix(uIce, uSnow, clamp((vKFaceH - uSnowline) / (.15 * uHMax), 0., 1.));
   diffuseColor.rgb = mix(kRock, kSnowC, kSnow);
   diffuseColor.rgb = mix(diffuseColor.rgb, uTrail, smoothstep(.35, .75, vKBench) * (1. - kSnow));
-  ${veins ? 'kVeins(vKObj);' : ''}
+  ${veins ? 'if (!kCapOn) kVeins(vKObj);' : ''}
   diffuseColor.rgb = mix(diffuseColor.rgb, uGold * .55, kVein);
+  if (kCapOn) diffuseColor.rgb = kCutC.rgb;
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(.2126, .7152, .0722))) * .6, uStale * .5);`);
   f = afterIf(f, '#include <metalnessmap_fragment>', 'metalnessFactor = mix(metalnessFactor, .85, kVein);');
   f = afterIf(f, '#include <roughnessmap_fragment>', 'roughnessFactor = mix(roughnessFactor, .4, kVein);');
+  f = after(f, '#include <normal_fragment_maps>', 'if (kCapOn) normal = normalize((viewMatrix * vec4(-uClip.xyz, 0.)).xyz); // the cut face faces the removed side');
   f = after(f, '#include <emissivemap_fragment>', `
   float kCave = 0.; // cave rim lift (09 Freeze item 1): snowLift-style, rock within ~24 m of a mouth, no new light
   for (int i = 0; i < 5; i++) kCave = max(kCave, uCaves[i].w * (1. - smoothstep(8., 24., distance(vKWorld, uCaves[i].xyz))));
   totalEmissiveRadiance += max(kSnow, kCave) * uSnowLift * diffuseColor.rgb
     + uGold * kVein * .12 + mix(uGold * .7, uVeinRef * 1.4, kRef) * kCore
     + uPoolCol * max(uHeat, .45) * uPoolK * (1. - smoothstep(.25, 1., length((vKWorld.xz - uPool.xy) / uPool.zw)))
-      * smoothstep(.45, .75, abs(kN.y)) * (1. - smoothstep(.1, .16, kH)); // the foot band (h < ~10 % of the summit), gentle faces only, never up the face`);
+      * smoothstep(.45, .75, abs(kN.y)) * (1. - smoothstep(.1, .16, kH)); // the foot band (h < ~10 % of the summit), gentle faces only, never up the face
+  if (kCapOn) totalEmissiveRadiance = kCutC.rgb * kCutC.a;`);
   // Rim (09 Freeze item 2): below y = -4 the terrain dissolves into the fog/haze colour, fully at the
   // valley haze floor (y = -16), so the dropped rim never shows a hard mesa edge against the floor.
   f = after(f, '#include <fog_fragment>', '#ifdef USE_FOG\ngl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, 1. - smoothstep(-16., -4., vKWorld.y));\n#endif');

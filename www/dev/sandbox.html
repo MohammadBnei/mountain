@@ -5,6 +5,7 @@
      ?snapshot=<url>        hello frame (default ./fixtures/hello.json, from `relay dump-hello`)
      ?key=night|dawn|day|dusk (default dusk)   ?P=<0..6> (default 6)   ?q=low
      ?ui=0                  no control panel, no render loop (gate.mjs)   ?cam=cave:<i>[:side]  ?az=<rad>
+     ?cut=<depth>           open the cut (cut.js at(depth, az)); a field provider alone is hosted by the mountain, cut 60
      Hooks: __setP(P) → stats, __step(n, dt), __inject(type, payload), __checks(), __test(), __gate (state): see sandbox.js.
      Controls (sandbox-ui.js): P slider, play/step, dt ×, key, tier toggle, params, injectors, field heatmaps, bus log. -->
 <html lang="en">

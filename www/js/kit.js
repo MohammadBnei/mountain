@@ -6,17 +6,17 @@
 //   token(name) → '#rrggbb' in the current phase ('name@dusk' = pinned dusk, semantic names allowed)
 //   color(name) → THREE.Color;  rampColor(ramp, t, out?) → THREE.Color;  RAMPS, FACET re-exported from layout
 //   lit(tokenOrRamp, opts?)  glow(token, intensity, {mesh}?)  line(token, intensity)  points(token, size)
-//   dome()  terrain({veins, closed}?)  crystal()  lava()  flow(token)  stamp()  cave(caves, heightAt)
+//   dome()  terrain({veins, closed}?)  crystal()  lava()  flow(token)  stamp()  cave(caves, heightAt)  field(glsl, uniforms)
 //   clipped(material) → material (adds the uClip discard)
 //   rock(seed)  puff(seed)  shard(seed)  setRampAt(mesh, i, t)  lavaHeat(material, v)  dispose(root)
 //   rig(renderer, scene) → {hemi, dir, dome, floor};  setPhase(elev, rising);  setKey(key);  setComposed(on) (post.js);  setStale(k)
 //   U (terrain uniforms; writers: setPhase → stops/uSnowLift/uEmber/uPoolK, setPool → uPool/uPoolCol/uHeat, setStale (sky) → uStale,
-//      setVeins → uVeins/uVeinN, main/socket → uSnowline, story → uClip);  setPool(...)  setVeins(caps)
+//      setVeins → uVeins/uVeinN, main/socket → uSnowline, cut.js (from world.clip) → uClip);  setPool(...)  setVeins(caps)
 //   footprintRT, stampScene (W4)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import T from './tokens.json' with { type: 'json' };
-import { patchTerrain, patchClip, patchCrystal, patchLava, domeVert, domeFrag, flowVert, flowFrag } from './shaders.js';
+import { patchTerrain, patchClip, patchCrystal, patchLava, domeVert, domeFrag, flowVert, flowFrag, CUT } from './shaders.js';
 
 export const QUALITY = globalThis.__quality || 'high';
 const LOW = QUALITY === 'low';
@@ -171,7 +171,7 @@ export function setVeins(caps) {
 export function terrain({ veins = !LOW, closed = false } = {}) {
   const m = base({ color: 0xffffff, ...(closed ? { side: THREE.DoubleSide } : {}) });
   m.onBeforeCompile = (sh) => patchTerrain(sh, U, { veins });
-  m.customProgramCacheKey = () => `kit-terrain-${LOW}-${veins}`;
+  m.customProgramCacheKey = () => `kit-terrain-${LOW}-${veins}-${CUT.key}`; // a new cut composition never reuses a stale program
   return tag(m, 'terrain');
 }
 export function crystal() {
@@ -183,7 +183,7 @@ export function crystal() {
 export function lava() {
   const m = base({ color: 0xffffff });
   m.userData.uniforms = { uLavaHeat: { value: 1 } };
-  m.onBeforeCompile = (sh) => patchLava(sh, m.userData.uniforms);
+  m.onBeforeCompile = (sh) => { patchLava(sh, m.userData.uniforms); patchClip(sh, U); }; // eruption lava is clipped (01)
   m.customProgramCacheKey = () => `kit-lava-${LOW}`;
   return tag(m, 'lava', { kitRamp: 'lava' });
 }
@@ -205,6 +205,19 @@ export function clipped(m) {
   return m;
 }
 export const stamp = () => tag(new THREE.MeshBasicMaterial({ color: 0xffffff }), 'stamp');
+
+/** Cut-face field provider (09 field(), cut.js composes it): glsl defines `vec4 <name>Field(vec3 p, vec4 base)`
+ *  (p world, base/return = linear rgb + glow weight a). uniforms {name: token | value}: a token name becomes a colour
+ *  uniform kept on the current phase; anything else (data textures, vectors, numbers) is wrapped as is. */
+export function field(glsl, uniforms = {}) {
+  const u = {};
+  for (const [k, v] of Object.entries(uniforms)) {
+    if (typeof v !== 'string') { u[k] = { value: v }; continue; }
+    const c = (u[k] = { value: color(v) }).value;
+    hooks.add(() => color(v, c)); // ponytail: never unregistered; providers live as long as the page
+  }
+  return { kit: 'field', glsl, uniforms: u };
+}
 
 /** Sky dome mesh + star field (one per scene). Uniforms written only by setPhase. */
 export function dome() {

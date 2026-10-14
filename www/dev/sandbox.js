@@ -5,6 +5,8 @@
 //   __checks() → {pose, style:{dusk, day}, facet, lum:{dusk, day}, clip, physics}   (pure measurements, state restored)
 //   __caveLum() → [lum dusk] per world.caves close-up      __world (the sandbox world)
 //   __test() → {ok, error, peak, stepMs, writes, emits, listens, rig, fields}       (test.js under audit)
+// Cut (cut.js): ?cut=<depth> opens world.clip facing the camera azimuth (?az); a field provider (layout.js `fields`) is
+// hosted by the mountain, its cut face open at depth 60 unless ?cut says otherwise.
 // Physics convention checked here (00 "Physics"): cannon-es collisionFilterGroup bit 1 = real, bit 2 = surface;
 // two bodies of different layers in one world must not be able to collide (group & mask both ways).
 const q = new URLSearchParams(location.search);
@@ -16,7 +18,8 @@ try {
   const CANNON = await import('cannon-es');
   const kit = await import('../js/kit.js');
   const { createWorld, encodeI16, BUS, EV_KINDS, WRITERS } = await import('../js/world.js');
-  const { profiles, finale, FACET } = await import('../js/layout.js');
+  const { profiles, finale, FACET, fields } = await import('../js/layout.js');
+  const cut = await import('../js/cut.js');
   const { makeCtx, checkModel, wire } = await import('../js/contract.js');
 
   let audit = null; // set by __test(); handlers can fire as soon as models are wired
@@ -25,6 +28,8 @@ try {
   CANNON.World.prototype.addBody = function (b) { bodies.push({ world: this, body: b }); return addBody.call(this, b); };
 
   const names = (q.get('m') || 'fixture:cube').split(',');
+  const hosted = names.some((n) => fields.includes(n)) && !names.includes('mountain');
+  if (hosted) names.unshift('mountain'); // a provider draws nothing of its own: it colours the mountain's cut face
   const KEY = q.get('key') || 'dusk';
   const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
   renderer.setPixelRatio(1);
@@ -62,6 +67,10 @@ try {
     scene.add(model.root);
     loaded.push(l);
   }
+
+  cut.compose(loaded.map((l) => l.model));
+  const setCut = (depth) => { world.write('clip', 'story', cut.at(depth, Number(q.get('az') || 0))); cut.apply(world); };
+  setCut(Number(q.get('cut') ?? (hosted ? 60 : 0)));
 
   // Framing comes from the profile only, so a missing or misplaced model shows up blank or cut off.
   const { profile } = loaded[0], { x, z, r } = profile.footprint, [y0, y1] = profile.yRange;
@@ -216,10 +225,11 @@ try {
         const h = new Uint16Array(W * H * 4);
         renderer.readRenderTargetPixels(rt, 0, 0, W, H, h);
         // terrain mask: model meshes drawn white (terrain) / black (others), rig hidden, black clear
-        const swap = objects((o) => o.isMesh).map((o) => [o, o.material]);
+        // the cut cap discards outside the solid only in its own shader: its plain-white quad would mask the whole plane
+        const caps = objects((o) => mats(o)[0]?.defines?.K_CUT_CAP !== undefined), swap = objects((o) => o.isMesh).map((o) => [o, o.material]);
         swap.forEach(([o, m]) => (o.material = [].concat(m)[0]?.userData?.kit === 'terrain' ? white : black));
         const mask = new Uint8Array(W * H * 4), bg = scene.background;
-        hidden([RIG.dome, RIG.floor], () => { scene.background = new THREE.Color(0); renderer.setRenderTarget(rt8); renderer.render(scene, camera); renderer.readRenderTargetPixels(rt8, 0, 0, W, H, mask); });
+        hidden([RIG.dome, RIG.floor, ...caps], () => { scene.background = new THREE.Color(0); renderer.setRenderTarget(rt8); renderer.render(scene, camera); renderer.readRenderTargetPixels(rt8, 0, 0, W, H, mask); });
         scene.background = bg;
         swap.forEach(([o, m]) => (o.material = m));
         renderer.setRenderTarget(null);
@@ -327,6 +337,7 @@ try {
     for (let i = 0; i < k; i++) {
       world.step(dt);
       kit.U.uHMax.value = world.hmax; // deposits move the summit (terrain shading keys off it)
+      cut.apply(world);
       t += dt;
       for (const l of loaded) audited(l, 'step()', () => {
         const a = performance.now();
@@ -373,7 +384,7 @@ try {
   };
   window.__setP(Number(q.get('P') ?? 6));
 
-  if (q.get('ui') !== '0') (await import('./sandbox-ui.js')).default({ THREE, kit, world, loaded, renderer, scene, camera, look, render, step, inject, EV_KINDS, BUS, WRITERS, setP: window.__setP, rebase: () => (b0 = rigOnly()) });
+  if (q.get('ui') !== '0') (await import('./sandbox-ui.js')).default({ THREE, kit, world, loaded, renderer, scene, camera, look, render, step, inject, EV_KINDS, BUS, WRITERS, setP: window.__setP, setCut, rebase: () => (b0 = rigOnly()) });
 } catch (e) {
   console.error(e);
   window.__gate = { ready: true, error: String(e?.stack || e) };
