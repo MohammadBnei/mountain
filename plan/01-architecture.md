@@ -68,7 +68,7 @@ Every model folder ships `fixture.json` (a scripted event and world-delta timeli
 | State | Writer | Source |
 |---|---|---|
 | `world.metrics` | socket.js | metrics frame (02) |
-| `world.state` | socket.js | `hello.state` + events (alerts firing, health, replicas, nodes, quorum, builds in flight) |
+| `world.state` | socket.js | `hello.state`, then kept current by the frames before their emit (W3b): `alerts`, `veins` (≤ 32), `glacier`, `ash` (≤ 32), `health`, `replicas`, `builds` (in flight). A new object after every hello/replay: a model that caches it resyncs on identity change (strata). Nodes, quorum: not yet |
 | `world.sites` | world.js | `/api/topology` + `world:site` deltas; `app.gone` removes |
 | `world.wind`, `world.snowline` | socket.js | metrics frame (relay-computed) |
 | `world.clouds` | sky (W1b sky-min) | real floor from net rx + visitor clouds + steam |

@@ -72,8 +72,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const { decodeI16, createWorld } = await import('../../js/world.js');
     const base = decodeI16(hello.snapshot.base);
     const al = { fp: '0123456789abcdef', sev: 'critical', layer: 'k8s', startsAt: 1760450000000 };
-    report('hello.state with a firing alert', validate({ ...hello, state: { alerts: [al] } }));
-    report('hello.state with a raw fingerprint', validate({ ...hello, state: { alerts: [{ ...al, fp: 'a1b2c3d4e5f6a7b8c9d0' }] } }), false);
+    report('hello.state with a firing alert', validate({ ...hello, state: { ...hello.state, alerts: [al] } }));
+    report('hello.state with a raw fingerprint', validate({ ...hello, state: { ...hello.state, alerts: [{ ...al, fp: 'a1b2c3d4e5f6a7b8c9d0' }] } }), false);
     report('hello.base decodes to 128² int16', base.length === 128 * 128 && Math.max(...base) > 3000 ? [] : [`len ${base.length}`]);
     const { valid, invalid } = JSON.parse(readFileSync(join(fx, 'frames.json'), 'utf8'));
     valid.forEach((f, i) => report(`frames.valid[${i}] ${f.t}:${f.kind || ''}`, validate(f)));

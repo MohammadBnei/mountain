@@ -7,6 +7,11 @@ import { CUT } from '../../js/shaders.js';
 
 export default async function test({ model, world, inject, step, fixture, assert }) {
   const u = model.field.uniforms, ys = u.uStrataAsh.value.image.data, clip0 = world.clip;
+  // a reload: the hello's world.state.ash is drawn at build; a new state object (hello, replay) resyncs the lines
+  assert(u.uStrataN.value === world.state.ash.length, `hello.state.ash → ${world.state.ash.length} lines at build (${u.uStrataN.value})`);
+  world.write('state', 'socket', { ...world.state, ash: [] }); // the test plays socket: a hello with no ash
+  step(1);
+  assert(u.uStrataN.value === 0, 'a resync to a state without ash clears the lines');
   for (const a of fixture.ash) inject('world:ash', a);
   step(1);
   assert(u.uStrataN.value === 3, `3 ash lines (${u.uStrataN.value})`);

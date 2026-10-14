@@ -233,7 +233,7 @@ func (s *Store) load(ctx context.Context, seed uint32, before *string) (*dbSnap,
 		seq       int64
 		land      []byte
 		st, mt    []byte
-		r         dbSnap
+		r         = dbSnap{state: newState()} // a snapshot from before a State field keeps that field's default
 		beforeArg any
 	)
 	if before != nil {
@@ -288,35 +288,32 @@ func (s *Store) rows(ctx context.Context, sql string, args ...any) ([]json.RawMe
 	return res, err
 }
 
-// fold re-applies stored frames: deposits add into land, alert.fire/resolve update st.
+// fold re-applies stored frames: deposits add into land, every frame updates st (State.apply).
 // Returns the world frames (hello deltas after a restore).
 func fold(land []int16, st *State, frames []json.RawMessage) []json.RawMessage {
 	since := []json.RawMessage{}
 	for _, b := range frames {
 		var f struct {
-			T, Kind, Cells, FP, Sev, Layer string
-			X0, Z0, W, H                   int
-			StartsAt                       int64
+			frameF
+			Cells        string
+			X0, Z0, W, H int
 		}
 		if err := json.Unmarshal(b, &f); err != nil {
 			log.Printf("db: fold: stored frame skipped: %v", err) // the restored land/state miss it
 			continue
 		}
-		switch {
-		case f.T == "world":
-			since = append(since, b)
-			if f.Kind == "deposit" {
-				cells, err := worldcore.DecodeI16(f.Cells)
-				if err != nil {
-					log.Printf("db: fold: stored deposit skipped: %v", err)
-					continue
-				}
-				worldcore.Deposit{X0: f.X0, Z0: f.Z0, W: f.W, H: f.H, Cells: cells}.AddTo(land)
+		st.apply(f.frameF, b)
+		if f.T != "world" {
+			continue
+		}
+		since = append(since, b)
+		if f.Kind == "deposit" {
+			cells, err := worldcore.DecodeI16(f.Cells)
+			if err != nil {
+				log.Printf("db: fold: stored deposit skipped: %v", err)
+				continue
 			}
-		case f.Kind == "alert.fire":
-			st.set(Alert{FP: f.FP, Sev: f.Sev, Layer: f.Layer, StartsAt: f.StartsAt})
-		case f.Kind == "alert.resolve":
-			st.drop(f.FP)
+			worldcore.Deposit{X0: f.X0, Z0: f.Z0, W: f.W, H: f.H, Cells: cells}.AddTo(land)
 		}
 	}
 	return since
@@ -358,38 +355,43 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 		return nil
 	}
 	land, st := slices.Clone(r.land), r.state
-	if st.Alerts == nil {
-		st.Alerts = []Alert{}
-	}
 	since := fold(land, &st, r.frames)
 	r.metrics.T, r.metrics.Stale = "metrics", map[string]int64{} // sources re-mark what is still down
+	r.metrics.Snowline = worldcore.Snowline(a.World.HMax, st.Glacier.Mass)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.Land, a.snapLand, a.since, a.State, a.Metrics = land, r.land, since, st, r.metrics
-	log.Printf("db: restored snapshot + %d frames, %d firing alerts", len(r.frames), len(st.Alerts))
+	log.Printf("db: restored snapshot + %d frames, %d firing alerts, %d veins, %d ash lines", len(r.frames), len(st.Alerts), len(st.Veins), len(st.Ash))
 	return nil
 }
 
-// record is the hub tap (under h.mu): every broadcast ev and world frame is persisted, and world
-// frames join the hello deltas until the next snapshot.
-func (a *App) record(b []byte) {
-	var h struct {
-		T, Kind, ID string
-		TS          int64
-	}
-	if json.Unmarshal(b, &h) != nil || (h.T != "ev" && h.T != "world") {
-		return
+// record is the hub tap (under h.mu): every broadcast ev and world frame updates the state and is persisted,
+// world frames join the hello deltas until the next snapshot, and an ev returns the world frames it derives
+// (App.derive), which the hub broadcasts right after it.
+func (a *App) record(b []byte) [][]byte {
+	var f frameF
+	if json.Unmarshal(b, &f) != nil || (f.T != "ev" && f.T != "world") {
+		return nil
 	}
 	ts := time.Now()
-	if h.TS > 0 {
-		ts = time.UnixMilli(h.TS)
+	if f.TS > 0 {
+		ts = time.UnixMilli(f.TS)
 	}
-	if h.T == "world" {
-		a.mu.Lock()
+	a.mu.Lock()
+	a.State.apply(f, b)
+	if f.T == "world" {
 		a.since = append(a.since, b)
-		a.mu.Unlock()
 	}
-	a.store.frame(h.T, h.Kind, h.ID, ts, b)
+	if f.Kind == "glacier" {
+		a.Metrics.Snowline = worldcore.Snowline(a.World.HMax, a.State.Glacier.Mass) // rides the next metrics frame
+	}
+	var more [][]byte
+	if f.T == "ev" {
+		more = a.derive(f)
+	}
+	a.mu.Unlock()
+	a.store.frame(f.T, f.Kind, f.ID, ts, b)
+	return more
 }
 
 // snapshot folds the hello deltas into the hello base, advances App.Day and upserts the day's row.
@@ -420,6 +422,9 @@ func (a *App) persist(ctx context.Context) {
 			a.mu.Unlock()
 			if n%metricsEvery == 0 {
 				a.store.metrics(now, m)
+			}
+			if utcDay(now) != day {
+				a.melt() // ponytail: a day the relay was down at midnight melts nothing
 			}
 			if n%snapEvery == 0 || utcDay(now) != day {
 				a.snapshot(now)

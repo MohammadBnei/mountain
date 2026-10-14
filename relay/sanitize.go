@@ -6,8 +6,11 @@ package main
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
+
+	"github.com/MohammadBnei/mountain/relay/worldcore"
 )
 
 var hosts = map[string]bool{"h1": true, "h2": true, "h3": true}
@@ -82,23 +85,31 @@ func (c *Config) host(node string) string {
 
 // Field types of the closed spec.
 const (
-	fApp    = iota // allowlisted app key
-	fHost          // h1..h3
-	fHosts         // []string of h1..h3
-	fBool          //
-	fNat           // int >= 0
-	fBucket        // int 0..8
-	fHealth        // ArgoCD health enum
-	fNum           // float64
-	fGroup         // platform|user
-	fULID          //
-	fB64           // base64 grid
-	fFP            // 16 hex (salted alert fingerprint hash)
-	fSev           // info|warning|critical
-	fLayer         // bedrock|k8s|apps
+	fApp     = iota // allowlisted app key
+	fHost           // h1..h3
+	fHosts          // []string of h1..h3
+	fBool           //
+	fNat            // int >= 0
+	fBucket         // int 0..8
+	fHealth         // ArgoCD health enum
+	fNum            // float64
+	fGroup          // platform|user
+	fULID           //
+	fB64            // base64 grid
+	fFP             // 16 hex (salted alert fingerprint hash)
+	fSev            // info|warning|critical
+	fLayer          // bedrock|k8s|apps
+	fPos            // int >= 1
+	fDay            // YYYY-MM-DD
+	fTitle          // string <= 120 matching a config.yaml titles pattern (anchored)
+	fVec3           // []float64 of 3
+	fTongues        // []worldcore.Tongue of allowlisted apps
+	fDays           // []string of YYYY-MM-DD
+	fBuild          // queued|running|success|failure
 )
 
-// spec: frame kind -> field -> type. Every field is required; nothing else passes.
+// spec: frame kind -> field -> type. Every field is required, except a "name?" field, which is left out when
+// missing or invalid (an ADR title off the allowlist: date only, 02); nothing else passes.
 var spec = map[string]map[string]int{
 	"ev:argo.sync":     {"app": fApp, "ok": fBool},
 	"ev:argo.health":   {"app": fApp, "status": fHealth},
@@ -111,6 +122,13 @@ var spec = map[string]map[string]int{
 	"ev:alert.resolve": {"fp": fFP, "sev": fSev, "layer": fLayer, "durS": fNat},
 	"world:deposit":    {"id": fULID, "x0": fNat, "z0": fNat, "w": fNat, "h": fNat, "cells": fB64},
 	"world:site":       {"app": fApp, "x": fNum, "z": fNum, "y": fNum, "tier": fNat, "group": fGroup},
+	// W3b seam: worldcore's derived frames (derive.go) and the src_github events (W3c) they derive from
+	"ev:build":         {"app": fApp, "state": fBuild},
+	"ev:gitops.commit": {"n": fPos},
+	"ev:adr.merge":     {"day": fDay, "title?": fTitle},
+	"world:vein":       {"fp": fFP, "a": fVec3, "b": fVec3, "thick": fNum, "layer": fLayer, "ref": fBool},
+	"world:glacier":    {"mass": fNum, "tongues": fTongues, "ash": fDays},
+	"world:ash":        {"day": fDay, "title?": fTitle},
 }
 
 var (
@@ -128,11 +146,13 @@ func (c *Config) clean(kind string, in map[string]any) (map[string]any, bool) {
 	}
 	out := make(map[string]any, len(sp))
 	for k, typ := range sp {
+		k, opt := strings.CutSuffix(k, "?")
 		v, ok := in[k]
-		if !ok || !c.valid(typ, v) {
+		if ok = ok && c.valid(typ, v); ok {
+			out[k] = v
+		} else if !opt {
 			return nil, false
 		}
-		out[k] = v
 	}
 	return out, true
 }
@@ -182,6 +202,32 @@ func (c *Config) valid(typ int, v any) bool {
 		return v == "info" || v == "warning" || v == "critical"
 	case fLayer:
 		return v == "bedrock" || v == "k8s" || v == "apps"
+	case fPos:
+		n, ok := v.(int)
+		return ok && n >= 1
+	case fDay:
+		s, ok := v.(string)
+		return ok && dayRE.MatchString(s)
+	case fTitle:
+		s, ok := v.(string)
+		return ok && len(s) <= 120 && slices.ContainsFunc(c.titles, func(re *regexp.Regexp) bool { return re.MatchString(s) })
+	case fVec3:
+		l, ok := v.([]float64)
+		return ok && len(l) == 3
+	case fTongues:
+		l, ok := v.([]worldcore.Tongue)
+		for _, t := range l {
+			ok = ok && c.valid(fApp, t.App)
+		}
+		return ok
+	case fDays:
+		l, ok := v.([]string)
+		for _, s := range l {
+			ok = ok && dayRE.MatchString(s)
+		}
+		return ok
+	case fBuild:
+		return v == "queued" || v == "running" || v == "success" || v == "failure"
 	}
 	return false
 }

@@ -39,7 +39,7 @@ Probes ran with `KUBECONFIG=~/.kube/ukubi-admin.conf`.
 | storage | One pool per PVC (ns→app map; non-allowlisted PVCs merge into one `other` pool per class). Size = `kube_persistentvolumeclaim_resource_requests_storage_bytes`, bucketed. **longhorn** level = `kubelet_volume_stats_used_bytes` ⋈ `kube_persistentvolumeclaim_info{storageclass}` (real). **local-path** level = unmeasured (no kubelet stats for hostPath; optional W3 textfile `du`, 07). No NFS (00). **Garage and Pigsty: unmeasured** (Pigsty metrics live in its own VictoriaMetrics) |
 | cpu, mem, net rx | node-exporter. `net rx` feeds wind + the cloud floor. Copy says "inbound traffic"; it includes inter-node traffic |
 | river | Σ Traefik bytes out over allowlisted apps |
-| alerts | `/api/v2/alerts?active=true&silenced=false&inhibited=false`, dropping `Watchdog` and `InfoInhibitor`. Uses Alertmanager `fingerprint` and `startsAt` (gives `durS`). **A vein needs severity ≥ warning and a duration ≥ 10 min** |
+| alerts | `/api/v2/alerts?active=true&silenced=false&inhibited=false`, dropping `Watchdog` and `InfoInhibitor`. Uses Alertmanager `fingerprint` and `startsAt` (gives `durS`). **A vein needs severity ≥ warning and a duration ≥ 10 min** (W3b: derived on `alert.resolve`, `relay/derive.go` + `worldcore/veins.go`) |
 | builds | GitHub Actions runs (W3), mapped by **workflow repo + time window**, then the next `argo.sync` of the mapped app. Not SHA |
 | gitops commits, ADR merges | GitHub commits on infra-bootstrap main touching `gitops/` and `docs/adr/`. A title is public **only if it is on the relay's title allowlist**; otherwise date only |
 | vein `ref` flag | daily GitHub contents scan of infra-bootstrap `docs/bootstrap-test-notes.md` and `.claude/skills/**` for the alert name. **No hq data** |
@@ -113,11 +113,11 @@ Rot guard:
 **Tables (migration `001_init.sql`):** one sequence `frame_seq` orders every frame and snapshot.
 - `events(seq, id, ts, day, kind, public jsonb)`: every broadcast `ev` frame as sent (sanitised). `detail` (kept 30 days) arrives with detail mode (08).
 - `world_deltas(seq, ts, day, kind, frame jsonb)`: every broadcast `world` frame as sent.
-- `snapshots(day PK, seq, ts, seed, land bytea, state jsonb, metrics jsonb)`: upserted every 10 min, at UTC rollover and on SIGTERM. `land` = h.land, little-endian int16; h.base is regenerated from `seed`, never stored. `veins`, `glacier`, `ash`, `clouds` columns arrive with their models (W3) in a later migration.
+- `snapshots(day PK, seq, ts, seed, land bytea, state jsonb, metrics jsonb)`: upserted every 10 min, at UTC rollover and on SIGTERM. `land` = h.land, little-endian int16; h.base is regenerated from `seed`, never stored. **W3b:** veins, glacier and ash ride in `state` (hello.state: `veins`, `glacier`, `ash`, `health`, `replicas`, `builds`), so no new columns or migration; a pre-W3b row restores their defaults. `clouds` arrives with toy-clouds (W4).
 - `metrics_5m(ts, day, frame jsonb)`: the metrics frame every 5 min (scrub).
 - `marks`, `limits`: W4 (visitor layer), not created yet.
 
-**Boot:** load the latest snapshot of the seed, re-apply every frame after it (deposits add into h.land with `AddQ`; `alert.fire`/`alert.resolve` rebuild `state`), restore `metrics` (stale map cleared: sources re-mark what is down). No snapshot yet: write one at once, so later frames have a base. Restored alerts seed `src_alerts`: still active → no second `alert.fire` (startsAt kept); gone from Alertmanager → resolved on the first good poll.
+**Boot:** load the latest snapshot of the seed, re-apply every frame after it (deposits add into h.land with `AddQ`; every frame updates `state` through `State.apply`, the same rules as live and world.js), restore `metrics` (stale map cleared: sources re-mark what is down). No snapshot yet: write one at once, so later frames have a base. Restored alerts seed `src_alerts`: still active → no second `alert.fire` (startsAt kept); gone from Alertmanager → resolved on the first good poll.
 
 **`hello`** = latest snapshot (`snapshot.land` = h.land at that snapshot) + the `world` frames since it (`deltas`) + `state` + the current metrics. `snapshot.day` = the UTC day of the latest snapshot; it advances at rollover.
 

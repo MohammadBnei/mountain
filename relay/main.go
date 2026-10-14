@@ -1,7 +1,7 @@
 // Command relay serves mountain.bnei.dev: the embedded www/, /ws, and :9090 metrics (06-relay).
 //
 //	relay [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--dev] [--source live|fixture:<file>] [--seed N] [--config file]
-//	relay dump-hello [--seed N] [--day YYYY-MM-DD] [--out www/dev/fixtures/hello.json|-]
+//	relay dump-hello [--seed N] [--day YYYY-MM-DD] [--events file.json] [--out www/dev/fixtures/hello.json|-]
 //
 // Env: MOUNTAIN_FP_SALT (alert fp salt), DATABASE_URL (Postgres; empty = memory-only, store.go).
 // dump-hello restores from DATABASE_URL when it is set.
@@ -48,12 +48,21 @@ type Config struct {
 	AlertLayers []struct{ Match, Layer string }            `yaml:"alertLayers"`
 	Repos       map[string]string                          `yaml:"repos"`
 	Titles      []string                                   `yaml:"titles"`
+
+	titles []*regexp.Regexp // Titles, anchored
 }
 
 func loadConfig(b []byte) (*Config, error) {
 	var c Config
 	if err := yaml.Unmarshal(b, &c); err != nil {
 		return nil, err
+	}
+	for _, t := range c.Titles {
+		re, err := regexp.Compile("^(?:" + t + ")$")
+		if err != nil {
+			return nil, fmt.Errorf("config: title %q: %w", t, err)
+		}
+		c.titles = append(c.titles, re)
 	}
 	for k, app := range c.Namespaces {
 		if _, ok := c.Apps[app]; app != "" && !ok {
@@ -120,8 +129,8 @@ var Public = http.NewServeMux()
 
 func newApp(cfg *Config, o Opts, day string) *App {
 	w := worldcore.Base(uint32(o.Seed))
-	a := &App{Cfg: cfg, Opts: o, World: w, Land: make([]int16, len(w.Base)), State: State{Alerts: []Alert{}}, Day: day,
-		Metrics: emptyMetrics(0.8 * w.HMax), base: worldcore.EncodeI16(w.Base), bench: base64.StdEncoding.EncodeToString(w.Bench),
+	a := &App{Cfg: cfg, Opts: o, World: w, Land: make([]int16, len(w.Base)), State: newState(), Day: day,
+		Metrics: emptyMetrics(worldcore.Snowline(w.HMax, worldcore.NewGlacier().Mass)), base: worldcore.EncodeI16(w.Base), bench: base64.StdEncoding.EncodeToString(w.Bench),
 		snapLand: make([]int16, len(w.Base)), since: []json.RawMessage{}}
 	a.Hub = NewHub(o.Dev, a.Hello)
 	a.Hub.tap = a.record
@@ -180,6 +189,7 @@ func dumpHello(args []string) error {
 	seed := f.Uint("seed", 1, "terrain seed")
 	day := f.String("day", time.Now().UTC().Format(time.DateOnly), "snapshot day")
 	out := f.String("out", "www/dev/fixtures/hello.json", "output file, - for stdout")
+	events := f.String("events", "", "an {events: [{kind, ...fields}]} file played through the real sanitize + worldcore first (fixtures/hello-events.json)")
 	if err := f.Parse(args); err != nil {
 		return err
 	}
@@ -192,12 +202,62 @@ func dumpHello(args []string) error {
 		a.attach(context.Background(), dsn, true)
 		defer a.store.Close(5 * time.Second)
 	}
+	if *events != "" {
+		if err := playEvents(a, *events); err != nil {
+			return err
+		}
+	}
 	b := a.Hello()
 	if *out == "-" {
 		_, err = os.Stdout.Write(append(b, '\n'))
 		return err
 	}
 	return os.WriteFile(*out, append(b, '\n'), 0o644)
+}
+
+// playEvents broadcasts each event of file as a source would (Out.Ev): sanitised, then the hub tap folds it into
+// the state and derives its world frames, so the hello fixture's veins, glacier and ash come from real worldcore.
+func playEvents(a *App, file string) error {
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	d := json.NewDecoder(bytes.NewReader(b))
+	d.UseNumber()
+	var f struct{ Events []map[string]any }
+	if err := d.Decode(&f); err != nil {
+		return fmt.Errorf("%s: %w", file, err)
+	}
+	out := &Out{app: a, name: "fixture"}
+	for i, e := range f.Events {
+		kind, _ := e["kind"].(string)
+		delete(e, "kind")
+		if out.Ev(kind, natural(e).(map[string]any)) == "" {
+			return fmt.Errorf("%s: event %d (%s) dropped by sanitize", file, i, kind)
+		}
+	}
+	return nil
+}
+
+// natural turns decoded json.Numbers into int (when integral) or float64, the types sources hand to sanitize.
+func natural(v any) any {
+	switch x := v.(type) {
+	case json.Number:
+		if n, err := x.Int64(); err == nil {
+			return int(n)
+		}
+		f, _ := x.Float64()
+		return f
+	case map[string]any:
+		for k, e := range x {
+			x[k] = natural(e)
+		}
+	case []any:
+		for i, e := range x {
+			x[i] = natural(e)
+		}
+	}
+	return v
 }
 
 func serve(o Opts) error {

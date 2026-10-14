@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -170,9 +172,11 @@ func TestAlertState(t *testing.T) {
 	a := newApp(cfg, Opts{Seed: 1}, "2026-10-14")
 	out := &Out{app: a, name: "alerts"}
 	state := func() string {
-		var h struct{ State json.RawMessage }
+		var h struct {
+			State struct{ Alerts json.RawMessage }
+		}
 		json.Unmarshal(a.Hello(), &h)
-		return string(h.State)
+		return `{"alerts":` + string(h.State.Alerts) + `}`
 	}
 	if s := state(); s != `{"alerts":[]}` {
 		t.Fatalf("empty state must be {\"alerts\":[]}, got %s", s)
@@ -189,6 +193,9 @@ func TestAlertState(t *testing.T) {
 	}
 	if out.Resolve(al, 900) == "" || state() != `{"alerts":[]}` {
 		t.Fatalf("resolve must empty hello.state.alerts, got %s", state())
+	}
+	if len(a.State.Veins) != 1 || a.State.Veins[0].FP != al.FP || a.State.Veins[0].Layer != "k8s" {
+		t.Fatalf("a critical resolved after 15 min leaves a vein: %+v", a.State.Veins)
 	}
 	out.Stale()
 	if a.Metrics.Stale["alerts"] == 0 {
@@ -236,5 +243,49 @@ func TestFPSalt(t *testing.T) {
 	}
 	if (&App{}).FP("abc") != "" {
 		t.Fatal("no salt must yield \"\" (sanitize drops it)")
+	}
+}
+
+// TestDerive (W3b): which events become world frames (veins, glacier, ash) and that they reach hello.state.
+func TestDerive(t *testing.T) {
+	cfg, err := loadConfig(configYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := newApp(cfg, Opts{Seed: 1}, "2026-10-14")
+	out := &Out{app: a, name: "test"}
+	kinds := func() (k []string) {
+		for _, b := range a.since {
+			var f struct{ Kind string }
+			json.Unmarshal(b, &f)
+			k = append(k, f.Kind)
+		}
+		a.since = a.since[:0]
+		return
+	}
+	out.Resolve(Alert{FP: "00000000000000a1", Sev: "info", Layer: "apps"}, 3600)
+	out.Resolve(Alert{FP: "00000000000000a2", Sev: "warning", Layer: "apps"}, 599)
+	out.Ev("argo.sync", map[string]any{"app": "wird", "ok": false})
+	if k := kinds(); len(k) != 0 {
+		t.Fatalf("an info alert, a 10 min - 1 s warning and a failed sync derive nothing, got %v", k)
+	}
+	out.Resolve(Alert{FP: "00000000000000a3", Sev: "warning", Layer: "apps"}, 600)
+	out.Ev("argo.sync", map[string]any{"app": "wird", "ok": true})
+	out.Ev("app.gone", map[string]any{"app": "wird"})
+	out.Ev("app.gone", map[string]any{"app": "wird"}) // no tongue left: nothing to calve
+	out.Ev("adr.merge", map[string]any{"day": "2026-10-14"})
+	out.Ev("adr.merge", map[string]any{"day": "2026-10-14"}) // same day + title: nothing new
+	a.melt()
+	if k := fmt.Sprint(kinds()); k != "[vein glacier glacier ash glacier glacier]" {
+		t.Fatalf("derived: %s", k)
+	}
+	if g := a.State.Glacier; len(a.State.Veins) != 1 || len(a.State.Ash) != 1 || len(g.Tongues) != 0 || g.Mass != 0.48 || len(g.Ash) != 1 {
+		t.Fatalf("state: %+v", a.State)
+	}
+	cfg.titles = append(cfg.titles, regexp.MustCompile(`^ADR-\d{4} .*$`))
+	out.Ev("adr.merge", map[string]any{"day": "2026-10-15", "title": "ADR-0057 allowed"})
+	out.Ev("adr.merge", map[string]any{"day": "2026-10-16", "title": "secret internal name"})
+	if l := a.State.Ash; len(l) != 3 || l[1].Title != "ADR-0057 allowed" || l[0].Title != "" {
+		t.Fatalf("titles: only an allowlisted one leaves, the rest are date only: %+v", l)
 	}
 }

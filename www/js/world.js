@@ -7,8 +7,16 @@
 //   world.bench       Uint8Array GRID² (0..255);  world.caves [{x, z, y, yaw, seed}];  world.hmax (units)
 //   world.metrics world.state world.sites(Map app→site) world.wind world.snowline world.clouds world.sun
 //   world.rig {elev, rising} world.clip world.stale   (shared state; writers in WRITERS)
-//   world.state  {alerts: [{fp, sev, layer, startsAt (unix ms)}]}: hello.state, then ev alert.fire adds (startsAt = Alertmanager's, from the ev),
-//                alert.resolve removes, both BEFORE the ev:alert.* emit (cauldron reads it, so a reload keeps the sag)
+//   world.state  hello.state, then kept current by the frames, each BEFORE its bus emit (a model reads it at build and on
+//                a resync, so a reload keeps what live frames built; the relay's State.apply has the same rules):
+//                alerts [{fp, sev, layer, startsAt (unix ms)}]: ev alert.fire adds (startsAt = Alertmanager's, from the ev),
+//                alert.resolve removes (cauldron's sag survives a reload);
+//                veins [world:vein payload] ≤ 32, oldest first, one per fp (a re-fire keeps a/b, the thicker wins);
+//                glacier {mass, tongues:[{app, len}], ash:[day]}: the last world:glacier;
+//                ash [{day, title?}] ≤ 32, newest day first, one per day + title (world:ash);
+//                health {app: status} (ev argo.health), replicas {app: bucket} (ev replicas), builds {app: 'queued'|'running'}
+//                (ev build; success/failure removes); ev app.gone drops the app from all three.
+//                world.state is a NEW object after every hello or replay: a model that caches it resyncs on identity change
 //   world.stale  null | unix ms: the oldest metrics.stale[source] since, or the socket drop time
 //   world.clouds sky's clusters [{x, z, y (base, units), r, mass}]: mass = a towering cluster over the summit (lightning's
 //                bolt source is the base of the first mass cluster); [] = none yet (lightning falls back above the site)
@@ -109,7 +117,7 @@ export function createWorld({ dev = false } = {}) {
       // Deposit deltas land at full height, silently: they are history, not live lava (no world:deposit replay).
       for (const d of h.deltas || []) if (d.t === 'world' && d.kind === 'deposit') deposit(d, decodeI16(d.cells), 1);
       solid();
-      w.write('state', 'socket', { alerts: [], ...h.state });
+      w.write('state', 'socket', { alerts: [], veins: [], glacier: { mass: 0.5, tongues: [], ash: [] }, ash: [], health: {}, replicas: {}, builds: {}, ...h.state });
       // Every other delta is history too: its state applies, nothing re-emits as a live event.
       for (const d of h.deltas || []) if (!(d.t === 'world' && d.kind === 'deposit')) apply(d, true);
       if (h.metrics) apply(h.metrics);
@@ -172,6 +180,10 @@ export function createWorld({ dev = false } = {}) {
         s.alerts = (s.alerts || []).filter((a) => a.fp !== f.fp);
         if (f.kind === 'alert.fire') s.alerts.push({ fp: f.fp, sev: f.sev, layer: f.layer, startsAt: f.startsAt });
       });
+      if (f.kind === 'argo.health') w.write('state', 'socket', (s) => { (s.health ||= {})[f.app] = f.status; });
+      if (f.kind === 'replicas') w.write('state', 'socket', (s) => { (s.replicas ||= {})[f.app] = f.bucket; });
+      if (f.kind === 'build') w.write('state', 'socket', (s) => { s.builds ||= {}; if (f.state === 'queued' || f.state === 'running') s.builds[f.app] = f.state; else delete s.builds[f.app]; });
+      if (f.kind === 'app.gone') w.write('state', 'socket', (s) => { for (const k of ['health', 'replicas', 'builds']) if (s[k]) delete s[k][f.app]; });
       return emit(`ev:${f.kind}`, f, 'socket');
     }
     if (f.t === 'world') {
@@ -182,6 +194,15 @@ export function createWorld({ dev = false } = {}) {
         return emit('world:deposit', { ...p, cells }, 'world');
       }
       if (kind === 'site') w.write('sites', 'world', (m) => m.set(p.app, p));
+      if (kind === 'vein') w.write('state', 'socket', (s) => {
+        const old = (s.veins ||= []).find((v) => v.fp === p.fp);
+        s.veins = s.veins.filter((v) => v !== old).concat(old ? { ...p, a: old.a, b: old.b, thick: Math.max(p.thick, old.thick) } : p).slice(-32);
+      });
+      if (kind === 'glacier') w.write('state', 'socket', (s) => { s.glacier = p; });
+      if (kind === 'ash') w.write('state', 'socket', (s) => {
+        if ((s.ash ||= []).some((a) => a.day === p.day && a.title === p.title)) return;
+        s.ash = s.ash.concat(p).sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0)).slice(0, 32);
+      });
       return emit(`world:${kind}`, p, 'world');
     }
   }

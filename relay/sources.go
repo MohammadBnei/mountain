@@ -22,6 +22,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/MohammadBnei/mountain/relay/worldcore"
 )
 
 // Source is one upstream (Prometheus, Alertmanager, GitHub).
@@ -139,46 +141,79 @@ type Alert struct {
 	StartsAt int64  `json:"startsAt"` // unix ms, Alertmanager startsAt
 }
 
-// State is hello.state (www/dev/schema/hello.json). ponytail: alerts only; health, replicas, nodes, quorum and
-// builds join it when a model needs them after a reload (they are re-derived within one poll today).
+// State is hello.state (www/dev/schema/hello.json): what a reload must not lose. It changes only through the frames
+// themselves (State.apply, from the hub tap and the DB fold), so live, restored and replayed state agree; the
+// client mirrors the same rules in world.js. Health and replicas are also refreshed quietly by every prom poll
+// (they only send an ev on change).
 type State struct {
-	Alerts []Alert `json:"alerts"`
+	Alerts   []Alert           `json:"alerts"`
+	Veins    []worldcore.Vein  `json:"veins"`    // ≤ 32, oldest first (world:vein)
+	Glacier  worldcore.Glacier `json:"glacier"`  // the last world:glacier
+	Ash      []worldcore.Ash   `json:"ash"`      // ≤ 32, newest day first (world:ash)
+	Health   map[string]string `json:"health"`   // app -> ArgoCD health (ev argo.health)
+	Replicas map[string]int    `json:"replicas"` // app -> replica bucket (ev replicas)
+	Builds   map[string]string `json:"builds"`   // app -> queued|running: builds in flight (ev build, W3c)
 }
 
-// Fire adds a to hello.state.alerts (replacing the same fp) and broadcasts ev alert.fire{fp, sev, layer, startsAt}.
+func newState() State {
+	return State{Alerts: []Alert{}, Veins: []worldcore.Vein{}, Glacier: worldcore.NewGlacier(), Ash: []worldcore.Ash{},
+		Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}}
+}
+
+// Fire broadcasts ev alert.fire{fp, sev, layer, startsAt}; the hub tap adds it to hello.state.alerts (replacing the
+// same fp) under the hub lock, so a connecting client sees the alert in its hello or as the event, never neither.
 // startsAt rides the event so a live client and a reloaded one agree (cauldron breakMin), even after a relay restart re-fires.
-// Hub lock held across both: a connecting client sees the alert in its hello or as the event, never neither.
 // Returns the ev id ("" if sanitize dropped it; state is then unchanged).
 func (o *Out) Fire(a Alert) string {
-	return o.stateEv("alert.fire", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "startsAt": int(a.StartsAt)}, func(s *State) { s.set(a) })
+	return o.Ev("alert.fire", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "startsAt": int(a.StartsAt)})
 }
 
-// Resolve removes a from hello.state.alerts and broadcasts ev alert.resolve{fp, sev, layer, durS}; same lock rule.
+// Resolve broadcasts ev alert.resolve{fp, sev, layer, durS}; the tap drops it from hello.state.alerts, and an alert
+// of severity ≥ warning that lasted ≥ 10 min becomes a world:vein (App.derive).
 func (o *Out) Resolve(a Alert, durS int) string {
-	return o.stateEv("alert.resolve", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "durS": durS}, func(s *State) { s.drop(a.FP) })
+	return o.Ev("alert.resolve", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "durS": durS})
 }
 
-// set adds a, replacing the same fp; drop removes fp. Shared by Fire/Resolve and the DB restore (store.go).
-func (s *State) set(a Alert) {
-	s.Alerts = append(slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == a.FP }), a)
-}
-func (s *State) drop(fp string) {
-	s.Alerts = slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == fp })
+// frameF is every field State.apply, fold and derive read from a broadcast frame.
+type frameF struct {
+	T, Kind, ID, FP, Sev, Layer, App, Status, State, Day, Title string
+	StartsAt, TS                                                int64
+	DurS, Bucket, N                                             int
+	OK                                                          bool
+	worldcore.Glacier                                           // mass, tongues, ash
 }
 
-func (o *Out) stateEv(kind string, fields map[string]any, mut func(*State)) string {
-	id, b := o.evFrame(kind, fields)
-	if b == nil {
-		return ""
+// apply updates the state for one broadcast ev or world frame (as sent: sanitised).
+func (s *State) apply(f frameF, raw []byte) {
+	switch f.T + ":" + f.Kind {
+	case "ev:alert.fire":
+		s.Alerts = append(slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == f.FP }), Alert{FP: f.FP, Sev: f.Sev, Layer: f.Layer, StartsAt: f.StartsAt})
+	case "ev:alert.resolve":
+		s.Alerts = slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == f.FP })
+	case "ev:argo.health":
+		s.Health[f.App] = f.Status
+	case "ev:replicas":
+		s.Replicas[f.App] = f.Bucket
+	case "ev:app.gone":
+		delete(s.Health, f.App)
+		delete(s.Replicas, f.App)
+		delete(s.Builds, f.App)
+	case "ev:build":
+		if f.State == "queued" || f.State == "running" {
+			s.Builds[f.App] = f.State
+		} else {
+			delete(s.Builds, f.App)
+		}
+	case "world:vein":
+		var v worldcore.Vein
+		if json.Unmarshal(raw, &v) == nil {
+			s.Veins = worldcore.AddVein(s.Veins, v)
+		}
+	case "world:glacier":
+		s.Glacier = worldcore.Glacier{Mass: f.Mass, Tongues: f.Tongues, Ash: f.Ash}
+	case "world:ash":
+		s.Ash, _ = worldcore.AddAshLine(s.Ash, worldcore.Ash{Day: f.Day, Title: f.Title})
 	}
-	h := o.app.Hub
-	h.mu.Lock() // lock order h.mu -> app.mu, as Hello
-	defer h.mu.Unlock()
-	o.app.mu.Lock()
-	mut(&o.app.State)
-	o.app.mu.Unlock()
-	h.broadcastLocked(b)
-	return id
 }
 
 // Stale marks this source stale in the metrics frame (stale[name] = since, unix ms; kept while it stays down)
