@@ -79,7 +79,8 @@ func (a *App) replay(day string, now time.Time) []byte {
 			return b
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// runs on the connection's reader: stay well under the 10 s ping write timeout (hub.go)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	b, err := a.buildReplay(ctx, day)
 	if err != nil {
