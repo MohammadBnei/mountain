@@ -30,7 +30,8 @@ export default async function test({ model, world, inject, step, fixture, assert
   assert(ring.visible && !steam.visible, 'warning: ring, no steam');
   const warnDip = dip();
   assert(warnDip < 1, `the ring dishes at its inner edge (${warnDip.toFixed(2)} m over the terrain, 1.2 at rest)`);
-  assert(ring.material.emissive.r === 0, 'warning: no glow');
+  const w = ring.material.emissive; // 09 dusk legibility: a cool water lift so the dish reads as deep ice, not a void
+  assert(w.b > 0.05 && w.b > w.r, `warning: cool lift, no red glow (${w.r.toFixed(3)}, ${w.g.toFixed(3)}, ${w.b.toFixed(3)})`);
 
   fire(fixture.critical);
   step(180);
@@ -48,7 +49,7 @@ export default async function test({ model, world, inject, step, fixture, assert
   fire(fixture.watchdog);
   step(450);
   assert(!ring.visible && !steam.visible && last().depth === 0, `resolve recovers; Watchdog-style sev never sags (${JSON.stringify(last())})`);
-  assert(e.r === 0, 'no glow once recovered');
+  assert(e.r < e.b, 'no red glow once recovered');
   resolve(fixture.watchdog);
 
   fire(fixture.warning, 0, true);

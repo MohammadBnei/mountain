@@ -1,6 +1,6 @@
 // cauldron (03-model-cauldron): the summit ice cauldron sags under firing alerts. Reads world.state.alerts every
 // step (not the ev:alert.* bus), so a reload restored from hello.state sags the same. Sag depth by the worst severity;
-// unknown severities (Watchdog's "none", dropped by the relay anyway) never sag. Its own sag ring (lit iceDeep annulus,
+// unknown severities (Watchdog's "none", dropped by the relay anyway) never sag. Its own sag ring (lit iceDeep annulus + water lift,
 // widening and dishing with depth); critical → red under-glow (magma emissive on the ring: no third draw) + a Points
 // steam column. A critical alert firing for breakMin → one jokulhlaup per alert.
 // Emits cauldron.sag {x, z, depth, sev} on each change, steam {x, z, vol} every STEAM_S while critical.
@@ -31,6 +31,7 @@ export default async function build({ THREE, kit, world, rng }) {
   const H = world.heightAt, burst = new Set();
   let depth = 0, target = -1, sev = null, now = Date.now(), steamT = 0;
   const glow = kit.color('magma').multiplyScalar(1.5); // > 1: blooms
+  const lift = kit.color('water').multiplyScalar(0.1); // dusk legibility (09): iceDeep alone reads as a void in the snow
 
   function shape() {
     const ro = 6 + 2 * depth;
@@ -65,7 +66,8 @@ export default async function build({ THREE, kit, world, rng }) {
       if (!target && depth < 0.02) depth = 0;
       ring.visible = depth > 0;
       if (ring.visible) shape();
-      mat.emissive.copy(glow).multiplyScalar(crit ? Math.min(1, depth / SEV.critical) : 0);
+      if (crit) mat.emissive.copy(glow).multiplyScalar(Math.min(1, depth / SEV.critical)); // one hue at a time (gate)
+      else mat.emissive.copy(lift);
 
       steam.visible = crit;
       if (!crit) { steamT = 0; return; }
