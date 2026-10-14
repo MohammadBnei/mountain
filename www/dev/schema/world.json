@@ -1,0 +1,352 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "world.json",
+ "title": "world frame (06): {t:'world', kind, ...payload}; payloads = the world:<kind> bus rows of 01. deposit.cells: w*h int16 (HEIGHT_Q steps), base64 little-endian, row-major (z outer, x inner), cell (0,0) = grid cell (x0, z0).",
+ "type": "object",
+ "required": [
+  "t",
+  "kind"
+ ],
+ "oneOf": [
+  {
+   "properties": {
+    "t": {
+     "const": "world"
+    },
+    "kind": {
+     "const": "deposit"
+    },
+    "id": {
+     "type": "string"
+    },
+    "x0": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 127
+    },
+    "z0": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 127
+    },
+    "w": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 128
+    },
+    "h": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 128
+    },
+    "cells": {
+     "type": "string",
+     "pattern": "^[A-Za-z0-9+/]*=*$"
+    }
+   },
+   "required": [
+    "t",
+    "kind",
+    "id",
+    "x0",
+    "z0",
+    "w",
+    "h",
+    "cells"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "world"
+    },
+    "kind": {
+     "const": "vein"
+    },
+    "fp": {
+     "$ref": "#/$defs/fp"
+    },
+    "a": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 3,
+     "maxItems": 3
+    },
+    "b": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 3,
+     "maxItems": 3
+    },
+    "thick": {
+     "type": "number"
+    },
+    "layer": {
+     "$ref": "#/$defs/layer"
+    },
+    "ref": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "t",
+    "kind",
+    "fp",
+    "a",
+    "b",
+    "thick",
+    "layer",
+    "ref"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "world"
+    },
+    "kind": {
+     "const": "glacier"
+    },
+    "mass": {
+     "type": "number"
+    },
+    "tongues": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+       "app",
+       "len"
+      ],
+      "properties": {
+       "app": {
+        "$ref": "#/$defs/app"
+       },
+       "len": {
+        "type": "number"
+       }
+      }
+     }
+    },
+    "ash": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/day"
+     }
+    }
+   },
+   "required": [
+    "t",
+    "kind",
+    "mass",
+    "tongues",
+    "ash"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "world"
+    },
+    "kind": {
+     "const": "ash"
+    },
+    "day": {
+     "$ref": "#/$defs/day"
+    },
+    "title": {
+     "type": "string",
+     "maxLength": 120
+    }
+   },
+   "required": [
+    "t",
+    "kind",
+    "day"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "world"
+    },
+    "kind": {
+     "const": "site"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "x": {
+     "type": "number"
+    },
+    "z": {
+     "type": "number"
+    },
+    "y": {
+     "type": "number"
+    },
+    "tier": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "group": {
+     "enum": [
+      "platform",
+      "user"
+     ]
+    }
+   },
+   "required": [
+    "t",
+    "kind",
+    "app",
+    "x",
+    "z",
+    "y",
+    "tier",
+    "group"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "world"
+    },
+    "kind": {
+     "type": "string",
+     "pattern": "^[a-z-]{1,24}$"
+    },
+    "id": {
+     "type": "string"
+    },
+    "pose": {
+     "type": "object"
+    },
+    "weight": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "t",
+    "kind",
+    "id",
+    "kind",
+    "pose",
+    "weight"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "world"
+    },
+    "kind": {
+     "const": "cloud"
+    },
+    "id": {
+     "type": "string"
+    },
+    "pos": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 3,
+     "maxItems": 3
+    },
+    "state": {
+     "type": "string"
+    },
+    "credits": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 40
+     }
+    }
+   },
+   "required": [
+    "t",
+    "kind",
+    "id",
+    "pos",
+    "state",
+    "credits"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "world"
+    },
+    "kind": {
+     "const": "rain"
+    },
+    "x": {
+     "type": "number"
+    },
+    "z": {
+     "type": "number"
+    },
+    "r": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "t",
+    "kind",
+    "x",
+    "z",
+    "r"
+   ],
+   "additionalProperties": false
+  }
+ ],
+ "$defs": {
+  "app": {
+   "type": "string",
+   "pattern": "^[a-z0-9][a-z0-9-]{0,40}$"
+  },
+  "host": {
+   "enum": [
+    "h1",
+    "h2",
+    "h3"
+   ]
+  },
+  "fp": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{16}$"
+  },
+  "sev": {
+   "enum": [
+    "info",
+    "warning",
+    "critical"
+   ]
+  },
+  "layer": {
+   "enum": [
+    "bedrock",
+    "k8s",
+    "apps"
+   ]
+  },
+  "day": {
+   "type": "string",
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+  }
+ }
+}

@@ -1,0 +1,474 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "ev.json",
+ "title": "ev frame (02 event enum, frozen W2): {t:'ev', id (ULID), ts (unix ms), kind, ...fields}. Allowlisted apps only, hosts h1..h3, fp = salted hash (16 hex). No extra fields.",
+ "type": "object",
+ "required": [
+  "t",
+  "id",
+  "ts",
+  "kind"
+ ],
+ "oneOf": [
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "argo.sync"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "ok": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "app",
+    "ok"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "argo.health"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "status": {
+     "enum": [
+      "Healthy",
+      "Progressing",
+      "Degraded",
+      "Suspended",
+      "Missing",
+      "Unknown"
+     ]
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "app",
+    "status"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "pod.churn"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "restarts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "oom": {
+     "type": "boolean"
+    },
+    "crashloop": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "app",
+    "restarts",
+    "oom",
+    "crashloop"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "node.ready"
+    },
+    "host": {
+     "$ref": "#/$defs/host"
+    },
+    "ready": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "host",
+    "ready"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "quorum"
+    },
+    "up": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/host"
+     },
+     "maxItems": 3
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "up"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "alert.fire"
+    },
+    "fp": {
+     "$ref": "#/$defs/fp"
+    },
+    "sev": {
+     "$ref": "#/$defs/sev"
+    },
+    "layer": {
+     "$ref": "#/$defs/layer"
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "fp",
+    "sev",
+    "layer"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "alert.resolve"
+    },
+    "fp": {
+     "$ref": "#/$defs/fp"
+    },
+    "sev": {
+     "$ref": "#/$defs/sev"
+    },
+    "layer": {
+     "$ref": "#/$defs/layer"
+    },
+    "durS": {
+     "type": "integer",
+     "minimum": 0
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "fp",
+    "sev",
+    "layer",
+    "durS"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "build"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "state": {
+     "enum": [
+      "queued",
+      "running",
+      "success",
+      "failure"
+     ]
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "app",
+    "state"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "gitops.commit"
+    },
+    "n": {
+     "type": "integer",
+     "minimum": 1
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "n"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "adr.merge"
+    },
+    "day": {
+     "$ref": "#/$defs/day"
+    },
+    "title": {
+     "type": "string",
+     "maxLength": 120
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "day"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "replicas"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "bucket": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 8
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "app",
+    "bucket"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "app.gone"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "app"
+   ],
+   "additionalProperties": false
+  }
+ ],
+ "$defs": {
+  "app": {
+   "type": "string",
+   "pattern": "^[a-z0-9][a-z0-9-]{0,40}$"
+  },
+  "host": {
+   "enum": [
+    "h1",
+    "h2",
+    "h3"
+   ]
+  },
+  "fp": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{16}$"
+  },
+  "sev": {
+   "enum": [
+    "info",
+    "warning",
+    "critical"
+   ]
+  },
+  "layer": {
+   "enum": [
+    "bedrock",
+    "k8s",
+    "apps"
+   ]
+  },
+  "day": {
+   "type": "string",
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+  }
+ }
+}

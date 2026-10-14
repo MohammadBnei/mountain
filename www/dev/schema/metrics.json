@@ -1,0 +1,227 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "metrics.json",
+ "title": "metrics frame (02), every 15 s; equals world.metrics. Bucketed values only (B suffix).",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "t",
+  "apps",
+  "storage",
+  "cpu",
+  "mem",
+  "heat",
+  "buildsInFlight",
+  "wind",
+  "snowline",
+  "rx",
+  "river",
+  "hosts",
+  "stale"
+ ],
+ "properties": {
+  "t": {
+   "const": "metrics"
+  },
+  "apps": {
+   "type": "object",
+   "propertyNames": {
+    "$ref": "#/$defs/app"
+   },
+   "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "rpsB",
+     "errB",
+     "spike",
+     "bytesB"
+    ],
+    "properties": {
+     "rpsB": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "errB": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "spike": {
+      "type": "boolean"
+     },
+     "bytesB": {
+      "type": "integer",
+      "minimum": 0
+     }
+    }
+   }
+  },
+  "storage": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "pools",
+    "garage",
+    "pigsty"
+   ],
+   "properties": {
+    "pools": {
+     "type": "array",
+     "maxItems": 16,
+     "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+       "id",
+       "app",
+       "class",
+       "capB",
+       "usedB"
+      ],
+      "properties": {
+       "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]{1,48}$"
+       },
+       "app": {
+        "$ref": "#/$defs/app"
+       },
+       "class": {
+        "enum": [
+         "longhorn",
+         "local"
+        ]
+       },
+       "host": {
+        "$ref": "#/$defs/host"
+       },
+       "capB": {
+        "type": "integer",
+        "minimum": 0
+       },
+       "usedB": {
+        "type": [
+         "integer",
+         "null"
+        ],
+        "minimum": 0
+       }
+      }
+     }
+    },
+    "garage": {
+     "type": "null"
+    },
+    "pigsty": {
+     "type": "null"
+    }
+   }
+  },
+  "cpu": {
+   "type": "number"
+  },
+  "mem": {
+   "type": "number"
+  },
+  "heat": {
+   "type": "number"
+  },
+  "buildsInFlight": {
+   "type": "integer",
+   "minimum": 0
+  },
+  "wind": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "x",
+    "z"
+   ],
+   "properties": {
+    "x": {
+     "type": "number"
+    },
+    "z": {
+     "type": "number"
+    }
+   }
+  },
+  "snowline": {
+   "type": "number"
+  },
+  "rx": {
+   "type": "number"
+  },
+  "river": {
+   "type": "number"
+  },
+  "hosts": {
+   "type": "object",
+   "propertyNames": {
+    "$ref": "#/$defs/host"
+   },
+   "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "alloc",
+     "ready",
+     "load"
+    ],
+    "properties": {
+     "alloc": {
+      "type": "number"
+     },
+     "ready": {
+      "type": "boolean"
+     },
+     "load": {
+      "type": "number"
+     }
+    }
+   }
+  },
+  "stale": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "integer",
+    "minimum": 0
+   }
+  }
+ },
+ "$defs": {
+  "app": {
+   "type": "string",
+   "pattern": "^[a-z0-9][a-z0-9-]{0,40}$"
+  },
+  "host": {
+   "enum": [
+    "h1",
+    "h2",
+    "h3"
+   ]
+  },
+  "fp": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{16}$"
+  },
+  "sev": {
+   "enum": [
+    "info",
+    "warning",
+    "critical"
+   ]
+  },
+  "layer": {
+   "enum": [
+    "bedrock",
+    "k8s",
+    "apps"
+   ]
+  },
+  "day": {
+   "type": "string",
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+  }
+ }
+}

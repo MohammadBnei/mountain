@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- Model sandbox (04). Grown from pi-lab dev/object.html, on the kit rig (never white lights, never shadows).
+     ?m=<model>[,<model>]   models/<name>/index.js, profile layout.profiles[<name>]
+     ?m=fixture:<name>      dev/fixtures/<name>.js, profile layout.profiles._test (or _<name> if present)
+     ?snapshot=<url>        hello frame (default ./fixtures/hello.json, from `relay dump-hello`)
+     ?key=night|dawn|day|dusk (default dusk)   ?P=<0..6> (default 6)   ?q=low
+     Hooks: __setP(P) → stats, __step(n, dt), __inject(type, payload), __test() → {ok, error}, __gate (state). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mountain sandbox</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../style.css">
+<script type="importmap">{"imports":{"three":"../vendor/build/three.module.js","three/addons/":"../vendor/examples/jsm/","cannon-es":"../vendor/cannon-es/cannon-es.js"}}</script>
+<script type="module" src="sandbox.js"></script>
+</head>
+<body>
+<canvas id="c"></canvas>
+</body>
+</html>
