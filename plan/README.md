@@ -8,7 +8,11 @@ pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compos
 
 ## Status (2026-10-14)
 
-**W0 is done except `/add-app`, which waits for the first image (W1a).**
+**W0, W0.5 and W1a are done (2026-10-14).** mountain.bnei.dev is live (image `34c952f`, infra-bootstrap #300). Next: W1b.
+
+**W1a exit gate (live, 2026-10-14):** a `wird` ArgoCD resync finished at 17:21:00Z and `ev:argo.sync` + `world:deposit` reached a client through Cloudflare at 17:21:26Z (26 s, target 45 s). A WebSocket held 380 s through Cloudflare. `/metrics` returns 404 publicly and `:9090` is unreachable. A foreign Origin gets 403. The CSP has no dev origin. Live `/ws` showed no IP, node, internal namespace or version. Dev loop: `scripts/devpod.sh` (infra-bootstrap #301 makes it a skill).
+
+**Carried into the W1b seam:** the ember pool sits under the fog from the default camera (Freeze item 3); the cave close-up clip check misses by 1–2 %; the 'other' world deltas still re-emit on reconnect; it is unconfirmed whether the build runner has Chrome for the CI gate.
 
 | Item | State | Where |
 |---|---|---|
@@ -21,8 +25,8 @@ pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compos
 | Postgres `dbuser_mountain` / `mountaindb` | **live**, verified: connlimit 10, owner, PUBLIC connect revoked, login + DDL via `.232` | Pigsty `pg-proxmox`, leader `.205` |
 | DB password | `DBUSER_MOUNTAIN_PASSWORD` in the **infra-bootstrap** Infisical project (`8a3fa54f-…`, env `dev`), not in `mountain-8c-cz`: one copy only, per infra-bootstrap convention | Infisical |
 | Docs marking the above live | open | infra-bootstrap #299 |
-| `/add-app` `mountain.bnei.dev` (points at this repo's `helm/`) | **not done**, waits for the first image | W1a lane D |
-| Traefik scrape interval 15 s (live: 1 m) | not done | W1a lane D |
+| `/add-app` `mountain.bnei.dev` (points at this repo's `helm/`) | **done**, infra-bootstrap #300 merged | W1a lane D |
+| Traefik scrape interval 15 s | **done**, #300 | W1a lane D |
 
 **Next: W0.5** (stack verification + style, amendment R4), then W1a. W1a and W1b now run as **parallel lanes after an orchestrator seam commit** (00 R4, 01 ownership).
 
@@ -50,7 +54,7 @@ What the W1a lanes need to know:
 |---|---|---|---|
 | **W0** ✅ (except `/add-app`) | M BN + 1 agent | Create the private repo `MohammadBnei/mountain` and split the plan. **ADR-A** PR (public telemetry, PromQL-only). Human steps: create the Infisical project `mountain`, add the repo to the `ACCESS_TOKEN` PAT repo list, run `build-runner-configure.yml`. `/add-app` (this repo's `helm/`, `:sha` pinned by CI, ServiceMonitor in `extraManifests`) **moved to W1a lane D** | All human steps are done, so W1 can deploy |
 | **W0.5** (R4) | Orchestrator + ~4 agents | Stack verification: facts (hard gate) + fit (advisory), live read-only PromQL probes. `09-style.md` + R4 plan edits. Swatches + lit styleboard for the 4 time keys | Facts table green, probes return series, **user approves the swatches + styleboard** |
-| **W1a** | Orchestrator seam commit, then parallel lanes: (A) relay, (B) www, (C) models, (D) infra PR | Relay: `src_prom` (sync, metrics), worldcore (`h.base`, sites, deposits), `hello`, `/ws`, `/api/topology`, `/metrics` on its own port. www: kit, world, socket, sandbox, gate. Models: **mountain** (body + plain slabs), **eruption**. Deployed | A real ArgoCD sync makes land appear on the live site within 45 s |
+| **W1a** ✅ | Orchestrator seam commit, then parallel lanes: (A) relay, (B) www, (C) models, (D) infra PR | Relay: `src_prom` (sync, metrics), worldcore (`h.base`, sites, deposits), `hello`, `/ws`, `/api/topology`, `/metrics` on its own port. www: kit, world, socket, sandbox, gate. Models: **mountain** (body + plain slabs), **eruption**. Deployed | A real ArgoCD sync makes land appear on the live site within 45 s |
 | **W1b** | Orchestrator seam commit (incl. `post.js`), then parallel lanes: (A) `src_alerts`, (B) cauldron, (C) sky-min, (D) lightning, (E) infra PR | `src_alerts`. Models: **cauldron** (own sag-ring mesh), **sky-min** (dome + cloud floor; owns `world.clouds`), **lightning**. post.js on desktop. Stale label | W1 verification passes |
 | **W2** | 1 agent | **Freeze** `contract.js`, `world.js`, `units.json`, `layout.js` (every profile), the bus registry, the event enum and the metrics frame, as revised by what W1 taught. Pigsty DB, persistence, scrub, `hello.state` | W2 verification passes |
 | **W3** | Parallel | Wave start, serial: **`cut.js` + strata** as the reference field provider (1 agent). Then parallel: aquifers, magma, veins (providers); glacier, summit, scree, sky (full), river, shimmer; story mechanism; `src_github`; detail-mode OIDC | Every model passes `gate.mjs <name>` + its fixture assertion; the page stays within budget |
