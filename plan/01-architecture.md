@@ -128,7 +128,8 @@ Every model folder ships `fixture.json` (a scripted event and world-delta timeli
 
 ## Cut (`cut.js`, W3 serial)
 - The mountain is a closed mesh (skirt + bottom), DoubleSide.
-- The back-face cap computes the view-ray ∩ plane point `p` and writes `gl_FragDepth`. perf.mjs measures early-z loss; the fallback is a separate cap mesh.
+- ~~The back-face cap computes the view-ray ∩ plane point `p` and writes `gl_FragDepth`.~~ **W3a: the cap is a separate mesh** (the fallback). perf.mjs measured the back-face cap: the body lost early-z and the Android profile went from 16.7 to 33.3 ms p50 with the cut closed. The cap mesh (`cut.cap()`, in the mountain's root, 1 draw / 2 tris, hidden while closed) is a kit `terrain()` quad laid on the `uClip` plane in its vertex shader; it keeps the fragments inside the solid (heightSolid texture, interpolated as the body mesh) and shades them from the providers. Android stays at 16.7 ms p50 closed, 16.7 p50 / 33.4 p95 open (cut 60).
+- Providers are built with kit `field(glsl, uniforms)` (09): token-named uniforms follow the time key. The cut is driven by `world.clip` (writer: story; until story.js, the dev knob `?cut=<depth>` on the page and the sandbox `cut` slider), `cut.at(depth, az)` builds the vertical plane facing the camera azimuth.
 - Field providers (`field.glsl`: `vec4 <name>Field(vec3 p, vec4 base)`) are composed in `layout.js` order: strata → aquifers → magma → veins → caves (mountain-owned: a short irregular `deep` blob hollow per `caves[]` entry, not a tube). Missing providers are skipped, so nobody edits cut.js after W3 start.
 - **Clipping list:**
 
