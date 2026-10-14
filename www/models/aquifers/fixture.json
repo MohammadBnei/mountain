@@ -1,0 +1,17 @@
+{
+  "_": "aquifers behaviour fixture: a metrics.storage frame (relay buckets: capB = ceil(log2(1 + GiB)) ≤ 12, usedB = used/cap in 5 % steps, null = unmeasured) with longhorn pools below, at and over the 85 % seep edge (usedB 17), one unmeasured longhorn, local-path pools on two hosts (unmeasured), and the usedB the drained pool drops to.",
+  "storage": {
+    "pools": [
+      { "id": "wird-1", "app": "wird", "class": "longhorn", "capB": 3, "usedB": 16 },
+      { "id": "mountain-1", "app": "mountain", "class": "longhorn", "capB": 4, "usedB": 17 },
+      { "id": "editable-blog-1", "app": "editable-blog", "class": "longhorn", "capB": 2, "usedB": 20 },
+      { "id": "other-longhorn", "app": "other", "class": "longhorn", "capB": 6, "usedB": null },
+      { "id": "wird-2", "app": "wird", "class": "local", "host": "h1", "capB": 5, "usedB": null },
+      { "id": "other-local-h1", "app": "other", "class": "local", "host": "h1", "capB": 7, "usedB": null },
+      { "id": "other-local-h3", "app": "other", "class": "local", "host": "h3", "capB": 8, "usedB": null }
+    ],
+    "garage": null,
+    "pigsty": null
+  },
+  "drained": 12
+}
