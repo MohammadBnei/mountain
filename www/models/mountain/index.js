@@ -1,6 +1,8 @@
 // mountain (03-model-mountain): the Go terrain h.base + h.land as one closed flat-shaded body,
-// 3 bedrock slabs h1..h3 (thickness = alloc, colour = ready/load), kit cave mouths at Go caves[].
+// 3 bedrock slabs h1..h3 (thickness = alloc, colour = ready/load), kit cave mouths at Go caves[], and the `caves`
+// cut-face provider (01 "Cut"): each cave a short irregular `deep` blob hollow behind its mouth.
 import U from '../../js/units.json' with { type: 'json' };
+import { cap } from '../../js/cut.js';
 
 export default async function build({ THREE, kit, world }) {
   const G = kit.QUALITY === 'low' ? U.GRID_LOW : U.GRID, Q = G - 1;
@@ -36,12 +38,12 @@ export default async function build({ THREE, kit, world }) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('bench', new THREE.BufferAttribute(bench, 1));
-  const mat = kit.terrain({ closed: true }); // closed body, back-face cap in cut.js (W3)
+  const mat = kit.terrain({ closed: true }); // closed body; its cut face is the cut.js cap mesh
   const body = new THREE.Mesh(geo, mat);
   body.name = 'body';
 
   // bedrock: 3 slabs under the body, side by side along x, non-overlapping
-  const slabs = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), kit.lit('slabLoad'), 3);
+  const slabs = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), kit.clipped(kit.lit('slabLoad')), 3); // clipped (01)
   slabs.name = 'slabs';
   slabs.userData.facet = 'slab';
   const O = new THREE.Object3D(), SW = SPAN / 3, HOSTS = ['h1', 'h2', 'h3'], NONE = { alloc: 0, ready: false, load: 0 }, C = kit.color('slabNotReady');
@@ -64,10 +66,27 @@ export default async function build({ THREE, kit, world }) {
   };
   slabsFrom(world.metrics);
 
+  // caves provider: hollow centre = the kit mouth centre (U.uCaves, set by kit.cave()) pushed 4.5 m into the wall;
+  // uCaveIn[i] = (inward x, inward z, seed phase). Ellipsoid 5 × 3 × 5 m, lobed by the seed, edge antialiased.
+  const caveIn = Array.from({ length: 5 }, () => new THREE.Vector4());
+  const hollows = () => caveIn.forEach((v, i) => { const c = world.caves[i]; if (c) v.set(-Math.sin(c.yaw), -Math.cos(c.yaw), c.seed % 97, 0); });
+  hollows();
+  const field = kit.field(`uniform vec4 uCaveIn[5]; uniform vec3 uCaveDeep;
+vec4 cavesField(vec3 p, vec4 base) {
+  for (int i = 0; i < 5; i++) {
+    if (uCaves[i].w < .5) continue;
+    vec3 q = p - uCaves[i].xyz - vec3(uCaveIn[i].x * 4.5, -.6, uCaveIn[i].y * 4.5);
+    float s = uCaveIn[i].z, d = length(q / vec3(5., 3., 5.)) / (1. + .2 * sin(3. * atan(q.z, q.x) + s) + .1 * sin(2.1 * q.y + s));
+    float w = fwidth(d);
+    base = mix(base, vec4(uCaveDeep, 0.), 1. - smoothstep(1. - w, 1. + w, d));
+  }
+  return base;
+}`, { uCaveIn: caveIn, uCaveDeep: 'deep' });
+
   const root = new THREE.Group();
   let cavesSeen = world.caves, caves = kit.cave(world.caves, world.heightAt);
   caves.name = 'caves';
-  root.add(body, slabs, caves);
+  root.add(body, slabs, caves, cap());
   const bounds = () => { geo.computeBoundingBox(); geo.computeBoundingSphere(); };
   // resync hello (socket reconnect, relay restart) replaces h.base/h.land/caves wholesale:
   // world.applyHello reassigns world.caves every time, so its identity marks a new snapshot
@@ -85,6 +104,7 @@ export default async function build({ THREE, kit, world }) {
     caves = kit.cave(world.caves, world.heightAt);
     caves.name = 'caves';
     root.add(caves);
+    hollows();
   };
 
   // deposits: re-sample + rewrite the affected quad rows while world.js ramps h.land (3 s)
@@ -105,6 +125,7 @@ export default async function build({ THREE, kit, world }) {
   return {
     root,
     params: {},
+    field,
     pose() {},
     step(dt) {
       if (world.metrics !== seen) slabsFrom(world.metrics);
