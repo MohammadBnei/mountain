@@ -1,0 +1,16 @@
+{
+  "_": "lightning behaviour fixture: two sites, sky's clusters (the far summit mass, a near mass, a nearer non-mass layer cluster), then metrics apps frames: calm, busy, a spike, a spike with errors.",
+  "sites": [
+    { "type": "world:site", "payload": { "app": "wird", "x": -50, "z": 5, "y": 0, "tier": 1, "group": "apps" } },
+    { "type": "world:site", "payload": { "app": "argo", "x": 30, "z": -20, "y": 0, "tier": 1, "group": "platform" } }
+  ],
+  "clouds": [
+    { "x": 0, "z": 0, "y": 95, "r": 30, "mass": true },
+    { "x": -60, "z": 0, "y": 100, "r": 20, "mass": true },
+    { "x": -50, "z": 10, "y": 60, "r": 10, "mass": false }
+  ],
+  "calm": { "wird": { "rpsB": 2, "errB": 0, "spike": false, "bytesB": 3 }, "argo": { "rpsB": 2, "errB": 0, "spike": false, "bytesB": 3 } },
+  "busy": { "wird": { "rpsB": 10, "errB": 0, "spike": false, "bytesB": 9 }, "argo": { "rpsB": 10, "errB": 0, "spike": false, "bytesB": 9 } },
+  "spike": { "wird": { "rpsB": 8, "errB": 0, "spike": true, "bytesB": 6 }, "argo": { "rpsB": 2, "errB": 0, "spike": false, "bytesB": 3 } },
+  "fault": { "wird": { "rpsB": 8, "errB": 3, "spike": true, "bytesB": 6 }, "argo": { "rpsB": 2, "errB": 0, "spike": false, "bytesB": 3 } }
+}
