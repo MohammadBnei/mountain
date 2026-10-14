@@ -81,8 +81,9 @@ ok(Array.isArray(w3.state.alerts) && !w3.state.alerts.length, 'a hello without a
 // ---- socket: reconnect with jittered backoff, resync via hello, stale since ----
 const socks = [];
 globalThis.WebSocket = class {
-  constructor(url) { this.url = url; socks.push(this); setTimeout(() => this.onopen?.(), 1); }
-  close() { this.onclose?.(); }
+  constructor(url) { this.url = url; this.out = []; socks.push(this); setTimeout(() => { this.readyState = 1; this.onopen?.(); }, 1); }
+  send(s) { this.out.push(s); }
+  close() { this.readyState = 3; this.onclose?.(); }
   recv(f) { this.onmessage({ data: typeof f === 'string' ? f : JSON.stringify(f) }); }
 };
 const fetched = [];
@@ -123,9 +124,45 @@ await sleep(500);
 ok(socks.length === 3, 'third attempt after 1 s');
 socks[2].recv({ ...hello, t: 'hello' });
 ok(w2.stale === null, 'hello resync clears stale');
+ok(w2.send({ t: 'scrub', day: '2026-10-13' }) && socks[2].out[0] === '{"t":"scrub","day":"2026-10-13"}', 'world.send writes JSON to the open socket');
+w2.resync();
+ok(socks.length === 4 && socks[2].readyState === 3 && w2.stale === null, 'world.resync reconnects at once, without a stale gap');
+socks[3].recv({ ...hello, t: 'hello' });
 c.close();
 await sleep(1200);
-ok(socks.length === 3, 'close() stops reconnecting');
+ok(socks.length === 4, 'close() stops reconnecting');
+
+// ---- scrub: replay rebuilds land + state, plays the day's frames, drops live frames; release resyncs ----
+const w4 = createWorld({ dev: true }), sent = [], heard = [];
+let resyncs = 0;
+w4.applyHello(hello);
+ok(await w4.scrub('2026-10-13').then(() => false, (e) => /socket/.test(e.message)), 'scrub without a socket rejects');
+w4.send = (f) => sent.push(f); w4.resync = () => resyncs++;
+for (const k of ['world:deposit', 'ev:alert.fire']) w4.on(k, (p, type) => heard.push(type));
+const al4 = { fp: '0123456789abcdef', sev: 'critical', layer: 'k8s', startsAt: 5 };
+const replayF = { t: 'replay', day: '2026-10-13', snapshot: { ...hello.snapshot, land: encodeI16(Object.assign(new Int16Array(GRID * GRID), { [g]: 300 })) },
+  state: { alerts: [] }, metrics: [], frames: [
+    { t: 'world', kind: 'deposit', id: 'r1', x0: 64, z0: 64, w: 1, h: 1, cells: encodeI16([200]) },
+    { t: 'ev', id: 'r2', ts: 1, kind: 'alert.fire', ...al4 }] };
+const p4 = w4.scrub('2026-10-13');
+ok(JSON.stringify(sent) === '[{"t":"scrub","day":"2026-10-13"}]', 'scrub sends {t:scrub, day}');
+w4.applyFrame({ t: 'world', kind: 'deposit', id: 'live', x0: 64, z0: 64, w: 1, h: 1, cells: encodeI16([5000]) });
+w4.applyFrame(replayF);
+const got4 = await p4;
+ok(got4 === replayF && w4.replay?.day === '2026-10-13' && w4.replay.left === 2, 'the replay resolves scrub() and sets world.replay');
+ok(w4.fields['h.land'][g] === 300 && !heard.length, 'replay land = its snapshot (the live frame during the scrub was dropped)');
+for (let i = 0; i < 3 * 30 + 30; i++) w4.step(1 / 30);
+ok(w4.fields['h.land'][g] === 500 && w4.state.alerts.length === 1 && heard.join() === 'world:deposit,ev:alert.fire' && w4.replay.left === 0,
+  `replay frames play through the bus, not silently (land ${w4.fields['h.land'][g]}, ${heard.join()})`);
+w4.applyFrame({ t: 'ev', id: 'l2', ts: 2, kind: 'alert.resolve', ...al4, durS: 1 });
+ok(w4.state.alerts.length === 1, 'live frames stay dropped while the replay is held');
+w4.release();
+ok(w4.replay === null && resyncs === 1, 'release() drops the replay and resyncs');
+w4.applyFrame({ t: 'ev', id: 'l3', ts: 3, kind: 'alert.resolve', ...al4, durS: 1 });
+ok(!w4.state.alerts.length, 'live frames apply again after release');
+const p5 = w4.scrub('2026-01-01');
+w4.applyFrame({ t: 'replay', error: 'bad-day' });
+ok(await p5.then(() => false, (e) => /bad-day/.test(e.message)) && w4.replay === null && resyncs === 2, 'an error replay rejects scrub() and resyncs');
 
 // ---- scripts/devpod.sh: the dev loop sees alerts (salted fp) and survives a push restart ----
 const dp = readFileSync(new URL('../../scripts/devpod.sh', import.meta.url), 'utf8');
