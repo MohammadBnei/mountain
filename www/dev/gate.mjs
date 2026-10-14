@@ -273,7 +273,11 @@ async function styleboardMode() {
   const b = await waitFor(page, 'window.__board?.ready && window.__board', 60000);
   if (!b) fail('styleboard not ready within 60 s');
   else if (b.error) fail(`styleboard error: ${b.error.split('\n')[0]}`);
-  else console.log(`styleboard models=${b.models.join(',')} missing=${b.missing.join(',') || '-'}  ${await shot(page, `styleboard-${W}.png`)}`);
+  else {
+    console.log(`styleboard haze seam (max step /255): ${JSON.stringify(b.haze)}`);
+    for (const [k, d] of Object.entries(b.haze)) if (d > 4) fail(`styleboard ${k}: hard horizon line (step ${d}/255 > 4): fog colour ≠ exposed horizon`);
+    console.log(`styleboard models=${b.models.join(',')} missing=${b.missing.join(',') || '-'}  ${await shot(page, `styleboard-${W}.png`)}`);
+  }
   await sleep(300);
   await finish(cleanup);
 }

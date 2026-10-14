@@ -361,7 +361,8 @@ function apply() {
   if (!RIG) return;
   const { renderer, scene, hemi, dir } = RIG;
   renderer.toneMappingExposure = rigAt('exposure');
-  scene.fog.color.set(rigHex('fog'));
+  // fog mixes after tone mapping: pre-expose it so the haze matches the exposed floor and dome (day 1.25)
+  scene.fog.color.set(rigHex('fog')).multiplyScalar(renderer.toneMappingExposure);
   scene.fog.density = rigAt('fogD');
   unit(hemi.color.set(rigHex('hemiSky')));
   unit(hemi.groundColor.set(rigHex('hemiGround')));
