@@ -15,7 +15,7 @@ image:
   # infra-bootstrap belongs after this repo's first CI run has replaced this
   # line, or the first sync is an ImagePullBackOff against a tag that was
   # never built (hq/wird have the same rule).
-  tag: "30373442e6bd"
+  tag: "4a0d0a6a4f90"
 
 service:
   port: 8080
