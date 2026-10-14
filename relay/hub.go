@@ -121,8 +121,10 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SetReadLimit(maxFrame)
 	c := &Client{IP: ip, conn: conn, send: make(chan []byte, sendBuffer)}
-	c.send <- h.hello()
+	// hello + register under the broadcast lock: every frame lands either in the snapshot or after it.
+	// Lock order h.mu → app.mu (Hello); nothing may Broadcast while holding app.mu.
 	h.mu.Lock()
+	c.send <- h.hello()
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()
 	WSConnections.Add("", 1)

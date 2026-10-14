@@ -218,7 +218,7 @@ The bands are set in each `layout.js` profile. Only the orchestrator tunes them.
 |---|---|
 | Colour membership | gate calls `setPhase` to an **exact key** (dusk, then day), then compares sRGB `getHexString()` per channel ±1/255 against that key's tokens/ramps |
 | Rendered luminance (ceiling) | `uHeat = 0`, haze pass off, every emissive zeroed, `glow`/`line`/`points`/`lava` hidden. Render to the gate's **own `HalfFloatType` RT** and read it with `readRenderTargetPixels`. **Max Rec.709 luminance < 1.0** at dusk and day. If float readback is unsupported the gate **fails loudly** (never skips) |
-| Rendered luminance (floor) | same render: **p50 luminance of terrain pixels at dusk > 0.004** (styleboard: 0.006), so the scene is never black |
+| Rendered luminance (floor) | same render: **p50 luminance of terrain pixels at dusk > 0.004** (the one floor, here, in 04 and in `gate.mjs`; styleboard measured 0.0055–0.006, so ≈ 30 % headroom), so the scene is never black |
 | Static source scan | grep `models/**/*.js` for `/#[0-9a-f]{6}\|0x[0-9a-f]{6}\|new (THREE\.)?Color\(\|TextureLoader\|GLTFLoader\|CanvasTexture\|onBeforeCompile/i` → fail on any hit |
 | Rig/dome untouched | snapshot dome uniforms, light colours/intensities, fog and exposure before and after each model `step()` → fail on any change |
 | `uFootprint` | holds only the kit RT |

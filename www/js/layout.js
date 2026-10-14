@@ -11,12 +11,15 @@ export const FACET = {
 
 // Facet bands that apply to the whole terrain-sized world (footprint = the world).
 const WORLD = { x: 0, z: 0, r: 141.5 };
+// Lowest mountain geometry: worldcore rim min −67 (h − 34 − 30 − 3 at the corners), body bottom 3 m under it (−70),
+// bedrock slabs 0.5 m below that, up to 20 m thick (03-model-mountain) → −90.5.
+const BEDROCK_Y = -70 - 0.5 - 20;
 
 export const profiles = {
   mountain: {
     tris: 40000, draws: 8, peak: { tris: 40000, draws: 8 }, stepMs: 1,
     writes: [], emits: [], listens: ['world:deposit'],
-    clipped: true, visibleFrom: 0, goneFrom: null, footprint: WORLD, yRange: [-70, 75], facet: 'terrain',
+    clipped: true, visibleFrom: 0, goneFrom: null, footprint: WORLD, yRange: [BEDROCK_Y, 75], facet: 'terrain',
   },
   eruption: {
     tris: 5000, draws: 3, peak: { tris: 5000, draws: 3 }, stepMs: 1,

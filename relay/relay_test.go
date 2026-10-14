@@ -127,3 +127,32 @@ func TestMetricsAndULID(t *testing.T) {
 		t.Errorf("ULID %s %s", a, b)
 	}
 }
+
+// A frame broadcast while a client's hello is being built must reach it (after the hello), not vanish.
+func TestHelloRegisterAtomic(t *testing.T) {
+	var h *Hub
+	h = NewHub(false, func() []byte {
+		done := make(chan struct{})
+		go func() { h.Broadcast([]byte(`{"t":"ev"}`)); close(done) }()
+		select { // the broadcast lands mid-hello unless it waits on the hub lock
+		case <-done:
+		case <-time.After(100 * time.Millisecond):
+		}
+		return []byte(`{"t":"hello"}`)
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	c, _, err := dial(t, srv, origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	for _, want := range []string{"hello", "ev"} {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_, b, err := c.Read(ctx)
+		cancel()
+		if err != nil || !strings.Contains(string(b), `"t":"`+want+`"`) {
+			t.Fatalf("want %s frame, got %s %v", want, b, err)
+		}
+	}
+}

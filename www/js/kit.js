@@ -6,8 +6,8 @@
 //   token(name) → '#rrggbb' in the current phase ('name@dusk' = pinned dusk, semantic names allowed)
 //   color(name) → THREE.Color;  rampColor(ramp, t, out?) → THREE.Color;  RAMPS, FACET re-exported from layout
 //   lit(tokenOrRamp, opts?)  glow(token, intensity, {mesh}?)  line(token, intensity)  points(token, size)
-//   dome()  terrain({veins}?)  crystal()  lava()  flow(token)  stamp()  cave(caves, heightAt)
-//   rock(seed)  puff(seed)  shard(seed)  setRampAt(mesh, i, t)  lavaHeat(material, v)
+//   dome()  terrain({veins, closed}?)  crystal()  lava()  flow(token)  stamp()  cave(caves, heightAt)
+//   rock(seed)  puff(seed)  shard(seed)  setRampAt(mesh, i, t)  lavaHeat(material, v)  dispose(root)
 //   rig(renderer, scene) → {hemi, dir, dome, floor};  setPhase(elev, rising);  setKey(key)
 //   U (terrain uniforms; writers: setPhase → stops/uSnowLift/uEmber, setPool → uPool/uPoolCol/uHeat,
 //      setVeins → uVeins/uVeinN, main/socket → uSnowline, story → uClip);  setPool(...)  setVeins(caps)
@@ -164,9 +164,9 @@ export function setVeins(caps) {
   veinTex.needsUpdate = true;
 }
 
-/** The mountain surface: lit + terrain patch. Geometry supplies `bench` (0..1). */
-export function terrain({ veins = !LOW } = {}) {
-  const m = base({ color: 0xffffff });
+/** The mountain surface: lit + terrain patch. Geometry supplies `bench` (0..1). closed: DoubleSide (closed body, 01). */
+export function terrain({ veins = !LOW, closed = false } = {}) {
+  const m = base({ color: 0xffffff, ...(closed ? { side: THREE.DoubleSide } : {}) });
   m.onBeforeCompile = (sh) => patchTerrain(sh, U, { veins });
   m.customProgramCacheKey = () => `kit-terrain-${LOW}-${veins}`;
   return tag(m, 'terrain');
@@ -205,6 +205,7 @@ export function dome() {
   hooks.add(paintDome);
   paintDome();
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), m);
+  mesh.userData.kitHook = paintDome;
   mesh.renderOrder = -1;
   return mesh;
 }
@@ -306,7 +307,19 @@ export function cave(caves, heightAt) {
   mouth.userData.facet = 'exempt';
   for (const m of [brow, jamb, loose]) m.userData.facet = 'cave';
   g.add(mouth, brow, jamb, loose);
+  g.userData.kitHook = paintMouth;
   return g;
+}
+
+/** Unregister and free everything under root (geometries, materials, kit phase hooks, ramp meshes),
+ *  e.g. old caves before cave() runs again on a resync hello. Textures (kit sprite) are kept. */
+export function dispose(root) {
+  root.traverse((o) => {
+    hooks.delete(o.userData.kitHook);
+    rampMeshes.delete(o);
+    o.geometry?.dispose();
+    for (const m of [o.material].flat()) m?.dispose(); // dispose event drops it from `tracked`
+  });
 }
 
 // ---------- rig ----------
