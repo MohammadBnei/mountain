@@ -11,6 +11,7 @@ try {
   const { profiles, finale } = await import('../js/layout.js');
   const { page } = await import('../js/page.js');
   const { makeCtx, checkModel, wire } = await import('../js/contract.js');
+  const cut = await import('../js/cut.js');
 
   const canvas = document.getElementById('c');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -23,7 +24,7 @@ try {
   kit.U.uHMax.value = world.hmax;
   kit.U.uSnowline.value = world.snowline;
 
-  const models = [], missing = [];
+  const models = [], missing = [], built = [];
   for (const name of page) {
     const url = `../models/${name}/index.js`; // only a 404 means not built yet; a broken model throws and fails the board
     if (!(await fetch(url, { method: 'HEAD' })).ok) { missing.push(name); continue; }
@@ -35,7 +36,10 @@ try {
     m.pose(6);
     scene.add(m.root);
     models.push(name);
+    built.push(m);
   }
+  cut.compose(built);
+  cut.apply(world);
   if (!models.length) {
     const m = await (await import('./fixtures/terrain.js')).default(makeCtx({ THREE, kit, world, name: '_test', profile: profiles._terrain }));
     scene.add(m.root);

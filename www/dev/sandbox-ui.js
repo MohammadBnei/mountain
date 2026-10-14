@@ -1,4 +1,4 @@
-// Sandbox controls (04): P slider, play/step, dt multiplier, key, tier toggle, params sliders, injectors for every
+// Sandbox controls (04): P slider, cut depth, play/step, dt multiplier, key, tier toggle, params sliders, injectors for every
 // ev / world:* / bus type, scrub (live socket + day replay + release), field heatmaps, bus log, drag-orbit + wheel zoom.
 // Loaded by sandbox.js unless ?ui=0.
 // No inline styles in markup (relay CSP: style-src 'self'); the look lives in sandbox.css.
@@ -17,7 +17,7 @@ const TPL = {
 };
 const busTpl = { 'magma.dyke': { app: 'wird', x: 0, z: 0, heat: 0.5 }, 'lava.heat': { x: 0, z: 0, q: 1 }, 'cauldron.sag': { x: 0, z: 0, depth: 1, sev: 'warning' }, 'aquifer.seep': { pool: 'wird-pg', x: 0, z: 0 } };
 
-export default function ui({ THREE, kit, world, loaded, renderer, scene, camera, look, render, step, inject, EV_KINDS, BUS, setP, rebase }) {
+export default function ui({ THREE, kit, world, loaded, renderer, scene, camera, look, render, step, inject, EV_KINDS, BUS, setP, setCut, rebase }) {
   const el = (tag, attrs = {}, ...kids) => { const e = Object.assign(document.createElement(tag), attrs); e.append(...kids); return e; };
   const row = (label, ...kids) => el('label', { className: 'row' }, el('span', { textContent: label }), ...kids);
   const q = new URLSearchParams(location.search);
@@ -41,6 +41,10 @@ export default function ui({ THREE, kit, world, loaded, renderer, scene, camera,
   const pIn = el('input', { type: 'range', min: 0, max: 6, step: 0.01, value: P });
   const pOut = el('output', { textContent: P.toFixed(2) });
   pIn.oninput = () => { P = Number(pIn.value); pOut.textContent = P.toFixed(2); setP(P); };
+  // cut depth (world.clip, as the story will write it): 0 = closed
+  const cutIn = el('input', { type: 'range', min: 0, max: 100, step: 1, value: world.clip.depth });
+  const cutOut = el('output', { textContent: world.clip.depth });
+  cutIn.oninput = () => { cutOut.textContent = cutIn.value; setCut(Number(cutIn.value)); };
   const play = el('button', { textContent: 'play' });
   play.onclick = () => { playing = !playing; play.textContent = playing ? 'pause' : 'play'; };
   const stepB = el('button', { textContent: 'step' });
@@ -117,7 +121,7 @@ export default function ui({ THREE, kit, world, loaded, renderer, scene, camera,
 
   document.body.append(el('aside', { className: 'panel' },
     el('h1', { textContent: loaded.map((l) => l.name).join(' + ') }),
-    row('P', pIn, pOut), el('div', { className: 'btns' }, play, stepB, dt, key, tier),
+    row('P', pIn, pOut), row('cut', cutIn, cutOut), el('div', { className: 'btns' }, play, stepB, dt, key, tier),
     ...(params.length ? [el('h2', { textContent: 'params' }), ...params] : []),
     el('h2', { textContent: 'inject' }), sel, body, go, injErr,
     el('h2', { textContent: 'scrub' }), el('div', { className: 'btns' }, dayIn, liveB, scrubB, relB), scrubOut,

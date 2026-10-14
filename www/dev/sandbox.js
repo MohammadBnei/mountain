@@ -5,6 +5,8 @@
 //   __checks() → {pose, style:{dusk, day}, facet, lum:{dusk, day}, clip, physics}   (pure measurements, state restored)
 //   __caveLum() → [lum dusk] per world.caves close-up      __world (the sandbox world)
 //   __test() → {ok, error, peak, stepMs, writes, emits, listens, rig, fields}       (test.js under audit)
+// Cut (cut.js): ?cut=<depth> opens world.clip facing the camera azimuth (?az); a field provider (layout.js `fields`) is
+// hosted by the mountain, its cut face open at depth 60 unless ?cut says otherwise.
 // Physics convention checked here (00 "Physics"): cannon-es collisionFilterGroup bit 1 = real, bit 2 = surface;
 // two bodies of different layers in one world must not be able to collide (group & mask both ways).
 const q = new URLSearchParams(location.search);
@@ -16,7 +18,8 @@ try {
   const CANNON = await import('cannon-es');
   const kit = await import('../js/kit.js');
   const { createWorld, encodeI16, BUS, EV_KINDS, WRITERS } = await import('../js/world.js');
-  const { profiles, finale, FACET } = await import('../js/layout.js');
+  const { profiles, finale, FACET, fields } = await import('../js/layout.js');
+  const cut = await import('../js/cut.js');
   const { makeCtx, checkModel, wire } = await import('../js/contract.js');
 
   let audit = null; // set by __test(); handlers can fire as soon as models are wired
@@ -25,6 +28,8 @@ try {
   CANNON.World.prototype.addBody = function (b) { bodies.push({ world: this, body: b }); return addBody.call(this, b); };
 
   const names = (q.get('m') || 'fixture:cube').split(',');
+  const hosted = names.some((n) => fields.includes(n)) && !names.includes('mountain');
+  if (hosted) names.unshift('mountain'); // a provider draws nothing of its own: it colours the mountain's cut face
   const KEY = q.get('key') || 'dusk';
   const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
   renderer.setPixelRatio(1);
@@ -63,8 +68,14 @@ try {
     loaded.push(l);
   }
 
+  cut.compose(loaded.map((l) => l.model));
+  const setCut = (depth) => { world.write('clip', 'story', cut.at(depth, Number(q.get('az') || 0))); cut.apply(world); };
+  setCut(Number(q.get('cut') ?? (hosted ? 60 : 0)));
+
+  // The models under test: a hosted mountain is scenery, its budgets and flags are its own gate's.
+  const own = loaded.slice(hosted ? 1 : 0);
   // Framing comes from the profile only, so a missing or misplaced model shows up blank or cut off.
-  const { profile } = loaded[0], { x, z, r } = profile.footprint, [y0, y1] = profile.yRange;
+  const { profile } = own[0], { x, z, r } = profile.footprint, [y0, y1] = profile.yRange;
   const camera = new THREE.PerspectiveCamera(finale.fov, innerWidth / innerHeight, 0.1, 2000);
   const look = new THREE.Vector3();
   const place = (cam) => {
@@ -98,9 +109,12 @@ try {
   const hidden = (list, fn) => { const was = list.map((o) => o.visible); list.forEach((o) => (o.visible = false)); try { return fn(); } finally { list.forEach((o, i) => (o.visible = was[i])); } };
   const diffPx = (a, b) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 18) n++; return n; };
 
-  // baseline: rig only (dome + haze floor), so stats count the models alone
+  // compile the cut cap and its provider chain even when the cut stays closed: a GLSL error is a console error (gate FAIL)
+  setCut(60); render(); setCut(Number(q.get('cut') ?? (hosted ? 60 : 0)));
+
+  // baseline: rig (dome + haze floor) and a hosted mountain, so stats count the models under test alone
   const base = new Uint8Array(W * H * 4), buf = new Uint8Array(W * H * 4);
-  const rigOnly = () => { roots().forEach((o) => (o.visible = false)); const b = render(base); roots().forEach((o) => (o.visible = true)); return b; };
+  const rigOnly = () => { own.forEach((l) => (l.model.root.visible = false)); const b = render(base); own.forEach((l) => (l.model.root.visible = true)); return b; };
   let b0 = rigOnly();
 
   function stats(P) {
@@ -216,10 +230,11 @@ try {
         const h = new Uint16Array(W * H * 4);
         renderer.readRenderTargetPixels(rt, 0, 0, W, H, h);
         // terrain mask: model meshes drawn white (terrain) / black (others), rig hidden, black clear
-        const swap = objects((o) => o.isMesh).map((o) => [o, o.material]);
+        // the cut cap discards outside the solid only in its own shader: its plain-white quad would mask the whole plane
+        const caps = objects((o) => mats(o)[0]?.defines?.K_CUT_CAP !== undefined), swap = objects((o) => o.isMesh).map((o) => [o, o.material]);
         swap.forEach(([o, m]) => (o.material = [].concat(m)[0]?.userData?.kit === 'terrain' ? white : black));
         const mask = new Uint8Array(W * H * 4), bg = scene.background;
-        hidden([RIG.dome, RIG.floor], () => { scene.background = new THREE.Color(0); renderer.setRenderTarget(rt8); renderer.render(scene, camera); renderer.readRenderTargetPixels(rt8, 0, 0, W, H, mask); });
+        hidden([RIG.dome, RIG.floor, ...caps], () => { scene.background = new THREE.Color(0); renderer.setRenderTarget(rt8); renderer.render(scene, camera); renderer.readRenderTargetPixels(rt8, 0, 0, W, H, mask); });
         scene.background = bg;
         swap.forEach(([o, m]) => (o.material = m));
         renderer.setRenderTarget(null);
@@ -246,10 +261,11 @@ try {
   // ---------- clipped flag: closing uClip over everything must remove (clipped) or keep (not) every solid ----------
   function clip() {
     const solid = (o) => o.isMesh && ['lit', 'terrain', 'lava'].includes(mats(o)[0]?.userData?.kit);
-    const others = objects((o) => !solid(o)), U = kit.U.uClip.value, was = U.clone();
-    return hidden(others, () => {
-      render(buf); const open = diffPx(buf, base);
-      U.set(0, 1, 0, -1e6); render(buf); const cut = diffPx(buf, base);
+    const others = objects((o) => !solid(o)), U = kit.U.uClip.value, was = U.clone(), rig = new Uint8Array(W * H * 4);
+    return hidden([...others, ...loaded.filter((l) => !own.includes(l)).map((l) => l.model.root)], () => { // own solids vs the rig alone
+      hidden(roots(), () => render(rig));
+      render(buf); const open = diffPx(buf, rig);
+      U.set(0, 1, 0, -1e6); render(buf); const cut = diffPx(buf, rig);
       U.copy(was);
       return { open, cut };
     });
@@ -327,6 +343,7 @@ try {
     for (let i = 0; i < k; i++) {
       world.step(dt);
       kit.U.uHMax.value = world.hmax; // deposits move the summit (terrain shading keys off it)
+      cut.apply(world);
       t += dt;
       for (const l of loaded) audited(l, 'step()', () => {
         const a = performance.now();
@@ -373,7 +390,7 @@ try {
   };
   window.__setP(Number(q.get('P') ?? 6));
 
-  if (q.get('ui') !== '0') (await import('./sandbox-ui.js')).default({ THREE, kit, world, loaded, renderer, scene, camera, look, render, step, inject, EV_KINDS, BUS, WRITERS, setP: window.__setP, rebase: () => (b0 = rigOnly()) });
+  if (q.get('ui') !== '0') (await import('./sandbox-ui.js')).default({ THREE, kit, world, loaded, renderer, scene, camera, look, render, step, inject, EV_KINDS, BUS, WRITERS, setP: window.__setP, setCut, rebase: () => (b0 = rigOnly()) });
 } catch (e) {
   console.error(e);
   window.__gate = { ready: true, error: String(e?.stack || e) };

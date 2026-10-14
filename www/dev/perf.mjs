@@ -6,7 +6,8 @@
 //
 //   node www/dev/perf.mjs [url|/path]   http(s) URL as is; a /path is served from www/ (default /index.html?fixture=1)
 // Options: --cpu 4  --secs 8  --max-p95 <ms, default 400>  --max-draws 220  --max-tris 200000  --desktop
-// Env: CHROME, DPR. gl_FragDepth cost: measured once cut.js exists (W3); reported n/a until then.
+//          --cut <depth> (opens the cut, main.js dev knob: the cap mesh's fill cost)
+// Env: CHROME, DPR. gl_FragDepth: none since W3a (cut.js chose the cap mesh over the back-face cap; numbers in cut.js).
 import { launch, serveStatic, sleep } from './cdp.mjs';
 
 const argv = process.argv.slice(2);
@@ -14,7 +15,8 @@ const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i
 const desktop = argv.includes('--desktop');
 const lim = { p95: Number(opt('max-p95', 400)), draws: Number(opt('max-draws', 220)), tris: Number(opt('max-tris', 200000)) };
 const arg = argv[0]?.startsWith('--') ? null : argv[0], srv = arg?.startsWith('http') ? null : await serveStatic();
-const url = srv ? `${srv.origin}${arg || '/index.html?fixture=1'}` : arg;
+let url = srv ? `${srv.origin}${arg || '/index.html?fixture=1'}` : arg;
+if (opt('cut')) url += `${url.includes('?') ? '&' : '?'}cut=${opt('cut')}`;
 
 const page = await launch(desktop ? { w: 1280, h: 800 } : { w: 393, h: 873, mobile: true, dpr: Number(process.env.DPR || 2.75) });
 if (!desktop) {
@@ -60,7 +62,7 @@ if (pct(0.95) > lim.p95) fails.push(`frame p95 ${pct(0.95).toFixed(1)} ms > ${li
 if (draws > lim.draws) fails.push(`draws ${draws} > ${lim.draws}`);
 if (tris > lim.tris) fails.push(`tris ${tris} > ${lim.tris}`);
 errors.forEach((e) => fails.push(`page error: ${String(e).slice(0, 200)}`));
-console.log(`perf ${desktop ? 'desktop' : `android cpu ×${opt('cpu', 4)}`} q=${quality}: frames=${dts.length} p50=${pct(0.5)?.toFixed(1)}ms p95=${pct(0.95)?.toFixed(1)}ms max=${dts.at(-1)?.toFixed(0)}ms | peak draws=${draws} tris=${Math.round(tris)} | fragDepth: n/a (cut.js W3)`);
+console.log(`perf ${desktop ? 'desktop' : `android cpu ×${opt('cpu', 4)}`} q=${quality}: frames=${dts.length} p50=${pct(0.5)?.toFixed(1)}ms p95=${pct(0.95)?.toFixed(1)}ms max=${dts.at(-1)?.toFixed(0)}ms | peak draws=${draws} tris=${Math.round(tris)} | cut=${opt('cut') || 'closed'}`);
 if (fails.length) { console.log('PERF FAIL'); fails.forEach((f) => console.log('  - ' + f)); process.exit(1); }
 console.log('PERF PASS');
 process.exit(0);
