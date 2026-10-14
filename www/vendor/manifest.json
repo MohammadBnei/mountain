@@ -29,6 +29,11 @@
   "sha256": "f0700cbd3a482954949b9d58c1b0f76dcc74767750297647a39d8c40dd63d37c",
   "source": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
  },
+ "examples/jsm/controls/OrbitControls.js": {
+  "bytes": 40755,
+  "sha256": "3d79d07ecb686b4e5d93232eedab255331c1beef711e13164eaa1f68655a5f2b",
+  "source": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/controls/OrbitControls.js"
+ },
  "examples/jsm/geometries/RoundedBoxGeometry.js": {
   "bytes": 6470,
   "sha256": "c5feab96123858ed8823c889b238dc8734adab7e760e3cfd21e7f3f2f3e348e3",
