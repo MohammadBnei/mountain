@@ -57,7 +57,8 @@ void kVeins(vec3 p) {
   f = after(f, '#include <emissivemap_fragment>', `
   totalEmissiveRadiance += kSnow * uSnowLift * diffuseColor.rgb
     + uGold * kVein * .12 + mix(uGold * .7, uVeinRef * 1.4, kRef) * kCore
-    + uPoolCol * max(uHeat, .45) * uEmber * (1. - smoothstep(.25, 1., length((vKWorld.xz - uPool.xy) / uPool.zw)));`);
+    + uPoolCol * max(uHeat, .45) * uEmber * (1. - smoothstep(.25, 1., length((vKWorld.xz - uPool.xy) / uPool.zw)))
+      * smoothstep(.6, .85, abs(kN.y)) * (1. - smoothstep(.01, .035, kH)); // the pool lies on flat low ground only, never up the face`);
   // Rim (09 Freeze item 2): below y = -4 the terrain dissolves into the fog/haze colour, fully at the
   // valley haze floor (y = -16), so the dropped rim never shows a hard mesa edge against the floor.
   f = after(f, '#include <fog_fragment>', '#ifdef USE_FOG\ngl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, 1. - smoothstep(-16., -4., vKWorld.y));\n#endif');
