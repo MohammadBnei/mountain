@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	_ "embed"
@@ -249,10 +250,30 @@ func csp(html []byte, dev bool) string {
 		"; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 }
 
+// buildID is a short hash over every embedded file: it changes on any deploy that changes www/.
+func buildID(www fs.FS) string {
+	h := sha256.New()
+	fs.WalkDir(www, ".", func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			if b, err := fs.ReadFile(www, p); err == nil {
+				fmt.Fprintf(h, "%s\x00%d\x00", p, len(b))
+				h.Write(b)
+			}
+		}
+		return nil
+	})
+	return fmt.Sprintf("%x", h.Sum(nil))[:12]
+}
+
+// static serves www/. Cloudflare overrides our Cache-Control (zone Browser Cache TTL, edge-cached .js),
+// so headers alone cannot stop a returning browser mixing module versions across a deploy (live: old
+// kit.js + new post.js => setComposed undefined). Instead every asset index.html references lives under
+// /v/<build>/ (immutable: a new deploy is a new URL); / itself is no-cache and Cloudflare serves it DYNAMIC.
+// Relative imports inside modules resolve under the same prefix. Unversioned paths still work (no-cache +
+// content ETags) for pages loaded before the deploy; another build's /v/<id>/ is a no-store 404, which
+// boot.js answers with one reload onto the current index.
 func static(www fs.FS, dev bool) http.Handler {
 	files := http.FileServerFS(www)
-	// Content-hash ETags + no-cache: browsers revalidate every load (304 when unchanged), so a deploy
-	// never mixes module versions (Cloudflare's default 4 h TTL did: old kit.js + new post.js).
 	etags := map[string]string{}
 	fs.WalkDir(www, ".", func(p string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
@@ -263,16 +284,39 @@ func static(www fs.FS, dev bool) http.Handler {
 		}
 		return nil
 	})
+	prefix := "/v/" + buildID(www) + "/"
+	// ponytail: every `"./` in index.html is an asset URL (src, href, importmap); keep it that way.
+	index, _ := fs.ReadFile(www, "index.html")
+	index = bytes.ReplaceAll(index, []byte(`"./`), []byte(`"`+prefix))
+	indexCSP := csp(index, dev)
+	s := sha256.Sum256(index)
+	indexTag := `"` + base64.RawURLEncoding.EncodeToString(s[:12]) + `"`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := r.URL.Path
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "no-referrer")
+		p, cache := r.URL.Path, "no-cache"
+		if strings.HasPrefix(p, "/v/") {
+			if !strings.HasPrefix(p, prefix) {
+				h.Set("Cache-Control", "no-store")
+				http.NotFound(w, r)
+				return
+			}
+			p, cache = "/"+strings.TrimPrefix(p, prefix), "public, max-age=31536000, immutable"
+			r = r.Clone(r.Context())
+			r.URL.Path, r.URL.RawPath = p, ""
+		}
 		if strings.HasPrefix(p, "/dev/") && !dev {
 			http.NotFound(w, r)
 			return
 		}
-		h := w.Header()
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("Referrer-Policy", "no-referrer")
-		h.Set("Cache-Control", "no-cache")
+		h.Set("Cache-Control", cache)
+		if p == "/" {
+			h.Set("ETag", indexTag)
+			h.Set("Content-Security-Policy", indexCSP)
+			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(index))
+			return
+		}
 		key := p
 		if strings.HasSuffix(key, "/") {
 			key += "index.html"
@@ -280,12 +324,8 @@ func static(www fs.FS, dev bool) http.Handler {
 		if e, ok := etags[key]; ok {
 			h.Set("ETag", e)
 		}
-		if p == "/" || strings.HasSuffix(p, ".html") {
-			name := strings.TrimPrefix(p, "/")
-			if name == "" {
-				name = "index.html"
-			}
-			if b, err := fs.ReadFile(www, name); err == nil {
+		if strings.HasSuffix(p, ".html") {
+			if b, err := fs.ReadFile(www, strings.TrimPrefix(p, "/")); err == nil {
 				h.Set("Content-Security-Policy", csp(b, dev))
 			}
 		}
