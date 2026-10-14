@@ -34,16 +34,14 @@ ingress:
     headers:
       referrerPolicy: no-referrer
 
-# Alert fp salt (02: never rotated, veins link to it). Key MOUNTAIN_FP_SALT in
-# Infisical mountain-8c-cz, synced to the Secret mountain-infisical (W1b lane E).
-# optional: until that Secret exists the relay boots and drops alerts (fail closed).
-env:
-  - name: MOUNTAIN_FP_SALT
-    valueFrom:
-      secretKeyRef:
-        name: mountain-infisical
-        key: MOUNTAIN_FP_SALT
-        optional: true
+# Alert fp salt (02: never rotated, veins link to it): key MOUNTAIN_FP_SALT in
+# Infisical mountain-8c-cz, synced to the Secret mountain-infisical and loaded
+# verbatim via envFrom. Without the key the relay boots and drops alerts (fail closed).
+infisical:
+  enabled: true
+  projectSlug: mountain-8c-cz
+  envSlug: dev
+  autoReload: true
 
 livenessProbe:
   enabled: true
