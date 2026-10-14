@@ -15,7 +15,8 @@
 // stepMs (mean over audited steps); writes/emits/listens ⊆ profile; no foreign field writes in step(); clipped flag
 // (rendered: closing uClip removes every solid iff clipped); pose(P) determinism; test.js; kit factories only;
 // shadows; style per factory at the exact dusk and day keys (colour ∈ tokens/ramps ±1/255, flatShading, no maps,
-// emissive hue); facet bands; luminance ceiling < 1 (dusk, day) and dusk terrain p50 > 0.004 on a HalfFloat RT;
+// emissive hue); facet bands; luminance ceiling < 1 (dusk, day) and dusk terrain p50 > 0.004 on a HalfFloat RT
+// (default camera and, without --qs, every cave:<i> close-up);
 // static source scan; rig/dome/fog/exposure/uFootprint unchanged around step(); no real↔surface bodies;
 // console errors, exceptions, failed or foreign requests. Checks run before and after test.js.
 import { spawn, spawnSync } from 'node:child_process';
@@ -171,6 +172,7 @@ async function modelMode() {
     for (const f of c.facet) if (f.error || !f.ok) fail(`${pre}facet ${f.mesh}: ${f.error || `class ${f.cls} median ${f.median} outside [${f.band}]`}`);
     for (const k of ['dusk', 'day']) if (!(c.lum[k].max < 1)) fail(`${pre}luminance ${k} max ${c.lum[k].max} ≥ 1 (emissives off)`);
     if (c.lum.dusk.terrainPx && !(c.lum.dusk.p50 > 0.004)) fail(`${pre}dusk terrain p50 luminance ${c.lum.dusk.p50} ≤ 0.004 (too dark)`);
+    if (!opt('qs')) (await page.evalJSON('window.__caveLum()')).forEach((l, i) => l.terrainPx && !(l.p50 > 0.004) && fail(`${pre}cave:${i} dusk terrain p50 luminance ${l.p50} ≤ 0.004 (too dark)`));
     if (c.clip.open > 0) {
       const kept = c.clip.cut / c.clip.open;
       if (profile.clipped && kept > 0.02) fail(`${pre}clipped:true but ${pct(kept)} of solid pixels ignore uClip`);
@@ -210,6 +212,9 @@ async function pageMode() {
   const stop = () => new Promise((r) => { relay.once('exit', r); relay.kill('SIGTERM'); });
   if (!(await start())) { fail(`relay did not answer /healthz: ${relayLog.slice(-300)}`); relay.kill('SIGKILL'); return finish(); }
   console.log(`relay ${bin} --dev --source=fixture:${fx} on ${origin}`);
+  // Every built model is on the page: a landed lane left out of layout.page would ship invisible.
+  const { page: onPage } = await import(join(ROOT, 'js/layout.js'));
+  for (const m of await readdir(join(ROOT, 'models'))) if (!onPage.includes(m)) fail(`page: models/${m}/ is not in layout.page`);
 
   // CSP: exactly one source (the Go relay); importmap hash, connect-src, no third-party origins
   const res = await fetch(`${origin}/`), csp = res.headers.get('content-security-policy') || '', html = await res.text();
@@ -246,17 +251,53 @@ async function pageMode() {
   await sleep(3000); // models build, first frames render
   console.log(`page: ${await shot(page, `page-${W}.png`)}  ws created=${ws.created} hello=${ws.hello} frames=${ws.frames}`);
 
+  // post (01 "Post"): desktop composer passes + MSAA 4 + HalfFloat; phones none. Same tone mapping as the direct path:
+  // the composer with bloom off (haze is off at uHeat 0) must match a direct render of the same frame, exactly without
+  // fog (tone mapping, exposure, colour space) and within 3/255 with it (the composer mixes fog in linear, ≈ 1.6/255
+  // measured); at day (exposure 1.25) the composer's fog colour is the raw key colour (kit pre-exposes it on the direct path only).
+  const pp = await page.evalJSON(`(() => {
+    const p = globalThis.__page; if (!p) return { err: 'no __page (dev hook)' };
+    const { renderer: r, scene, camera, post } = p;
+    if (!post) return { post: false };
+    const gl = r.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, a = new Uint8Array(w * h * 4), b = new Uint8Array(w * h * 4);
+    const diff = () => {
+      r.render(scene, camera); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, a);
+      post.bloom.enabled = false; post.composer.render(); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, b); post.bloom.enabled = true;
+      let d = 0; for (let i = 0; i < a.length; i += 4) for (let c = 0; c < 3; c++) d += Math.abs(a[i + c] - b[i + c]);
+      return +(d / (w * h * 3)).toFixed(3);
+    };
+    const fog = scene.fog, withFog = diff(); p.kit.setKey('day'); const dayFog = '#' + fog.color.getHexString() + ' want ' + p.kit.TOKENS.day.rig.fog; p.kit.setKey('dusk'); scene.fog = null; const noFog = diff(); scene.fog = fog;
+    const rt = post.composer.renderTarget1;
+    return { post: true, passes: post.composer.passes.map((x) => x.constructor.name).join(','), samples: rt.samples, half: rt.texture.type === 1016, threshold: post.bloom.threshold, noFog, withFog, dayFog };
+  })()`).catch((e) => ({ err: e.message }));
+  if (pp.err) fail(`post: ${pp.err}`);
+  else if (opt('q') === 'low') { if (pp.post) fail('post: the low tier must render direct (no composer)'); }
+  else if (!pp.post) fail('post: no composer on desktop');
+  else {
+    if (pp.passes !== 'RenderPass,UnrealBloomPass,ShaderPass,OutputPass' || pp.samples !== 4 || !pp.half || pp.threshold !== 1) fail(`post: ${JSON.stringify(pp)}`);
+    if (!(pp.noFog < 0.25)) fail(`post: composer (bloom off, no fog) differs from the direct path by ${pp.noFog}/255 (tone mapping not matched)`);
+    if (!(pp.withFog < 3)) fail(`post: composer (bloom off) differs from the direct path by ${pp.withFog}/255 (fog not matched)`);
+    const [got, , want] = pp.dayFog.split(' ');
+    if (got !== want) fail(`post: day fog ${got} != ${want}: the composer's fog must not be pre-exposed (OutputPass exposes it)`);
+  }
+  console.log(`post: ${JSON.stringify(pp)}`);
+
   // relay restart: the socket must reconnect with backoff and resync through a fresh hello
   restarting = true;
   await stop();
   for (let i = 0; i < 50 && !ws.closed; i++) await sleep(100);
   if (!ws.closed) fail('socket not closed after the relay stopped');
   await sleep(1500);
+  const staleEl = `(e => e && !e.hidden && e.textContent)(document.getElementById('stale'))`;
+  const label = await page.evalJSON(staleEl);
+  if (!/^stale since \d\d:\d\d/.test(label || '')) fail(`stale label not shown while the relay is down (got ${JSON.stringify(label)})`);
   if (!(await start())) fail('relay restart failed');
   for (let i = 0; i < 400 && ws.hello < 2; i++) await sleep(100); // ≤ 1 s + 2 s backoff × 1.5 jitter, plus slack
   restarting = false;
   if (ws.hello < 2) fail(`no resync hello after the relay restart (created=${ws.created})`);
-  else console.log(`resync: reconnect ok (sockets created=${ws.created}, hello=${ws.hello})`);
+  else console.log(`resync: reconnect ok (sockets created=${ws.created}, hello=${ws.hello})  label while down: ${JSON.stringify(label)}`);
+  await sleep(300);
+  if (await page.evalJSON(staleEl)) fail('stale label still shown after the resync hello');
   await sleep(1000);
   clearTimeout(timer);
   await finish(cleanup);

@@ -55,6 +55,29 @@ ok(w.sites.get('wird')?.x === 1, 'world:site sets world.sites');
 w.applyFrame({ t: 'ev', id: 'e1', ts: 0, kind: 'app.gone', app: 'wird' });
 ok(!w.sites.has('wird'), 'ev app.gone removes the site');
 
+// ---- world: every hello delta applies silently (carry item 3); alerts in world.state ----
+const w3 = createWorld({ dev: true }), live = [];
+for (const k of ['world:site', 'world:mark', 'world:vein', 'ev:app.gone', 'ev:alert.fire']) w3.on(k, (p, type) => live.push(type));
+const al = { fp: '0123456789abcdef', sev: 'critical', layer: 'k8s' };
+w3.applyHello({ ...hello, state: { alerts: [{ ...al, startsAt: 5 }] }, deltas: [
+  { t: 'world', kind: 'site', app: 'wird', x: 1, z: 2, y: 3, tier: 1, group: 'user' },
+  { t: 'world', kind: 'site', app: 'gone-app', x: 0, z: 0, y: 0, tier: 0, group: 'user' },
+  { t: 'world', kind: 'mark', id: 'm1', mark: 'cairn', pose: { x: 1, z: 2 }, weight: 1 },
+  { t: 'ev', id: 'e1', ts: 0, kind: 'app.gone', app: 'gone-app' },
+  { t: 'ev', id: 'e2', ts: 9, kind: 'alert.fire', fp: 'fedcba9876543210', sev: 'warning', layer: 'apps', startsAt: 7 },
+] });
+ok(!live.length, `hello deltas emit nothing (got ${live.join() || 'none'})`);
+ok(w3.sites.get('wird')?.x === 1 && !w3.sites.has('gone-app'), 'hello deltas still apply their state (site set, app.gone removes)');
+ok(w3.state.alerts.map((a) => `${a.fp}@${a.startsAt}`).join() === '0123456789abcdef@5,fedcba9876543210@7', 'hello.state alerts + a fire delta → world.state.alerts');
+let seenAlerts;
+w3.on('ev:alert.resolve', () => (seenAlerts = w3.state.alerts.length));
+w3.applyFrame({ t: 'ev', id: 'e3', ts: 20, kind: 'alert.fire', ...al, startsAt: 5 });
+ok(live.join() === 'ev:alert.fire' && w3.state.alerts.length === 2 && w3.state.alerts[1].startsAt === 5, 'live alert.fire emits once, replaces the same fp, keeps Alertmanager startsAt (not ev.ts)');
+w3.applyFrame({ t: 'ev', id: 'e4', ts: 30, kind: 'alert.resolve', ...al, durS: 10 });
+ok(seenAlerts === 1, 'alert.resolve removes the alert from world.state before ev:alert.resolve fires');
+w3.applyHello({ ...hello, state: {} });
+ok(Array.isArray(w3.state.alerts) && !w3.state.alerts.length, 'a hello without alerts → world.state.alerts = []');
+
 // ---- socket: reconnect with jittered backoff, resync via hello, stale since ----
 const socks = [];
 globalThis.WebSocket = class {
@@ -103,6 +126,11 @@ ok(w2.stale === null, 'hello resync clears stale');
 c.close();
 await sleep(1200);
 ok(socks.length === 3, 'close() stops reconnecting');
+
+// ---- scripts/devpod.sh: the dev loop sees alerts (salted fp) and survives a push restart ----
+const dp = readFileSync(new URL('../../scripts/devpod.sh', import.meta.url), 'utf8');
+ok(/name: MOUNTAIN_FP_SALT, value: \S+/.test(dp), 'devpod: pod env sets MOUNTAIN_FP_SALT (else src_alerts drops every alert)');
+ok(/while :; do \$K port-forward [^;]*\|\|/.test(dp), 'devpod: port-forward is looped and its failure tolerated under set -e (a push restart kills it)');
 
 console.log(bad ? `CORE FAIL (${bad})` : 'CORE PASS');
 process.exit(bad ? 1 : 0);

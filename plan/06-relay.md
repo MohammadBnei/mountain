@@ -66,7 +66,7 @@ Limits:
 
 The ServiceMonitor and PrometheusRule live in **the mountain app's `extraManifests`**, since common-app-chart has no template for them.
 
-Rules (all `severity: info` → Discord; **not warning, which would wake thot**):
+Rules (all `severity: notice` → Discord; **not warning, which would wake thot**). **Not `info` either** (decided at the W1b seam): the live Alertmanager keeps kube-prometheus-stack's `InfoInhibitor` inhibit rule (`target severity="info", equal [namespace]`), which swallows every info alert unless a warning or critical fires in the same namespace. `notice` matches neither the thot route (`severity=~"critical|warning"`) nor that inhibit rule, so it falls through to the default `discord` route. No infra-bootstrap change; the relay's alert source drops these (unknown `sev`), which is fine: stale already shows on the page.
 - `MountainSourceStale`
 - `MountainTokenExpiring` (< 14 d)
 - `MountainUnmapped`

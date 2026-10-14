@@ -10,11 +10,15 @@
 #   scripts/devpod.sh logs     follow relay logs
 #   scripts/devpod.sh down     delete the namespace
 #
+#   ARGS='--prom-url=http://invalid' scripts/devpod.sh push     extra relay flags (reset on every push/up)
+#   CONFIG=path/config.yaml scripts/devpod.sh push              copied to /app/config.yaml, adds --config
+#   (a pod from before ARGS / MOUNTAIN_FP_SALT support lacks them: `down` + `up` once)
+#
 # ponytail: one pod, no Service/Deployment; the real chart is tested by the
 # ArgoCD deploy, this only shortens the code -> live-data loop.
 set -euo pipefail
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/ukubi-admin.conf}"
-NS=mountain-test
+NS="${NS:-mountain-test}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${TMPDIR:-/tmp}/mountain-relay-linux-amd64"
 K="kubectl -n $NS"
@@ -24,8 +28,11 @@ build() { (cd "$ROOT" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$BIN
 push() {
   build
   $K cp "$BIN" relay:/app/relay.new -c relay
+  args="${ARGS:-}"
+  if [ -n "${CONFIG:-}" ]; then $K cp "$CONFIG" relay:/app/config.yaml -c relay; args="$args --config /app/config.yaml"; fi
+  printf '%s\n' "$args" | $K exec -i relay -c relay -- sh -c 'cat > /app/args'
   $K exec relay -c relay -- sh -c 'chmod +x /app/relay.new && mv /app/relay.new /app/relay && { p=$(pidof relay) && kill $p || true; }'
-  echo "pushed $(shasum -a 256 "$BIN" | cut -c1-12)"
+  echo "pushed $(shasum -a 256 "$BIN" | cut -c1-12) args: ${args:-(none)}"
 }
 
 up() {
@@ -40,7 +47,9 @@ spec:
     - name: relay
       image: docker.io/library/alpine:3.20
       # Supervisor loop: pkill relay => restart with the new binary.
-      command: [sh, -c, 'while true; do [ -x /app/relay ] && /app/relay --dev --listen :8080 --metrics :9090; sleep 1; done']
+      command: [sh, -c, 'while true; do [ -x /app/relay ] && /app/relay --dev --listen :8080 --metrics :9090 $(cat /app/args 2>/dev/null); sleep 1; done']
+      # Dev-only salt (reached only via port-forward): without one src_alerts drops every alert.
+      env: [{ name: MOUNTAIN_FP_SALT, value: dev-pod-salt }]
       ports: [{ containerPort: 8080 }, { containerPort: 9090 }]
       resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { memory: 256Mi } }
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
@@ -50,7 +59,7 @@ EOF
   $K wait --for=condition=Ready pod/relay --timeout=120s
   push
   echo "port-forward: http://127.0.0.1:18080  metrics http://127.0.0.1:19090/metrics"
-  exec $K port-forward pod/relay 18080:8080 19090:9090
+  while :; do $K port-forward pod/relay 18080:8080 19090:9090 || sleep 1; done # push restarts the relay: re-forward
 }
 
 case "${1:-}" in
@@ -58,5 +67,5 @@ case "${1:-}" in
   push) push ;;
   logs) $K logs -f relay -c relay ;;
   down) kubectl delete ns "$NS" --wait=false ;;
-  *) sed -n 2,13p "$0"; exit 2 ;;
+  *) sed -n 2,17p "$0"; exit 2 ;;
 esac

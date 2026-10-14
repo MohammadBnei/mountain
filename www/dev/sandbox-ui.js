@@ -4,7 +4,7 @@
 const TPL = {
   'ev:argo.sync': { app: 'wird', ok: true }, 'ev:argo.health': { app: 'wird', status: 'Degraded' },
   'ev:pod.churn': { app: 'wird', restarts: 2, oom: true, crashloop: false }, 'ev:node.ready': { host: 'h2', ready: false },
-  'ev:quorum': { up: ['h1', 'h2'] }, 'ev:alert.fire': { fp: '0123456789abcdef', sev: 'warning', layer: 'k8s' },
+  'ev:quorum': { up: ['h1', 'h2'] }, 'ev:alert.fire': { fp: '0123456789abcdef', sev: 'warning', layer: 'k8s', startsAt: 1760450000000 },
   'ev:alert.resolve': { fp: '0123456789abcdef', sev: 'warning', layer: 'k8s', durS: 900 }, 'ev:build': { app: 'wird', state: 'running' },
   'ev:gitops.commit': { n: 1 }, 'ev:adr.merge': { day: '2026-10-14' }, 'ev:replicas': { app: 'wird', bucket: 2 }, 'ev:app.gone': { app: 'wird' },
   'world:deposit': { id: '01JA0000000000000000000099', x0: 60, z0: 60, w: 8, h: 8, cells: Array(64).fill(400) },

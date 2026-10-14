@@ -6,13 +6,20 @@ package main
 //
 //	func init() { Register("prom", func(a *App) (Source, error) { return &promSource{url: a.Opts.PromURL}, nil }) }
 //
+// W1b lane A: src_alerts.go registers "alerts" the same way and polls a.Opts.AMURL (/api/v2/alerts; the fixture
+// hook serves it too). Alert.FP = a.FP(fingerprint). It reports firing alerts through Out.Fire / Out.Resolve (hello.state.alerts + ev, atomically),
+// liveness through Out.OK, failures through Out.Stale (metrics stale[name]); it clears stale[name] on recovery.
+//
 // and emits through *Out. Frames must validate against www/dev/schema/*.json.
 
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log"
+	"slices"
 	"strings"
 	"time"
 )
@@ -50,6 +57,8 @@ func startSources(ctx context.Context, a *App) error {
 			return err
 		}
 		out := &Out{app: a, name: name}
+		// seeded at start: a source that never succeeds (e.g. --prom-url=http://invalid) still ages into MountainSourceStale
+		SourceLastSuccess.Set(name, float64(time.Now().Unix()))
 		go func() {
 			for ctx.Err() == nil {
 				if err := s.Run(ctx, out); err != nil && ctx.Err() == nil {
@@ -110,6 +119,71 @@ func (o *Out) worldFrame(kind string, payload map[string]any) []byte {
 		return mustJSON(f)
 	}
 	return nil
+}
+
+// FP is Alert.FP for an Alertmanager fingerprint: the first 16 hex of sha256(salt + fingerprint).
+// "" without a salt, which sanitize drops (fail closed: an unsalted fp would link across resets).
+func (a *App) FP(amFingerprint string) string {
+	if a.Opts.FPSalt == "" {
+		return ""
+	}
+	h := sha256.Sum256([]byte(a.Opts.FPSalt + amFingerprint))
+	return hex.EncodeToString(h[:8])
+}
+
+// Alert is one firing alert in hello.state.alerts (02 alerts row; in memory until W2 persists it).
+type Alert struct {
+	FP       string `json:"fp"`       // salted hash, 16 hex (never the raw fingerprint)
+	Sev      string `json:"sev"`      // info | warning | critical
+	Layer    string `json:"layer"`    // bedrock | k8s | apps (config.yaml alertLayers)
+	StartsAt int64  `json:"startsAt"` // unix ms, Alertmanager startsAt
+}
+
+// State is hello.state (www/dev/schema/hello.json). W2 adds health, replicas, nodes, quorum, builds.
+type State struct {
+	Alerts []Alert `json:"alerts"`
+}
+
+// Fire adds a to hello.state.alerts (replacing the same fp) and broadcasts ev alert.fire{fp, sev, layer, startsAt}.
+// startsAt rides the event so a live client and a reloaded one agree (cauldron breakMin), even after a relay restart re-fires.
+// Hub lock held across both: a connecting client sees the alert in its hello or as the event, never neither.
+// Returns the ev id ("" if sanitize dropped it; state is then unchanged).
+func (o *Out) Fire(a Alert) string {
+	return o.stateEv("alert.fire", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "startsAt": int(a.StartsAt)}, func(s *State) {
+		s.Alerts = append(slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == a.FP }), a)
+	})
+}
+
+// Resolve removes a from hello.state.alerts and broadcasts ev alert.resolve{fp, sev, layer, durS}; same lock rule.
+func (o *Out) Resolve(a Alert, durS int) string {
+	return o.stateEv("alert.resolve", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "durS": durS}, func(s *State) {
+		s.Alerts = slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == a.FP })
+	})
+}
+
+func (o *Out) stateEv(kind string, fields map[string]any, mut func(*State)) string {
+	id, b := o.evFrame(kind, fields)
+	if b == nil {
+		return ""
+	}
+	h := o.app.Hub
+	h.mu.Lock() // lock order h.mu -> app.mu, as Hello
+	defer h.mu.Unlock()
+	o.app.mu.Lock()
+	mut(&o.app.State)
+	o.app.mu.Unlock()
+	h.broadcastLocked(b)
+	return id
+}
+
+// Stale marks this source stale in the metrics frame (stale[name] = since, unix ms; kept while it stays down)
+// and broadcasts it. A source clears it with Metrics(func(m) { delete(m.Stale, name) }) on its next good poll.
+func (o *Out) Stale() {
+	o.Metrics(func(m *Metrics) {
+		if _, ok := m.Stale[o.name]; !ok {
+			m.Stale[o.name] = time.Now().UnixMilli()
+		}
+	})
 }
 
 // Metrics mutates the current metrics frame under the app lock, then broadcasts it.

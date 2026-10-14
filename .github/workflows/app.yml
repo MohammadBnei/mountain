@@ -12,6 +12,9 @@ name: app
 
 on:
   workflow_dispatch:
+  # PRs run the test job only: build-push and deploy are guarded to push/workflow_dispatch.
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -54,6 +57,20 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      # rules_test.go runs `promtool test rules` (and fails, not skips, under CI without it).
+      - name: promtool 3.5.0
+        run: |
+          set -euo pipefail
+          case "$RUNNER_ARCH" in
+            X64) a=amd64 s=e811827af26d822afb09a4f28314f61b618b12cff5369835a67f674d8b46f39a ;;
+            ARM64) a=arm64 s=173389cc42bf09c4e6e54cb53fa07a5a835d7c261e14775d2183181d6e385d1c ;;
+            *) echo "::error::no promtool for $RUNNER_ARCH"; exit 1 ;;
+          esac
+          f="$RUNNER_TEMP/prom.tgz"
+          curl -sSfL -o "$f" "https://github.com/prometheus/prometheus/releases/download/v3.5.0/prometheus-3.5.0.linux-$a.tar.gz"
+          echo "$s  $f" | sha256sum -c -
+          tar -xzf "$f" -C "$RUNNER_TEMP" --strip-components=1 "prometheus-3.5.0.linux-$a/promtool"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: go vet + go test
         run: |
           set -euo pipefail

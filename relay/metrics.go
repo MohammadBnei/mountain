@@ -24,7 +24,7 @@ func (m *vec) Set(l string, x float64) { m.mu.Lock(); m.v[l] = x; m.mu.Unlock() 
 func (m *vec) Add(l string, x float64) { m.mu.Lock(); m.v[l] += x; m.mu.Unlock() }
 
 var (
-	SourceLastSuccess = newVec("mountain_source_last_success", "gauge", "source", "Unix time of the last successful poll per source.")
+	SourceLastSuccess = newVec("mountain_source_last_success", "gauge", "source", "Unix time of the last successful poll per source (relay start until the first).")
 	Unmapped          = newVec("mountain_unmapped_total", "counter", "kind", "Series dropped for lack of a static map entry (node|app|repo|ns).")
 	TokenDaysLeft     = newVec("mountain_github_token_days_left", "gauge", "", "Days until the GitHub token expires.")
 	WSConnections     = newVec("mountain_ws_connections", "gauge", "", "Open /ws connections.")

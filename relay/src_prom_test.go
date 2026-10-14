@@ -104,6 +104,27 @@ func TestExporterReschedule(t *testing.T) {
 	}
 }
 
+// TestNoSpikeOnSteadyTraffic: the first poll has no rate (dt=0); seeding the 30-min baseline with
+// that 0 made steady traffic read as a spike (bolts) for ~12 min after every relay start.
+func TestNoSpikeOnSteadyTraffic(t *testing.T) {
+	a, c := testApp(t)
+	var f fixture
+	for i := range 8 {
+		req := []fixtureSeries{{M: map[string]string{"exported_service": "wird-wird-abc@kubernetescrd", "code": "200"}, V: float64(100 + 50*i)}}
+		f.prom = append(f.prom, map[string][]fixtureSeries{"req": req})
+	}
+	for i, st := range run(t, a, c, &f, 0) {
+		for _, x := range st {
+			if x["t"] != "metrics" {
+				continue
+			}
+			if w := x["apps"].(map[string]any)["wird"].(map[string]any); w["spike"] == true {
+				t.Fatalf("poll %d: spike on steady traffic: %v", i, w)
+			}
+		}
+	}
+}
+
 func TestOOMRule(t *testing.T) {
 	a, c := testApp(t)
 	r := func(n float64) fixtureSeries {

@@ -93,24 +93,30 @@ const (
 	fGroup         // platform|user
 	fULID          //
 	fB64           // base64 grid
+	fFP            // 16 hex (salted alert fingerprint hash)
+	fSev           // info|warning|critical
+	fLayer         // bedrock|k8s|apps
 )
 
 // spec: frame kind -> field -> type. Every field is required; nothing else passes.
 var spec = map[string]map[string]int{
-	"ev:argo.sync":   {"app": fApp, "ok": fBool},
-	"ev:argo.health": {"app": fApp, "status": fHealth},
-	"ev:pod.churn":   {"app": fApp, "restarts": fNat, "oom": fBool, "crashloop": fBool},
-	"ev:node.ready":  {"host": fHost, "ready": fBool},
-	"ev:quorum":      {"up": fHosts},
-	"ev:replicas":    {"app": fApp, "bucket": fBucket},
-	"ev:app.gone":    {"app": fApp},
-	"world:deposit":  {"id": fULID, "x0": fNat, "z0": fNat, "w": fNat, "h": fNat, "cells": fB64},
-	"world:site":     {"app": fApp, "x": fNum, "z": fNum, "y": fNum, "tier": fNat, "group": fGroup},
+	"ev:argo.sync":     {"app": fApp, "ok": fBool},
+	"ev:argo.health":   {"app": fApp, "status": fHealth},
+	"ev:pod.churn":     {"app": fApp, "restarts": fNat, "oom": fBool, "crashloop": fBool},
+	"ev:node.ready":    {"host": fHost, "ready": fBool},
+	"ev:quorum":        {"up": fHosts},
+	"ev:replicas":      {"app": fApp, "bucket": fBucket},
+	"ev:app.gone":      {"app": fApp},
+	"ev:alert.fire":    {"fp": fFP, "sev": fSev, "layer": fLayer, "startsAt": fNat},
+	"ev:alert.resolve": {"fp": fFP, "sev": fSev, "layer": fLayer, "durS": fNat},
+	"world:deposit":    {"id": fULID, "x0": fNat, "z0": fNat, "w": fNat, "h": fNat, "cells": fB64},
+	"world:site":       {"app": fApp, "x": fNum, "z": fNum, "y": fNum, "tier": fNat, "group": fGroup},
 }
 
 var (
 	ulidRE   = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Z]{26}$`)
 	b64RE    = regexp.MustCompile(`^[A-Za-z0-9+/]*=*$`)
+	fpRE     = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	healthOK = map[string]bool{"Healthy": true, "Progressing": true, "Degraded": true, "Suspended": true, "Missing": true, "Unknown": true}
 )
 
@@ -169,6 +175,13 @@ func (c *Config) valid(typ int, v any) bool {
 	case fB64:
 		s, ok := v.(string)
 		return ok && b64RE.MatchString(s)
+	case fFP:
+		s, ok := v.(string)
+		return ok && fpRE.MatchString(s)
+	case fSev:
+		return v == "info" || v == "warning" || v == "critical"
+	case fLayer:
+		return v == "bedrock" || v == "k8s" || v == "apps"
 	}
 	return false
 }

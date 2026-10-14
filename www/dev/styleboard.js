@@ -48,18 +48,24 @@ try {
   // Haze seam (09 valley haze floor): the fogged floor must meet the dome with no hard horizon line. Largest
   // step between neighbouring pixels down the left edge of each cell (sky → floor), 0..255.
   const gl = renderer.getContext(), px = new Uint8Array(4 * ch), haze = {};
+  const cell = (key, row, col) => {
+    const az = (col * Math.PI) / 2;
+    camera.position.set(finale.radius * Math.sin(az), finale.height, finale.radius * Math.cos(az));
+    camera.lookAt(...finale.look);
+    const y = H - (row + 1) * ch; // GL origin bottom-left; row 0 at the top
+    renderer.setViewport(col * cw, y, cw, ch);
+    renderer.setScissor(col * cw, y, cw, ch);
+    renderer.render(scene, camera);
+    gl.readPixels(col * cw + 2, y, 1, ch, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    for (let i = 4; i < 4 * Math.round(ch * 0.45); i += 4) haze[key] = Math.max(haze[key] || 0, ...[0, 1, 2].map((c) => Math.abs(px[i + c] - px[i - 4 + c])));
+  };
+  // stale (kit.setStale(1)) dims the sky: it must still meet the fogged floor with no seam. Measured in cell 0,
+  // which the key loop then repaints.
+  kit.setKey('dusk'); kit.setStale(1); cell('dusk+stale', 0, 0); kit.setStale(0);
   kit.KEYS.forEach((key, row) => {
     kit.setKey(key);
     for (let col = 0; col < 4; col++) {
-      const az = (col * Math.PI) / 2;
-      camera.position.set(finale.radius * Math.sin(az), finale.height, finale.radius * Math.cos(az));
-      camera.lookAt(...finale.look);
-      const y = H - (row + 1) * ch; // GL origin bottom-left; row 0 at the top
-      renderer.setViewport(col * cw, y, cw, ch);
-      renderer.setScissor(col * cw, y, cw, ch);
-      renderer.render(scene, camera);
-      gl.readPixels(col * cw + 2, y, 1, ch, gl.RGBA, gl.UNSIGNED_BYTE, px);
-      for (let i = 4; i < 4 * Math.round(ch * 0.45); i += 4) haze[key] = Math.max(haze[key] || 0, ...[0, 1, 2].map((c) => Math.abs(px[i + c] - px[i - 4 + c])));
+      cell(key, row, col);
       labels.append(Object.assign(document.createElement('span'), { textContent: `${key} · ${col * 90}°` }));
     }
   });

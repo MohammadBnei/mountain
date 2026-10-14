@@ -7,11 +7,18 @@
 //   world.bench       Uint8Array GRID² (0..255);  world.caves [{x, z, y, yaw, seed}];  world.hmax (units)
 //   world.metrics world.state world.sites(Map app→site) world.wind world.snowline world.clouds world.sun
 //   world.rig {elev, rising} world.clip world.stale   (shared state; writers in WRITERS)
+//   world.state  {alerts: [{fp, sev, layer, startsAt (unix ms)}]}: hello.state, then ev alert.fire adds (startsAt = Alertmanager's, from the ev),
+//                alert.resolve removes, both BEFORE the ev:alert.* emit (cauldron reads it, so a reload keeps the sag)
+//   world.stale  null | unix ms: the oldest metrics.stale[source] since, or the socket drop time
+//   world.clouds sky's clusters [{x, z, y (base, units), r, mass}]: mass = a towering cluster over the summit (lightning's
+//                bolt source is the base of the first mass cluster); [] = none yet (lightning falls back above the site)
+//   world.rig    {elev (deg), rising}: sky writes it; the host (main.js) applies it with kit.setPhase on change (a model
+//                never touches the rig itself: the gate checks the rig is unchanged around step()). Dusk until W3
 //   world.heightAt(x, z) → units (bilinear on heightSolid);  world.cell(x, z) → index;  cellXZ(i, j)
 //   world.on(type, fn) → off;  world.emit(type, payload, emitter);  world.write(slot, writer, valueOrFn)
 //   world.as(name) → view whose write()/emit() are bound to name (what models get)
 //   decodeI16(b64) / encodeI16(array) / decodeU8(b64): wire grids (little-endian, z outer, x inner)
-//   world.applyHello(hello);  world.applyFrame(frame);  world.step(dt);  world.ready → Promise (first hello)
+//   world.applyHello(hello);  world.applyFrame(frame, silent?) (silent: state only, no bus emit; hello deltas);  world.step(dt);  world.ready → Promise (first hello)
 // Dev mode throws on a write by a non-writer and on an emit by a non-emitter or of an unknown bus type.
 import U from './units.json' with { type: 'json' };
 
@@ -52,7 +59,7 @@ export function createWorld({ dev = false } = {}) {
       'h.talus': new Float32Array(N), temp: new Float32Array(N), moisture: new Float32Array(N), ice: new Float32Array(ICE * ICE),
     },
     bench: new Uint8Array(N), caves: [], hmax: 0, day: null, seed: null,
-    metrics: null, state: {}, sites: new Map(), wind: { x: 0, z: 0 }, snowline: 1e4, clouds: [], sun: null,
+    metrics: null, state: { alerts: [] }, sites: new Map(), wind: { x: 0, z: 0 }, snowline: 1e4, clouds: [], sun: null,
     rig: { elev: 0, rising: false }, // dusk until sky-full (W3)
     clip: { plane: [0, 1, 0, 1e4], depth: 0 }, stale: null,
     ready: new Promise((r) => (resolveReady = r)),
@@ -96,12 +103,14 @@ export function createWorld({ dev = false } = {}) {
       // Deposit deltas land at full height, silently: they are history, not live lava (no world:deposit replay).
       for (const d of h.deltas || []) if (d.t === 'world' && d.kind === 'deposit') deposit(d, decodeI16(d.cells), 1);
       solid();
-      w.write('state', 'socket', h.state || {});
-      for (const d of h.deltas || []) if (!(d.t === 'world' && d.kind === 'deposit')) w.applyFrame(d);
+      w.write('state', 'socket', { alerts: [], ...h.state });
+      // Every other delta is history too: its state applies, nothing re-emits as a live event.
+      for (const d of h.deltas || []) if (!(d.t === 'world' && d.kind === 'deposit')) w.applyFrame(d, true);
       if (h.metrics) w.applyFrame(h.metrics);
       resolveReady(w);
     },
-    applyFrame(f) {
+    applyFrame(f, silent = false) {
+      const emit = silent ? () => {} : w.emit;
       if (f.t === 'hello') return w.applyHello(f);
       if (f.t === 'metrics') {
         w.write('metrics', 'socket', f);
@@ -113,17 +122,21 @@ export function createWorld({ dev = false } = {}) {
       }
       if (f.t === 'ev') {
         if (f.kind === 'app.gone') w.write('sites', 'world', (m) => m.delete(f.app));
-        return w.emit(`ev:${f.kind}`, f, 'socket');
+        if (f.kind === 'alert.fire' || f.kind === 'alert.resolve') w.write('state', 'socket', (s) => {
+          s.alerts = (s.alerts || []).filter((a) => a.fp !== f.fp);
+          if (f.kind === 'alert.fire') s.alerts.push({ fp: f.fp, sev: f.sev, layer: f.layer, startsAt: f.startsAt });
+        });
+        return emit(`ev:${f.kind}`, f, 'socket');
       }
       if (f.t === 'world') {
         const { t, kind, ...p } = f;
         if (kind === 'deposit') {
           const cells = decodeI16(p.cells);
           pending.push({ ...p, cells, done: new Int16Array(cells.length), age: 0 });
-          return w.emit('world:deposit', { ...p, cells }, 'world');
+          return emit('world:deposit', { ...p, cells }, 'world');
         }
         if (kind === 'site') w.write('sites', 'world', (m) => m.set(p.app, p));
-        return w.emit(`world:${kind}`, p, 'world');
+        return emit(`world:${kind}`, p, 'world');
       }
     },
     /** Advance the h.land deposit ramps (3 s each). */

@@ -7,15 +7,16 @@
 //   color(name) → THREE.Color;  rampColor(ramp, t, out?) → THREE.Color;  RAMPS, FACET re-exported from layout
 //   lit(tokenOrRamp, opts?)  glow(token, intensity, {mesh}?)  line(token, intensity)  points(token, size)
 //   dome()  terrain({veins, closed}?)  crystal()  lava()  flow(token)  stamp()  cave(caves, heightAt)
+//   clipped(material) → material (adds the uClip discard)
 //   rock(seed)  puff(seed)  shard(seed)  setRampAt(mesh, i, t)  lavaHeat(material, v)  dispose(root)
-//   rig(renderer, scene) → {hemi, dir, dome, floor};  setPhase(elev, rising);  setKey(key)
-//   U (terrain uniforms; writers: setPhase → stops/uSnowLift/uEmber, setPool → uPool/uPoolCol/uHeat,
+//   rig(renderer, scene) → {hemi, dir, dome, floor};  setPhase(elev, rising);  setKey(key);  setComposed(on) (post.js);  setStale(k)
+//   U (terrain uniforms; writers: setPhase → stops/uSnowLift/uEmber, setPool → uPool/uPoolCol/uHeat, setStale (sky) → uStale,
 //      setVeins → uVeins/uVeinN, main/socket → uSnowline, story → uClip);  setPool(...)  setVeins(caps)
 //   footprintRT, stampScene (W4)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import T from './tokens.json' with { type: 'json' };
-import { patchTerrain, patchCrystal, patchLava, domeVert, domeFrag, flowVert, flowFrag } from './shaders.js';
+import { patchTerrain, patchClip, patchCrystal, patchLava, domeVert, domeFrag, flowVert, flowFrag } from './shaders.js';
 
 export const QUALITY = globalThis.__quality || 'high';
 const LOW = QUALITY === 'low';
@@ -137,16 +138,18 @@ export const stampScene = new THREE.Scene();
 export const U = {
   uClip: { value: new THREE.Vector4(0, 1, 0, 1e4) }, uSnowline: { value: 1e4 }, uHMax: { value: 60 },
   uWobble: { value: 0 }, uHeat: { value: 0 }, uStale: { value: 0 }, uSnowLift: { value: 0 }, uEmber: { value: 1 },
-  uPool: { value: new THREE.Vector4(0, 76, 30, 9) }, uPoolCol: { value: new THREE.Color() },
+  uPool: { value: new THREE.Vector4(0, 66, 30, 9) }, uPoolCol: { value: new THREE.Color() },
   uVeins: { value: veinTex }, uVeinN: { value: 0 }, uFootprint: { value: footprintRT.texture },
   uRock0: { value: new THREE.Color() }, uRock1: { value: new THREE.Color() }, uEmberRoot: { value: new THREE.Color() },
   uSnow: { value: new THREE.Color() }, uIce: { value: new THREE.Color() }, uTrail: { value: new THREE.Color() },
   uGold: { value: color('gold') }, uVeinRef: { value: color('sunHalo') },
+  uCaves: { value: Array.from({ length: 5 }, () => new THREE.Vector4()) }, // cave() mouth centres (w = 1 live)
 };
 color('magma', U.uPoolCol.value).multiplyScalar(0.6);
 
-/** Ember pool (09): centre (x, z), radii (rx, rz), heat. Writer: magma. Default (0, 76, 30, 9): the board's (0, 86)
- *  sits below the haze floor once the rim is softened (Freeze item 2), so the foot moved 10 m in. */
+/** Ember pool (09): centre (x, z), radii (rx, rz), heat. Writer: magma. Default (0, 66, 30, 9): the board's (0, 86)
+ *  sits below the haze floor once the rim is softened (Freeze item 2), and at (0, 76) the foot is a steep drop with
+ *  no flat ground under the mask (W1b carry, Freeze item 3), so it sits on the visible foot terrace. */
 export function setPool(x, z, rx, rz, heat) {
   U.uPool.value.set(x, z, rx, rz);
   if (heat !== undefined) U.uHeat.value = heat;
@@ -195,11 +198,17 @@ export function flow(name = 'water') {
   });
   return tag(m, 'flow', { kitToken: name });
 }
+/** Make a kit material honour uClip (a clipped model's non-terrain parts, 01 clipping list). */
+export function clipped(m) {
+  m.onBeforeCompile = (sh) => patchClip(sh, U);
+  m.customProgramCacheKey = () => `kit-clip-${m.type}`;
+  return m;
+}
 export const stamp = () => tag(new THREE.MeshBasicMaterial({ color: 0xffffff }), 'stamp');
 
 /** Sky dome mesh + star field (one per scene). Uniforms written only by setPhase. */
 export function dome() {
-  const u = { uSky0: { value: new THREE.Color() }, uSky1: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uInk: { value: color('ink') }, uStars: { value: 0 } };
+  const u = { uSky0: { value: new THREE.Color() }, uSky1: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uInk: { value: color('ink') }, uStars: { value: 0 }, uStale: U.uStale };
   const m = tag(new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false, uniforms: u, vertexShader: domeVert, fragmentShader: domeFrag }), 'dome');
   const paintDome = () => { color('sky0', u.uSky0.value); color('sky1', u.uSky1.value); color('horizon', u.uHorizon.value); u.uStars.value = rigAt('stars'); };
   hooks.add(paintDome);
@@ -260,7 +269,8 @@ export function setRampAt(mesh, i, t) {
 /**
  * Cave mouths at Go `caves[]` (09 cave()): 4 InstancedMeshes (mouth, brow, jambs, threshold rocks).
  * heightAt(x, z) → world y of heightSolid. Dusk legibility (09 Freeze item 1): the brow/jamb rocks get a
- * snowLift-style emissive lift (colour × rig.snowLift), so the dark mouth reads by contrast; no new light.
+ * snowLift-style emissive lift (colour × rig.snowLift), so the dark mouth reads by contrast; no new light. The terrain
+ * patch lifts the rock around each mouth the same way (U.uCaves, ≤ 5 = Go's max caves).
  */
 export function cave(caves, heightAt) {
   const g = new THREE.Group(), n = caves.length, W = 2.6, e = 0.5;
@@ -282,10 +292,12 @@ export function cave(caves, heightAt) {
   const rockG = rock(3), browM = lit('rock0'), jambM = lit('stone'), looseM = lit('rock0');
   browM.userData.kitLift = jambM.userData.kitLift = 1;
   tracked.add(browM); tracked.add(jambM); paint(browM); paint(jambM);
+  [mouthM, browM, jambM, looseM].forEach(clipped); // the caves belong to the clipped mountain
   const mouth = new THREE.InstancedMesh(mouthG, mouthM, n), brow = new THREE.InstancedMesh(rockG, browM, n);
   const jamb = new THREE.InstancedMesh(rockG, jambM, n * 3), loose = new THREE.InstancedMesh(rockG, looseM, n * 3);
   const F = new THREE.Object3D(), L = new THREE.Object3D(), M = new THREE.Matrix4();
   const put = (im, k, pos, scale, rot) => { L.position.set(...pos); L.scale.set(...scale); L.rotation.set(...rot); L.updateMatrix(); im.setMatrixAt(k, M.multiplyMatrices(F.matrix, L.matrix)); };
+  U.uCaves.value.forEach((v) => v.set(0, 0, 0, 0));
   caves.forEach((c, i) => {
     const r = mulberry(c.seed), out = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), tan = new THREE.Vector3(out.z, 0, -out.x), ym = c.y + 2.4;
     let dd = W;
@@ -293,6 +305,7 @@ export function cave(caves, heightAt) {
     const P = new THREE.Vector3(c.x - out.x * dd, ym, c.z - out.z * dd);
     const nrm = new THREE.Vector3(heightAt(P.x - e, P.z) - heightAt(P.x + e, P.z), 2 * e, heightAt(P.x, P.z - e) - heightAt(P.x, P.z + e)).normalize().lerp(out, 0.5).normalize();
     F.position.copy(P).addScaledVector(nrm, 0.35);
+    U.uCaves.value[i]?.set(P.x, P.y, P.z, 1);
     F.lookAt(F.position.clone().add(nrm));
     F.updateMatrix();
     put(mouth, i, [0, 0, 0], [1, 1, 1], [0, 0, 0]);
@@ -361,8 +374,9 @@ function apply() {
   if (!RIG) return;
   const { renderer, scene, hemi, dir } = RIG;
   renderer.toneMappingExposure = rigAt('exposure');
-  // fog mixes after tone mapping: pre-expose it so the haze matches the exposed floor and dome (day 1.25)
-  scene.fog.color.set(rigHex('fog')).multiplyScalar(renderer.toneMappingExposure);
+  // direct path: fog mixes after tone mapping, so pre-expose it to match the exposed floor and dome (day 1.25);
+  // composer path (post.js): fog mixes in the linear target before OutputPass exposes everything
+  scene.fog.color.set(rigHex('fog')).multiplyScalar(RIG.composed ? 1 : renderer.toneMappingExposure);
   scene.fog.density = rigAt('fogD');
   unit(hemi.color.set(rigHex('hemiSky')));
   unit(hemi.groundColor.set(rigHex('hemiGround')));
@@ -386,4 +400,8 @@ export function setPhase(elev, rising) { ph = keyMix(elev, rising); apply(); }
 /** Exact key (gate / styleboard). */
 export function setKey(k) { if (!KEYS.includes(k)) throw new Error(`kit: unknown key ${k}`); ph = { a: k, b: k, w: 0 }; apply(); }
 export const phase = () => ({ ...ph });
+/** Stale dimming 0..1 (sky eases it toward world.stale ? 1 : 0): terrain desaturates, the dome and its stars dim. Writer: sky. */
+export const setStale = (k) => (U.uStale.value = Math.min(1, Math.max(0, k)));
+/** post.js: the composer renders this rig (fog colour not pre-exposed). */
+export function setComposed(on) { RIG.composed = on; apply(); }
 apply();
