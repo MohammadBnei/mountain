@@ -6,6 +6,29 @@
 ## Context
 pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compose/www/`). This is a sibling page for ukubi. It tells a scroll story of the cluster as a mountain, then ends in a **live finale** where real cluster events reshape the mountain in real time. The metaphor comes from hq's Aretē: strata = Proxmox → K8s → apps, lightning = usage, an eruption makes new land, the ice cauldron is observability, gold veins are incidents that became knowledge, and clouds are people. The binding rule: **"one physics only, and every image true and tied to something real."**
 
+## Status (2026-10-14)
+
+**W0 is done except `/add-app`, which waits for the first image (W1a).**
+
+| Item | State | Where |
+|---|---|---|
+| Plan split + private repo `MohammadBnei/mountain` | done | this repo |
+| ADR-0056 (= ADR-A: public telemetry, PromQL only, no RBAC) + DECISION.md entry | **merged** | infra-bootstrap #298 |
+| Infisical project for app secrets | **exists**: `mountain-8c-cz`, id `8746c02c-24a0-4b4c-950f-1ee9b36c2625` (empty so far) | Infisical |
+| `ACCESS_TOKEN` PAT covers the repo | **verified** (GET runners → 200) | — |
+| Build runner `ukubi-build-mountain` (labels `self-hosted, ukubi-build`) | **online** | build-runner LXC, `build_runner_repos` |
+| CI OIDC identity `19807471-…` bound claim includes `MohammadBnei/mountain` | **done** (`event_name` = `push, workflow_dispatch` only) | Infisical |
+| Postgres `dbuser_mountain` / `mountaindb` | **live**, verified: connlimit 10, owner, PUBLIC connect revoked, login + DDL via `.232` | Pigsty `pg-proxmox`, leader `.205` |
+| DB password | `DBUSER_MOUNTAIN_PASSWORD` in the **infra-bootstrap** Infisical project (`8a3fa54f-…`, env `dev`), not in `mountain-8c-cz`: one copy only, per infra-bootstrap convention | Infisical |
+| Docs marking the above live | open | infra-bootstrap #299 |
+| `/add-app` `mountain.bnei.dev` | **not done**, waits for the first image | W1a |
+| Traefik scrape interval 15 s | not done | W1a/W1b |
+
+**Ready for W1a.** What the W1a agent needs to know:
+- Build workflow: copy hq's `.github/workflows/app.yml` pattern. `runs-on: [self-hosted, ukubi-build]`. Registry creds come from `platform-commons-76pb` over GitHub OIDC (ADR-0049). Only `push` and `workflow_dispatch` can read them, so guard that step with an `if` for PRs. Image: `registry.bnei.lan:5000/mountain`.
+- DB is not needed until W2. When it is: `DATABASE_URL=postgres://dbuser_mountain:<pw>@postgres.bnei.lan:5432/mountaindb` (5432, not 6432, because pgbouncer is off). It is assembled in infra-bootstrap by a `gitops/bootstrap/mountain-secret.yaml` modelled on `hq-secret.yaml`. Keep the password urlsafe. **pgxpool `MaxConns` must be set ≤ 8** (connlimit 10).
+- `/add-app` lands with the first image: replicas 1, `Recreate`, baseline middleware on, metrics on a separate `service.extraPorts` port that is never routed.
+
 ## Section index
 | File | Content |
 |---|---|
@@ -22,7 +45,7 @@ pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compos
 ## Waves
 | Wave | Who | Content | Exit gate |
 |---|---|---|---|
-| **W0** | M BN + 1 agent | Create the private repo `MohammadBnei/mountain` and split the plan. **ADR-A** PR (public telemetry, PromQL-only). Human steps: create the Infisical project `mountain`, add the repo to the `ACCESS_TOKEN` PAT repo list, run `build-runner-configure.yml`, merge `/add-app` | All human steps are done, so W1 can deploy |
+| **W0** ✅ (except `/add-app`) | M BN + 1 agent | Create the private repo `MohammadBnei/mountain` and split the plan. **ADR-A** PR (public telemetry, PromQL-only). Human steps: create the Infisical project `mountain`, add the repo to the `ACCESS_TOKEN` PAT repo list, run `build-runner-configure.yml`, merge `/add-app` | All human steps are done, so W1 can deploy |
 | **W1a** | 1 agent, serial | Relay: `src_prom` (sync, metrics), worldcore (`h.base`, sites, deposits), `hello`, `/ws`, `/api/topology`, `/metrics` on its own port. www: kit, world, socket, sandbox, gate. Models: **mountain** (body + plain slabs), **eruption**. Deployed | A real ArgoCD sync makes land appear on the live site within 45 s |
 | **W1b** | 1 agent, serial | `src_alerts`. Models: **cauldron** (own sag-ring mesh), **sky-min** (dome + cloud floor; owns `world.clouds`), **lightning**. post.js on desktop. Stale label | W1 verification passes |
 | **W2** | 1 agent | **Freeze** `contract.js`, `world.js`, `units.json`, `layout.js` (every profile), the bus registry, the event enum and the metrics frame, as revised by what W1 taught. Pigsty DB, persistence, scrub, `hello.state` | W2 verification passes |
@@ -66,8 +89,5 @@ pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compos
 - Rain needs 3 accounts.
 - `VISITORS_ENABLED=false` hides the surface layer live.
 
-## On approval
-1. Create `~/Code/mountain` (`git init`; private GitHub repo `MohammadBnei/mountain`, created by M BN or through `gh`).
-2. Split this file into `plan/README.md` + `plan/00…08-*.md` + 18 `plan/03-model-*.md`.
-3. Commit with no attribution.
-4. Stop. W0's human steps and the workflow launch are M BN's call.
+## On approval (done 2026-10-14)
+Repo created, plan split and pushed. W0 infra is done; see Status above.

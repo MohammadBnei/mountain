@@ -78,11 +78,11 @@ Rot guard:
 - No versions. Story versions are static i18n copy.
 - Visitors: an opt-in handle passed through the moderation filter (08), otherwise "a visitor".
 
-## Persistence (W2, Pigsty db `mountain`)
-**Pigsty user and pool:**
-- Copy the **`dbuser_hq` shape exactly** (`pigsty.yml:257-275`): `pgbouncer: false`, direct 5432, committed SCRAM verifier, `connlimit`.
-- The user runs `pgsql-user.yml -l <hq's cluster> -e username=dbuser_mountain`, then `pgsql-db.yml`.
-- `pg_hba` `intra` already admits the nodes.
+## Persistence (W2; Pigsty side already live)
+**Already done (2026-10-14):** role `dbuser_mountain` + database **`mountaindb`** on cluster `pg-proxmox`, in hq's shape: committed SCRAM verifier, `pgbouncer: false`, `revokeconn`, **connlimit 10**. The password is `DBUSER_MOUNTAIN_PASSWORD` in the infra-bootstrap Infisical project.
+- DSN: `postgres://dbuser_mountain:<pw>@postgres.bnei.lan:5432/mountaindb`. It reaches the pod through an infra-bootstrap `gitops/bootstrap/mountain-secret.yaml` modelled on `hq-secret.yaml` (W2 PR).
+- pgx: set `MaxConns` ≤ 8 explicitly. The default `max(4, NumCPU)` can exceed connlimit 10.
+- Direct connection, so prepared statements and advisory-lock migrations are fine.
 
 **Tables:**
 - `events` (`public`, `detail`; detail kept 30 days)
