@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestClientIP(t *testing.T) {
@@ -77,4 +79,26 @@ func TestPublicMux(t *testing.T) {
 		t.Fatalf("same-origin upgrade: %v", err)
 	}
 	c.CloseNow()
+}
+
+// TestTopologyWaitsFirstPoll: a fresh relay answers /api/topology after its first poll, not empty before it.
+func TestTopologyWaitsFirstPoll(t *testing.T) {
+	a, c := testApp(t)
+	app, polled, polledOnce = a, make(chan struct{}), sync.Once{}
+	rec, done := httptest.NewRecorder(), make(chan struct{})
+	go func() { topology(rec, httptest.NewRequest("GET", "/api/topology", nil)); close(done) }()
+	time.Sleep(50 * time.Millisecond)
+	select {
+	case <-done:
+		t.Fatalf("answered before the first poll: %s", rec.Body)
+	default:
+	}
+	f := &fixture{prom: []map[string][]fixtureSeries{{"info": {{M: map[string]string{"name": "wird", "health_status": "Healthy"}, V: 1}}}}}
+	run(t, a, c, f, 0)
+	<-done
+	var topo struct{ Sites []struct{ App string } }
+	json.Unmarshal(rec.Body.Bytes(), &topo)
+	if len(topo.Sites) != 1 || topo.Sites[0].App != "wird" || rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("topology after the first poll: %s %v", rec.Body, rec.Header())
+	}
 }

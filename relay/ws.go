@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strings"
+	"time"
 )
 
 // cloudflare: https://www.cloudflare.com/ips-v4 and ips-v6.
@@ -61,8 +62,18 @@ func init() {
 	Public.HandleFunc("GET /api/topology", topology)
 }
 
-// topology: the public site list (allowlisted apps only) and the host buckets.
-func topology(w http.ResponseWriter, _ *http.Request) {
+// topologyWait caps how long /api/topology waits for the first poll (Prometheus down: answer anyway).
+var topologyWait = 10 * time.Second
+
+// topology: the public site list (allowlisted apps only) and the host buckets. Never cached: the
+// client replaces world.sites with it on every resync, so a stale answer would undo newer world:site.
+func topology(w http.ResponseWriter, r *http.Request) {
+	select {
+	case <-polled:
+	case <-time.After(topologyWait):
+	case <-r.Context().Done():
+		return
+	}
 	app.mu.Lock()
 	s := app.sites()
 	app.mu.Unlock()
@@ -73,6 +84,6 @@ func topology(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=15")
+	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(map[string]any{"sites": sites, "hosts": []string{"h1", "h2", "h3"}})
 }

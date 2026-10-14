@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/MohammadBnei/mountain/relay/worldcore"
@@ -40,6 +41,13 @@ var afterPoll = func() {}
 // liveApps: allowlisted apps seen in argocd_app_info and not gone (/api/topology). Guarded by app.mu.
 // ponytail: package-level like `app`; one relay, one prom source.
 var liveApps = map[string]bool{}
+
+// polled is closed by the first complete poll: /api/topology waits for it so a fresh relay does not
+// answer an empty site list. ponytail: package-level like liveApps.
+var (
+	polled     = make(chan struct{})
+	polledOnce sync.Once
+)
 
 // promQ: name -> PromQL. The fixture server keys its timeline by these names.
 var promQ = map[string]string{
@@ -543,6 +551,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	})
 	p.last, p.warm = now, true
 	p.prune(r)
+	polledOnce.Do(func() { close(polled) })
 	return nil
 }
 
