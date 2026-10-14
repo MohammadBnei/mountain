@@ -77,10 +77,13 @@ export function createWorld({ dev = false } = {}) {
       else w[slot] = v;
     },
     as(name) {
-      return Object.create(w, {
+      const d = {
         write: { value: (slot, v) => w.write(slot, name, v) },
         emit: { value: (type, p) => w.emit(type, p, name) },
-      });
+      };
+      // Plain assignment on a view (`view.metrics = x`) would only shadow the slot; route it through write().
+      for (const slot of Object.keys(WRITERS)) if (!(slot in w.fields)) d[slot] = { get: () => w[slot], set: (v) => w.write(slot, name, v) };
+      return Object.create(w, d);
     },
 
     applyHello(h) {
@@ -132,6 +135,7 @@ export function createWorld({ dev = false } = {}) {
           const want = Math.round(d.cells[c] * k), g = gz * GRID + gx;
           land[g] += want - d.done[c]; d.done[c] = want;
           hs[g] = (base[g] + land[g]) * HQ;
+          if (hs[g] > w.hmax) w.hmax = hs[g];
         }
         if (k >= 1) pending.splice(n, 1);
       }
