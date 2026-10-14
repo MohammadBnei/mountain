@@ -56,7 +56,7 @@ export const profiles = {
 };
 
 // Page load order (main.js) and cut-face field provider order (cut.js, W3).
-export const page = ['mountain', 'eruption']; // W1b merge order: + 'sky', 'cauldron', 'lightning' (each as its lane lands)
+export const page = ['mountain', 'eruption', 'sky', 'cauldron', 'lightning'];
 export const fields = ['strata', 'aquifers', 'magma', 'veins', 'caves'];
 
 // Live finale camera (09 Freeze item 3): sways ±0.45 rad × min(1, aspect) around +z so the ember pool at the foot

@@ -210,6 +210,9 @@ async function pageMode() {
   const stop = () => new Promise((r) => { relay.once('exit', r); relay.kill('SIGTERM'); });
   if (!(await start())) { fail(`relay did not answer /healthz: ${relayLog.slice(-300)}`); relay.kill('SIGKILL'); return finish(); }
   console.log(`relay ${bin} --dev --source=fixture:${fx} on ${origin}`);
+  // Every built model is on the page: a landed lane left out of layout.page would ship invisible.
+  const { page: onPage } = await import(join(ROOT, 'js/layout.js'));
+  for (const m of await readdir(join(ROOT, 'models'))) if (!onPage.includes(m)) fail(`page: models/${m}/ is not in layout.page`);
 
   // CSP: exactly one source (the Go relay); importmap hash, connect-src, no third-party origins
   const res = await fetch(`${origin}/`), csp = res.headers.get('content-security-policy') || '', html = await res.text();
