@@ -33,8 +33,10 @@ export default async function build({ THREE, kit, world }) {
     step() {},
     on: {
       'world:ash'({ day, title }) {
+        if (typeof title === 'string') title = title.slice(0, 120); // the relay allowlists titles; cap anyway (before the dedup)
+        else title = undefined;
         if (!DAY.test(day) || Number.isNaN(days(day)) || ash.some((a) => a.day === day && a.title === title)) return;
-        ash.push({ day, ...(typeof title === 'string' ? { title: title.slice(0, 120) } : {}) }); // the relay allowlists titles; cap anyway
+        ash.push({ day, ...(title !== undefined ? { title } : {}) });
         ash.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
         ash.length = Math.min(ash.length, MAX);
         ash.forEach((a, i) => (ys[i] = a.y = TOP - (days(ash[0].day) - days(a.day)) * RATE));

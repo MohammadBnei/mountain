@@ -72,8 +72,10 @@ try {
   const setCut = (depth) => { world.write('clip', 'story', cut.at(depth, Number(q.get('az') || 0))); cut.apply(world); };
   setCut(Number(q.get('cut') ?? (hosted ? 60 : 0)));
 
+  // The models under test: a hosted mountain is scenery, its budgets and flags are its own gate's.
+  const own = loaded.slice(hosted ? 1 : 0);
   // Framing comes from the profile only, so a missing or misplaced model shows up blank or cut off.
-  const { profile } = loaded[0], { x, z, r } = profile.footprint, [y0, y1] = profile.yRange;
+  const { profile } = own[0], { x, z, r } = profile.footprint, [y0, y1] = profile.yRange;
   const camera = new THREE.PerspectiveCamera(finale.fov, innerWidth / innerHeight, 0.1, 2000);
   const look = new THREE.Vector3();
   const place = (cam) => {
@@ -107,9 +109,12 @@ try {
   const hidden = (list, fn) => { const was = list.map((o) => o.visible); list.forEach((o) => (o.visible = false)); try { return fn(); } finally { list.forEach((o, i) => (o.visible = was[i])); } };
   const diffPx = (a, b) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 18) n++; return n; };
 
-  // baseline: rig only (dome + haze floor), so stats count the models alone
+  // compile the cut cap and its provider chain even when the cut stays closed: a GLSL error is a console error (gate FAIL)
+  setCut(60); render(); setCut(Number(q.get('cut') ?? (hosted ? 60 : 0)));
+
+  // baseline: rig (dome + haze floor) and a hosted mountain, so stats count the models under test alone
   const base = new Uint8Array(W * H * 4), buf = new Uint8Array(W * H * 4);
-  const rigOnly = () => { roots().forEach((o) => (o.visible = false)); const b = render(base); roots().forEach((o) => (o.visible = true)); return b; };
+  const rigOnly = () => { own.forEach((l) => (l.model.root.visible = false)); const b = render(base); own.forEach((l) => (l.model.root.visible = true)); return b; };
   let b0 = rigOnly();
 
   function stats(P) {
@@ -256,10 +261,11 @@ try {
   // ---------- clipped flag: closing uClip over everything must remove (clipped) or keep (not) every solid ----------
   function clip() {
     const solid = (o) => o.isMesh && ['lit', 'terrain', 'lava'].includes(mats(o)[0]?.userData?.kit);
-    const others = objects((o) => !solid(o)), U = kit.U.uClip.value, was = U.clone();
-    return hidden(others, () => {
-      render(buf); const open = diffPx(buf, base);
-      U.set(0, 1, 0, -1e6); render(buf); const cut = diffPx(buf, base);
+    const others = objects((o) => !solid(o)), U = kit.U.uClip.value, was = U.clone(), rig = new Uint8Array(W * H * 4);
+    return hidden([...others, ...loaded.filter((l) => !own.includes(l)).map((l) => l.model.root)], () => { // own solids vs the rig alone
+      hidden(roots(), () => render(rig));
+      render(buf); const open = diffPx(buf, rig);
+      U.set(0, 1, 0, -1e6); render(buf); const cut = diffPx(buf, rig);
       U.copy(was);
       return { open, cut };
     });

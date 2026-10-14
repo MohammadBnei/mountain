@@ -10,7 +10,8 @@
 //
 //   compose(models)    once, after the models are built and before the first render. Each model `field` (kit.field) that
 //                      defines `vec4 <name>Field(vec3 p, vec4 base)` for a layout.js `fields` name is chained in that order
-//                      (strata → aquifers → magma → veins → caves); missing ones are skipped. The chain starts at
+//                      (strata → aquifers → magma → veins → caves); missing ones are skipped; a field that matches no name, or
+//                      two fields matching one, throw. The chain starts at
 //                      (deep, glow 0); a provider returns linear rgb + glow weight. Returns the names used.
 //   cap()              → the cap Mesh (the mountain's)
 //   at(depth, az = 0)  → a world.clip value: the vertical plane facing the camera azimuth az (camera at (sin az, ·, cos az))
@@ -22,12 +23,13 @@
 // clipped(), lava()); not clipped = sky, clouds, crystals, river, toys, particles. Only the body has a cap (ponytail: the
 // slabs sit under the y −16 haze floor and the glacier shell is metres thin; give them caps if the story shows them cut).
 import * as THREE from 'three';
-import { U, field, terrain } from './kit.js';
+import { QUALITY, U, field, terrain } from './kit.js';
 import { CUT } from './shaders.js';
 import { fields } from './layout.js';
 import N from './units.json' with { type: 'json' };
 
-const G = N.GRID, CELL = N.EXTENT / G, X0 = -N.EXTENT / 2, X1 = X0 + CELL * (G - 1), YB = -70; // body grid, bottom (03-model-mountain)
+// the body's render grid (03-model-mountain: G² vertices over the heightSolid span, 96² on low), its spacing S, bottom
+const G = QUALITY === 'low' ? N.GRID_LOW : N.GRID, CELL = N.EXTENT / N.GRID, X0 = -N.EXTENT / 2, S = (CELL * (N.GRID - 1)) / (G - 1), X1 = X0 + S * (G - 1), YB = -70;
 const f = (v) => v.toFixed(5);
 const hs = new Float32Array(G * G), hTex = new THREE.DataTexture(hs, G, G, THREE.RedFormat, THREE.FloatType);
 const base = field('', { uCutDeep: 'deep' });
@@ -35,8 +37,8 @@ const base = field('', { uCutDeep: 'deep' });
 const QUAD = { value: new THREE.Vector3(28, 48, 142) };
 
 const PARS = `uniform sampler2D uCutH; uniform vec3 uCutDeep;
-float kCutH(vec2 xz) { // heightSolid as the 128² body mesh interpolates it: quad (i, j) = tris (a, b, c), (c, b, d)
-  vec2 g = (xz - ${f(X0)}) / ${f(CELL)}; ivec2 i = ivec2(clamp(floor(g), vec2(0.), vec2(${G - 2}.))); g -= vec2(i);
+float kCutH(vec2 xz) { // heightSolid as the G² body mesh interpolates it: quad (i, j) = tris (a, b, c), (c, b, d)
+  vec2 g = (xz - ${f(X0)}) / ${f(S)}; ivec2 i = ivec2(clamp(floor(g), vec2(0.), vec2(${G - 2}.))); g -= vec2(i);
   float a = texelFetch(uCutH, i, 0).r, b = texelFetch(uCutH, i + ivec2(0, 1), 0).r, c = texelFetch(uCutH, i + ivec2(1, 0), 0).r, d = texelFetch(uCutH, i + ivec2(1, 1), 0).r;
   return g.x + g.y <= 1. ? a + g.x * (c - a) + g.y * (b - a) : d + (1. - g.x) * (b - d) + (1. - g.y) * (c - d);
 }
@@ -47,9 +49,12 @@ export function compose(models) {
   const own = models.map((m) => m.field).filter(Boolean), used = [];
   for (const x of own) if (x.kit !== 'field') throw new Error('cut: a model field must come from kit.field()');
   for (const n of fields) {
-    const x = own.find((o) => new RegExp(`vec4\\s+${n}Field\\s*\\(`).test(o.glsl));
-    if (x) used.push([n, x]);
+    const xs = own.filter((o) => new RegExp(`vec4\\s+${n}Field\\s*\\(`).test(o.glsl));
+    if (xs.length > 1) throw new Error(`cut: ${xs.length} model fields define ${n}Field`);
+    if (xs.length) used.push([n, xs[0]]);
   }
+  // a misnamed provider (or one whose name is not in layout.js `fields`) would silently draw nothing
+  if (own.some((o) => !used.some(([, x]) => x === o))) throw new Error(`cut: a model field defines no vec4 <name>Field( for a layout.js fields name (${fields.join(', ')})`);
   const uniforms = { ...base.uniforms, uCutH: { value: hTex }, uCutQuad: QUAD };
   for (const [n, x] of used) for (const k of Object.keys(x.uniforms)) {
     if (k in uniforms || k in U) throw new Error(`cut: ${n} uniform ${k} is already taken`);
@@ -84,7 +89,10 @@ export function apply(world) {
   if (capMesh) capMesh.visible = p[3] < 1e4; // closed: (0, 1, 0, 1e4)
   let s = 0;
   for (let i = 0; i < h.length; i++) s += h[i] * ((i & 7) + 1); // ponytail: 16k-cell checksum per frame, cheaper than a re-upload
-  if (s !== sum) { sum = s; hs.set(h); hTex.needsUpdate = true; }
+  if (s === sum) return;
+  sum = s; // the body's vertex heights, sampled exactly as the mountain samples them (heightAt at its grid points)
+  for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) hs[j * G + i] = world.heightAt(X0 + i * S, X0 + j * S);
+  hTex.needsUpdate = true;
 }
 
 export function pick(ray, world) {
