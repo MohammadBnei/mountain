@@ -38,6 +38,7 @@ if (target === 'selftest') {
     cube: ['PASS'], terrain: ['PASS'], blank: ['FAIL', /nearly blank/], broken: ['FAIL', /build error/], foreign: ['FAIL', /not from kit/],
     failtest: ['FAIL', /test\.js failed/], offpalette: ['FAIL', /colour #ff0000 != rock0/], scan: ['FAIL', /static scan/], facet: ['FAIL', /facet .* median 3/],
     bright: ['FAIL', /luminance day max/], impure: ['FAIL', /pose\(P\) not deterministic/], fieldwrite: ['FAIL', /changed field temp/],
+    handler: ['FAIL', /on ev:argo\.sync changed field temp[^]*on ev:argo\.sync changed slot wind/],
     rig: ['FAIL', /changed the rig/], unclipped: ['FAIL', /clipped:false but/], contact: ['FAIL', /real↔surface/],
   };
   const run = ([f, [v, why]]) => new Promise((done) => {

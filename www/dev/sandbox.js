@@ -18,6 +18,7 @@ try {
   const { profiles, finale, FACET } = await import('../js/layout.js');
   const { makeCtx, checkModel, wire } = await import('../js/contract.js');
 
+  let audit = null; // set by __test(); handlers can fire as soon as models are wired
   const bodies = []; // {world, body}
   const addBody = CANNON.World.prototype.addBody;
   CANNON.World.prototype.addBody = function (b) { bodies.push({ world: this, body: b }); return addBody.call(this, b); };
@@ -43,20 +44,21 @@ try {
     const profile = fx ? profiles[`_${fx}`] || profiles._test : profiles[name];
     if (!profile) throw new Error(`no layout profile for ${name}`);
     const mod = await import(fx ? `./fixtures/${fx}.js` : `../models/${name}/index.js`);
-    const rec = { writes: new Set(), emits: new Set(), listens: new Set() };
+    const rec = { writes: new Set(), emits: new Set(), listens: new Set() }, l = { name, fx, mod, profile, rec };
     const ctx = makeCtx({ THREE, kit, world, name: fx ? '_test' : name, profile });
-    const v = ctx.world; // record what the model actually writes, emits and listens to
+    const v = ctx.world; // record what the model actually writes, emits and listens to; handlers run under the audit
     ctx.world = Object.create(v, {
       write: { value: (s, x) => (rec.writes.add(s), v.write(s, x)) },
       emit: { value: (t, p) => (rec.emits.add(t), v.emit(t, p)) },
-      on: { value: (t, fn) => (rec.listens.add(t), v.on(t, fn)) },
+      on: { value: (t, fn) => (rec.listens.add(t), v.on(t, (...a) => audited(l, `on ${t}`, () => fn(...a)))) },
     });
-    const model = await mod.default(ctx);
+    const model = (l.model = await mod.default(ctx));
     const problems = checkModel(model, profile);
     if (problems.length) throw new Error(`${name}: ${problems.join('; ')}`);
+    if (model.on) model.on = Object.fromEntries(Object.entries(model.on).map(([t, fn]) => [t, (...a) => audited(l, `on ${t}`, () => fn(...a))]));
     wire(model, world);
     scene.add(model.root);
-    loaded.push({ name, fx, mod, model, profile, rec });
+    loaded.push(l);
   }
 
   // Framing comes from the profile only, so a missing or misplaced model shows up blank or cut off.
@@ -294,21 +296,33 @@ try {
   // ---------- step (audited during __test): peak budget, stepMs, rig/dome untouched, foreign field writes ----------
   const rigSnap = () => JSON.stringify([RIG.hemi.color, RIG.hemi.groundColor, RIG.hemi.intensity, RIG.dir.color, RIG.dir.intensity, RIG.dir.position, scene.fog.color, scene.fog.density,
     renderer.toneMapping, renderer.toneMappingExposure, Object.values(RIG.dome.material.uniforms).map((u) => u.value), kit.phase(), kit.U.uFootprint.value === kit.footprintRT.texture]);
+  // Every WRITERS slot the model does not own (fields by checksum, shared state by JSON) must be unchanged after its
+  // step() and after each of its bus/ev handlers. A nested call (a handler run by an emit inside step) may write its
+  // own slots: those are re-baselined in every enclosing snapshot, so the outer caller is not blamed.
   const fieldSum = (a) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * ((i % 7) + 1); return s; };
-  let audit = null, t = 0;
+  const val = (s) => (s in world.fields ? fieldSum(world.fields[s]) : JSON.stringify(world[s], (k, x) => (x instanceof Map ? [...x] : x)));
+  const open = [];
+  function audited(l, what, fn) {
+    if (!audit) return fn();
+    const r0 = rigSnap(), own = new Set(l.profile.writes), f0 = new Map(Object.keys(WRITERS).filter((s) => !own.has(s)).map((s) => [s, val(s)]));
+    open.push(f0);
+    try { return fn(); } finally {
+      open.pop();
+      if (rigSnap() !== r0) audit.rig.add(`${l.name} ${what} changed the rig/dome/fog/exposure/uFootprint`);
+      for (const [s, x] of f0) if (val(s) !== x) audit.fields.add(`${l.name} ${what} changed ${s in world.fields ? 'field' : 'slot'} ${s} (not in its writes[])`);
+      for (const outer of open) for (const s of own) if (outer.has(s)) outer.set(s, val(s));
+    }
+  }
+  let t = 0;
   const step = (k = 1, dt = 1 / 30) => {
     for (let i = 0; i < k; i++) {
       world.step(dt);
       t += dt;
-      for (const l of loaded) {
-        if (!audit) { l.model.step(dt, t); continue; }
-        const r0 = rigSnap(), own = new Set(l.profile.writes), f0 = Object.entries(world.fields).filter(([n]) => !own.has(n)).map(([n, a]) => [n, fieldSum(a)]);
+      for (const l of loaded) audited(l, 'step()', () => {
         const a = performance.now();
         l.model.step(dt, t);
-        audit.ms.push(performance.now() - a);
-        if (rigSnap() !== r0) audit.rig.add(`${l.name} step() changed the rig/dome/fog/exposure/uFootprint`);
-        for (const [n, s] of f0) if (fieldSum(world.fields[n]) !== s) audit.fields.add(`${l.name} step() changed field ${n} (not in its writes[])`);
-      }
+        audit?.ms.push(performance.now() - a);
+      });
       if (audit && ++audit.n % 10 === 0) { const s = render(); audit.peak.tris = Math.max(audit.peak.tris, s.tris - b0.tris); audit.peak.draws = Math.max(audit.peak.draws, s.draws - b0.draws); }
     }
   };

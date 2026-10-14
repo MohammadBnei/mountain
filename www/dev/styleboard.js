@@ -24,8 +24,9 @@ try {
 
   const models = [], missing = [];
   for (const name of page) {
-    let mod;
-    try { mod = await import(`../models/${name}/index.js`); } catch { missing.push(name); continue; }
+    const url = `../models/${name}/index.js`; // only a 404 means not built yet; a broken model throws and fails the board
+    if (!(await fetch(url, { method: 'HEAD' })).ok) { missing.push(name); continue; }
+    const mod = await import(url);
     const m = await mod.default(makeCtx({ THREE, kit, world, name, profile: profiles[name] }));
     const bad = checkModel(m, profiles[name]);
     if (bad.length) throw new Error(`${name}: ${bad.join('; ')}`);
