@@ -74,7 +74,7 @@ What the W1a lanes need to know:
 - **OOM test pod** (a memory hog with a low limit), or `kill 1` in a test container → `pod.churn{oom}`.
 - `amtool` alert → cauldron ring + steam. **Watchdog causes no sag.**
 - Traffic burst → glow, then a bolt (fallback cloud height).
-- Relay started with `--prom-url=http://invalid` → `MountainSourceStale` (info → Discord) + "stale since" + the sky dims.
+- Relay started with `--prom-url=http://invalid` → `MountainSourceStale` (notice → Discord) + "stale since" + the sky dims.
 - Restarting the Prometheus or ArgoCD controller causes **no mass `app.gone`**.
 
 **W2:**

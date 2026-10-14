@@ -7,7 +7,7 @@
 //   world.bench       Uint8Array GRID² (0..255);  world.caves [{x, z, y, yaw, seed}];  world.hmax (units)
 //   world.metrics world.state world.sites(Map app→site) world.wind world.snowline world.clouds world.sun
 //   world.rig {elev, rising} world.clip world.stale   (shared state; writers in WRITERS)
-//   world.state  {alerts: [{fp, sev, layer, startsAt (unix ms)}]}: hello.state, then ev alert.fire adds (startsAt = ev.ts),
+//   world.state  {alerts: [{fp, sev, layer, startsAt (unix ms)}]}: hello.state, then ev alert.fire adds (startsAt = Alertmanager's, from the ev),
 //                alert.resolve removes, both BEFORE the ev:alert.* emit (cauldron reads it, so a reload keeps the sag)
 //   world.stale  null | unix ms: the oldest metrics.stale[source] since, or the socket drop time
 //   world.clouds sky's clusters [{x, z, y (base, units), r, mass}]: mass = a towering cluster over the summit (lightning's
@@ -124,7 +124,7 @@ export function createWorld({ dev = false } = {}) {
         if (f.kind === 'app.gone') w.write('sites', 'world', (m) => m.delete(f.app));
         if (f.kind === 'alert.fire' || f.kind === 'alert.resolve') w.write('state', 'socket', (s) => {
           s.alerts = (s.alerts || []).filter((a) => a.fp !== f.fp);
-          if (f.kind === 'alert.fire') s.alerts.push({ fp: f.fp, sev: f.sev, layer: f.layer, startsAt: f.ts });
+          if (f.kind === 'alert.fire') s.alerts.push({ fp: f.fp, sev: f.sev, layer: f.layer, startsAt: f.startsAt });
         });
         return emit(`ev:${f.kind}`, f, 'socket');
       }

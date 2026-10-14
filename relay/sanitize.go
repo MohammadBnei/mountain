@@ -107,7 +107,7 @@ var spec = map[string]map[string]int{
 	"ev:quorum":        {"up": fHosts},
 	"ev:replicas":      {"app": fApp, "bucket": fBucket},
 	"ev:app.gone":      {"app": fApp},
-	"ev:alert.fire":    {"fp": fFP, "sev": fSev, "layer": fLayer},
+	"ev:alert.fire":    {"fp": fFP, "sev": fSev, "layer": fLayer, "startsAt": fNat},
 	"ev:alert.resolve": {"fp": fFP, "sev": fSev, "layer": fLayer, "durS": fNat},
 	"world:deposit":    {"id": fULID, "x0": fNat, "z0": fNat, "w": fNat, "h": fNat, "cells": fB64},
 	"world:site":       {"app": fApp, "x": fNum, "z": fNum, "y": fNum, "tier": fNat, "group": fGroup},

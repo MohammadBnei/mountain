@@ -59,12 +59,16 @@ func loadConfig(b []byte) (*Config, error) {
 	return &c, nil
 }
 
-// Opts are the command-line flags.
+// Opts are the command-line flags, plus FPSalt from env MOUNTAIN_FP_SALT (Infisical mountain-8c-cz; never rotated, 02).
 type Opts struct {
 	Listen, Metrics, PromURL, AMURL, Source, Config string
 	Dev                                             bool
 	Seed                                            uint
+	FPSalt                                          string
 }
+
+// devFPSalt is the fixture-mode salt: fixtures carry no real fingerprints, so a public constant is fine there.
+const devFPSalt = "mountain-dev-salt"
 
 func parseServe(args []string) (Opts, error) {
 	var o Opts
@@ -77,7 +81,12 @@ func parseServe(args []string) (Opts, error) {
 	f.StringVar(&o.Source, "source", "live", "live | fixture:<file>")
 	f.StringVar(&o.Config, "config", "", "config.yaml path (default: embedded)")
 	f.UintVar(&o.Seed, "seed", 1, "terrain seed")
-	return o, f.Parse(args)
+	err := f.Parse(args)
+	// env, not a flag: a flag value shows in ps and the pod spec
+	if o.FPSalt = os.Getenv("MOUNTAIN_FP_SALT"); o.FPSalt == "" && strings.HasPrefix(o.Source, "fixture:") {
+		o.FPSalt = devFPSalt
+	}
+	return o, err
 }
 
 // App is the relay's live state. Lanes read and mutate it under mu.
@@ -183,6 +192,10 @@ func serve(o Opts) error {
 	cfg, err := loadConfig(b)
 	if err != nil {
 		return err
+	}
+	if o.FPSalt == "" {
+		// fail closed without a crashloop: App.FP returns "", so sanitize drops every alert (no unsalted fp leaves)
+		log.Printf("relay: MOUNTAIN_FP_SALT unset: alerts are dropped until it is set")
 	}
 	app = newApp(cfg, o, time.Now().UTC().Format(time.DateOnly))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

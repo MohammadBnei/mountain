@@ -67,7 +67,7 @@ Rot guard:
 | `pod.churn` | `app`, `restarts`, `oom`, `crashloop`, over the **15 s** window |
 | `node.ready` | `host`, `ready` |
 | `quorum` | `up[]` |
-| `alert.fire` | `fp`, `sev`, `layer` |
+| `alert.fire` | `fp`, `sev`, `layer`, `startsAt` (unix ms, Alertmanager's: a re-fire after a relay restart keeps it) |
 | `alert.resolve` | `fp`, `sev`, `layer`, `durS` |
 | `build` | `app`, `state` |
 | `gitops.commit` | `n` |

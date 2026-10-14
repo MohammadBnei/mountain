@@ -10,8 +10,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestRules checks the PrometheusRule in helm/values.yaml extraManifests (06): every rule is severity info
-// (never warning: that would wake thot), and runs helm/rules.test.yaml through promtool when it is on PATH.
+// TestRules checks the PrometheusRule in helm/values.yaml extraManifests (06): every rule is severity notice
+// (warning|critical route to thot; info is eaten by the live InfoInhibitor inhibit rule, so never reaches Discord), and runs helm/rules.test.yaml through promtool when it is on PATH.
 func TestRules(t *testing.T) {
 	b, err := os.ReadFile("helm/values.yaml")
 	if err != nil {
@@ -49,8 +49,8 @@ func TestRules(t *testing.T) {
 	for _, g := range rule.Spec.Groups {
 		for _, r := range g.Rules {
 			names[r.Alert] = true
-			if r.Labels["severity"] != "info" {
-				t.Errorf("%s: severity %q, want info", r.Alert, r.Labels["severity"])
+			if r.Labels["severity"] != "notice" {
+				t.Errorf("%s: severity %q, want notice", r.Alert, r.Labels["severity"])
 			}
 		}
 	}

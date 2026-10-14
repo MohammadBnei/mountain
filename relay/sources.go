@@ -7,7 +7,7 @@ package main
 //	func init() { Register("prom", func(a *App) (Source, error) { return &promSource{url: a.Opts.PromURL}, nil }) }
 //
 // W1b lane A: src_alerts.go registers "alerts" the same way and polls a.Opts.AMURL (/api/v2/alerts; the fixture
-// hook serves it too). It reports firing alerts through Out.Fire / Out.Resolve (hello.state.alerts + ev, atomically),
+// hook serves it too). Alert.FP = a.FP(fingerprint). It reports firing alerts through Out.Fire / Out.Resolve (hello.state.alerts + ev, atomically),
 // liveness through Out.OK, failures through Out.Stale (metrics stale[name]); it clears stale[name] on recovery.
 //
 // and emits through *Out. Frames must validate against www/dev/schema/*.json.
@@ -15,6 +15,8 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"slices"
@@ -119,6 +121,16 @@ func (o *Out) worldFrame(kind string, payload map[string]any) []byte {
 	return nil
 }
 
+// FP is Alert.FP for an Alertmanager fingerprint: the first 16 hex of sha256(salt + fingerprint).
+// "" without a salt, which sanitize drops (fail closed: an unsalted fp would link across resets).
+func (a *App) FP(amFingerprint string) string {
+	if a.Opts.FPSalt == "" {
+		return ""
+	}
+	h := sha256.Sum256([]byte(a.Opts.FPSalt + amFingerprint))
+	return hex.EncodeToString(h[:8])
+}
+
 // Alert is one firing alert in hello.state.alerts (02 alerts row; in memory until W2 persists it).
 type Alert struct {
 	FP       string `json:"fp"`       // salted hash, 16 hex (never the raw fingerprint)
@@ -132,11 +144,12 @@ type State struct {
 	Alerts []Alert `json:"alerts"`
 }
 
-// Fire adds a to hello.state.alerts (replacing the same fp) and broadcasts ev alert.fire{fp, sev, layer}.
+// Fire adds a to hello.state.alerts (replacing the same fp) and broadcasts ev alert.fire{fp, sev, layer, startsAt}.
+// startsAt rides the event so a live client and a reloaded one agree (cauldron breakMin), even after a relay restart re-fires.
 // Hub lock held across both: a connecting client sees the alert in its hello or as the event, never neither.
 // Returns the ev id ("" if sanitize dropped it; state is then unchanged).
 func (o *Out) Fire(a Alert) string {
-	return o.stateEv("alert.fire", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer}, func(s *State) {
+	return o.stateEv("alert.fire", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "startsAt": int(a.StartsAt)}, func(s *State) {
 		s.Alerts = append(slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == a.FP }), a)
 	})
 }

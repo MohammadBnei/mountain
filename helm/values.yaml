@@ -34,6 +34,17 @@ ingress:
     headers:
       referrerPolicy: no-referrer
 
+# Alert fp salt (02: never rotated, veins link to it). Key MOUNTAIN_FP_SALT in
+# Infisical mountain-8c-cz, synced to the Secret mountain-infisical (W1b lane E).
+# optional: until that Secret exists the relay boots and drops alerts (fail closed).
+env:
+  - name: MOUNTAIN_FP_SALT
+    valueFrom:
+      secretKeyRef:
+        name: mountain-infisical
+        key: MOUNTAIN_FP_SALT
+        optional: true
+
 livenessProbe:
   enabled: true
   path: /healthz
@@ -58,7 +69,9 @@ securityContext:
 # common-app-chart has no ServiceMonitor or PrometheusRule template; Prometheus'
 # serviceMonitorSelectorNilUsesHelmValues is false and ruleSelector is {}, so both
 # are picked up (same pattern as platform/values/zot, netbird). Rules (06): all
-# severity info -> Discord, never warning (that would wake thot). Unit test:
+# severity notice -> Discord (the default route). Never warning|critical (routed to
+# thot) and never info: the chart's InfoInhibitor inhibits every severity="info"
+# alert whose namespace has no warning, so info never reaches Discord. Unit test:
 # rules_test.go (promtool test rules helm/rules.test.yaml when promtool is on PATH).
 # No {{ $labels }} in annotations: extraManifests go through Helm tpl.
 extraManifests:
@@ -95,7 +108,7 @@ extraManifests:
               expr: time() - max by (source) (mountain_source_last_success{namespace="{{ .Release.Namespace }}"}) > 180
               for: 2m
               labels:
-                severity: info
+                severity: notice
               annotations:
                 summary: "mountain: a relay source has not polled successfully for 5 min"
                 description: >-
@@ -105,7 +118,7 @@ extraManifests:
               expr: min(mountain_github_token_days_left{namespace="{{ .Release.Namespace }}"}) < 14
               for: 1h
               labels:
-                severity: info
+                severity: notice
               annotations:
                 summary: "mountain: the GitHub token expires in under 14 days"
                 description: Rotate the token in Infisical (mountain-8c-cz) before builds and commits go dark.
@@ -113,7 +126,7 @@ extraManifests:
               expr: max by (kind) (mountain_unmapped_total{namespace="{{ .Release.Namespace }}"}) > 0
               for: 30m
               labels:
-                severity: info
+                severity: notice
               annotations:
                 summary: "mountain: series dropped for lack of a relay/config.yaml map entry"
                 description: >-

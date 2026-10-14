@@ -23,7 +23,7 @@ tests:
       - eval_time: 6m
         alertname: MountainSourceStale
         exp_alerts:
-          - exp_labels: { severity: info, source: alerts }
+          - exp_labels: { severity: notice, source: alerts }
             exp_annotations:
               summary: "mountain: a relay source has not polled successfully for 5 min"
               description: 'The live page shows "stale since" and the sky dims. The relay keeps serving the last world; check the relay logs for the source label.'
@@ -33,7 +33,7 @@ tests:
       - eval_time: 61m
         alertname: MountainTokenExpiring
         exp_alerts:
-          - exp_labels: { severity: info }
+          - exp_labels: { severity: notice }
             exp_annotations:
               summary: "mountain: the GitHub token expires in under 14 days"
               description: Rotate the token in Infisical (mountain-8c-cz) before builds and commits go dark.
@@ -43,7 +43,7 @@ tests:
       - eval_time: 46m
         alertname: MountainUnmapped
         exp_alerts:
-          - exp_labels: { severity: info, kind: app }
+          - exp_labels: { severity: notice, kind: app }
             exp_annotations:
               summary: "mountain: series dropped for lack of a relay/config.yaml map entry"
               description: A new app, node, repo or namespace is not in relay/config.yaml, so it is missing from the mountain. Add it to the static maps (02 rot guard).

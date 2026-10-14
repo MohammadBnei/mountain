@@ -217,3 +217,24 @@ func TestSourceSeeded(t *testing.T) {
 		t.Fatalf("a source that never succeeds must still export mountain_source_last_success (start time), got %v", v)
 	}
 }
+
+// TestFPSalt: fp = 16 hex of sha256(salt+fingerprint), stable for one salt, "" (dropped) without one;
+// the salt comes from MOUNTAIN_FP_SALT, with a fixed dev value only in fixture mode (02: never rotated).
+func TestFPSalt(t *testing.T) {
+	t.Setenv("MOUNTAIN_FP_SALT", "")
+	if o, _ := parseServe(nil); o.FPSalt != "" {
+		t.Fatalf("live mode must not invent a salt, got %q", o.FPSalt)
+	}
+	if o, _ := parseServe([]string{"--source", "fixture:x.json"}); o.FPSalt != devFPSalt {
+		t.Fatalf("fixture mode salt = %q", o.FPSalt)
+	}
+	t.Setenv("MOUNTAIN_FP_SALT", "s1")
+	o, _ := parseServe(nil)
+	a := &App{Opts: o}
+	if fp := a.FP("abc"); !fpRE.MatchString(fp) || fp != a.FP("abc") || fp == (&App{Opts: Opts{FPSalt: "s2"}}).FP("abc") || fp == a.FP("abd") {
+		t.Fatalf("fp %q: want 16 hex, stable per salt, salt- and fingerprint-dependent", fp)
+	}
+	if (&App{}).FP("abc") != "" {
+		t.Fatal("no salt must yield \"\" (sanitize drops it)")
+	}
+}
