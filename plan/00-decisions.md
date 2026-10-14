@@ -22,7 +22,15 @@
 | Sequencing **(R2)** | Vertical slice (W1a/W1b), then freeze, then fan out |
 | Post FX **(R2)** | Desktop only, one composer owned by the orchestrator |
 | Cut face **(R2)** | One cut shader with field providers, frozen at the start of W3 with strata as the reference |
-| Style | Procedural low-poly, flatShading, Aretē dusk palette, gradient sky dome, **no shadows** |
+| Style | Procedural low-poly, flatShading, Aretē palette (dusk canonical, time keys R4), gradient sky dome, **no shadows** |
+| Lanes **(R4)** | W1a and W1b run **parallel lanes** inside the wave. Safe only because the orchestrator first writes every orchestrator-owned and soon-frozen file as a **seam commit**; lanes own only their own files (01 ownership) and stop and ask for any seam change |
+| Palette **(R4)** | From hq Aretē (`app/arete.html` + `app/web/src/arete.css`), frozen in `kit.js`, gate-enforced. **Time keys** night/dawn/day/dusk (dusk canonical; the others shift lightness/temperature only). The real Paris sun drives `kit.setPhase` via `world.rig` (09) |
+| Assets **(R4)** | **All procedural.** No KayKit GLBs; kit helpers `rock`/`puff`/`shard` (09) |
+| Deploy **(R4)** | hq/wedding style: helm values in this repo (`helm/values.yaml`), CI pins the `:sha` tag in-repo, the ArgoCD app from `/add-app` points at this repo's `helm/` |
+| Storage / aquifers **(R4)** | **No NFS.** One pool per PVC, mapped to an app via the ns→app map; non-allowlisted PVCs (fleet, monitoring, …) merge into one `other` pool per storage class (no names leak), ~8–12 pools. Pool size = capacity bucket. **longhorn** = clear, deep, triple-layered shimmer (3 replicas), level **real** (`kubelet_volume_stats_used_bytes` ⋈ `kube_persistentvolumeclaim_info`, 6 PVCs live). **local-path** (node-local, fleet, 31 PVCs) = murky, shallow, pinned to its host's bedrock slab, level **unmeasured** (hostPath volumes emit no kubelet stats). No direct PVC access (R2). Optional W3 infra PR: node-exporter textfile `du` per PV dir makes local-path measured |
+| Day key **(R4)** | Day relaxes the ≤ 10 % tint for the sky group only (sky0/sky1/ridge → water .5, horizon → water .6, cloud → ink .5), exposure 1.25, hemisphere ground = `stone`. Day must read as day, not dawn (09) |
+| Terrain shape **(R4)** | Broad massif + terraces + **a continuous spiral walkway carved by Go in `h.base`** (≈ 2 turns, constant gentle grade, wraps around ridges on the surface, **no tunnels**) + 3–5 natural **caves** off the walkway (Go-seeded niches, kit `cave()`), shown on the cut face by the `caves` provider. Cave interiors not walkable in v1 (06, 03-mountain) |
+| Push **(R4)** | Pushing to main is outward-facing (it deploys): **once per wave, after the user confirms** |
 
 **Attribution, per repo** (agents must follow it):
 
@@ -59,4 +67,8 @@
 - the CF-Connecting-IP trust boundary
 - clipped open meshes
 - the coordinate contract
+
+**R4 doubt cycle (W0.5):** 16 findings: 14 folded in (the R4 rows above, the R4 edits in 01/02/03/04/06/07, and `09-style.md`), 1 trade-off (scree rock variety comes from non-uniform scale + rotation, since its 2-draw budget rules out k meshes), 1 merged into another (CHROME/perf thresholds folded into the QA tooling finding). Cross-model review skipped by the user.
+
+**R4 style review (W0.5):** 20 findings, all folded into 09/01/02/03/06/README. The lit styleboard confirmed the first-draft rig rendered the mountain black (dusk terrain p50 0.0022 linear); rig, fog and tone mapping retuned (09).
 

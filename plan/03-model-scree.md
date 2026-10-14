@@ -9,7 +9,7 @@ W3
 `pod.churn`: pebble per restart, boulder per OOM/CrashLoop, talus erodes when stable. Consumes `ice.calve`. Group `real`
 
 ## Technique
-cannon Sphere/Box on the 128² heightSolid collider, sleep, ≤80 bodies, oldest → `h.talus`, SAP broadphase; KayKit rocks InstancedMesh; snap resting bodies to render height
+cannon Sphere/Box on the 128² heightSolid collider, sleep, ≤80 bodies, oldest → `h.talus`, SAP broadphase; kit `rock(seed)` geometry in one InstancedMesh (`lit()`, `ramp('rock')`); variety from non-uniform scale + rotation (09); snap resting bodies to render height
 
 ## Clip / cost
 not clipped / 2 draws

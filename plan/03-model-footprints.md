@@ -6,7 +6,7 @@ Layer: **surface**. Contract, world, bus and budgets: see `01-architecture.md`. 
 Click-path on the snow; trails where many walk; rain and weather erode them
 
 ## Technique
-512² RGBA8 stamp render target sampled by the snow material. **The relay computes `weight` (erosion)**; the client stamps with it
+512² RGBA8 stamp render target, **kit-owned**, sampled by the terrain `uFootprint` slot; the offscreen stamp scene uses kit `stamp()` materials. **The relay computes `weight` (erosion)**; the client stamps with it
 
 ## Surface-layer rules (shared)
 (W4)

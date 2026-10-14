@@ -1,13 +1,13 @@
 # 06-relay — Relay
 
-**Process:** 1 replica, `Recreate`. Go binary embeds `www/`. Ownership per [01].
+**Process:** 1 replica, `Recreate`. Go binary embeds `www/` via the root package `mountain` (`embed.go`, `//go:embed www`), imported by relay. Go 1.27 toolchain. Ownership per [01].
 
 **Ports:**
 - `:8080` public: `/`, `/api/topology`, `/ws`, `/auth/*`, `/healthz`.
 - **`:9090` metrics, a separate port via `service.extraPorts`**, never routed by the IngressRoute.
 
 **worldcore.go** is the only implementation of:
-- `h.base` generation (seeded, int16 mm)
+- `h.base` generation (seeded, int16 mm): broad massif + soft ridged noise + terraces (step ≈ 7 m, 65 % blend). **Spiral walkway** (seeded: start azimuth, turns ≈ 2, foot height, top = 0.6 × summit so it stays below the snow cap, bench width ≈ 5 m): per azimuth the radius follows the altitude contour, smoothed; altitude is linear in arc length (constant grade, ≈ 6 % on the board); where smoothing would cut > 4 m into a ridge it snaps back to the contour, so the ledge always wraps around ridges and never passes through. Carved as a flat bench (centre ± 2.6 m) blended to the slope over 1.4 m: a clean outer lip and an inner cut wall. Emits the **`bench` mask** (u8, 128²). **Caves**: 3–5 seeded `caves[{x,z,y,yaw,seed}]` on the walkway where the inner cut wall is ≥ 7 m tall (Go keeps that wall steep; no niche carve: at 1.56 m cells it only makes a slot). **Edge**: beyond r = 78 m the height drops 34 m (to r = 100) and 30 m more to the corners, so the massif falls into the valley with no flat apron. All sent in `hello.snapshot`. No tunnels
 - site placement
 - deposit rasterisation (int16 cells, seeded by FNV-1a of the event id, size = f(heat))
 - vein capsules
@@ -30,10 +30,16 @@
   - `mark{kind, pose}` (session in `mountain-visitors` or `platform-admins`)
 - `action`: v2.
 
+**Dev and fixture modes (R4):**
+- `relay --dev` allows an `http://127.0.0.1:*` Origin and adds `connect-src ws://127.0.0.1:*` to the CSP. A Go test proves the dev flags are off by default and that production still rejects foreign origins with 403.
+- `relay --source=fixture:<file>` serves a scripted Prometheus/Alertmanager timeline through an in-process fake HTTP server. The fixture is seeded with hostile labels (04).
+- `relay dump-hello` prints a `hello` frame from real `worldcore` (W1a seam: minimal `worldcore.Base(seed)`). It is the only source of the hello fixture.
+
 **Keepalive:** a server ping every 30 s. Clients reconnect with jittered backoff and resync through `hello`. Logging in requires a reconnect, because the cookie is read at upgrade.
 
 **Security:**
 - `Origin` must equal `https://mountain.bnei.dev` at upgrade.
+- **coder/websocket v1.8.15:** its default origin check ignores the scheme and passes an empty `Origin`. So the relay runs its own `originOK` check (exact scheme + host, empty = reject; dev flag adds `http://127.0.0.1:*`) and then calls `Accept` with `InsecureSkipVerify: true`. `Ping` needs a concurrent reader goroutine, or it never returns.
 - Cookie: `Secure; HttpOnly; SameSite=Lax`, signed, **TTL ≤ 1 h** with a groups re-check on refresh.
 - OIDC `state` is random. The return view is in a short-lived signed cookie.
 - **`CF-Connecting-IP` is trusted only when the TCP peer is in a Cloudflare range.** Otherwise the peer IP is used (LAN/pod CIDR spoofing is accepted and noted).

@@ -9,7 +9,7 @@ W1a
 `ev:argo.sync{ok}` → lava flows toward the paired `world:deposit` (same id) and cools magma → stone. `ok:false` → ash puff, no land. Emits `lava.heat`
 
 ## Technique
-≤200 icosa blobs InstancedMesh, steepest descent on `heightSolid`, `setColorAt` ramp
+≤200 icosa blobs InstancedMesh, steepest descent on `heightSolid`, kit `lava()` material (instance colour also drives emissive), colours via `ramp('lava')` (lavaHot → magma → emberRoot as it cools)
 
 ## Clip / cost
 clipped / 3 draws, 5k

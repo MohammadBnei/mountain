@@ -9,7 +9,7 @@ W3
 One crystal per allowlisted app at `world.sites` (**y from sites only**). Height = replicas bucket, glow = health, hue = group
 
 ## Technique
-Seeded hex shards, **one InstancedMesh**, `aGlow` attribute, `instanceId` picking. Shader owned by the orchestrator
+kit `shard(seed)`, **one InstancedMesh**, kit `crystal()` material (`instanceColor` = `ramp('group')` body tint; `aHealth` vec3 ∈ `ramp('health')` × `aGlow` scalar drives emissive), `instanceId` picking. Shader owned by the orchestrator
 
 ## Clip / cost
 not clipped / 2 draws, 7k

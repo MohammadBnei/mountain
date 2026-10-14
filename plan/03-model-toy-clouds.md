@@ -6,7 +6,7 @@ Layer: **surface**. Contract, world, bus and budgets: see `01-architecture.md`. 
 Spawn, drift on `world.wind`, merge on contact. **3 distinct accounts within 1 h → rain** (surface only), then dissipate. Contributors credited by moderated handle
 
 ## Technique
-Relay owns drift (`pos = f(spawn, ∫wind)`), merge and rain → `world:cloud` / `world:rain`. Client: puff InstancedMesh, rain `LineSegments`
+Relay owns drift (`pos = f(spawn, ∫wind)`), merge and rain → `world:cloud` / `world:rain`. Client: kit `puff(seed)` InstancedMesh (`lit()`), rain `LineSegments` (kit `glow()`)
 
 ## Surface-layer rules (shared)
 (W4)

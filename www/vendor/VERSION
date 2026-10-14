@@ -1,0 +1,4 @@
+three@0.186.1 (r186, npm). build/ copied from pi-lab compose/www/vendor (esbuild 0.25.10 minified). examples/jsm/ unmodified from jsdelivr three@0.186.1.
+cannon-es@0.20.0 (npm, dist/cannon-es.js ESM, unmodified). MIT, see LICENSE and cannon-es/LICENSE.
+Importmap: { "three": "./vendor/build/three.module.js", "three/addons/": "./vendor/examples/jsm/", "cannon-es": "./vendor/cannon-es/cannon-es.js" }
+manifest.json: path -> { bytes, sha256, source }; regenerate when re-vendoring.

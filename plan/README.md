@@ -1,7 +1,7 @@
 # mountain.bnei.dev — ukubi as a live Aretē mountain
 
 > This is the master plan. Each section lives in its own file in this folder; this file is the index.
-> **Revision 3, 2026-10-14.** It folds in 2 adversarial cycles (6 reviews) and 4 technique research passes. **(R2)** and **(R3)** mark the user's decisions from after each review.
+> **Revision 3, 2026-10-14.** It folds in 2 adversarial cycles (6 reviews) and 4 technique research passes. **(R2)** and **(R3)** mark the user's decisions from after each review. **(R4)** marks the W0.5 amendment (parallel lanes, style, deploy shape).
 
 ## Context
 pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compose/www/`). This is a sibling page for ukubi. It tells a scroll story of the cluster as a mountain, then ends in a **live finale** where real cluster events reshape the mountain in real time. The metaphor comes from hq's Aretē: strata = Proxmox → K8s → apps, lightning = usage, an eruption makes new land, the ice cauldron is observability, gold veins are incidents that became knowledge, and clouds are people. The binding rule: **"one physics only, and every image true and tied to something real."**
@@ -21,13 +21,15 @@ pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compos
 | Postgres `dbuser_mountain` / `mountaindb` | **live**, verified: connlimit 10, owner, PUBLIC connect revoked, login + DDL via `.232` | Pigsty `pg-proxmox`, leader `.205` |
 | DB password | `DBUSER_MOUNTAIN_PASSWORD` in the **infra-bootstrap** Infisical project (`8a3fa54f-…`, env `dev`), not in `mountain-8c-cz`: one copy only, per infra-bootstrap convention | Infisical |
 | Docs marking the above live | open | infra-bootstrap #299 |
-| `/add-app` `mountain.bnei.dev` | **not done**, waits for the first image | W1a |
-| Traefik scrape interval 15 s | not done | W1a/W1b |
+| `/add-app` `mountain.bnei.dev` (points at this repo's `helm/`) | **not done**, waits for the first image | W1a lane D |
+| Traefik scrape interval 15 s (live: 1 m) | not done | W1a lane D |
 
-**Ready for W1a.** What the W1a agent needs to know:
+**Next: W0.5** (stack verification + style, amendment R4), then W1a. W1a and W1b now run as **parallel lanes after an orchestrator seam commit** (00 R4, 01 ownership).
+
+What the W1a lanes need to know:
 - Build workflow: copy hq's `.github/workflows/app.yml` pattern. `runs-on: [self-hosted, ukubi-build]`. Registry creds come from `platform-commons-76pb` over GitHub OIDC (ADR-0049). Only `push` and `workflow_dispatch` can read them, so guard that step with an `if` for PRs. Image: `registry.bnei.lan:5000/mountain`.
 - DB is not needed until W2. When it is: `DATABASE_URL=postgres://dbuser_mountain:<pw>@postgres.bnei.lan:5432/mountaindb` (5432, not 6432, because pgbouncer is off). It is assembled in infra-bootstrap by a `gitops/bootstrap/mountain-secret.yaml` modelled on `hq-secret.yaml`. Keep the password urlsafe. **pgxpool `MaxConns` must be set ≤ 8** (connlimit 10).
-- `/add-app` lands with the first image: replicas 1, `Recreate`, baseline middleware on, metrics on a separate `service.extraPorts` port that is never routed.
+- `/add-app` lands with the first image (**W1a lane D**, 07): the ArgoCD app points at **this repo's `helm/`**, CI pins the `:sha` tag in `helm/values.yaml`, replicas 1, `Recreate`, baseline middleware on, metrics on a separate `service.extraPorts` port that is never routed, **ServiceMonitor in `extraManifests`**.
 
 ## Section index
 | File | Content |
@@ -41,13 +43,15 @@ pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compos
 | `06-relay.md` | Go relay: endpoints, worldcore, WS protocol, security, self-observability |
 | `07-infra.md` | infra-bootstrap PRs and ADRs, each with its owner |
 | `08-auth.md` | Detail mode, visitor enrollment hardening, moderation |
+| `09-style.md` | Aretē tokens, time keys + light rig, kit factories, facet bands, bans (R4) |
 
 ## Waves
 | Wave | Who | Content | Exit gate |
 |---|---|---|---|
-| **W0** ✅ (except `/add-app`) | M BN + 1 agent | Create the private repo `MohammadBnei/mountain` and split the plan. **ADR-A** PR (public telemetry, PromQL-only). Human steps: create the Infisical project `mountain`, add the repo to the `ACCESS_TOKEN` PAT repo list, run `build-runner-configure.yml`, merge `/add-app` | All human steps are done, so W1 can deploy |
-| **W1a** | 1 agent, serial | Relay: `src_prom` (sync, metrics), worldcore (`h.base`, sites, deposits), `hello`, `/ws`, `/api/topology`, `/metrics` on its own port. www: kit, world, socket, sandbox, gate. Models: **mountain** (body + plain slabs), **eruption**. Deployed | A real ArgoCD sync makes land appear on the live site within 45 s |
-| **W1b** | 1 agent, serial | `src_alerts`. Models: **cauldron** (own sag-ring mesh), **sky-min** (dome + cloud floor; owns `world.clouds`), **lightning**. post.js on desktop. Stale label | W1 verification passes |
+| **W0** ✅ (except `/add-app`) | M BN + 1 agent | Create the private repo `MohammadBnei/mountain` and split the plan. **ADR-A** PR (public telemetry, PromQL-only). Human steps: create the Infisical project `mountain`, add the repo to the `ACCESS_TOKEN` PAT repo list, run `build-runner-configure.yml`. `/add-app` (this repo's `helm/`, `:sha` pinned by CI, ServiceMonitor in `extraManifests`) **moved to W1a lane D** | All human steps are done, so W1 can deploy |
+| **W0.5** (R4) | Orchestrator + ~4 agents | Stack verification: facts (hard gate) + fit (advisory), live read-only PromQL probes. `09-style.md` + R4 plan edits. Swatches + lit styleboard for the 4 time keys | Facts table green, probes return series, **user approves the swatches + styleboard** |
+| **W1a** | Orchestrator seam commit, then parallel lanes: (A) relay, (B) www, (C) models, (D) infra PR | Relay: `src_prom` (sync, metrics), worldcore (`h.base`, sites, deposits), `hello`, `/ws`, `/api/topology`, `/metrics` on its own port. www: kit, world, socket, sandbox, gate. Models: **mountain** (body + plain slabs), **eruption**. Deployed | A real ArgoCD sync makes land appear on the live site within 45 s |
+| **W1b** | Orchestrator seam commit (incl. `post.js`), then parallel lanes: (A) `src_alerts`, (B) cauldron, (C) sky-min, (D) lightning, (E) infra PR | `src_alerts`. Models: **cauldron** (own sag-ring mesh), **sky-min** (dome + cloud floor; owns `world.clouds`), **lightning**. post.js on desktop. Stale label | W1 verification passes |
 | **W2** | 1 agent | **Freeze** `contract.js`, `world.js`, `units.json`, `layout.js` (every profile), the bus registry, the event enum and the metrics frame, as revised by what W1 taught. Pigsty DB, persistence, scrub, `hello.state` | W2 verification passes |
 | **W3** | Parallel | Wave start, serial: **`cut.js` + strata** as the reference field provider (1 agent). Then parallel: aquifers, magma, veins (providers); glacier, summit, scree, sky (full), river, shimmer; story mechanism; `src_github`; detail-mode OIDC | Every model passes `gate.mjs <name>` + its fixture assertion; the page stays within budget |
 | **W4** | M BN + agents | **ADR-B** (visitor enrollment). Hardening PRs (08). Then, in parallel: toy-clouds, cairns, footprints, toss + the relay `toy_<name>.go` validators | W4 verification passes |

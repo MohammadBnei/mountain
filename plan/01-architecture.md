@@ -3,23 +3,33 @@
 ## Repo and ownership
 ```
 mountain/
+  go.mod embed.go       repo root (R4): package `mountain`, `//go:embed www`, imported by relay
   units.json            FROZEN W2 — shared Go/JS constants
+  Dockerfile helm/values.yaml .github/workflows/   orchestrator (seam); CI pins :sha in helm/values.yaml
   relay/
-    main.go hub.go      orchestrator-only
+    main.go hub.go config.yaml   orchestrator-only
     sanitize.go store.go worldcore.go   owner per wave (W1a, W2, W1a)
     src_prom.go src_alerts.go src_github.go   one owner each; registered in sources.go (frozen W2)
     toy_<name>.go       one per toy (W4), registered in validators.go (frozen W2)
-    oidc.go metrics.go
+    sources.go metrics.go   orchestrator (W1a seam)
+    oidc.go
   www/
     index.html vendor/ (three r186 from pi-lab + SimplexNoise, RoundedBoxGeometry,
                         postprocessing chain + shaders, cannon-es 0.20.0; manifest.json regenerated)
-    js/boot.js main.js story.js kit.js shaders.js post.js socket.js   orchestrator
+    js/boot.js main.js story.js kit.js shaders.js post.js socket.js   orchestrator (socket.js body: W1a lane B)
     js/contract.js world.js layout.js                              FROZEN W2
     js/cut.js                                                      W3 serial (frozen after)
     models/<name>/{index.js, field.glsl, field.js, fixture.json, test.js}   owned by one agent
-    dev/sandbox.html gate.mjs perf.mjs fixtures/
+    dev/sandbox.html gate.mjs perf.mjs fixtures/relay-*.json schema/*.json
   plan/
 ```
+
+**Seam commits (R4).** Each wave starts with one orchestrator commit that writes every orchestrator-owned and soon-frozen file. Lanes then own only their own files. A lane that needs a seam change stops and asks the orchestrator.
+
+| Seam | Orchestrator writes | Lanes own |
+|---|---|---|
+| W1a | `units.json`; root `go.mod` + `embed.go`; `relay/{main,hub,sources,metrics}.go`, `relay/config.yaml`; minimal `worldcore.Base(seed)` + `relay dump-hello`; `www/index.html`; `js/{boot,main,kit,shaders,socket,contract,world,layout}.js` (interfaces; `layout.js` profiles for every model of the wave); `vendor/` (re-vendored three@0.186.1 + RoundedBoxGeometry, SimplexNoise, EffectComposer/RenderPass/UnrealBloomPass/OutputPass/ShaderPass, cannon-es 0.20.0, regenerated `manifest.json`); `www/dev/schema/*.json`; Dockerfile, `helm/values.yaml`, CI; minimal `dev/gate.mjs` + `dev/sandbox.html`; kit `lava()` + interface stubs `crystal()`/`flow()`/`stamp()`/`uFootprint` (09) | (A) relay: `src_prom.go`, `worldcore.go` body, `sanitize.go`, `/ws`, `/api/topology`, `:9090`, fixture source + **relay fixtures `www/dev/fixtures/relay-*.json`**. (B) www: `world.js`/`socket.js` bodies, sandbox controls, full `gate.mjs`, **`dev/perf.mjs`**, styleboard. (C) `models/mountain/`, `models/eruption/` (each model's `fixture.json` belongs to its model owner). (D) infra-bootstrap PRs (`/add-app`, Traefik 15 s) |
+| W1b | `post.js`; `layout.js` profiles for cauldron, sky, lightning; `world.rig` slot | (A) `src_alerts.go` + stale handling. (B) `models/cauldron/`. (C) `models/sky/` (sky-min). (D) `models/lightning/`. (E) infra-bootstrap PR |
 
 ## Units (`units.json`, frozen W2)
 - World extent: 200 × 200 units, origin at the centre, y up.
@@ -42,7 +52,7 @@ Every model folder ships `fixture.json` (a scripted event and world-delta timeli
 
 | Field | Writer | Use |
 |---|---|---|
-| `h.base` | **world.js**, from `hello.snapshot` | Go-generated terrain base, int16 mm |
+| `h.base` | **world.js**, from `hello.snapshot` | Go-generated terrain base, int16 mm, spiral walkway + cave niches already carved (06); `bench` mask (u8) and `caves[]` alongside |
 | `h.land` | **world.js**, from `world:deposit` raster cells | ramps over 3 s so lava arrives first |
 | `heightSolid` | — (`h.base + h.land`) | physics, picking, snowline, relay validation |
 | `h.talus` | scree | visual only |
@@ -60,6 +70,7 @@ Every model folder ships `fixture.json` (a scripted event and world-delta timeli
 | `world.wind`, `world.snowline` | socket.js | metrics frame (relay-computed) |
 | `world.clouds` | sky (W1b sky-min) | real floor from net rx + visitor clouds + steam |
 | `world.sun` | sky | SunCalc port, Paris |
+| `world.rig` **(R4)** | sky | `{elev, rising}` → `kit.setPhase` (09). Fixed at dusk until sky-full (W3) |
 | `world.clip` | story.js (`cut(P)`) | plane + depth; closed = `constant 1e4` |
 | `world.stale` | socket.js | since-timestamp |
 
@@ -87,15 +98,34 @@ Every model folder ships `fixture.json` (a scripted event and world-delta timeli
 | `ice.calve` | `{x, z, size}` | glacier | scree |
 | `aquifer.seep` | `{pool, x, z}` | aquifers | river |
 
+## Wire encoding (R4)
+- JSON Schema for the `hello`, `ev`, `metrics` and `world` frames lives in `www/dev/schema/*.json`. Go and JS tests both validate against it.
+- int16 grids: **base64, little-endian, row-major (z outer, x inner)**. Cell 0 sits at world (−100, −100).
+- Heights: int16 mm; units = mm / 1000.
+- The hello fixture comes from `relay dump-hello` (real Go), never by hand.
+
+## Kit (`kit.js`, orchestrator-owned; see `09-style.md`)
+- Factories, each tagging `userData.kit='<factory>'`: `lit()`, `glow()`, `line()`, `points()`, `dome()`, `terrain()`, `stamp()`, `cave()`, `crystal()`, `lava()`, `flow()`, `ramp(name)`. Procedural helpers: `rock(seed)`, `puff(seed)`, `shard(seed)`.
+- Kit pins tone mapping (`LinearToneMapping`), exposure (1), the light rig (hemisphere + directional) and `FogExp2`, with colours from the current time key. `kit.setPhase(elev, rising)` lerps them all.
+- No GLBs, no shadows, no textures outside `glow`/`points`/fields.
+
 ## Shaders (`kit.js` + `shaders.js`, orchestrator-owned)
-- The orchestrator owns the **terrain and crystal shaders**. They expose uniform slots: `uClip`, `uSnowline`, `uWobble`, `uHeat`, `uStale`. Sky and shimmer **only write uniforms** and never call `onBeforeCompile`.
+- The orchestrator owns the **terrain and crystal shaders**. They expose uniform slots: `uClip`, `uSnowline`, `uWobble`, `uHeat`, `uStale`, `uSnowLift`, `uEmber`, **`uVeins`** (kit-owned vein capsule texture), `bench` attribute, **`uFootprint`** (terrain; sampler bound only to the kit-owned 512² footprint RT, drawn by an offscreen stamp scene built from kit `stamp()`). Sky and shimmer **only write uniforms** and never call `onBeforeCompile`.
 - Patches work on both kit materials (Standard on high, Lambert on low), with `customProgramCacheKey` set.
 - Tone mapping and output colour space are pinned the same for the composer path and the direct path.
+
+## CI (R4, `.github/workflows/`, orchestrator)
+| Item | Rule |
+|---|---|
+| Triggers | `push` to main on paths `relay/**`, `www/**`, `embed.go`, `go.mod`, `go.sum`, `Dockerfile`; plus `workflow_dispatch` |
+| Excluded paths | `helm/**`, `plan/**` (so the tag-bump commit cannot retrigger CI) |
+| Tag bump | CI writes the image `:sha` into `helm/values.yaml` and pushes with `GITHUB_TOKEN` (which also cannot retrigger workflows) |
+| Orchestrator push | `git pull --rebase` before each wave push (CI's bump commits land on main in between) |
 
 ## Cut (`cut.js`, W3 serial)
 - The mountain is a closed mesh (skirt + bottom), DoubleSide.
 - The back-face cap computes the view-ray ∩ plane point `p` and writes `gl_FragDepth`. perf.mjs measures early-z loss; the fallback is a separate cap mesh.
-- Field providers (`field.glsl`: `vec4 <name>Field(vec3 p, vec4 base)`) are composed in `layout.js` order: strata → aquifers → magma → veins. Missing providers are skipped, so nobody edits cut.js after W3 start.
+- Field providers (`field.glsl`: `vec4 <name>Field(vec3 p, vec4 base)`) are composed in `layout.js` order: strata → aquifers → magma → veins → caves (mountain-owned: a short irregular `deep` blob hollow per `caves[]` entry, not a tube). Missing providers are skipped, so nobody edits cut.js after W3 start.
 - **Clipping list:**
 
   | Clipped | Not clipped |

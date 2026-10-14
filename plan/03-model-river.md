@@ -9,7 +9,7 @@ W3
 Width/speed = `metrics.river` (public traffic bytes). Visual feeds: `melt`, `aquifer.seep`, `jokulhlaup`
 
 ## Technique
-CatmullRom ribbon on heightSolid, scrolled UV + foam
+CatmullRom ribbon on heightSolid, kit `flow(water)` material (foam scrolled by `uTime` only, no `map`)
 
 ## Clip / cost
 not clipped / 1 draw
