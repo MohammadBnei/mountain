@@ -43,6 +43,10 @@ nodes:
   k8s-cp-02: h2
   k8s-worker-02: h2
   k8s-cp-03: h3
+  # PVE blackbox probe targets (probe_success{target}) -> same host buckets.
+  pve-bnei: h1
+  pve-server1: h2
+  pve-ex-laptop: h3
 
 # Alert -> stratum layer, first match on alertname (Go regexp, anchored).
 # Layers: bedrock (Proxmox/hosts), k8s (cluster), apps.
