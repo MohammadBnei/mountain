@@ -192,8 +192,18 @@ func (p *promSource) diff(k string, v float64) float64 {
 }
 
 // prune ends a poll: counter series unseen for staleAfter polls (pods come and go) are dropped.
-func (p *promSource) prune() {
-	maps.DeleteFunc(p.ctr, func(_ string, c counter) bool { return p.polls-c.poll >= staleAfter })
+// Only polls whose query answered age a series (an empty answer is no answer): a scrape down
+// for 10 min must not make every series come back as new and replay its full value.
+func (p *promSource) prune(r map[string][]sample) {
+	for k, c := range p.ctr {
+		name, _, _ := strings.Cut(k, "{")
+		if len(r[name]) == 0 {
+			c.poll++
+			p.ctr[k] = c
+		} else if p.polls-c.poll >= staleAfter {
+			delete(p.ctr, k)
+		}
+	}
 	p.polls++
 }
 
@@ -553,7 +563,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		delete(m.Stale, "prom")
 	})
 	p.last, p.warm = now, true
-	p.prune()
+	p.prune(r)
 	return nil
 }
 

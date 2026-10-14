@@ -294,10 +294,27 @@ func TestCounterPrune(t *testing.T) {
 	p.diff("gone", 5)
 	for range staleAfter + 1 {
 		p.diff("live", 1)
-		p.prune()
+		p.prune(map[string][]sample{"gone": {{}}, "live": {{}}})
 	}
 	if _, ok := p.ctr["gone"]; ok || len(p.ctr) != 1 {
 		t.Fatalf("stale series must be pruned, live kept: %v", p.ctr)
+	}
+}
+
+// TestCounterOutage: a sync series hidden behind empty answers for staleAfter polls (scrape down,
+// Prometheus up) comes back unchanged: diff 0, no argo.sync.
+func TestCounterOutage(t *testing.T) {
+	a, c := testApp(t)
+	s := []fixtureSeries{{M: map[string]string{"name": "wird", "phase": "Succeeded"}, V: 7}}
+	f := &fixture{prom: []map[string][]fixtureSeries{{"sync": s}}}
+	for range staleAfter + 1 {
+		f.prom = append(f.prom, map[string][]fixtureSeries{})
+	}
+	f.prom = append(f.prom, map[string][]fixtureSeries{"sync": s})
+	for i, st := range run(t, a, c, f, 0) {
+		if e := evs(st, "argo.sync"); len(e) != 0 {
+			t.Fatalf("poll %d: false argo.sync after outage: %v", i, e)
+		}
 	}
 }
 
