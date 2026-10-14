@@ -34,6 +34,15 @@ ingress:
     headers:
       referrerPolicy: no-referrer
 
+# DATABASE_URL (mountaindb on pg-proxmox, direct :5432), rendered by infra-bootstrap
+# gitops/bootstrap/mountain-secret.yaml. optional: a missing Secret starts the relay
+# memory-only (logged) instead of CreateContainerConfigError; the alarm is
+# mountain_source_last_success{source="db"} ageing into MountainSourceStale.
+envFrom:
+  - secretRef:
+      name: mountain-config
+      optional: true
+
 # Alert fp salt (02: never rotated, veins link to it): key MOUNTAIN_FP_SALT in
 # Infisical mountain-8c-cz, synced to the Secret mountain-infisical and loaded
 # verbatim via envFrom. Without the key the relay boots and drops alerts (fail closed).
@@ -50,8 +59,8 @@ readinessProbe:
   enabled: true
   path: /healthz
 
-# distroless static:nonroot runs as 65532. Nothing writes to disk until W2
-# (Postgres, DATABASE_URL via gitops/bootstrap/mountain-secret.yaml).
+# distroless static:nonroot runs as 65532. Nothing writes to disk: state lives in
+# Postgres (DATABASE_URL above).
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 65532
@@ -110,8 +119,10 @@ extraManifests:
               annotations:
                 summary: "mountain: a relay source has not polled successfully for 5 min"
                 description: >-
-                  The live page shows "stale since" and the sky dims. The relay keeps
-                  serving the last world; check the relay logs for the source label.
+                  prom/alerts: the live page shows "stale since" and the sky dims; the relay
+                  keeps serving the last world. db: the page stays live, but frames and
+                  snapshots are not stored (restart survival, scrub); unset DATABASE_URL
+                  (memory-only) looks the same. Check the relay logs for the source label.
             - alert: MountainTokenExpiring
               expr: min(mountain_github_token_days_left{namespace="{{ .Release.Namespace }}"}) < 14
               for: 1h
