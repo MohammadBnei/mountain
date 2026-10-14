@@ -66,13 +66,23 @@ func NewHub(dev bool, hello func() []byte) *Hub {
 	return &Hub{dev: dev, hello: hello, clients: map[*Client]struct{}{}, perIP: map[string]int{}}
 }
 
-// Broadcast queues b to every client.
+// Broadcast queues b to every client (nil = nothing, a dropped frame).
 func (h *Hub) Broadcast(b []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for c := range h.clients {
-		if !c.Send(b) {
-			c.conn.CloseNow() // never block the hub lock on a close handshake
+	h.broadcastLocked(b)
+}
+
+// broadcastLocked queues each non-nil frame to every client, in order. Caller holds h.mu.
+func (h *Hub) broadcastLocked(bs ...[]byte) {
+	for _, b := range bs {
+		if b == nil {
+			continue
+		}
+		for c := range h.clients {
+			if !c.Send(b) {
+				c.conn.CloseNow() // never block the hub lock on a close handshake
+			}
 		}
 	}
 }

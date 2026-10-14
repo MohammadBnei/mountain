@@ -290,7 +290,7 @@ func TestDepositHubLock(t *testing.T) {
 	p := newProm(a)
 	a.Hub.mu.Lock()
 	done := make(chan struct{})
-	go func() { p.deposit(ULID(), "wird", 1); close(done) }()
+	go func() { p.deposit(&Out{app: a}, "wird", 1); close(done) }()
 	time.Sleep(50 * time.Millisecond)
 	a.mu.Lock()
 	changed := slices.ContainsFunc(a.Land, func(v int16) bool { return v != 0 })
@@ -300,8 +300,48 @@ func TestDepositHubLock(t *testing.T) {
 	if changed {
 		t.Fatal("deposit changed h.land outside the hub lock")
 	}
-	if n := len(drain(c)); n != 2 {
-		t.Fatalf("want world:deposit + world:site, got %d frames", n)
+	if n := len(drain(c)); n != 3 {
+		t.Fatalf("want ev:argo.sync + world:deposit + world:site, got %d frames", n)
+	}
+}
+
+// TestSyncDepositAtomic: the argo.sync ev leaves in the same hub-lock section as its world:deposit, so a
+// client registering between them cannot get the deposit without its ev. While the deposit waits on
+// the app lock, no frame of the sync may be out yet.
+func TestSyncDepositAtomic(t *testing.T) {
+	a, c := testApp(t)
+	f := &fixture{prom: []map[string][]fixtureSeries{
+		{"sync": {{M: map[string]string{"name": "wird", "phase": "Succeeded"}, V: 1}}},
+		{"sync": {{M: map[string]string{"name": "wird", "phase": "Succeeded"}, V: 2}}},
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	u, err := serveFixture(ctx, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Opts.PromURL = u
+	p, out := newProm(a), &Out{app: a, name: "prom"}
+	if err := p.poll(ctx, out, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	drain(c)
+	f.step.Store(1)
+	a.mu.Lock()
+	done := make(chan error)
+	go func() { done <- p.poll(ctx, out, time.Now()) }()
+	time.Sleep(100 * time.Millisecond)
+	early := drain(c)
+	a.mu.Unlock()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if len(early) != 0 {
+		t.Fatalf("frames out before the deposit's critical section: %v", early)
+	}
+	got := drain(c)
+	if len(got) < 3 || got[0]["kind"] != "argo.sync" || got[1]["kind"] != "deposit" || got[0]["id"] != got[1]["id"] {
+		t.Fatalf("want ev then its deposit: %v", got)
 	}
 }
 

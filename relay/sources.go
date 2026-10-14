@@ -71,25 +71,45 @@ type Out struct {
 	name string
 }
 
-// Ev broadcasts {t:"ev", id, ts, kind, ...fields} (02 event enum). Fields must already be sanitised.
-func (o *Out) Ev(kind string, fields map[string]any) {
-	f := map[string]any{}
-	for k, v := range fields {
-		f[k] = v
-	}
-	f["t"], f["id"], f["ts"], f["kind"] = "ev", ULID(), time.Now().UnixMilli(), kind // after fields: a field can't overwrite them
-	o.app.Hub.Broadcast(mustJSON(f))
+// Ev sanitises fields (Cfg.clean: the closed per-kind spec, copied into a fresh map), broadcasts
+// {t:"ev", id, ts, kind, ...fields} (02 event enum) and returns its id ("" if dropped).
+func (o *Out) Ev(kind string, fields map[string]any) string {
+	id, b := o.evFrame(kind, fields)
+	o.app.Hub.Broadcast(b)
+	return id
 }
 
-// World broadcasts {t:"world", kind, ...payload} (kind = deposit|vein|glacier|ash|site|mark|cloud|rain).
-// A payload never carries its own "kind" (world:mark uses "mark"); t/kind are written last regardless.
+// World sanitises and broadcasts {t:"world", kind, ...payload} (kind = deposit|vein|glacier|ash|site|mark|cloud|rain).
 func (o *Out) World(kind string, payload map[string]any) {
-	f := map[string]any{}
-	for k, v := range payload {
-		f[k] = v
+	o.app.Hub.Broadcast(o.worldFrame(kind, payload))
+}
+
+// frame cleans fields for "<t>:<kind>" and stamps t/kind last (a field can't overwrite them); nil if dropped.
+func (o *Out) frame(t, kind string, fields map[string]any) map[string]any {
+	f, ok := o.app.Cfg.clean(t+":"+kind, fields)
+	if !ok {
+		log.Printf("sanitize: dropped %s %s", t, kind)
+		return nil
 	}
-	f["t"], f["kind"] = "world", kind
-	o.app.Hub.Broadcast(mustJSON(f))
+	f["t"], f["kind"] = t, kind
+	return f
+}
+
+func (o *Out) evFrame(kind string, fields map[string]any) (string, []byte) {
+	f := o.frame("ev", kind, fields)
+	if f == nil {
+		return "", nil
+	}
+	id := ULID()
+	f["id"], f["ts"] = id, time.Now().UnixMilli()
+	return id, mustJSON(f)
+}
+
+func (o *Out) worldFrame(kind string, payload map[string]any) []byte {
+	if f := o.frame("world", kind, payload); f != nil {
+		return mustJSON(f)
+	}
+	return nil
 }
 
 // Metrics mutates the current metrics frame under the app lock, then broadcasts it.

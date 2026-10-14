@@ -87,10 +87,15 @@ func TestHub(t *testing.T) {
 		if err != nil || json.Unmarshal(b, &f) != nil || f.T != "hello" {
 			t.Fatalf("first frame: %v %.80s", err, b)
 		}
-		(&Out{app: a, name: "test"}).Ev("argo.sync", map[string]any{"app": "wird", "ok": true, "kind": "hostile", "t": "x"})
+		out := &Out{app: a, name: "test"}
+		if id := out.Ev("argo.sync", map[string]any{"app": "kube-system", "ok": true}); id != "" {
+			t.Errorf("a non-allowlisted app must drop the frame, got id %s", id)
+		}
+		id := out.Ev("argo.sync", map[string]any{"app": "wird", "ok": true, "kind": "hostile", "t": "x", "ns": "kube-system"})
 		_, b, err = c.Read(context.Background())
-		if err != nil || !strings.Contains(string(b), `"kind":"argo.sync"`) || !strings.Contains(string(b), `"t":"ev"`) {
-			t.Fatalf("broadcast: %v %s", err, b)
+		if err != nil || !strings.Contains(string(b), `"kind":"argo.sync"`) || !strings.Contains(string(b), `"t":"ev"`) ||
+			!strings.Contains(string(b), `"id":"`+id+`"`) || strings.Contains(string(b), "kube-system") {
+			t.Fatalf("broadcast must be sanitised and carry the returned id: %v %s", err, b)
 		}
 		c.CloseNow()
 		srv.Close()

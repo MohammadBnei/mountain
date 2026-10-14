@@ -213,31 +213,6 @@ func (p *promSource) prune(r map[string][]sample) {
 	p.polls++
 }
 
-// emit sanitises and broadcasts an ev frame and returns its id ("" if dropped).
-// ponytail: mirrors Out.Ev because Out.Ev does not return the id that world:deposit must reuse.
-func emit(o *Out, kind string, fields map[string]any) string {
-	f, ok := o.app.Cfg.clean("ev:"+kind, fields)
-	if !ok {
-		log.Printf("sanitize: dropped ev %s", kind)
-		return ""
-	}
-	id := ULID()
-	f["t"], f["id"], f["ts"], f["kind"] = "ev", id, time.Now().UnixMilli(), kind
-	o.app.Hub.Broadcast(mustJSON(f))
-	return id
-}
-
-// worldFrame sanitises a world payload into a {t:"world", kind, ...} frame (nil if dropped).
-func worldFrame(c *Config, kind string, payload map[string]any) []byte {
-	f, ok := c.clean("world:"+kind, payload)
-	if !ok {
-		log.Printf("sanitize: dropped world %s", kind)
-		return nil
-	}
-	f["t"], f["kind"] = "world", kind
-	return mustJSON(f)
-}
-
 func siteMap(s worldcore.Site) map[string]any {
 	return map[string]any{"app": s.App, "x": s.X, "z": s.Z, "y": s.Y, "tier": s.Tier, "group": s.Group}
 }
@@ -254,14 +229,18 @@ func (a *App) sites() []worldcore.Site {
 	return s
 }
 
-// deposit rasterises the land of a successful sync at the app's site, adds it to h.land and
-// broadcasts world:deposit (id = the sync's ev id) and the site's new y. It holds the hub lock across
-// the land change and the broadcast (lock order h.mu -> a.mu, hub.go): a client connecting meanwhile
-// gets either the old land plus the deposit frame or the new land without it, never the deposit twice.
-func (p *promSource) deposit(id, app string, heat float64) {
+// deposit broadcasts a successful sync's argo.sync ev, rasterises its land at the app's site into
+// h.land, and broadcasts world:deposit (id = the ev id) and the site's new y, all in one hub-lock critical
+// section (lock order h.mu -> a.mu, hub.go): a client connecting meanwhile gets either the old land and
+// all three frames or the new land and none of them, never a deposit without its ev, never one twice.
+func (p *promSource) deposit(o *Out, app string, heat float64) {
 	a := p.a
 	a.Hub.mu.Lock()
 	defer a.Hub.mu.Unlock()
+	id, ev := o.evFrame("argo.sync", map[string]any{"app": app, "ok": true})
+	if ev == nil {
+		return
+	}
 	a.mu.Lock()
 	solid := worldcore.Solid(a.World.Base, a.Land)
 	g := a.Cfg.Apps[app].Group
@@ -275,17 +254,9 @@ func (p *promSource) deposit(id, app string, heat float64) {
 	}
 	s = worldcore.PlaceSite(app, g, worldcore.Solid(a.World.Base, a.Land))
 	a.mu.Unlock()
-	for _, b := range [][]byte{
-		worldFrame(a.Cfg, "deposit", map[string]any{"id": id, "x0": d.X0, "z0": d.Z0, "w": d.W, "h": d.H, "cells": worldcore.EncodeI16(d.Cells)}),
-		worldFrame(a.Cfg, "site", siteMap(s)),
-	} {
-		// ponytail: Hub.Broadcast's body, inlined because Broadcast takes h.mu itself.
-		for c := range a.Hub.clients {
-			if b != nil && !c.Send(b) {
-				c.conn.CloseNow()
-			}
-		}
-	}
+	a.Hub.broadcastLocked(ev,
+		o.worldFrame("deposit", map[string]any{"id": id, "x0": d.X0, "z0": d.Z0, "w": d.W, "h": d.H, "cells": worldcore.EncodeI16(d.Cells)}),
+		o.worldFrame("site", siteMap(s)))
 }
 
 var code5xx = regexp.MustCompile(`^5\d\d$`)
@@ -342,8 +313,10 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	for _, s := range syncs {
 		p.syncs = append(p.syncs, now)
 		heat := math.Min(1, float64(len(p.syncs))/5)
-		if id := emit(o, "argo.sync", map[string]any{"app": s.app, "ok": s.ok}); id != "" && s.ok {
-			p.deposit(id, s.app, heat)
+		if s.ok {
+			p.deposit(o, s.app, heat)
+		} else {
+			o.Ev("argo.sync", map[string]any{"app": s.app, "ok": false})
 		}
 	}
 
@@ -357,7 +330,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		present[app] = true
 		st := s.L["health_status"]
 		if old, ok := p.health[app]; ok && old != st && p.warm {
-			emit(o, "argo.health", map[string]any{"app": app, "status": st})
+			o.Ev("argo.health", map[string]any{"app": app, "status": st})
 		}
 		p.health[app], p.seen[app] = st, true
 		delete(p.gone, app)
@@ -371,7 +344,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		case p.gone[app].IsZero():
 			p.gone[app] = now
 		case now.Sub(p.gone[app]) >= goneAfter:
-			emit(o, "app.gone", map[string]any{"app": app})
+			o.Ev("app.gone", map[string]any{"app": app})
 			delete(p.seen, app)
 			delete(p.gone, app)
 			delete(p.health, app)
@@ -421,7 +394,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	p.crash = crash
 	for _, app := range slices.Sorted(maps.Keys(ch)) {
 		c := ch[app]
-		emit(o, "pod.churn", map[string]any{"app": app, "restarts": c.restarts, "oom": c.oom, "crashloop": c.crashloop})
+		o.Ev("pod.churn", map[string]any{"app": app, "restarts": c.restarts, "oom": c.oom, "crashloop": c.crashloop})
 	}
 
 	// replicas: sum per app, bucketed, on change.
@@ -434,7 +407,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	for _, app := range slices.Sorted(maps.Keys(reps)) {
 		b := replicaB(reps[app])
 		if old, ok := p.repl[app]; ok && old != b {
-			emit(o, "replicas", map[string]any{"app": app, "bucket": b})
+			o.Ev("replicas", map[string]any{"app": app, "bucket": b})
 		}
 		p.repl[app] = b
 	}
@@ -469,7 +442,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	for _, h := range []string{"h1", "h2", "h3"} {
 		rd := hs[h].nodes > 0 && hs[h].ready == hs[h].nodes
 		if old, ok := p.ready[h]; ok && old != rd {
-			emit(o, "node.ready", map[string]any{"host": h, "ready": rd})
+			o.Ev("node.ready", map[string]any{"host": h, "ready": rd})
 		}
 		p.ready[h] = rd
 	}
@@ -484,7 +457,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	slices.Sort(up)
 	if q := strings.Join(up, ","); q != p.quorum {
 		if p.warm {
-			emit(o, "quorum", map[string]any{"up": up})
+			o.Ev("quorum", map[string]any{"up": up})
 		}
 		p.quorum = q
 	}
