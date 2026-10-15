@@ -46,7 +46,7 @@ export function clip(P) {
 const lang = navigator.language?.toLowerCase().startsWith('fr') ? 'fr' : 'en', T = S[lang];
 const pct = (x) => `${Math.round((x || 0) * 100)} %`;
 // count + label, singular from the `<key>.one` string when the language says so (1 ash line, 0 alerte active)
-const plural = new Intl.PluralRules(lang), N = (n, k) => `${n} ${T[plural.select(n) === 'one' && T[k + '.one'] || k]}`;
+const plural = new Intl.PluralRules(lang), N = (n, k) => `${n} ${T[plural.select(n) === 'one' && T[k + '.one'] ? k + '.one' : k]}`;
 // Panel facts, mono: only what the page already holds (/api/topology sites, metrics, hello.state). No versions (02).
 function facts(i, w) {
   const m = w.metrics || {}, s = w.state || {}, hosts = Object.values(m.hosts || {});
