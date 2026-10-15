@@ -1,0 +1,6 @@
+{
+  "_": "shimmer behaviour fixture: idle, then a busy cluster with the GPU host (h1) hot, then h1 cooler at the same cpu, then idle again.",
+  "idle": { "cpu": 0, "hosts": { "h1": { "alloc": 0.4, "ready": true, "load": 0 }, "h2": { "alloc": 0.2, "ready": true, "load": 0 }, "h3": { "alloc": 0.1, "ready": true, "load": 0 } } },
+  "busy": { "cpu": 0.8, "hosts": { "h1": { "alloc": 0.4, "ready": true, "load": 0.95 }, "h2": { "alloc": 0.2, "ready": true, "load": 0.7 }, "h3": { "alloc": 0.1, "ready": true, "load": 0.6 } } },
+  "cool": { "cpu": 0.8, "hosts": { "h1": { "alloc": 0.4, "ready": true, "load": 0.2 }, "h2": { "alloc": 0.2, "ready": true, "load": 1 }, "h3": { "alloc": 0.1, "ready": true, "load": 1 } } }
+}
