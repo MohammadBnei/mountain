@@ -1,0 +1,9 @@
+{
+  "_": "river behaviour fixture: metrics.river levels test.js writes (quiet, busy, the level the feeds land on) and one payload per visual feed (glacier melt, a longhorn pool seeping, the cauldron's jokulhlaup at the summit).",
+  "quiet": 0,
+  "busy": 1,
+  "base": 0.3,
+  "melt": { "x": 4, "z": 6, "vol": 12.5 },
+  "seep": { "pool": "pvc-wird-data", "x": -12, "z": 0 },
+  "jokulhlaup": { "x": 0, "z": 0, "vol": 5 }
+}
