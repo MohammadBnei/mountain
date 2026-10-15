@@ -307,9 +307,10 @@ async function pageMode() {
     const b = await settle(4);
     dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
     const left = (await settle(3)).section;
+    await wait(1100); const facts = $('facts').textContent; // refreshed every 1 s
     location.hash = '#live';
     await settle(5);
-    return { hero: s0.section, P0: s0.P, prev0, hashes: hashes.join(' '), deepest, live: s5.section, P5: s5.P, depth5: s5.clip.depth, next5, prev5,
+    return { hero: s0.section, P0: s0.P, prev0, hashes: hashes.join(' '), facts, deepest, live: s5.section, P5: s5.P, depth5: s5.clip.depth, next5, prev5,
       link: b.section, depth4: b.clip.depth, left, signin: $('signin').hidden };
   })()`).catch((e) => ({ err: e.message }));
   if (sy.err) fail(`story: ${sy.err}`);
@@ -320,6 +321,7 @@ async function pageMode() {
     if (sy.live !== 'live' || sy.P5 !== 5 || !sy.next5 || sy.prev5 || sy.depth5 !== 0) fail(`story: Next ×5 did not settle on Live (closed cut, Next disabled): ${JSON.stringify(sy)}`);
     if (sy.link !== 'bedrock' || sy.depth4 !== 100 || sy.left !== 'strata') fail(`story: #bedrock link / its depth-100 cut / ← step: ${JSON.stringify(sy)}`);
     if (!sy.signin) fail('story: sign-in link shown with detail mode off');
+    if (!sy.facts || /undefined|NaN/.test(sy.facts)) fail(`story: strata facts ${JSON.stringify(sy.facts)}`);
     console.log(`story: ${JSON.stringify(sy)}  ${await shot(page, `page-live-${W}.png`)}`);
   }
 
