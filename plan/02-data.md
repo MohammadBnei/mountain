@@ -115,7 +115,7 @@ Rot guard:
 - `world_deltas(seq, ts, day, kind, frame jsonb)`: every broadcast `world` frame as sent.
 - `snapshots(day PK, seq, ts, seed, land bytea, state jsonb, metrics jsonb)`: upserted every 10 min, at UTC rollover and on SIGTERM. `land` = h.land, little-endian int16; h.base is regenerated from `seed`, never stored. **W3b:** veins, glacier and ash ride in `state` (hello.state: `veins`, `glacier`, `ash`, `health`, `replicas`, `builds`), so no new columns or migration; a pre-W3b row restores their defaults. `clouds` arrives with toy-clouds (W4).
 - `metrics_5m(ts, day, frame jsonb)`: the metrics frame every 5 min (scrub).
-- `marks`, `limits`: W4 (visitor layer), not created yet.
+- `marks` (migration `003_marks.sql`, W4 seam): `id, sub, handle, toy, ts, day, pose jsonb, weight, deleted_at`: the private record of each accepted mark. The public side is the `world:mark` frame (world_deltas, `hello.state.marks`). No `limits` table: the per-account rate limits are seeded from `marks` at boot (ponytail).
 
 **Boot:** load the latest snapshot of the seed, re-apply every frame after it (deposits add into h.land with `AddQ`; every frame updates `state` through `State.apply`, the same rules as live and world.js), restore `metrics` (stale map cleared: sources re-mark what is down). No snapshot yet: write one at once, so later frames have a base. Restored alerts seed `src_alerts`: still active → no second `alert.fire` (startsAt kept); gone from Alertmanager → resolved on the first good poll.
 

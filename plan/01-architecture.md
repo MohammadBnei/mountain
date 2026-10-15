@@ -12,7 +12,7 @@ mountain/
     sanitize.go store.go scrub.go migrations/   owner per wave (W1a, W2)
     worldcore/          package (W1a seam): base.go = Base(seed) + wire encoding (orchestrator, frozen); other files lane A
     src_prom.go src_alerts.go src_github.go   one owner each; registered in sources.go (frozen W2)
-    toy_<name>.go       one per toy (W4), registered in validators.go (frozen W2)
+    toy_<name>.go       one per toy (W4), registered in validators.go (W4 seam: RegisterToy, Place, marks, kill switch, tick)
     sources.go metrics.go   orchestrator (W1a seam)
     oidc.go
   www/
@@ -21,6 +21,7 @@ mountain/
     js/boot.js main.js story.js kit.js shaders.js post.js socket.js   orchestrator (socket.js body: W1a lane B)
     js/contract.js world.js layout.js kit.js tokens.json           FROZEN W2 (done; FROZEN.sha256)
     js/page.js                                                     orchestrator: landed models, load order (not frozen)
+    js/toys.js                                                     orchestrator (W4 seam): toolbar, input routing, pickTerrain, surfacePhysics
     js/cut.js                                                      W3 serial (frozen after)
     models/<name>/{index.js, field.glsl, field.js, fixture.json, test.js}   owned by one agent
     dev/sandbox.html gate.mjs perf.mjs fixtures/relay-*.json schema/*.json (schema FROZEN W2)
