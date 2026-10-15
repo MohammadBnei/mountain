@@ -58,8 +58,10 @@ export default async function build({ THREE, kit, world }) {
   // world.clouds entries, mutated in place (step is allocation-free)
   const C = [...MASS, ...LAYER].map((c) => ({ x: c.x ?? 0, z: c.z ?? 0, y: c.y ?? 0, r: c.r, mass: !c.y }));
   const S = Array.from({ length: SLOTS }, (_, i) => ({ age: LIFE, x: 0, z: 0, y0: 0, k: 1, flip: i & 1 ? -1 : 1, c: { x: 0, z: 0, y: 0, r: 6, mass: false } }));
-  const visitors = new Map(); // id → world.clouds entry; a hello resync clears them (world.caves identity, as the glacier)
+  const visitors = new Map(); // id → world.clouds entry; a hello resync reseeds them from world.state.clouds (world.caves identity, as the glacier)
+  const seed = () => { visitors.clear(); for (const c of world.state.clouds || []) visitors.set(c.id, { r: 8, mass: false, x: c.pos[0], y: c.pos[1], z: c.pos[2] }); };
   let cavesSeen = world.caves;
+  seed();
   const clouds = [];
   const fill = (out) => {
     out.length = 0;
@@ -131,9 +133,10 @@ export default async function build({ THREE, kit, world }) {
     params: { tauRx: TAU_RX, tauStale: TAU_STALE, base: BASE, visit: VISIT },
     pose() {}, // sky is not on the scroll story: its state is the live metrics and the clock
     step(dt) {
-      if (world.caves !== cavesSeen) { // ponytail: hello.state has no clouds until W4: a visitor re-appears on its next frame
+      if (world.caves !== cavesSeen) { // a hello or replay: hello.state.clouds holds the live toy clouds (W4)
         cavesSeen = world.caves;
-        if (visitors.size) { visitors.clear(); world.write('clouds', fill); }
+        seed();
+        world.write('clouds', fill);
       }
       const rx = target();
       m = Math.abs(rx - m) < 0.002 ? rx : m + (rx - m) * Math.min(1, dt / TAU_RX);

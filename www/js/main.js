@@ -2,6 +2,8 @@
 // Orchestrator-owned. ?fixture=1 loads dev/fixtures/hello.json instead of /ws (static serving).
 // Host duties: world.rig → kit.setPhase on change; world.stale → the "stale since" label (sky dims via kit.setStale);
 // cut.js: compose the field providers once, then world.clip → uClip every frame; story.js writes world.clip from P.
+// W4 (toys.js): the surface models hang under one group the kill switch hides (metrics.visitors), the toolbar + tool input,
+// and the footprint RT (kit.drawStamps; its stamp scene hides with the group).
 // Dev (127.0.0.1): ?cut=<depth>[&cutaz=<rad>] holds the cut open instead (perf.mjs --cut).
 // Dev (127.0.0.1): globalThis.__page = {renderer, scene, camera, post, world, kit, quality(), orbit(), story()} for the gate.
 import * as THREE from 'three';
@@ -14,6 +16,7 @@ import { makeCtx, checkModel, wire } from './contract.js';
 import { createPost } from './post.js';
 import * as cut from './cut.js';
 import * as story from './story.js';
+import { SURFACE, createToys } from './toys.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const q = new URLSearchParams(location.search);
@@ -32,7 +35,8 @@ if (q.has('fixture')) fetch('./dev/fixtures/hello.json').then((r) => r.json()).t
 else connect({ world });
 await world.ready;
 
-const models = [];
+const models = [], surface = new THREE.Group();
+scene.add(surface);
 for (const name of page) {
   let build;
   try {
@@ -45,7 +49,7 @@ for (const name of page) {
   const bad = checkModel(m, profiles[name]);
   if (bad.length) { console.error(`main: ${name}: ${bad.join('; ')}`); continue; }
   wire(m, world);
-  scene.add(m.root);
+  (SURFACE.has(name) ? surface : scene).add(m.root);
   models.push(m);
 }
 
@@ -87,6 +91,8 @@ orbit.addEventListener('end', () => { idleAt = performance.now() + 45000; });
 const tale = story.createStory({ world, onStep: () => { if (orbiting) idleAt = performance.now(); } });
 if (dev) globalThis.__page.story = () => ({ P: tale.P, section: tale.section, hash: location.hash, clip: world.clip });
 let lastP = NaN;
+const toys = createToys({ world, camera, canvas: renderer.domElement, orbit, tale, models, surface });
+if (dev) globalThis.__page.surface = surface;
 
 const DT = 1 / 30;
 // Adaptive draw rate (heat/battery): a ladder of [fps, pixel ratio] from cheapest to richest. 60 fps is
@@ -128,6 +134,9 @@ renderer.setAnimationLoop((now) => {
   }
   host();
   const P = tale.tick(now);
+  toys.tick();
+  if (kit.stampScene.visible !== surface.visible) { kit.stampScene.visible = surface.visible; kit.stampScene.userData.dirty = true; }
+  kit.drawStamps(renderer);
   if (P !== lastP) { // pose + cut follow P only while it moves
     lastP = P;
     if (!cutKnob) world.write('clip', 'story', story.clip(P));

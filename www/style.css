@@ -14,4 +14,14 @@ canvas:active { cursor: grabbing; }
 #story button:disabled { opacity: .3; cursor: default; }
 #signin { position: absolute; top: 16px; right: 16px; font-size: 13px; color: inherit; opacity: .7; }
 #signin:hover, #signin:focus-visible { opacity: 1; }
-@media (max-width: 900px) { #panel { bottom: 80px; right: 16px; } }
+/* W4 visitor layer (toys.js): toolbar on the right edge, ≥ 44 px targets; the sign-in links in the same place */
+#toys { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; }
+#toys button { min-width: 48px; min-height: 48px; border: 1px solid rgb(236 230 220 / .35); border-radius: 24px; background: rgb(18 11 10 / .55); color: inherit; font: 20px/1 Georgia, serif; cursor: pointer; }
+#toys button:hover { background: rgb(18 11 10 / .8); }
+#toys button[aria-pressed="true"] { border-color: #ece6dc; background: rgb(18 11 10 / .85); }
+#toys button:focus-visible, #play a:focus-visible { outline: 2px solid #ece6dc; outline-offset: 2px; }
+#toystatus { position: absolute; right: 16px; bottom: 80px; margin: 0; padding: 6px 10px; border-radius: 8px; background: rgb(18 11 10 / .55); font-size: 13px; }
+#play { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); margin: 0; display: flex; flex-direction: column; gap: 8px; text-align: right; }
+#play a { display: inline-flex; align-items: center; justify-content: flex-end; min-height: 44px; padding: 0 14px; border-radius: 22px; background: rgb(18 11 10 / .55); color: inherit; font-size: 14px; }
+#play a#signin2 { font-size: 13px; opacity: .8; }
+@media (max-width: 900px) { #panel { bottom: 80px; right: 16px; } #toys, #play { top: 16px; transform: none; } #toys { flex-direction: row; right: 16px; } #toystatus { bottom: 140px; } }

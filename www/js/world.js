@@ -16,6 +16,8 @@
 //                ash [{day, title?}] ≤ 32, newest day first, one per day + title (world:ash);
 //                health {app: status} (ev argo.health), replicas {app: bucket} (ev replicas), builds {app: 'queued'|'running'}
 //                (ev build; success/failure removes); ev app.gone drops the app from all three.
+//                W4: marks [world:mark payload] ≤ 2000, oldest first (gone removes the id); clouds [world:cloud payload], one per
+//                id (a frame replaces it, state 'gone' removes it), ≤ 256.
 //                world.state is a NEW object after every hello or replay: a model that caches it resyncs on identity change
 //   world.stale  null | unix ms: the oldest metrics.stale[source] since, or the socket drop time
 //   world.clouds sky's clusters [{x, z, y (base, units), r, mass}]: mass = a towering cluster over the summit (lightning's
@@ -32,6 +34,10 @@
 //                then step() plays the day's frames, not silent, spread over ≤ 20 s.  world.replay null | {day, frames, metrics, left}
 //   world.release() → leaves the replay and resyncs to live (world.resync: a fresh hello)
 //   world.send(frame) / world.resync()   wired by socket.connect (absent without a socket)
+//   world.place(mark, pose) → Promise<id> (W4): sends {t:'mark', ref, mark, pose, named: world.named}; resolves with the
+//                mark id once the relay accepted it (the mark itself arrives as world:mark, to everyone), rejects with
+//                Error(reason): off | auth | toy | rate | bad | a toy's reason | timeout (10 s) | offline.  world.named: the
+//                toolbar's "sign my marks" (the host sets it).  world.unmark(id) → Promise<id>: admin mark.delete, same answers.
 // Dev mode throws on a write by a non-writer and on an emit by a non-emitter or of an unknown bus type.
 import U from './units.json' with { type: 'json' };
 
@@ -66,6 +72,7 @@ export function createWorld({ dev = false } = {}) {
   let resolveReady;
   const pending = []; // deposits ramping into h.land over 3 s
   let play = null; // replay playback: {day, queue, gap, t, timer, done: [resolve, reject]}
+  const acks = new Map(); let refN = 0; // W4 place/unmark: ref → [resolve, reject, timer]
   const w = {
     dev,
     fields: {
@@ -75,7 +82,7 @@ export function createWorld({ dev = false } = {}) {
     bench: new Uint8Array(N), caves: [], hmax: 0, day: null, seed: null,
     metrics: null, state: { alerts: [] }, sites: new Map(), wind: { x: 0, z: 0 }, snowline: 1e4, clouds: [], sun: null,
     rig: { elev: 0, rising: false }, // dusk until sky-full (W3)
-    clip: { plane: [0, 1, 0, 1e4], depth: 0 }, stale: null, replay: null,
+    clip: { plane: [0, 1, 0, 1e4], depth: 0 }, stale: null, replay: null, named: false,
     ready: new Promise((r) => (resolveReady = r)),
 
     cell(x, z) { const i = Math.round((x + 100) / CELL), j = Math.round((z + 100) / CELL); return Math.min(GRID - 1, Math.max(0, j)) * GRID + Math.min(GRID - 1, Math.max(0, i)); },
@@ -117,7 +124,7 @@ export function createWorld({ dev = false } = {}) {
       // Deposit deltas land at full height, silently: they are history, not live lava (no world:deposit replay).
       for (const d of h.deltas || []) if (d.t === 'world' && d.kind === 'deposit') deposit(d, decodeI16(d.cells), 1);
       solid();
-      w.write('state', 'socket', { alerts: [], veins: [], glacier: { mass: 0.5, tongues: [], ash: [] }, ash: [], health: {}, replicas: {}, builds: {}, ...h.state });
+      w.write('state', 'socket', { alerts: [], veins: [], glacier: { mass: 0.5, tongues: [], ash: [] }, ash: [], health: {}, replicas: {}, builds: {}, marks: [], clouds: [], ...h.state });
       // Every other delta is history too: its state applies, nothing re-emits as a live event.
       for (const d of h.deltas || []) if (!(d.t === 'world' && d.kind === 'deposit')) apply(d, true);
       if (h.metrics) apply(h.metrics);
@@ -134,6 +141,8 @@ export function createWorld({ dev = false } = {}) {
         w.send({ t: 'scrub', day });
       });
     },
+    place(mark, pose) { return ask({ t: 'mark', mark, pose, named: !!w.named }); },
+    unmark(id) { return ask({ t: 'mark.delete', id }); },
     release() {
       const p = play;
       play = null; w.replay = null;
@@ -143,6 +152,7 @@ export function createWorld({ dev = false } = {}) {
     // ponytail: live frames during a scrub are dropped, not buffered: release() resyncs through a fresh hello anyway.
     // A hello (reconnect) ends the scrub: the socket has resynced, so the world follows it.
     applyFrame(f, silent = false) {
+      if (f.t === 'mark') return answer(f);
       if (f.t === 'replay') return replay(f);
       if (f.t === 'hello' && play) { const p = play; play = null; w.replay = null; clearTimeout(p.timer); p.done[1](new Error('world: resynced')); }
       if (!play) apply(f, silent);
@@ -199,12 +209,35 @@ export function createWorld({ dev = false } = {}) {
         s.veins = s.veins.filter((v) => v !== old).concat(old ? { ...p, a: old.a, b: old.b, thick: Math.max(p.thick, old.thick) } : p).slice(-32);
       });
       if (kind === 'glacier') w.write('state', 'socket', (s) => { s.glacier = p; });
+      if (kind === 'mark') w.write('state', 'socket', (s) => {
+        s.marks = (s.marks || []).filter((m) => m.id !== p.id);
+        if (!p.gone) s.marks = s.marks.concat(p).slice(-2000);
+      });
+      if (kind === 'cloud') w.write('state', 'socket', (s) => {
+        const l = (s.clouds || []).filter((c) => c.id !== p.id), i = (s.clouds || []).findIndex((c) => c.id === p.id);
+        if (p.state !== 'gone') i < 0 ? l.push(p) : l.splice(i, 0, p);
+        s.clouds = l.slice(-256);
+      });
       if (kind === 'ash') w.write('state', 'socket', (s) => {
         if ((s.ash ||= []).some((a) => a.day === p.day && a.title === p.title)) return;
         s.ash = s.ash.concat(p).sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0)).slice(0, 32);
       });
       return emit(`world:${kind}`, p, 'world');
     }
+  }
+  /** W4: send a mark frame with a fresh ref; settles on the relay's {t:'mark', ref, id | error}. */
+  function ask(f) {
+    const ref = `r${(++refN).toString(36)}`;
+    return new Promise((resolve, reject) => {
+      if (!w.send?.({ ...f, ref })) return reject(new Error('offline'));
+      acks.set(ref, [resolve, reject, setTimeout(() => { acks.delete(ref); reject(new Error('timeout')); }, 10000)]);
+    });
+  }
+  function answer(f) {
+    const a = acks.get(f.ref);
+    if (!a) return;
+    acks.delete(f.ref); clearTimeout(a[2]);
+    if (f.error) a[1](new Error(f.error)); else a[0](f.id);
   }
   /** A replay frame: rebuild land + state from its snapshot, then step() plays its frames (ev/world, live, not silent). */
   function replay(f) {

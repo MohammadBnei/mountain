@@ -208,6 +208,36 @@ const p5 = w4.scrub('2026-01-01');
 w4.applyFrame({ t: 'replay', error: 'bad-day' });
 ok(await p5.then(() => false, (e) => /bad-day/.test(e.message)) && w4.replay === null && resyncs === 2, 'an error replay rejects scrub() and resyncs');
 
+// ---- W4 visitor layer: state.marks / state.clouds mirror the relay's State.apply; place() settles on the ack ----
+{
+  const w5 = createWorld({ dev: true }), out = [], seen = [];
+  w5.applyHello(hello);
+  ok(Array.isArray(w5.state.marks) && Array.isArray(w5.state.clouds), 'hello.state carries marks and clouds');
+  ok(await w5.place('toss', {}).then(() => false, (e) => e.message === 'offline'), 'place() without a socket rejects offline');
+  w5.send = (f) => out.push(f) || true;
+  w5.on('world:mark', (p) => seen.push(p.id));
+  const m = (id, x = {}) => ({ t: 'world', kind: 'mark', id, mark: 'toss', pose: { pos: [1, 60, 2] }, weight: 1, ...x });
+  for (let i = 0; i < 2003; i++) w5.applyFrame(m(`m${i}`), true);
+  ok(w5.state.marks.length === 2000 && w5.state.marks[0].id === 'm3', 'state.marks keeps the newest 2000 (the relay cap)');
+  w5.applyFrame(m('m2002', { pose: {}, weight: 0, gone: true }));
+  ok(w5.state.marks.length === 1999 && seen.join() === 'm2002', 'a gone mark leaves state.marks and still reaches world:mark (models drop it)');
+  const k = (id, state, x = 0) => ({ t: 'world', kind: 'cloud', id, pos: [x, 90, 0], state, credits: ['a visitor'] });
+  w5.applyFrame(k('a', 'drift')); w5.applyFrame(k('b', 'drift')); w5.applyFrame(k('a', 'rain', 5));
+  ok(w5.state.clouds.map((c) => `${c.id}${c.pos[0]}`).join() === 'a5,b0', 'a world:cloud replaces its id in place');
+  w5.applyFrame(k('a', 'gone'));
+  ok(w5.state.clouds.map((c) => c.id).join() === 'b', "state 'gone' removes the cloud");
+  w5.named = true;
+  const pa = w5.place('cairns', { pos: [1, 2, 3] }), pb = w5.place('cairns', { pos: [1, 2, 3] });
+  ok(out[0].t === 'mark' && out[0].mark === 'cairns' && out[0].named === true && out[0].ref !== out[1].ref, 'place() sends {t:mark, ref, mark, pose, named}');
+  w5.applyFrame({ t: 'mark', ref: out[1].ref, error: 'snowline' });
+  w5.applyFrame({ t: 'mark', ref: out[0].ref, id: 'X1' });
+  ok(await pa === 'X1' && await pb.then(() => false, (e) => e.message === 'snowline'), 'acks settle by ref: id resolves, error rejects');
+  const pd = w5.unmark('X1');
+  ok(out[2].t === 'mark.delete' && out[2].id === 'X1', 'unmark() sends mark.delete');
+  w5.applyFrame({ t: 'mark', ref: out[2].ref, error: 'auth' });
+  ok(await pd.then(() => false, (e) => e.message === 'auth'), 'a refused delete rejects');
+}
+
 // ---- scripts/devpod.sh: the dev loop sees alerts (salted fp) and survives a push restart ----
 const dp = readFileSync(new URL('../../scripts/devpod.sh', import.meta.url), 'utf8');
 ok(/name: MOUNTAIN_FP_SALT, value: \S+/.test(dp), 'devpod: pod env sets MOUNTAIN_FP_SALT (else src_alerts drops every alert)');
