@@ -68,6 +68,16 @@ func TestDBRestartSurvival(t *testing.T) {
 		t.Fatal("fire dropped")
 	}
 	out.Resolve(Alert{FP: a.FP("gone"), Sev: "warning", Layer: "apps"}, 5)
+	// W3b state: a vein (warning, 20 min), snow, an ash day + band, a health/replicas/build, one before the snapshot below
+	out.Resolve(Alert{FP: a.FP("vein"), Sev: "warning", Layer: "bedrock"}, 1200)
+	out.Ev("gitops.commit", map[string]any{"n": 10})
+	out.Ev("adr.merge", map[string]any{"day": "2026-10-14", "title": "not on the allowlist"})
+	out.Ev("argo.health", map[string]any{"app": "wird", "status": "Degraded"})
+	out.Ev("build", map[string]any{"app": "wird", "state": "running"})
+	if len(a.State.Veins) != 1 || len(a.State.Ash) != 1 || a.State.Ash[0].Title != "" || a.State.Glacier.Mass != 0.54 ||
+		len(a.State.Glacier.Tongues) != 2 || a.State.Builds["wird"] != "running" || a.Metrics.Snowline >= 0.8*a.World.HMax {
+		t.Fatalf("live W3b state: %+v, snowline %v", a.State, a.Metrics.Snowline)
+	}
 	a.store.Close(5 * time.Second)
 
 	b := storedApp(t, dsn)
@@ -84,7 +94,7 @@ func TestDBRestartSurvival(t *testing.T) {
 	}
 	json.Unmarshal(a.Hello(), &ha)
 	json.Unmarshal(b.Hello(), &hb)
-	if ha.Snapshot.Land != hb.Snapshot.Land || fmt.Sprint(ha.Deltas) != fmt.Sprint(hb.Deltas) || len(hb.Deltas) != 2 {
+	if ha.Snapshot.Land != hb.Snapshot.Land || fmt.Sprint(ha.Deltas) != fmt.Sprint(hb.Deltas) || len(hb.Deltas) != 7 {
 		t.Fatalf("hello: snapshot or deltas differ (%d vs %d deltas)", len(ha.Deltas), len(hb.Deltas))
 	}
 	// a third boot after a snapshot: no deltas, same land
@@ -94,6 +104,18 @@ func TestDBRestartSurvival(t *testing.T) {
 	defer c.store.Close(time.Second)
 	if !slices.Equal(c.Land, a.Land) || len(c.since) != 0 {
 		t.Fatalf("restore after a snapshot: land equal %v, %d deltas", slices.Equal(c.Land, a.Land), len(c.since))
+	}
+	if fmt.Sprint(c.State) != fmt.Sprint(a.State) || c.Metrics.Snowline != a.Metrics.Snowline {
+		t.Fatalf("restore from the snapshot row alone: state %+v, want %+v", c.State, a.State)
+	}
+	// a snapshot row from before W3b (state = alerts only) restores the defaults, not nil
+	if _, err := c.store.pool.Exec(context.Background(), `UPDATE snapshots SET state = '{"alerts":[]}'`); err != nil {
+		t.Fatal(err)
+	}
+	d := storedApp(t, dsn)
+	defer d.store.Close(time.Second)
+	if d.State.Glacier.Mass != 0.5 || d.State.Veins == nil || d.State.Health == nil {
+		t.Fatalf("old snapshot row: %+v", d.State)
 	}
 }
 
@@ -120,13 +142,13 @@ func TestDBReplay(t *testing.T) {
 		d.AddTo(land)
 		s.frame("world", "deposit", "", ts, out.worldFrame("deposit", map[string]any{"id": id, "x0": d.X0, "z0": d.Z0, "w": d.W, "h": d.H, "cells": worldcore.EncodeI16(d.Cells)}))
 	}
-	st := State{Alerts: []Alert{}}
+	st := newState()
 	s.snapshot(yday, at(yday, 0), 1, land, mustJSON(st), mustJSON(emptyMetrics(1)))
 	dep("01JA0000000000000000000001", at(yday, 12))
 	al := Alert{FP: a.FP("x"), Sev: "warning", Layer: "k8s", StartsAt: at(yday, 12).UnixMilli()}
 	_, fire := out.evFrame("alert.fire", map[string]any{"fp": al.FP, "sev": al.Sev, "layer": al.Layer, "startsAt": int(al.StartsAt)})
 	s.frame("ev", "alert.fire", ULID(), at(yday, 13), fire)
-	st.set(al)
+	st.Alerts = append(st.Alerts, al)
 	s.snapshot(yday, at(yday, 23), 1, land, mustJSON(st), mustJSON(emptyMetrics(1)))
 	dep("01JA0000000000000000000002", at(yday, 23).Add(30*time.Minute)) // after yesterday's last snapshot
 	startToday := slices.Clone(land)
@@ -248,8 +270,8 @@ func TestSnapshotRollover(t *testing.T) {
 		Deltas   []json.RawMessage
 	}
 	json.Unmarshal(a.Hello(), &h)
-	if h.Snapshot.Land != worldcore.EncodeI16(make([]int16, len(a.Land))) || len(h.Deltas) != 2 {
-		t.Fatalf("before a snapshot: base land + deposit and site deltas, got %d deltas", len(h.Deltas))
+	if h.Snapshot.Land != worldcore.EncodeI16(make([]int16, len(a.Land))) || len(h.Deltas) != 3 {
+		t.Fatalf("before a snapshot: base land + deposit, site and glacier deltas, got %d deltas", len(h.Deltas))
 	}
 	a.snapshot(time.Date(2026, 10, 15, 0, 0, 30, 0, time.UTC))
 	json.Unmarshal(a.Hello(), &h)

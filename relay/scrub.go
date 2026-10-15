@@ -134,12 +134,9 @@ func (a *App) buildReplay(ctx context.Context, day string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	land, st := make([]int16, worldcore.Grid*worldcore.Grid), State{Alerts: []Alert{}}
+	land, st := make([]int16, worldcore.Grid*worldcore.Grid), newState()
 	if r != nil {
 		land, st = r.land, r.state
-		if st.Alerts == nil {
-			st.Alerts = []Alert{}
-		}
 		fold(land, &st, r.frames)
 	}
 	frames, metrics, err := a.store.day(ctx, day)

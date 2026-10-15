@@ -1,0 +1,8 @@
+{
+  "_": "scree behaviour fixture: pod.churn is live only (no relay or hello data), so test.js scripts it: a site for wird, 3 restarts (pebbles), an OOM + CrashLoop (2 boulders), one glacier calving, then a flood of 16-restart events past the 80-body cap (oldest → talus).",
+  "site": { "app": "wird", "x": 12, "z": 28, "y": 0, "tier": 1, "group": "apps" },
+  "restarts": { "app": "wird", "restarts": 3, "oom": false, "crashloop": false },
+  "oom": { "app": "wird", "restarts": 0, "oom": true, "crashloop": true },
+  "calve": { "x": -14, "z": 20, "size": 1 },
+  "flood": { "app": "editable-blog", "restarts": 16, "oom": false, "crashloop": false, "n": 6 }
+}

@@ -322,8 +322,8 @@ func TestDepositHubLock(t *testing.T) {
 	if changed {
 		t.Fatal("deposit changed h.land outside the hub lock")
 	}
-	if n := len(drain(c)); n != 3 {
-		t.Fatalf("want ev:argo.sync + world:deposit + world:site, got %d frames", n)
+	if n := len(drain(c)); n != 4 {
+		t.Fatalf("want ev:argo.sync + world:deposit + world:site + world:glacier, got %d frames", n)
 	}
 }
 

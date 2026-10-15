@@ -57,7 +57,7 @@ func (c *Client) Send(b []byte) bool {
 type Hub struct {
 	dev   bool
 	hello func() []byte
-	tap   func([]byte) // sees every broadcast frame, under h.mu (App.record: persistence); may be nil
+	tap   func([]byte) [][]byte // sees every broadcast frame, under h.mu (App.record: state, persistence); returns frames to broadcast next; may be nil
 
 	mu      sync.Mutex
 	clients map[*Client]struct{}
@@ -75,20 +75,25 @@ func (h *Hub) Broadcast(b []byte) {
 	h.broadcastLocked(b)
 }
 
-// broadcastLocked queues each non-nil frame to every client, in order. Caller holds h.mu.
+// broadcastLocked queues each non-nil frame to every client, in order, then the frames the tap derives from them
+// (an ev's world frames follow the batch it came in: argo.sync, deposit, site, then glacier). Caller holds h.mu.
 func (h *Hub) broadcastLocked(bs ...[]byte) {
+	var more [][]byte
 	for _, b := range bs {
 		if b == nil {
 			continue
 		}
 		if h.tap != nil {
-			h.tap(b)
+			more = append(more, h.tap(b)...)
 		}
 		for c := range h.clients {
 			if !c.Send(b) {
 				c.conn.CloseNow() // never block the hub lock on a close handshake
 			}
 		}
+	}
+	if len(more) > 0 {
+		h.broadcastLocked(more...)
 	}
 }
 

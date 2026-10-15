@@ -10,13 +10,15 @@
 - `h.base` generation (seeded, int16 (HEIGHT_Q steps)): broad massif + soft ridged noise + terraces (step ≈ 7 m, 65 % blend). **Spiral walkway** (seeded: start azimuth, turns ≈ 2, foot height, top = 0.6 × summit so it stays below the snow cap, bench width ≈ 5 m): per azimuth the radius follows the altitude contour, smoothed; altitude is linear in arc length (constant grade, ≈ 6 % on the board); where smoothing would cut > 4 m into a ridge it snaps back to the contour, so the ledge always wraps around ridges and never passes through. Carved as a flat bench (centre ± 2.6 m) blended to the slope over 1.4 m: a clean outer lip and an inner cut wall. Emits the **`bench` mask** (u8, 128²). **Caves**: 3–5 seeded `caves[{x,z,y,yaw,seed}]` on the walkway where the inner cut wall is ≥ 7 m tall (Go keeps that wall steep; no niche carve: at 1.56 m cells it only makes a slot). **Edge**: beyond r = 78 m the height drops 34 m (to r = 100) and 30 m more to the corners, so the massif falls into the valley with no flat apron. All sent in `hello.snapshot`. No tunnels
 - site placement
 - deposit rasterisation (int16 cells, seeded by FNV-1a of the event id, size = f(heat))
-- vein capsules
-- glacier state
-- ash lines
-- snowline
+- vein capsules (`veins.go`: `alert.resolve` sev ≥ warning, ≥ 10 min → a seeded seam on the surface in its layer's band; `ref` false until W3c)
+- glacier state (`glacier.go`: snow 0.004/commit, tongue +1.5 m per ok sync (≤ 12), calve on `app.gone`, ×0.95 per UTC day, ash bands = ash days)
+- ash lines (one per `adr.merge` day + allowlisted title, ≤ 32)
+- snowline (`0.9 − 0.2 × mass` of h.base max: 0.8 at the starting mass .5)
 - wind
 - toy-cloud drift, merge and rain
 - footprint weight
+
+The event → world-frame mapping is `relay/derive.go`, run from the hub tap: derived frames follow their event's batch under the hub lock and update `hello.state` like any frame (`State.apply`).
 
 **WS protocol:**
 - Server → client:

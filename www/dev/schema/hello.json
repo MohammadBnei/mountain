@@ -36,8 +36,8 @@
     },
     "deltas": { "type": "array", "items": { "type": "object", "required": ["t"], "properties": { "t": { "enum": ["ev", "world"] } } } },
     "state": {
-      "description": "Live state a reload must not lose (W1b: firing alerts, in memory; W2 persists it and adds health, replicas, nodes, quorum, builds).",
-      "type": "object", "required": ["alerts"], "additionalProperties": false,
+      "description": "Live state a reload must not lose, persisted with the snapshot (W1b: firing alerts; W3b: veins, glacier, ash lines, health, replicas, builds in flight). It changes only through frames (relay State.apply, mirrored by world.js).",
+      "type": "object", "required": ["alerts", "veins", "glacier", "ash", "health", "replicas", "builds"], "additionalProperties": false,
       "properties": {
         "alerts": {
           "type": "array", "maxItems": 256,
@@ -50,7 +50,39 @@
               "startsAt": { "type": "integer", "minimum": 0 }
             }
           }
-        }
+        },
+        "veins": {
+          "description": "world:vein payloads, oldest first, one per fp (a re-fire keeps the seam, the thicker radius wins).",
+          "type": "array", "maxItems": 32,
+          "items": {
+            "type": "object", "required": ["fp", "a", "b", "thick", "layer", "ref"], "additionalProperties": false,
+            "properties": {
+              "fp": { "$ref": "world.json#/$defs/fp" },
+              "a": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+              "b": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+              "thick": { "type": "number" },
+              "layer": { "$ref": "world.json#/$defs/layer" },
+              "ref": { "type": "boolean" }
+            }
+          }
+        },
+        "glacier": {
+          "description": "the last world:glacier payload (starts at mass 0.5, no tongues, no ash).",
+          "type": "object", "required": ["mass", "tongues", "ash"], "additionalProperties": false,
+          "properties": {
+            "mass": { "type": "number", "minimum": 0, "maximum": 1 },
+            "tongues": { "type": "array", "items": { "type": "object", "required": ["app", "len"], "additionalProperties": false, "properties": { "app": { "$ref": "world.json#/$defs/app" }, "len": { "type": "number" } } } },
+            "ash": { "type": "array", "maxItems": 32, "items": { "$ref": "world.json#/$defs/day" } }
+          }
+        },
+        "ash": {
+          "description": "world:ash payloads, newest day first, one per day + title.",
+          "type": "array", "maxItems": 32,
+          "items": { "type": "object", "required": ["day"], "additionalProperties": false, "properties": { "day": { "$ref": "world.json#/$defs/day" }, "title": { "type": "string", "maxLength": 120 } } }
+        },
+        "health": { "description": "app -> ArgoCD health", "type": "object", "propertyNames": { "$ref": "world.json#/$defs/app" }, "additionalProperties": { "enum": ["Healthy", "Progressing", "Degraded", "Suspended", "Missing", "Unknown"] } },
+        "replicas": { "description": "app -> replica bucket", "type": "object", "propertyNames": { "$ref": "world.json#/$defs/app" }, "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 8 } },
+        "builds": { "description": "app -> build in flight (ev build queued|running; success|failure removes it)", "type": "object", "propertyNames": { "$ref": "world.json#/$defs/app" }, "additionalProperties": { "enum": ["queued", "running"] } }
       }
     },
     "metrics": { "$ref": "metrics.json" }

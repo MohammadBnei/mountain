@@ -1,0 +1,10 @@
+{
+  "_": "glacier behaviour fixture: world:glacier payloads test.js injects (more snow, a tongue advanced to its 12 m cap, an app gone, ash bands), a cauldron sag, the hot temp share magma would write under the cap, and a lower snowline.",
+  "snow": { "mass": 0.9, "tongues": [{ "app": "wird", "len": 4.5 }, { "app": "mountain", "len": 3 }, { "app": "editable-blog", "len": 1.5 }], "ash": [] },
+  "advance": { "mass": 0.9, "tongues": [{ "app": "wird", "len": 12 }, { "app": "mountain", "len": 3 }, { "app": "editable-blog", "len": 1.5 }], "ash": [] },
+  "gone": { "mass": 0.9, "tongues": [{ "app": "wird", "len": 12 }, { "app": "editable-blog", "len": 1.5 }], "ash": [] },
+  "ash": { "mass": 0.9, "tongues": [{ "app": "wird", "len": 12 }, { "app": "editable-blog", "len": 1.5 }], "ash": ["2026-10-14", "2026-10-06", "2026-09-28"] },
+  "sag": { "x": 0, "z": 0, "depth": 2, "sev": "warning" },
+  "temp": 0.9,
+  "snowline": 48
+}

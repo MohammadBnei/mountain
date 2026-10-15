@@ -413,6 +413,13 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		}
 		p.repl[app] = b
 	}
+	// hello.state health + replicas (summit after a reload): the evs above carry only changes, so every poll
+	// also sets the current values quietly. Health passes the same enum as the ev (a raw label value never leaves).
+	health := maps.Clone(p.health)
+	maps.DeleteFunc(health, func(_, st string) bool { return !healthOK[st] })
+	p.a.mu.Lock()
+	p.a.State.Health, p.a.State.Replicas = health, maps.Clone(p.repl)
+	p.a.mu.Unlock()
 
 	// nodes -> hosts: ready = every mapped node Ready; alloc = share of cluster CPU; load = mean CPU use.
 	type hostAgg struct {

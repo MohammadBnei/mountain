@@ -1,6 +1,6 @@
 // strata (03-model-strata): the reference cut-face field provider (cut.js). 0 draws: it colours the mountain's cut face.
 // Platform bands by height (proxmox → k8s → apps, the Aretē strata; k8s in sediment beds, deep seams between them) and
-// ≤ 32 ash lines from world:ash (one per ADR day, 02): the newest at y TOP, each older one RATE m lower per day of age,
+// ≤ 32 ash lines from world.state.ash (hello, replay) + world:ash (one per ADR day, 02): the newest at y TOP, each older one RATE m lower per day of age,
 // so time buries them under the haze floor. pick(ray) → {day, title?} of the ash line under the ray on the cut face.
 import { pick as cutPick } from '../../js/cut.js';
 
@@ -23,27 +23,30 @@ export default async function build({ THREE, kit, world }) {
   const ash = []; // [{day, title?, y}] newest first
   const days = (d) => Date.parse(`${d}T00:00:00Z`) / 864e5;
   const pose = () => field.uniforms.uStrataEdge.value.set(params.proxmox, params.k8s, params.bed);
+  const add = ({ day, title }) => {
+    if (typeof title === 'string') title = title.slice(0, 120); // the relay allowlists titles; cap anyway (before the dedup)
+    else title = undefined;
+    if (!DAY.test(day) || Number.isNaN(days(day)) || ash.some((a) => a.day === day && a.title === title)) return;
+    ash.push({ day, ...(title !== undefined ? { title } : {}) });
+    ash.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
+    ash.length = Math.min(ash.length, MAX);
+    ash.forEach((a, i) => (ys[i] = a.y = TOP - (days(ash[0].day) - days(a.day)) * RATE));
+    field.uniforms.uStrataN.value = ash.length;
+    tex.needsUpdate = true;
+  };
+  // A reload or a scrub replay brings the ash as world.state.ash (a new state object), not as world:ash frames.
+  let seen;
+  const sync = () => { if (world.state === seen) return; seen = world.state; ash.length = 0; field.uniforms.uStrataN.value = 0; (seen.ash || []).forEach(add); };
   pose();
+  sync();
 
   return {
     root: new THREE.Group(),
     params,
     field,
     pose,
-    step() {},
-    on: {
-      'world:ash'({ day, title }) {
-        if (typeof title === 'string') title = title.slice(0, 120); // the relay allowlists titles; cap anyway (before the dedup)
-        else title = undefined;
-        if (!DAY.test(day) || Number.isNaN(days(day)) || ash.some((a) => a.day === day && a.title === title)) return;
-        ash.push({ day, ...(title !== undefined ? { title } : {}) });
-        ash.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
-        ash.length = Math.min(ash.length, MAX);
-        ash.forEach((a, i) => (ys[i] = a.y = TOP - (days(ash[0].day) - days(a.day)) * RATE));
-        field.uniforms.uStrataN.value = ash.length;
-        tex.needsUpdate = true;
-      },
-    },
+    step: sync,
+    on: { 'world:ash': add },
     pick(ray) {
       const p = cutPick(ray, world), a = p && ash.find((x) => Math.abs(p.y - x.y) < 0.6);
       return a ? { day: a.day, ...(a.title ? { title: a.title } : {}) } : null;

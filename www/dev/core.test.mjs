@@ -78,6 +78,33 @@ ok(seenAlerts === 1, 'alert.resolve removes the alert from world.state before ev
 w3.applyHello({ ...hello, state: {} });
 ok(Array.isArray(w3.state.alerts) && !w3.state.alerts.length, 'a hello without alerts → world.state.alerts = []');
 
+// ---- world.state W3b: veins, glacier, ash, health, replicas, builds follow the frames (relay State.apply rules) ----
+const w6 = createWorld({ dev: true }), order = [];
+w6.applyHello({ ...hello, state: {}, deltas: [] });
+ok(!w6.state.veins.length && w6.state.glacier.mass === 0.5 && !w6.state.ash.length && !Object.keys(w6.state.health).length, 'a hello without them → empty veins/ash/health, glacier at mass .5');
+w6.on('world:vein', () => order.push(w6.state.veins.length));
+const vein = (fp, thick, a = [0, 0, 0]) => ({ t: 'world', kind: 'vein', fp, a, b: [1, 1, 1], thick, layer: 'k8s', ref: false });
+for (let i = 0; i < 34; i++) w6.applyFrame(vein(i.toString(16).padStart(16, '0'), 0.3));
+w6.applyFrame(vein('0000000000000021', 0.2, [9, 9, 9]));
+const last = w6.state.veins.at(-1);
+ok(order[0] === 1 && w6.state.veins.length === 32 && w6.state.veins[0].fp === '0000000000000002' && last.thick === 0.3 && last.a[0] === 0,
+  'world:vein: state before the emit, ≤ 32 oldest dropped, a re-fired fp keeps its seam and the thicker radius');
+for (const d of ['2026-09-01', '2026-10-14', '2026-10-01', '2026-10-14']) w6.applyFrame({ t: 'world', kind: 'ash', day: d, ...(d === '2026-10-14' ? { title: 'ADR-0056' } : {}) });
+ok(w6.state.ash.map((a) => a.day).join() === '2026-10-14,2026-10-01,2026-09-01' && w6.state.ash[0].title === 'ADR-0056', 'world:ash: newest first, one per day + title');
+w6.applyFrame({ t: 'world', kind: 'glacier', mass: 0.6, tongues: [{ app: 'wird', len: 3 }], ash: ['2026-10-14'] });
+for (const f of [{ kind: 'argo.health', app: 'wird', status: 'Degraded' }, { kind: 'replicas', app: 'wird', bucket: 3 }, { kind: 'build', app: 'wird', state: 'running' }, { kind: 'build', app: 'mountain', state: 'queued' }, { kind: 'build', app: 'mountain', state: 'success' }])
+  w6.applyFrame({ t: 'ev', id: 'x', ts: 0, ...f });
+ok(w6.state.glacier.tongues[0].len === 3 && w6.state.health.wird === 'Degraded' && w6.state.replicas.wird === 3 && w6.state.builds.wird === 'running' && !('mountain' in w6.state.builds),
+  'world:glacier replaces; argo.health, replicas, build (success clears) land in world.state');
+w6.applyFrame({ t: 'ev', id: 'y', ts: 0, kind: 'app.gone', app: 'wird' });
+ok(!('wird' in w6.state.health) && !('wird' in w6.state.replicas) && !('wird' in w6.state.builds), 'app.gone drops the app from health, replicas, builds');
+// parity with the relay: the fixture hello (dump-hello, before any snapshot) carries every world frame in its deltas,
+// so folding them from an empty state must give the relay's own hello.state
+const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort()) : x));
+const w7 = createWorld({ dev: true });
+w7.applyHello({ ...hello, state: {} });
+for (const k of ['veins', 'glacier', 'ash']) ok(canon(w7.state[k]) === canon(hello.state[k]), `hello deltas fold to the relay's hello.state.${k} (${hello.state[k].length ?? hello.state[k].tongues.length} items)`);
+
 // ---- socket: reconnect with jittered backoff, resync via hello, stale since ----
 const socks = [];
 globalThis.WebSocket = class {
