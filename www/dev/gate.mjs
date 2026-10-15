@@ -286,6 +286,43 @@ async function pageMode() {
   }
   console.log(`post: ${JSON.stringify(pp)}`);
 
+  // story (05, R5): lands on Hero with Previous disabled; Next ×5 (pressed mid-move) reaches Live with Next disabled,
+  // the hash follows every step, world.clip opens on the way and is closed again at Live; a #bedrock link lands on its
+  // depth-100 cut, ← steps back; no sign-in link without OIDC. ponytail: reduced motion is unchecked (one media branch)
+  const sy = await page.evalJSON(`(async () => {
+    const p = globalThis.__page, $ = (id) => document.getElementById(id), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    if (!p?.story) return { err: 'no __page.story (dev hook)' };
+    const s0 = p.story(), prev0 = $('prev').disabled, hashes = [s0.hash];
+    let deepest = s0.clip.depth;
+    for (let i = 0; i < 5; i++) {
+      $('next').click();
+      for (let k = 0; k < 8; k++) { await wait(50); deepest = Math.max(deepest, p.story().clip.depth); }
+      hashes.push(location.hash);
+    }
+    for (let k = 0; k < 40 && p.story().P !== 5; k++) await wait(100);
+    const s5 = p.story(), next5 = $('next').disabled, prev5 = $('prev').disabled;
+    // a shared link (#bedrock) lands on its section with that section's cut; ← steps back; then back to Live
+    const settle = async (P) => { for (let k = 0; k < 40 && p.story().P !== P; k++) await wait(100); return p.story(); };
+    location.hash = '#bedrock';
+    const b = await settle(4);
+    dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+    const left = (await settle(3)).section;
+    location.hash = '#live';
+    await settle(5);
+    return { hero: s0.section, P0: s0.P, prev0, hashes: hashes.join(' '), deepest, live: s5.section, P5: s5.P, depth5: s5.clip.depth, next5, prev5,
+      link: b.section, depth4: b.clip.depth, left, signin: $('signin').hidden };
+  })()`).catch((e) => ({ err: e.message }));
+  if (sy.err) fail(`story: ${sy.err}`);
+  else {
+    if (sy.hero !== 'hero' || sy.P0 !== 0 || !sy.prev0) fail(`story: not on Hero with Previous disabled at load: ${JSON.stringify(sy)}`);
+    if (sy.hashes !== '#hero #summit #water #strata #bedrock #live') fail(`story: hash steps ${sy.hashes}`);
+    if (!(sy.deepest > 0)) fail('story: world.clip never opened on the way to Live');
+    if (sy.live !== 'live' || sy.P5 !== 5 || !sy.next5 || sy.prev5 || sy.depth5 !== 0) fail(`story: Next ×5 did not settle on Live (closed cut, Next disabled): ${JSON.stringify(sy)}`);
+    if (sy.link !== 'bedrock' || sy.depth4 !== 100 || sy.left !== 'strata') fail(`story: #bedrock link / its depth-100 cut / ← step: ${JSON.stringify(sy)}`);
+    if (!sy.signin) fail('story: sign-in link shown with detail mode off');
+    console.log(`story: ${JSON.stringify(sy)}  ${await shot(page, `page-live-${W}.png`)}`);
+  }
+
   // relay restart: the socket must reconnect with backoff and resync through a fresh hello
   restarting = true;
   await stop();
