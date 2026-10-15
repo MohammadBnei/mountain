@@ -92,6 +92,8 @@ export default async function build({ THREE, kit, world }) {
     pose() {},
     step(dt) {
       if (world.caves !== cavesSeen) course();
+      // ponytail: not clipped (01), so while the cut is open the ribbon would hang in front of the face: hidden whole
+      ribbon.visible = !(world.clip.depth > 0);
       surge = surge < 0.01 ? 0 : surge * Math.exp(-dt / TAU);
       const w = want();
       hw = Math.abs(w - hw) < 0.005 ? w : hw + (w - hw) * Math.min(1, dt / EASE);
