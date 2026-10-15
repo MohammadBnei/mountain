@@ -45,17 +45,19 @@ export function clip(P) {
 
 const lang = navigator.language?.toLowerCase().startsWith('fr') ? 'fr' : 'en', T = S[lang];
 const pct = (x) => `${Math.round((x || 0) * 100)} %`;
+// count + label, singular from the `<key>.one` string when the language says so (1 ash line, 0 alerte active)
+const plural = new Intl.PluralRules(lang), N = (n, k) => `${n} ${T[plural.select(n) === 'one' && T[k + '.one'] || k]}`;
 // Panel facts, mono: only what the page already holds (/api/topology sites, metrics, hello.state). No versions (02).
 function facts(i, w) {
   const m = w.metrics || {}, s = w.state || {}, hosts = Object.values(m.hosts || {});
   const health = Object.values(s.health || {});
   return [
-    [`${w.sites.size} ${T['fact.apps']}`, `${hosts.length} ${T['fact.hostsN']}`],
+    [N(w.sites.size, 'fact.apps'), N(hosts.length, 'fact.hostsN')],
     [`${T['fact.snowline']} ${Math.round(w.snowline)} m`, `${health.filter((h) => h === 'Healthy').length}/${health.length} ${T['fact.healthy']}`],
-    [`${m.storage?.pools?.length ?? 0} ${T['fact.pools']}`],
-    [`${s.ash?.length ?? 0} ${T['fact.ash']}`, `${hosts.filter((h) => h.ready).length}/${hosts.length} ${T['fact.hosts']}`],
-    [`${s.veins?.length ?? 0} ${T['fact.veins']}`],
-    [`cpu ${pct(m.cpu)} · mem ${pct(m.mem)}`, `${s.alerts?.length ?? 0} ${T['fact.alerts']}`, `${m.buildsInFlight ?? 0} ${T['fact.builds']}`],
+    [N(m.storage?.pools?.length ?? 0, 'fact.pools')],
+    [N(s.ash?.length ?? 0, 'fact.ash'), `${hosts.filter((h) => h.ready).length}/${hosts.length} ${T['fact.hosts']}`],
+    [N(s.veins?.length ?? 0, 'fact.veins')],
+    [`cpu ${pct(m.cpu)} · mem ${pct(m.mem)}`, N(s.alerts?.length ?? 0, 'fact.alerts'), N(m.buildsInFlight ?? 0, 'fact.builds')],
   ][i].join(' · ');
 }
 

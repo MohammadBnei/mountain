@@ -82,6 +82,7 @@ function host() {
 // first touch takes the camera from the story keyframe; a story step, or 45 s after the last input, glides it back.
 // Limits keep the camera off the massif and above the valley floor.
 const key = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
+const gOff = new THREE.Vector3(), gKey = new THREE.Vector3(), still = matchMedia('(prefers-reduced-motion: reduce)'); // glide-back scratch
 const orbit = new OrbitControls(camera, renderer.domElement);
 Object.assign(orbit, { enablePan: false, enableDamping: true, dampingFactor: 0.08, minDistance: 110, maxDistance: 260,
   minPolarAngle: 0.9, maxPolarAngle: 1.7, rotateSpeed: 0.6, zoomSpeed: 0.8 });
@@ -149,8 +150,12 @@ renderer.setAnimationLoop((now) => {
   story.view(P, tc, camera.aspect, key);
   if (!orbiting) { camera.position.copy(key.pos); camera.lookAt(key.look); orbit.target.copy(key.look); }
   else if (idleAt && now > idleAt) { // idle or a step: glide back onto the keyframe, then hand the camera back to it
-    camera.position.lerp(key.pos, 0.05);
-    orbit.target.lerp(key.look, 0.05);
+    // around the target, not through the mountain: the offset turns and its length eases (never inside both radii)
+    const k = still.matches ? 1 : 0.05; // reduced motion: jump back
+    gOff.subVectors(camera.position, orbit.target); gKey.subVectors(key.pos, key.look);
+    const len = gOff.length() + (gKey.length() - gOff.length()) * k;
+    orbit.target.lerp(key.look, k);
+    camera.position.copy(orbit.target).add(gOff.lerp(gKey, k).setLength(len));
     camera.lookAt(orbit.target);
     if (camera.position.distanceTo(key.pos) < 0.5) { orbiting = false; idleAt = 0; }
   } else orbit.update();

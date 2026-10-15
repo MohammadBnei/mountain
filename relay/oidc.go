@@ -27,6 +27,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -165,10 +166,17 @@ func sessionOf(r *http.Request) (Session, time.Time) {
 	return Session{}, time.Time{}
 }
 
+// authFail answers a failed sign-in with a page a person can leave (a link back), not a bare status line.
+func authFail(w http.ResponseWriter, msg string, code int) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(code)
+	fmt.Fprintf(w, `<!doctype html><meta name="viewport" content="width=device-width"><title>mountain</title><p>%s. <a href="/">Back to the mountain</a></p>`, msg)
+}
+
 func (au *Auth) login(w http.ResponseWriter, r *http.Request) {
 	if _, err := au.discover(); err != nil {
 		log.Printf("auth: discovery: %v", err)
-		http.Error(w, "sign-in unavailable", http.StatusServiceUnavailable)
+		authFail(w, "Sign-in is unavailable right now", http.StatusServiceUnavailable)
 		return
 	}
 	f := flow{State: rand.Text(), Nonce: rand.Text(), Verifier: oauth2.GenerateVerifier(), Return: r.URL.Query().Get("return")}
@@ -187,25 +195,25 @@ func (au *Auth) callback(w http.ResponseWriter, r *http.Request) {
 	clearCookie(w, flowCookie) // one use
 	q := r.URL.Query()
 	if !ok || subtle.ConstantTimeCompare([]byte(q.Get("state")), []byte(f.State)) != 1 || q.Get("code") == "" {
-		http.Error(w, "bad sign-in state", http.StatusBadRequest)
+		authFail(w, "This sign-in link expired", http.StatusBadRequest)
 		return
 	}
 	v, err := au.discover()
 	if err != nil {
-		http.Error(w, "sign-in unavailable", http.StatusServiceUnavailable)
+		authFail(w, "Sign-in is unavailable right now", http.StatusServiceUnavailable)
 		return
 	}
 	tok, err := au.oauth.Exchange(r.Context(), q.Get("code"), oauth2.VerifierOption(f.Verifier))
 	if err != nil {
 		log.Printf("auth: exchange: %v", err)
-		http.Error(w, "sign-in failed", http.StatusForbidden)
+		authFail(w, "Sign-in failed", http.StatusForbidden)
 		return
 	}
 	raw, _ := tok.Extra("id_token").(string)
 	idt, err := v.Verify(r.Context(), raw)
 	if err != nil || subtle.ConstantTimeCompare([]byte(idt.Nonce), []byte(f.Nonce)) != 1 {
 		log.Printf("auth: id token: %v", err)
-		http.Error(w, "sign-in failed", http.StatusForbidden)
+		authFail(w, "Sign-in failed", http.StatusForbidden)
 		return
 	}
 	var c struct {
