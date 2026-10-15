@@ -270,7 +270,7 @@ async function pageMode() {
       let d = 0; for (let i = 0; i < a.length; i += 4) for (let c = 0; c < 3; c++) d += Math.abs(a[i + c] - b[i + c]);
       return +(d / (w * h * 3)).toFixed(3);
     };
-    const fog = scene.fog, withFog = diff(); p.kit.setKey('day'); const dayFog = '#' + fog.color.getHexString() + ' want ' + p.kit.TOKENS.day.rig.fog; p.kit.setKey('dusk'); scene.fog = null; const noFog = diff(); scene.fog = fog;
+    p.kit.setKey('dusk'); const fog = scene.fog, withFog = diff(); /* the real sun sets the phase: measure at the canonical key, not the clock */ p.kit.setKey('day'); const dayFog = '#' + fog.color.getHexString() + ' want ' + p.kit.TOKENS.day.rig.fog; p.kit.setKey('dusk'); scene.fog = null; const noFog = diff(); scene.fog = fog;
     const rt = post.composer.renderTarget1;
     return { post: true, passes: post.composer.passes.map((x) => x.constructor.name).join(','), samples: rt.samples, half: rt.texture.type === 1016, threshold: post.bloom.threshold, noFog, withFog, dayFog };
   })()`).catch((e) => ({ err: e.message }));
@@ -333,7 +333,7 @@ async function pageMode() {
     const at = px(384, 128), mirrored = px(384, 384) + px(128, 128);
     k.stampScene.remove(m); k.stampScene.userData.dirty = true; k.drawStamps(p.renderer);
     const marks = p.world.state.marks;
-    return { at, mirrored, cleared: px(384, 128), toys: $('toys').hidden, play: $('play').hidden, visitors: p.world.metrics.visitors, surface: p.surface.visible,
+    return { at, mirrored, cleared: px(384, 128), toys: getComputedStyle($('toys')).display === 'none', play: getComputedStyle($('play')).display === 'none', visitors: p.world.metrics.visitors, surface: p.surface.visible,
       marks: marks.length, clean: marks.every((x) => !/script|10\.233|u-/.test(JSON.stringify(x))) };
   })()`).catch((e) => ({ err: e.message }));
   if (vz.err) fail(`visitors: ${vz.err}`);
