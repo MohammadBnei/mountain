@@ -1,5 +1,5 @@
 {
- "_": "Hostile relay timeline for --source=fixture: (06, 04). Labels carry IPs, namespaces, hostnames, versions and non-allowlisted apps; none may reach /ws. Steps are sparse (unnamed queries keep their last answer).",
+ "_": "Hostile relay timeline for --source=fixture: (06, 04). Labels carry IPs, namespaces, hostnames, versions and non-allowlisted apps; none may reach /ws. Steps are sparse (unnamed queries keep their last answer). \"gh\" is the fake GitHub API (src_github): run, commit and tree payloads carry SHAs, emails, private repo names and branch names; only app + state, n, a day and a vein ref bool may leave.",
  "step_s": 2,
  "steps": [
   {
@@ -732,7 +732,194 @@
      }
     ]
    },
-   "am": []
+   "am": [],
+   "gh": {
+    "/repos/MohammadBnei/mountain/actions/runs?per_page=20": {
+     "total_count": 1,
+     "workflow_runs": [
+      {
+       "id": 9000001,
+       "name": "app",
+       "head_branch": "feat/hq-private-dashboard",
+       "head_sha": "d4e5f6a7b8c9d4e5f6a7b8c9d4e5f6a7b8c9d4e5",
+       "status": "completed",
+       "conclusion": "success",
+       "created_at": "2026-10-14T08:00:00Z",
+       "updated_at": "2026-10-14T08:00:00Z",
+       "display_title": "fix: leak mo@bnei.dev 10.0.3.17 k8s-worker-01.bnei.lan",
+       "actor": {
+        "login": "evil-actor",
+        "email": "evil@bnei.dev"
+       },
+       "repository": {
+        "full_name": "MohammadBnei/hq",
+        "private": true
+       },
+       "head_commit": {
+        "id": "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+        "author": {
+         "email": "mo@bnei.dev",
+         "name": "Mo"
+        }
+       }
+      }
+     ]
+    },
+    "/repos/MohammadBnei/wird/actions/runs?per_page=20": {
+     "total_count": 1,
+     "workflow_runs": [
+      {
+       "id": 9000001,
+       "name": "app",
+       "head_branch": "feat/hq-private-dashboard",
+       "head_sha": "d4e5f6a7b8c9d4e5f6a7b8c9d4e5f6a7b8c9d4e5",
+       "status": "in_progress",
+       "conclusion": null,
+       "created_at": "2026-10-15T08:00:00Z",
+       "updated_at": "2026-10-15T08:00:00Z",
+       "display_title": "fix: leak mo@bnei.dev 10.0.3.17 k8s-worker-01.bnei.lan",
+       "actor": {
+        "login": "evil-actor",
+        "email": "evil@bnei.dev"
+       },
+       "repository": {
+        "full_name": "MohammadBnei/hq",
+        "private": true
+       },
+       "head_commit": {
+        "id": "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+        "author": {
+         "email": "mo@bnei.dev",
+         "name": "Mo"
+        }
+       }
+      }
+     ]
+    },
+    "/repos/MohammadBnei/hq/actions/runs?per_page=20": {
+     "total_count": 1,
+     "workflow_runs": [
+      {
+       "id": 9000001,
+       "name": "app",
+       "head_branch": "feat/hq-private-dashboard",
+       "head_sha": "d4e5f6a7b8c9d4e5f6a7b8c9d4e5f6a7b8c9d4e5",
+       "status": "in_progress",
+       "conclusion": null,
+       "created_at": "2026-10-15T08:00:00Z",
+       "updated_at": "2026-10-15T08:00:00Z",
+       "display_title": "fix: leak mo@bnei.dev 10.0.3.17 k8s-worker-01.bnei.lan",
+       "actor": {
+        "login": "evil-actor",
+        "email": "evil@bnei.dev"
+       },
+       "repository": {
+        "full_name": "MohammadBnei/hq",
+        "private": true
+       },
+       "head_commit": {
+        "id": "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+        "author": {
+         "email": "mo@bnei.dev",
+         "name": "Mo"
+        }
+       }
+      }
+     ]
+    },
+    "/repos/MohammadBnei/infra-bootstrap/commits?path=gitops&per_page=30&sha=main": [
+     {
+      "sha": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+      "commit": {
+       "message": "gitops: bump wird to 1.2.3 (#290)",
+       "author": {
+        "name": "Mo",
+        "email": "mo@bnei.dev",
+        "date": "2026-10-13T09:00:00Z"
+       },
+       "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-10-13T09:00:00Z"
+       }
+      },
+      "author": {
+       "login": "MohammadBnei"
+      },
+      "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
+     },
+     {
+      "sha": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
+      "commit": {
+       "message": "gitops: add hq ns",
+       "author": {
+        "name": "Mo",
+        "email": "mo@bnei.dev",
+        "date": "2026-10-12T09:00:00Z"
+       },
+       "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-10-12T09:00:00Z"
+       }
+      },
+      "author": {
+       "login": "MohammadBnei"
+      },
+      "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+     }
+    ],
+    "/repos/MohammadBnei/infra-bootstrap/commits?path=docs%2Fadr&per_page=30&sha=main": [
+     {
+      "sha": "ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0a",
+      "commit": {
+       "message": "docs(adr): ADR-0056 public telemetry (#298)",
+       "author": {
+        "name": "Mo",
+        "email": "mo@bnei.dev",
+        "date": "2026-10-13T10:00:00Z"
+       },
+       "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-10-13T10:00:00Z"
+       }
+      },
+      "author": {
+       "login": "MohammadBnei"
+      },
+      "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0a"
+     }
+    ],
+    "/repos/MohammadBnei/infra-bootstrap/git/trees/main?recursive=1": {
+     "sha": "7ee7ee7ee7ee7ee7ee7ee7ee7ee7ee7ee7ee7ee7",
+     "truncated": false,
+     "tree": [
+      {
+       "path": "docs/bootstrap-test-notes.md",
+       "type": "blob",
+       "sha": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"
+      },
+      {
+       "path": ".claude/skills/alerts/SKILL.md",
+       "type": "blob",
+       "sha": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+      },
+      {
+       "path": ".claude/skills",
+       "type": "tree",
+       "sha": "b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3"
+      },
+      {
+       "path": "docs/hq-secrets.md",
+       "type": "blob",
+       "sha": "b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4"
+      }
+     ]
+    },
+    "/repos/MohammadBnei/infra-bootstrap/contents/docs/bootstrap-test-notes.md?ref=main": "## 2026-07-14\nKubePodCrashLooping on k8s-worker-01.bnei.lan (10.0.3.17): the GPU passthrough fix, see mo@bnei.dev.\n",
+    "/repos/MohammadBnei/infra-bootstrap/contents/.claude/skills/alerts/SKILL.md?ref=main": "When TargetDown fires for hq, check the scrape config.\n"
+   }
   },
   {
    "prom": {
@@ -1009,6 +1196,178 @@
        "instance": "10.233.64.12:9100"
       },
       "v": 9000000.0
+     }
+    ]
+   },
+   "gh": {
+    "/repos/MohammadBnei/mountain/actions/runs?per_page=20": {
+     "total_count": 2,
+     "workflow_runs": [
+      {
+       "id": 9000001,
+       "name": "app",
+       "head_branch": "feat/hq-private-dashboard",
+       "head_sha": "d4e5f6a7b8c9d4e5f6a7b8c9d4e5f6a7b8c9d4e5",
+       "status": "queued",
+       "conclusion": null,
+       "created_at": "2026-10-15T09:00:00Z",
+       "updated_at": "2026-10-15T09:00:00Z",
+       "display_title": "fix: leak mo@bnei.dev 10.0.3.17 k8s-worker-01.bnei.lan",
+       "actor": {
+        "login": "evil-actor",
+        "email": "evil@bnei.dev"
+       },
+       "repository": {
+        "full_name": "MohammadBnei/hq",
+        "private": true
+       },
+       "head_commit": {
+        "id": "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+        "author": {
+         "email": "mo@bnei.dev",
+         "name": "Mo"
+        }
+       }
+      },
+      {
+       "id": 9000001,
+       "name": "app",
+       "head_branch": "feat/hq-private-dashboard",
+       "head_sha": "d4e5f6a7b8c9d4e5f6a7b8c9d4e5f6a7b8c9d4e5",
+       "status": "completed",
+       "conclusion": "success",
+       "created_at": "2026-10-14T08:00:00Z",
+       "updated_at": "2026-10-14T08:00:00Z",
+       "display_title": "fix: leak mo@bnei.dev 10.0.3.17 k8s-worker-01.bnei.lan",
+       "actor": {
+        "login": "evil-actor",
+        "email": "evil@bnei.dev"
+       },
+       "repository": {
+        "full_name": "MohammadBnei/hq",
+        "private": true
+       },
+       "head_commit": {
+        "id": "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+        "author": {
+         "email": "mo@bnei.dev",
+         "name": "Mo"
+        }
+       }
+      }
+     ]
+    },
+    "/repos/MohammadBnei/wird/actions/runs?per_page=20": {
+     "total_count": 1,
+     "workflow_runs": [
+      {
+       "id": 9000001,
+       "name": "app",
+       "head_branch": "feat/hq-private-dashboard",
+       "head_sha": "d4e5f6a7b8c9d4e5f6a7b8c9d4e5f6a7b8c9d4e5",
+       "status": "completed",
+       "conclusion": "success",
+       "created_at": "2026-10-15T08:00:00Z",
+       "updated_at": "2026-10-15T08:00:00Z",
+       "display_title": "fix: leak mo@bnei.dev 10.0.3.17 k8s-worker-01.bnei.lan",
+       "actor": {
+        "login": "evil-actor",
+        "email": "evil@bnei.dev"
+       },
+       "repository": {
+        "full_name": "MohammadBnei/hq",
+        "private": true
+       },
+       "head_commit": {
+        "id": "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+        "author": {
+         "email": "mo@bnei.dev",
+         "name": "Mo"
+        }
+       }
+      }
+     ]
+    },
+    "/repos/MohammadBnei/infra-bootstrap/commits?path=gitops&per_page=30&sha=main": [
+     {
+      "sha": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "commit": {
+       "message": "gitops: hq secret rotation (Signed-off-by: Mo <mo@bnei.dev>)",
+       "author": {
+        "name": "Mo",
+        "email": "mo@bnei.dev",
+        "date": "2026-10-15T09:01:00Z"
+       },
+       "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-10-15T09:01:00Z"
+       }
+      },
+      "author": {
+       "login": "MohammadBnei"
+      },
+      "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+     },
+     {
+      "sha": "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2",
+      "commit": {
+       "message": "gitops: bump vos to v2.0.1",
+       "author": {
+        "name": "Mo",
+        "email": "mo@bnei.dev",
+        "date": "2026-10-15T09:00:00Z"
+       },
+       "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-10-15T09:00:00Z"
+       }
+      },
+      "author": {
+       "login": "MohammadBnei"
+      },
+      "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2"
+     },
+     {
+      "sha": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+      "commit": {
+       "message": "gitops: bump wird to 1.2.3 (#290)",
+       "author": {
+        "name": "Mo",
+        "email": "mo@bnei.dev",
+        "date": "2026-10-13T09:00:00Z"
+       },
+       "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-10-13T09:00:00Z"
+       }
+      },
+      "author": {
+       "login": "MohammadBnei"
+      },
+      "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
+     },
+     {
+      "sha": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
+      "commit": {
+       "message": "gitops: add hq ns",
+       "author": {
+        "name": "Mo",
+        "email": "mo@bnei.dev",
+        "date": "2026-10-12T09:00:00Z"
+       },
+       "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-10-12T09:00:00Z"
+       }
+      },
+      "author": {
+       "login": "MohammadBnei"
+      },
+      "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
      }
     ]
    }
@@ -1386,6 +1745,81 @@
       "v": 1
      }
     ]
+   },
+   "gh": {
+    "/repos/MohammadBnei/mountain/actions/runs?per_page=20": {
+     "total_count": 1,
+     "workflow_runs": [
+      {
+       "id": 9000001,
+       "name": "app",
+       "head_branch": "feat/hq-private-dashboard",
+       "head_sha": "d4e5f6a7b8c9d4e5f6a7b8c9d4e5f6a7b8c9d4e5",
+       "status": "in_progress",
+       "conclusion": null,
+       "created_at": "2026-10-15T09:00:00Z",
+       "updated_at": "2026-10-15T09:00:00Z",
+       "display_title": "fix: leak mo@bnei.dev 10.0.3.17 k8s-worker-01.bnei.lan",
+       "actor": {
+        "login": "evil-actor",
+        "email": "evil@bnei.dev"
+       },
+       "repository": {
+        "full_name": "MohammadBnei/hq",
+        "private": true
+       },
+       "head_commit": {
+        "id": "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+        "author": {
+         "email": "mo@bnei.dev",
+         "name": "Mo"
+        }
+       }
+      }
+     ]
+    },
+    "/repos/MohammadBnei/infra-bootstrap/commits?path=docs%2Fadr&per_page=30&sha=main": [
+     {
+      "sha": "ad1ad1ad1ad1ad1ad1ad1ad1ad1ad1ad1ad1ad1a",
+      "commit": {
+       "message": "docs(adr): ADR-0058 hq private dashboard on 10.0.3.17 (#310)",
+       "author": {
+        "name": "Mo",
+        "email": "mo@bnei.dev",
+        "date": "2026-10-15T10:00:00Z"
+       },
+       "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-10-15T10:00:00Z"
+       }
+      },
+      "author": {
+       "login": "MohammadBnei"
+      },
+      "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/ad1ad1ad1ad1ad1ad1ad1ad1ad1ad1ad1ad1ad1a"
+     },
+     {
+      "sha": "ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0a",
+      "commit": {
+       "message": "docs(adr): ADR-0056 public telemetry (#298)",
+       "author": {
+        "name": "Mo",
+        "email": "mo@bnei.dev",
+        "date": "2026-10-13T10:00:00Z"
+       },
+       "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-10-13T10:00:00Z"
+       }
+      },
+      "author": {
+       "login": "MohammadBnei"
+      },
+      "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0a"
+     }
+    ]
    }
   },
   {
@@ -1487,7 +1921,41 @@
       "v": 0
      }
     ]
+   },
+   "gh": {
+    "/repos/MohammadBnei/mountain/actions/runs?per_page=20": {
+     "total_count": 1,
+     "workflow_runs": [
+      {
+       "id": 9000001,
+       "name": "app",
+       "head_branch": "feat/hq-private-dashboard",
+       "head_sha": "d4e5f6a7b8c9d4e5f6a7b8c9d4e5f6a7b8c9d4e5",
+       "status": "completed",
+       "conclusion": "failure",
+       "created_at": "2026-10-15T09:00:00Z",
+       "updated_at": "2026-10-15T09:00:00Z",
+       "display_title": "fix: leak mo@bnei.dev 10.0.3.17 k8s-worker-01.bnei.lan",
+       "actor": {
+        "login": "evil-actor",
+        "email": "evil@bnei.dev"
+       },
+       "repository": {
+        "full_name": "MohammadBnei/hq",
+        "private": true
+       },
+       "head_commit": {
+        "id": "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+        "author": {
+         "email": "mo@bnei.dev",
+         "name": "Mo"
+        }
+       }
+      }
+     ]
+    }
    }
   }
- ]
+ ],
+ "gh_expires": "2026-12-01 00:00:00 UTC"
 }

@@ -3,7 +3,8 @@
 //	relay [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--dev] [--source live|fixture:<file>] [--seed N] [--config file]
 //	relay dump-hello [--seed N] [--day YYYY-MM-DD] [--events file.json] [--out www/dev/fixtures/hello.json|-]
 //
-// Env: MOUNTAIN_FP_SALT (alert fp salt), DATABASE_URL (Postgres; empty = memory-only, store.go).
+// Env: MOUNTAIN_FP_SALT (alert fp salt), DATABASE_URL (Postgres; empty = memory-only, store.go),
+// MOUNTAIN_GITHUB_TOKEN (fine-grained read-only PAT; empty = src_github off, src_github.go).
 // dump-hello restores from DATABASE_URL when it is set.
 //
 // main.go, hub.go, sources.go, metrics.go and config.yaml are ORCHESTRATOR-OWNED (W1a seam).
@@ -69,15 +70,21 @@ func loadConfig(b []byte) (*Config, error) {
 			return nil, fmt.Errorf("config: namespace %q maps to %q, not on the allowlist", k, app)
 		}
 	}
+	for repo, app := range c.Repos {
+		if _, ok := c.Apps[app]; !ok {
+			return nil, fmt.Errorf("config: repo %q maps to %q, not on the allowlist", repo, app)
+		}
+	}
 	return &c, nil
 }
 
-// Opts are the command-line flags, plus FPSalt from env MOUNTAIN_FP_SALT (Infisical mountain-8c-cz; never rotated, 02).
+// Opts are the command-line flags, plus FPSalt from env MOUNTAIN_FP_SALT (Infisical mountain-8c-cz; never rotated, 02)
+// and GHToken from env MOUNTAIN_GITHUB_TOKEN (same project).
 type Opts struct {
-	Listen, Metrics, PromURL, AMURL, Source, Config string
-	Dev                                             bool
-	Seed                                            uint
-	FPSalt                                          string
+	Listen, Metrics, PromURL, AMURL, GHURL, Source, Config string
+	Dev                                                    bool
+	Seed                                                   uint
+	FPSalt, GHToken                                        string
 }
 
 // devFPSalt is the fixture-mode salt: fixtures carry no real fingerprints, so a public constant is fine there.
@@ -90,6 +97,7 @@ func parseServe(args []string) (Opts, error) {
 	f.StringVar(&o.Metrics, "metrics", ":9090", "metrics listen address (never routed)")
 	f.StringVar(&o.PromURL, "prom-url", "http://platform-prometheus-kube-p-prometheus.monitoring:9090", "Prometheus base URL")
 	f.StringVar(&o.AMURL, "am-url", "http://platform-prometheus-kube-p-alertmanager.monitoring:9093", "Alertmanager base URL")
+	f.StringVar(&o.GHURL, "github-url", "https://api.github.com", "GitHub API base URL")
 	f.BoolVar(&o.Dev, "dev", false, "allow http://127.0.0.1:* origins, ws://127.0.0.1:* in CSP, serve /dev/")
 	f.StringVar(&o.Source, "source", "live", "live | fixture:<file>")
 	f.StringVar(&o.Config, "config", "", "config.yaml path (default: embedded)")
@@ -99,6 +107,7 @@ func parseServe(args []string) (Opts, error) {
 	if o.FPSalt = os.Getenv("MOUNTAIN_FP_SALT"); o.FPSalt == "" && strings.HasPrefix(o.Source, "fixture:") {
 		o.FPSalt = devFPSalt
 	}
+	o.GHToken = os.Getenv("MOUNTAIN_GITHUB_TOKEN")
 	return o, err
 }
 
@@ -114,6 +123,11 @@ type App struct {
 	Metrics Metrics
 	State   State  // hello.state: Out.Fire / Out.Resolve only (persisted, store.go)
 	Day     string // UTC day of the latest snapshot; advanced at rollover (store.go)
+
+	// Vein ref (02): alert names never leave the relay; only the bool does. ponytail: memory only, so a vein
+	// restored after a restart can no longer be flagged (its name is gone); a re-fire of it can.
+	names map[string]string // salted fp -> alertname (src_alerts)
+	refs  map[string]bool   // alert names found in the runbook notes (src_github daily scan)
 
 	snapLand []int16           // hello.snapshot.land: h.land at the latest snapshot (store.go)
 	since    []json.RawMessage // hello.deltas: the world frames broadcast since that snapshot
@@ -131,7 +145,7 @@ func newApp(cfg *Config, o Opts, day string) *App {
 	w := worldcore.Base(uint32(o.Seed))
 	a := &App{Cfg: cfg, Opts: o, World: w, Land: make([]int16, len(w.Base)), State: newState(), Day: day,
 		Metrics: emptyMetrics(worldcore.Snowline(w.HMax, worldcore.NewGlacier().Mass)), base: worldcore.EncodeI16(w.Base), bench: base64.StdEncoding.EncodeToString(w.Bench),
-		snapLand: make([]int16, len(w.Base)), since: []json.RawMessage{}}
+		snapLand: make([]int16, len(w.Base)), since: []json.RawMessage{}, names: map[string]string{}, refs: map[string]bool{}}
 	a.Hub = NewHub(o.Dev, a.Hello)
 	a.Hub.tap = a.record
 	return a

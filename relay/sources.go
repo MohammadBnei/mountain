@@ -34,7 +34,7 @@ type Source interface {
 
 var registry = map[string]func(*App) (Source, error){}
 
-// Register adds a source constructor; call it from init().
+// Register adds a source constructor; call it from init(). A constructor returning (nil, nil) disables its source.
 func Register(name string, ctor func(*App) (Source, error)) { registry[name] = ctor }
 
 // FixtureHook serves a scripted Prometheus/Alertmanager timeline in-process for
@@ -51,12 +51,19 @@ func startSources(ctx context.Context, a *App) error {
 		if err != nil {
 			return err
 		}
-		a.Opts.PromURL, a.Opts.AMURL = p, am
+		// ponytail: the one fake server also answers the GitHub API (fixture.go "gh"), so the prom URL serves it too
+		a.Opts.PromURL, a.Opts.AMURL, a.Opts.GHURL = p, am, p
+		if a.Opts.GHToken == "" {
+			a.Opts.GHToken = "fixture"
+		}
 	}
 	for name, ctor := range registry {
 		s, err := ctor(a)
 		if err != nil {
 			return err
+		}
+		if s == nil { // disabled by its config (src_github without a token): no series, so no MountainSourceStale either
+			continue
 		}
 		out := &Out{app: a, name: name}
 		// seeded at start: a source that never succeeds (e.g. --prom-url=http://invalid) still ages into MountainSourceStale
@@ -139,6 +146,7 @@ type Alert struct {
 	Sev      string `json:"sev"`      // info | warning | critical
 	Layer    string `json:"layer"`    // bedrock | k8s | apps (config.yaml alertLayers)
 	StartsAt int64  `json:"startsAt"` // unix ms, Alertmanager startsAt
+	Name     string `json:"-"`        // alertname: memory only (vein ref), never on the wire nor in the DB
 }
 
 // State is hello.state (www/dev/schema/hello.json): what a reload must not lose. It changes only through the frames

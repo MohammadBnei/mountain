@@ -46,6 +46,8 @@ envFrom:
 # Alert fp salt (02: never rotated, veins link to it): key MOUNTAIN_FP_SALT in
 # Infisical mountain-8c-cz, synced to the Secret mountain-infisical and loaded
 # verbatim via envFrom. Without the key the relay boots and drops alerts (fail closed).
+# MOUNTAIN_GITHUB_TOKEN (same project, optional): fine-grained read-only PAT for src_github.
+# Unset = builds / gitops snow / ADR ash / vein refs off, logged once, no stale alarm.
 infisical:
   enabled: true
   projectSlug: mountain-8c-cz

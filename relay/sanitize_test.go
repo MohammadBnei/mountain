@@ -53,6 +53,9 @@ func TestSanitizeCorpus(t *testing.T) {
 		}
 	}
 
+	if f, pass := cfg.clean("ev:adr.merge", map[string]any{"day": "2026-10-15", "title": "docs(adr): mo@bnei.dev", "sha": "3f2a9c1d"}); !pass || len(f) != 1 {
+		t.Errorf("adr.merge: an off-allowlist title and every extra field are dropped, the day stays: %v %v", f, pass)
+	}
 	ok := map[string]any{"app": "wird", "ok": true, "namespace": "wird", "pod": "wird-1", "instance": "10.0.0.1:80", "version": "v1.2.3"}
 	if f, pass := cfg.clean("ev:argo.sync", ok); !pass || len(f) != 2 || f["app"] != "wird" {
 		t.Errorf("clean must keep exactly app+ok: %v %v", f, pass)
@@ -73,6 +76,14 @@ func TestSanitizeCorpus(t *testing.T) {
 		{"ev:pod.evicted", map[string]any{"app": "wird"}},
 		{"world:site", map[string]any{"app": "wird", "x": 1.0, "z": 1.0, "y": 1.0, "tier": 1, "group": "admin"}},
 		{"world:deposit", map[string]any{"id": "10.0.3.17", "x0": 1, "z0": 1, "w": 1, "h": 1, "cells": "AAA="}},
+		// src_github (W3c): GitHub's own status words, repo names and SHAs never pass
+		{"ev:build", map[string]any{"app": "wird", "state": "in_progress"}},
+		{"ev:build", map[string]any{"app": "MohammadBnei/wird", "state": "running"}},
+		{"ev:build", map[string]any{"app": "hq", "state": "running"}},
+		{"ev:gitops.commit", map[string]any{"n": 0}},
+		{"ev:gitops.commit", map[string]any{"n": "3f2a9c1d"}},
+		{"ev:adr.merge", map[string]any{"day": "2026-10-15T10:00:00Z"}},
+		{"ev:adr.merge", map[string]any{"title": "ADR-0058"}},
 	} {
 		if f, pass := cfg.clean(c.kind, c.in); pass {
 			t.Errorf("clean(%s, %v) passed: %v", c.kind, c.in, f)

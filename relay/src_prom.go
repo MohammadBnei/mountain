@@ -296,8 +296,13 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		dt = 0
 	}
 
-	// heat = f(syncs in flight, builds in flight): syncs in the last 5 min. Same value sizes deposits.
+	// heat = f(syncs in flight, builds in flight): syncs in the last 5 min + src_github's builds in flight. Same value
+	// sizes deposits, so a build running when its app syncs makes the bigger eruption (02 builds row: no SHA matching).
 	p.syncs = slices.DeleteFunc(p.syncs, func(t time.Time) bool { return now.Sub(t) > heatWindow })
+	p.a.mu.Lock()
+	builds := p.a.Metrics.BuildsInFlight
+	p.a.mu.Unlock()
+	heatOf := func() float64 { return math.Min(1, float64(len(p.syncs)+builds)/5) }
 
 	// argo.sync: counter diff per (name, phase).
 	type syncEv struct {
@@ -314,7 +319,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	}
 	for _, s := range syncs {
 		p.syncs = append(p.syncs, now)
-		heat := math.Min(1, float64(len(p.syncs))/5)
+		heat := heatOf()
 		if s.ok {
 			p.deposit(o, s.app, heat)
 		} else {
@@ -524,7 +529,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	}
 
 	pools := p.pools(r)
-	heat := math.Min(1, float64(len(p.syncs))/5)
+	heat := heatOf()
 	one := func(n string) float64 {
 		if len(r[n]) > 0 {
 			return r[n][0].V

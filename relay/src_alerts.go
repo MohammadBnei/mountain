@@ -80,6 +80,11 @@ func (s *alertsSource) poll(ctx context.Context, out *Out, now time.Time) {
 		return
 	}
 	out.OK()
+	s.a.mu.Lock()
+	for fp, x := range cur {
+		s.a.names[fp] = x.Name // ponytail: never pruned; distinct alerts are few
+	}
+	s.a.mu.Unlock()
 	if s.stale {
 		out.Metrics(func(m *Metrics) { delete(m.Stale, "alerts") })
 		s.stale = false
@@ -127,7 +132,7 @@ func (s *alertsSource) fetch(ctx context.Context) (map[string]Alert, error) {
 			(sev != "info" && sev != "warning" && sev != "critical") {
 			continue
 		}
-		out[fp] = Alert{FP: fp, Sev: sev, Layer: s.layer(name), StartsAt: x.StartsAt.UnixMilli()}
+		out[fp] = Alert{FP: fp, Sev: sev, Layer: s.layer(name), StartsAt: x.StartsAt.UnixMilli(), Name: name}
 	}
 	return out, nil
 }
