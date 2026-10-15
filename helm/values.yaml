@@ -59,8 +59,9 @@ envFrom:
 # rejects marks. It must flip WITHOUT a restart, so autoReload is off (the operator would otherwise
 # roll the pod on every change of this Secret): the key is also mounted as a file below, which the
 # kubelet refreshes in place, and the relay re-reads it every 10 s (Infisical resync 60 s + kubelet
-# sync ≈ 1–2 min end to end). Missing key = enabled. The env copies (envFrom) are bound at start:
-# after rotating MOUNTAIN_GITHUB_TOKEN (or adding a key), restart the pod by hand.
+# sync ≈ 1–2 min end to end). Missing key = enabled, live too (the mounted file goes away). The env
+# copies (envFrom) are bound at start: after rotating MOUNTAIN_GITHUB_TOKEN (or adding a key), restart
+# the pod by hand.
 infisical:
   enabled: true
   projectSlug: mountain-8c-cz

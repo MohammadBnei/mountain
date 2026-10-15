@@ -24,6 +24,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -161,24 +162,27 @@ func gridCell(c float64) int {
 
 var handleRE = regexp.MustCompile(`^[a-z0-9_-]{3,20}$`)
 
-// handleDeny: substrings a handle may not contain (impersonation + abuse). ponytail: a short list, false positives
-// ("model", "essex") just show "a visitor"; extend it on the first report.
-var handleDeny = []string{"admin", "root", "mod", "staff", "support", "official", "ukubi", "bnei", "authentik", "system",
-	"visitor", "null", "undefined", "fuck", "shit", "cunt", "bitch", "nigg", "fag", "rape", "nazi", "hitler", "porn", "sex", "kill"}
+// handleDenyExact / handleDeny: whole handles and substrings a handle may not be or contain (impersonation + abuse).
+// The SAME list as the authentik `mountain-handle` enrollment policy (infra-bootstrap
+// authentik-blueprint-mountain-enrollment.yaml): change both together. ponytail: a short list; extend it on the first report.
+var handleDenyExact = []string{"root", "mod", "mods", "staff", "system", "null", "none", "undefined", "anonymous", "mountain",
+	"visitor", "everyone", "here", "sex", "kill", "rape"}
+var handleDeny = []string{"admin", "authentik", "ukubi", "bnei", "moderat", "official", "support", "operator", "fuck", "shit",
+	"cunt", "bitch", "nigg", "fag", "nazi", "hitler", "porn"}
 
-// handle is the public form of an OIDC username: lower-cased, 3–20 [a-z0-9_-], no denylisted substring; "" otherwise.
-// Applied at every use (not only at sign-in), so a denylist change also covers live sessions.
+// handle is the public form of an OIDC username: 3–20 [a-z0-9_-] as is (upper case is refused, not folded: "Ana_K"
+// is not "ana_k"), not denylisted; "" otherwise. Applied at every use (not only at sign-in), so a denylist change also
+// covers live sessions.
 func handle(name string) string {
-	n := strings.ToLower(name)
-	if !handleRE.MatchString(n) {
+	if !handleRE.MatchString(name) || slices.Contains(handleDenyExact, name) {
 		return ""
 	}
 	for _, d := range handleDeny {
-		if strings.Contains(n, d) {
+		if strings.Contains(name, d) {
 			return ""
 		}
 	}
-	return n
+	return name
 }
 
 // ---------- rate limits (06: 1/min, 20/day per account) ----------
@@ -339,16 +343,16 @@ func (a *App) unmark(c *Client, ref, id string, now time.Time) []byte {
 
 // flagFile is VISITORS_ENABLED as a file: helm mounts that key of the Infisical-synced Secret (values.yaml
 // extraVolumes), and the kubelet refreshes a mounted Secret in place, so flipping it in Infisical reaches a running
-// relay within a few minutes without a restart. No file (local, fixture) = the env var, read each poll.
+// relay within a few minutes without a restart. No flags directory (local, fixture) = the env var, read each poll.
 var flagFile, flagEvery = "/etc/mountain/flags/VISITORS_ENABLED", 10 * time.Second
 
 // visitorsFlag: "false", "0", "off" or "no" disable; anything else (or nothing) enables.
 func visitorsFlag() bool {
 	v, err := os.ReadFile(flagFile)
 	s := string(v)
-	if err != nil {
+	if _, dir := os.Stat(filepath.Dir(flagFile)); err != nil && dir != nil { // no volume (local, fixture): the env var
 		s = os.Getenv("VISITORS_ENABLED")
-	}
+	} // the volume without the file = the key was deleted in Infisical = enabled (not the env bound at pod start)
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "false", "0", "off", "no":
 		return false
@@ -387,6 +391,12 @@ func (a *App) tickToys(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-t.C:
+			a.mu.Lock()
+			on := a.Metrics.Visitors
+			a.mu.Unlock()
+			if !on { // the kill switch freezes the visitor layer too: no drift, rain or erosion reaches the wire
+				continue
+			}
 			for name, toy := range toys {
 				if toy.Tick != nil {
 					tick(name, toy, a, now)

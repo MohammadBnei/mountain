@@ -60,7 +60,7 @@ Limits:
 | Active marks, global cap | 2000 |
 | Day replays | cached in memory (last 7 built): a day ended > 1 min ago until evicted, today 10 s; at most 2 builds at once relay-wide (else `rate`) |
 
-**Kill switch:** `VISITORS_ENABLED=false` hides the surface layer and rejects marks, with no deploy (Infisical-synced env + restart-free reload of the flag).
+**Kill switch:** `VISITORS_ENABLED=false` hides the surface layer and rejects marks, with no deploy (Infisical-synced env + restart-free reload of the flag). While off, the toy Ticks pause (no drift, rain or erosion) and sky drops visitor clouds from the real floor. `hello.state.marks` / `.clouds` still carry their `by` / credits handles (clients only hide them): the switch is not the tool for an abusive handle, admin `mark.delete` is (and deactivating the user in authentik).
 
 **Self-observability:**
 - `mountain_source_last_success{source}`

@@ -213,15 +213,19 @@ func TestKillSwitch(t *testing.T) {
 	withToys(t, a, "test-toy")
 	dir := t.TempDir()
 	old := flagFile
-	flagFile = filepath.Join(dir, "VISITORS_ENABLED")
+	flagFile = filepath.Join(dir, "flags", "VISITORS_ENABLED")
 	t.Cleanup(func() { flagFile = old })
 	t.Setenv("VISITORS_ENABLED", "")
 	if !visitorsFlag() {
-		t.Fatal("no file, no env: enabled")
+		t.Fatal("no volume, no env: enabled")
 	}
 	t.Setenv("VISITORS_ENABLED", "false")
 	if visitorsFlag() {
-		t.Fatal("env false: disabled")
+		t.Fatal("no volume, env false: disabled")
+	}
+	os.Mkdir(filepath.Dir(flagFile), 0o755)
+	if !visitorsFlag() {
+		t.Fatal("the volume without the key (deleted in Infisical): enabled, not the env bound at start")
 	}
 	os.WriteFile(flagFile, []byte("true\n"), 0o644)
 	if !visitorsFlag() {
@@ -273,7 +277,7 @@ func TestToyGuards(t *testing.T) {
 }
 
 func TestHandle(t *testing.T) {
-	for in, want := range map[string]string{"Ana_K": "ana_k", "bo": "", "a-very-long-handle-of-21": "", "x y z": "", "SysAdmin": "", "<b>hi</b>": "", "dee-42": "dee-42"} {
+	for in, want := range map[string]string{"Ana_K": "", "bo": "", "mountain": "", "operator9": "", "killian": "killian", "model_t": "model_t", "a-very-long-handle-of-21": "", "x y z": "", "SysAdmin": "", "<b>hi</b>": "", "dee-42": "dee-42"} {
 		if got := handle(in); got != want {
 			t.Errorf("handle(%q) = %q, want %q", in, got, want)
 		}

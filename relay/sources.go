@@ -350,9 +350,27 @@ func emptyMetrics(snowline float64) Metrics {
 		Hosts: map[string]Host{"h1": {}, "h2": {}, "h3": {}}, Stale: map[string]int64{}, Visitors: true}
 }
 
+const ulidEnc = "0123456789ABCDEFGHJKMNPQRSTVWXYZ" // Crockford base32
+
+// ulidTime is a ULID's 48-bit ms timestamp (mark ids are ULIDs: the placement time); zero if malformed.
+func ulidTime(id string) time.Time {
+	if len(id) != 26 {
+		return time.Time{}
+	}
+	var ms int64
+	for _, c := range id[:10] {
+		i := strings.IndexRune(ulidEnc, c)
+		if i < 0 {
+			return time.Time{}
+		}
+		ms = ms<<5 | int64(i)
+	}
+	return time.UnixMilli(ms)
+}
+
 // ULID returns a 26-char Crockford ULID (48-bit ms time + 80 random bits).
 func ULID() string {
-	const enc = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	const enc = ulidEnc
 	var b [16]byte
 	ms := uint64(time.Now().UnixMilli())
 	for i := 0; i < 6; i++ {
