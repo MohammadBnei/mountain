@@ -60,18 +60,19 @@ export default async function build({ THREE, kit, world }) {
   const S = Array.from({ length: SLOTS }, (_, i) => ({ age: LIFE, x: 0, z: 0, y0: 0, k: 1, flip: i & 1 ? -1 : 1, c: { x: 0, z: 0, y: 0, r: 6, mass: false } }));
   const visitors = new Map(); // id → world.clouds entry; a hello resync reseeds them from world.state.clouds (world.caves identity, as the glacier)
   const seed = () => { visitors.clear(); for (const c of world.state.clouds || []) visitors.set(c.id, { r: 8, mass: false, x: c.pos[0], y: c.pos[1], z: c.pos[2] }); };
-  let cavesSeen = world.caves;
+  const vis = () => world.metrics?.visitors !== false; // the kill switch hides visitor clouds from the real floor too (06)
+  let cavesSeen = world.caves, visSeen = vis();
   seed();
   const clouds = [];
   const fill = (out) => {
     out.length = 0;
     for (let i = 0; i < C.length; i++) if (i !== 1 || mass.count > n0) out.push(C[i]);
     for (const s of S) if (s.age < LIFE) out.push(s.c);
-    for (const v of visitors.values()) out.push(v);
+    if (visSeen) for (const v of visitors.values()) out.push(v);
   };
 
   const O = new THREE.Object3D();
-  const target = () => Math.min(1, (world.metrics?.rx ?? 0) + VISIT * visitors.size);
+  const target = () => Math.min(1, (world.metrics?.rx ?? 0) + (visSeen ? VISIT * visitors.size : 0));
   let m = target(), drawn = -1, hDrawn = NaN, sx = 0, sz = 0, st = world.stale != null ? 1 : 0, sunT = 0, since = GAP, live = 0;
   const put = (im, i, x, y, z, s, sy) => { O.position.set(x, y, z); O.scale.set(s * 1.15, s * sy, s); O.updateMatrix(); im.setMatrixAt(i, O.matrix); };
   function place() {
@@ -133,9 +134,9 @@ export default async function build({ THREE, kit, world }) {
     params: { tauRx: TAU_RX, tauStale: TAU_STALE, base: BASE, visit: VISIT },
     pose() {}, // sky is not on the scroll story: its state is the live metrics and the clock
     step(dt) {
-      if (world.caves !== cavesSeen) { // a hello or replay: hello.state.clouds holds the live toy clouds (W4)
-        cavesSeen = world.caves;
-        seed();
+      if (world.caves !== cavesSeen || vis() !== visSeen) { // a hello or replay (state.clouds: the toy clouds, W4) or the kill switch
+        if (world.caves !== cavesSeen) seed();
+        cavesSeen = world.caves; visSeen = vis();
         world.write('clouds', fill);
       }
       const rx = target();

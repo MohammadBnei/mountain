@@ -34,6 +34,9 @@
     "toys.err.snowline": "Only above the snowline",
     "toys.err.reach": "Too far",
     "toys.err.slope": "Too steep here",
+    "toys.err.upright": "The stone fell over",
+    "toys.err.full": "This cairn is complete",
+    "toys.err.throw": "Too far to throw",
     "toys.err.offline": "Not connected",
     "toys.err.bad": "Not here"
   },
@@ -72,6 +75,9 @@
     "toys.err.snowline": "Seulement au-dessus de la limite des neiges",
     "toys.err.reach": "Trop loin",
     "toys.err.slope": "Trop raide ici",
+    "toys.err.upright": "La pierre est tombée",
+    "toys.err.full": "Ce cairn est complet",
+    "toys.err.throw": "Trop loin pour lancer",
     "toys.err.offline": "Pas de connexion",
     "toys.err.bad": "Pas ici"
   }
