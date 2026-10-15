@@ -3,10 +3,10 @@
 Layer: **surface**. Contract, world, bus and budgets: see `01-architecture.md`. Ship `models/toss/{index.js, fixture.json, test.js}` and pass `gate.mjs toss`.
 
 ## Rules
-Slingshot drag; the pebble or snowball rests
+Slingshot drag; the pebble rests (W4: pebbles only. One draw call cannot hold the rock and snow ramps; snowballs would need `draws: 2` in the frozen layout.js)
 
 ## Technique
-cannon Sphere; rest on sleep or after 6 s. Relay validation + max throw distance
+cannon Sphere; rest on sleep or after 6 s. Relay validation + max throw distance (`tossMax` 24 m, reject `throw`)
 
 ## Surface-layer rules (shared)
 (W4)
