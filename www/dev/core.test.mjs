@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { createWorld, encodeI16, GRID, HQ } from '../js/world.js';
 import { connect } from '../js/socket.js';
+import { sun } from '../js/sun.js';
 
 let bad = 0;
 const ok = (c, m) => { console.log(`${c ? 'ok  ' : 'BAD '} ${m}`); if (!c) bad++; };
@@ -211,6 +212,12 @@ ok(await p5.then(() => false, (e) => /bad-day/.test(e.message)) && w4.replay ===
 const dp = readFileSync(new URL('../../scripts/devpod.sh', import.meta.url), 'utf8');
 ok(/name: MOUNTAIN_FP_SALT, value: \S+/.test(dp), 'devpod: pod env sets MOUNTAIN_FP_SALT (else src_alerts drops every alert)');
 ok(/while :; do \$K port-forward [^;]*\|\|/.test(dp), 'devpod: port-forward is looped and its failure tolerated under set -e (a push restart kills it)');
+
+// ---- sun.js: the real Paris sun (sky-full writes world.rig from it) ----
+const at = (iso) => sun(Date.parse(iso));
+ok(Math.abs(at('2026-06-21T11:52:00Z').elev - 64.6) < 0.3 && Math.abs(at('2026-12-21T11:52:00Z').elev - 17.7) < 0.3, 'sun: solstice noon elevations over Paris (64.6°, 17.7°)');
+ok(Math.abs(at('2026-03-20T06:00:00Z').elev) < 0.5 && at('2026-03-20T06:00:00Z').rising && Math.abs(at('2026-03-20T06:00:00Z').az - 90) < 2, 'sun: equinox sunrise ≈ 06:00 UTC, due east, rising');
+ok(at('2026-10-15T17:00:00Z').elev < 0 && !at('2026-10-15T17:00:00Z').rising && at('2026-10-15T15:00:00Z').elev > 6, 'sun: an October dusk sets (not rising) after 15:00 UTC daylight');
 
 console.log(bad ? `CORE FAIL (${bad})` : 'CORE PASS');
 process.exit(bad ? 1 : 0);

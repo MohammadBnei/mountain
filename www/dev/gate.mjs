@@ -92,7 +92,10 @@ const unbuilt = (s) => [...s.matchAll(/\/models\/([^/]+)\/index\.js/g)].some((m)
 function watch(page, origin, { allow = () => false } = {}) {
   const ok = (...xs) => { const s = xs.join(' '); return allow(s) || unbuilt(s); };
   page.on(({ method, params }) => {
-    if (method === 'Runtime.consoleAPICalled' && (params.type === 'error' || params.type === 'assert' || params.type === 'warning')) fail(`console.${params.type}: ${params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 400)}`);
+    if (method === 'Runtime.consoleAPICalled' && (params.type === 'error' || params.type === 'assert' || params.type === 'warning')) {
+      const s = params.args.map((a) => a.value ?? a.description ?? '').join(' ');
+      if (!(params.type === 'warning' && unbuilt(s))) fail(`console.${params.type}: ${s.slice(0, 400)}`); // main.js warns on an unbuilt page.js model
+    }
     if (method === 'Runtime.exceptionThrown') fail(`exception: ${(params.exceptionDetails.exception?.description || params.exceptionDetails.text).slice(0, 400)}`);
     if (method === 'Log.entryAdded' && params.entry.level === 'error' && !ok(params.entry.text, params.entry.url)) fail(`log error: ${params.entry.text.slice(0, 300)} ${params.entry.url || ''}`);
     if (method === 'Network.requestWillBeSent') { const u = params.request.url; if (!u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:')) fail(`foreign request: ${u}`); }
@@ -262,7 +265,8 @@ async function pageMode() {
     const gl = r.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, a = new Uint8Array(w * h * 4), b = new Uint8Array(w * h * 4);
     const diff = () => {
       r.render(scene, camera); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, a);
-      post.bloom.enabled = false; post.composer.render(); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, b); post.bloom.enabled = true;
+      const hz = post.haze.enabled; // haze (uHeat / shimmer's uHaze) is a deliberate offset: compare without it
+      post.bloom.enabled = post.haze.enabled = false; post.composer.render(); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, b); post.bloom.enabled = true; post.haze.enabled = hz;
       let d = 0; for (let i = 0; i < a.length; i += 4) for (let c = 0; c < 3; c++) d += Math.abs(a[i + c] - b[i + c]);
       return +(d / (w * h * 3)).toFixed(3);
     };
@@ -281,6 +285,43 @@ async function pageMode() {
     if (got !== want) fail(`post: day fog ${got} != ${want}: the composer's fog must not be pre-exposed (OutputPass exposes it)`);
   }
   console.log(`post: ${JSON.stringify(pp)}`);
+
+  // story (05, R5): lands on Hero with Previous disabled; Next ×5 (pressed mid-move) reaches Live with Next disabled,
+  // the hash follows every step, world.clip opens on the way and is closed again at Live; a #bedrock link lands on its
+  // depth-100 cut, ← steps back; no sign-in link without OIDC. ponytail: reduced motion is unchecked (one media branch)
+  const sy = await page.evalJSON(`(async () => {
+    const p = globalThis.__page, $ = (id) => document.getElementById(id), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    if (!p?.story) return { err: 'no __page.story (dev hook)' };
+    const s0 = p.story(), prev0 = $('prev').disabled, hashes = [s0.hash];
+    let deepest = s0.clip.depth;
+    for (let i = 0; i < 5; i++) {
+      $('next').click();
+      for (let k = 0; k < 8; k++) { await wait(50); deepest = Math.max(deepest, p.story().clip.depth); }
+      hashes.push(location.hash);
+    }
+    for (let k = 0; k < 40 && p.story().P !== 5; k++) await wait(100);
+    const s5 = p.story(), next5 = $('next').disabled, prev5 = $('prev').disabled;
+    // a shared link (#bedrock) lands on its section with that section's cut; ← steps back; then back to Live
+    const settle = async (P) => { for (let k = 0; k < 40 && p.story().P !== P; k++) await wait(100); return p.story(); };
+    location.hash = '#bedrock';
+    const b = await settle(4);
+    dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+    const left = (await settle(3)).section;
+    location.hash = '#live';
+    await settle(5);
+    return { hero: s0.section, P0: s0.P, prev0, hashes: hashes.join(' '), deepest, live: s5.section, P5: s5.P, depth5: s5.clip.depth, next5, prev5,
+      link: b.section, depth4: b.clip.depth, left, signin: $('signin').hidden };
+  })()`).catch((e) => ({ err: e.message }));
+  if (sy.err) fail(`story: ${sy.err}`);
+  else {
+    if (sy.hero !== 'hero' || sy.P0 !== 0 || !sy.prev0) fail(`story: not on Hero with Previous disabled at load: ${JSON.stringify(sy)}`);
+    if (sy.hashes !== '#hero #summit #water #strata #bedrock #live') fail(`story: hash steps ${sy.hashes}`);
+    if (!(sy.deepest > 0)) fail('story: world.clip never opened on the way to Live');
+    if (sy.live !== 'live' || sy.P5 !== 5 || !sy.next5 || sy.prev5 || sy.depth5 !== 0) fail(`story: Next ×5 did not settle on Live (closed cut, Next disabled): ${JSON.stringify(sy)}`);
+    if (sy.link !== 'bedrock' || sy.depth4 !== 100 || sy.left !== 'strata') fail(`story: #bedrock link / its depth-100 cut / ← step: ${JSON.stringify(sy)}`);
+    if (!sy.signin) fail('story: sign-in link shown with detail mode off');
+    console.log(`story: ${JSON.stringify(sy)}  ${await shot(page, `page-live-${W}.png`)}`);
+  }
 
   // relay restart: the socket must reconnect with backoff and resync through a fresh hello
   restarting = true;

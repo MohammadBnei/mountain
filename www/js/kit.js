@@ -11,7 +11,9 @@
 //   rock(seed)  puff(seed)  shard(seed)  setRampAt(mesh, i, t)  lavaHeat(material, v)  dispose(root)
 //   rig(renderer, scene) → {hemi, dir, dome, floor};  setPhase(elev, rising);  setKey(key);  setComposed(on) (post.js);  setStale(k)
 //   U (terrain uniforms; writers: setPhase → stops/uSnowLift/uEmber/uPoolK, setPool → uPool/uPoolCol/uHeat, setStale (sky) → uStale,
-//      setVeins → uVeins/uVeinN, main/socket → uSnowline, cut.js (from world.clip) → uClip);  setPool(...)  setVeins(caps)
+//      setVeins → uVeins/uVeinN, main/socket → uSnowline, cut.js (from world.clip) → uClip; shimmer → uWobble, and the post haze
+//      uHaze (amplitude) + uMask (world x, y, z, radius; radius 0 = the frame's foot), which post.js projects to the screen);
+//      setPool(...)  setVeins(caps)
 //   footprintRT, stampScene (W4)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -144,6 +146,7 @@ export const U = {
   uSnow: { value: new THREE.Color() }, uIce: { value: new THREE.Color() }, uTrail: { value: new THREE.Color() },
   uGold: { value: color('gold') }, uVeinRef: { value: color('sunHalo') },
   uCaves: { value: Array.from({ length: 5 }, () => new THREE.Vector4()) }, // cave() mouth centres (w = 1 live)
+  uHaze: { value: 0 }, uMask: { value: new THREE.Vector4() }, // post haze (not terrain): shimmer only (W3c; uHeat is magma's pool heat)
 };
 color('magma', U.uPoolCol.value).multiplyScalar(0.6);
 

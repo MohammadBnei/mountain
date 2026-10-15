@@ -13,3 +13,8 @@ kit `dome()`; kit `puff(seed)` clusters (09), colours on `ramp('cloud')` (`cloud
 
 ## Clip / cost
 not clipped / 3–4 draws
+
+## W3c seam (what sky-full has)
+- `js/sun.js`: `sun(ms, lat, lon) → {elev, az, rising}` (SunCalc formulas, Paris default). Sky writes `world.sun` and `world.rig = {elev, rising}` (a new object only when it moves enough to matter; the host calls `kit.setPhase` on every new object).
+- `uSnowline` stays host-written from `world.snowline` (relay: glacier mass): sky does not write it.
+- Profile listens `steam`, `melt`, `world:cloud` (visitor clouds arrive with W4 toy-clouds; inject them in the fixture until then). Writes `clouds`, `rig`, `sun`, `moisture`.

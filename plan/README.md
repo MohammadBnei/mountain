@@ -6,7 +6,9 @@
 ## Context
 pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compose/www/`). This is a sibling page for ukubi. It tells a scroll story of the cluster as a mountain, then ends in a **live finale** where real cluster events reshape the mountain in real time. The metaphor comes from hq's Aretē: strata = Proxmox → K8s → apps, lightning = usage, an eruption makes new land, the ice cauldron is observability, gold veins are incidents that became knowledge, and clouds are people. The binding rule: **"one physics only, and every image true and tied to something real."**
 
-## Status (2026-10-14)
+## Status (2026-10-15)
+
+**W3a + W3b are done** (PR #10, image `1e099e2586f7`; PR #11, image `0453f71d5713`). Live prod restored from a pre-W3b snapshot cleanly ("0 veins, 0 ash lines"). **W3c seam (branch `feat/w3c`):** `src_github` (builds, gitops snow, ADR ash lines, vein `ref`, token-expiry metric; off without `MOUNTAIN_GITHUB_TOKEN`, not set in prod yet), the fixture's fake GitHub API, the cauldron test no longer assumes no firing alerts, and what the sky-full / river / shimmer lanes need (`js/sun.js`, kit `uHaze` + `uMask` with post.js projecting the mask, sky listens `world:cloud`, both models already in `page.js`). **W3c lanes integrated (branch `feat/w3c`, not merged):** sky-full (SunCalc rig, visitor + steam clouds, moisture), river, shimmer, the story mechanism (buttons/keys/hash, placeholder EN+FR copy; keyframe tuning + Aretē lines human-gated, portrait framing too close), detail mode OIDC (`relay/oidc.go`, `events.detail`, the sign-in link; infra-bootstrap #303 open). Deferred to W4: admin `mark.delete` (no marks table yet; the W3 verification item moves with it), detail frames in `hello`/scrub. Next: merge, infra #303, one real sign-in.
 
 **W0, W0.5, W1a, W1b and W2 are done (2026-10-14).** **W3b seam (2026-10-15, branch `feat/w3b`):** relay worldcore veins/glacier/ash/snowline (`relay/derive.go`, `worldcore/{veins,glacier}.go`), `hello.state` += veins, glacier, ash, health, replicas, builds (persisted in `snapshots.state`, mirrored by world.js; frozen `world.js` + `hello.json` changed), strata reseeds from `world.state.ash` (ash survives a reload), hello fixture from `dump-hello --events fixtures/hello-events.json`. mountain.bnei.dev is live (image `4a0d0a6a4f90`, infra-bootstrap #300 + #302). Next: W3.
 
@@ -15,7 +17,7 @@ pi-lab has a scroll-driven three.js landing page that M BN loves (`pi-lab/compos
 - `scrub{day}` through Cloudflare: today replays (110 KB); a second scrub inside 2 s gets `rate`, a future day `bad-day`. Yesterday has no rows yet (the DB started today); the yesterday replay was proven locally against backdated rows.
 - `mountain_source_last_success{source="db"}` is fresh in Prometheus.
 
-Also live: adaptive draw rate (PR #5: 30 fps on battery, 60 when charging, pixel-ratio ladder) and orbit control on the finale (PR #7: drag/zoom, glides back to the sway after 45 s idle). Carried into W3: cauldron `test.js` assumes no firing alerts (fails on a restored hello with a long critical); the scroll story must share input with the orbit.
+Also live: adaptive draw rate (PR #5: 30 fps on battery, 60 when charging, pixel-ratio ladder) and orbit control on the finale (PR #7: drag/zoom, glides back to the sway after 45 s idle). Carried into W3: ~~cauldron `test.js` assumes no firing alerts~~ (fixed in the W3c seam); the scroll story must share input with the orbit.
 
 **W1a exit gate (live, 2026-10-14):** a `wird` ArgoCD resync finished at 17:21:00Z and `ev:argo.sync` + `world:deposit` reached a client through Cloudflare at 17:21:26Z (26 s, target 45 s). A WebSocket held 380 s through Cloudflare. `/metrics` returns 404 publicly and `:9090` is unreachable. A foreign Origin gets 403. The CSP has no dev origin. Live `/ws` showed no IP, node, internal namespace or version. Dev loop: `scripts/devpod.sh` (infra-bootstrap #301 makes it a skill).
 

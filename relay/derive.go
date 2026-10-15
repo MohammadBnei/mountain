@@ -19,6 +19,7 @@ func (a *App) derive(f frameF) [][]byte {
 			return nil
 		}
 		v := worldcore.PlaceVein(f.FP, f.Layer, f.DurS, worldcore.Solid(a.World.Base, a.Land))
+		v.Ref = a.refs[a.names[f.FP]] // the alert is in the runbook notes (src_github scan)
 		l := worldcore.AddVein(a.State.Veins, v)
 		v = l[len(l)-1] // a re-fired fp keeps its seam and the thicker radius
 		return [][]byte{o.worldFrame("vein", map[string]any{"fp": v.FP, "a": v.A[:], "b": v.B[:], "thick": v.Thick, "layer": v.Layer, "ref": v.Ref})}

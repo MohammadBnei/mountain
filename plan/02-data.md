@@ -40,7 +40,7 @@ Probes ran with `KUBECONFIG=~/.kube/ukubi-admin.conf`.
 | cpu, mem, net rx | node-exporter. `net rx` feeds wind + the cloud floor. Copy says "inbound traffic"; it includes inter-node traffic |
 | river | Σ Traefik bytes out over allowlisted apps |
 | alerts | `/api/v2/alerts?active=true&silenced=false&inhibited=false`, dropping `Watchdog` and `InfoInhibitor`. Uses Alertmanager `fingerprint` and `startsAt` (gives `durS`). **A vein needs severity ≥ warning and a duration ≥ 10 min** (W3b: derived on `alert.resolve`, `relay/derive.go` + `worldcore/veins.go`) |
-| builds | GitHub Actions runs (W3), mapped by **workflow repo + time window**, then the next `argo.sync` of the mapped app. Not SHA |
+| builds | GitHub Actions runs (W3c `src_github`), mapped by **workflow repo + time window** (2 h); builds in flight raise `heat`, so the next `argo.sync` of the app deposits bigger. Not SHA |
 | gitops commits, ADR merges | GitHub commits on infra-bootstrap main touching `gitops/` and `docs/adr/`. A title is public **only if it is on the relay's title allowlist**; otherwise date only |
 | vein `ref` flag | daily GitHub contents scan of infra-bootstrap `docs/bootstrap-test-notes.md` and `.claude/skills/**` for the alert name. **No hq data** |
 

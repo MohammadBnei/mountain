@@ -1,9 +1,9 @@
-// Page: kit rig + world + socket + the models of page.js, live finale camera (story is W3), post on desktop.
+// Page: kit rig + world + socket + the models of page.js, the story camera (story.js), post on desktop.
 // Orchestrator-owned. ?fixture=1 loads dev/fixtures/hello.json instead of /ws (static serving).
 // Host duties: world.rig → kit.setPhase on change; world.stale → the "stale since" label (sky dims via kit.setStale);
-// cut.js: compose the field providers once, then world.clip → uClip every frame. Dev (127.0.0.1): ?cut=<depth>[&cutaz=<rad>]
-// opens the cut until story.js (W3) writes world.clip.
-// Dev (127.0.0.1): globalThis.__page = {renderer, scene, camera, post, world, kit, quality(), orbit()} for the gate.
+// cut.js: compose the field providers once, then world.clip → uClip every frame; story.js writes world.clip from P.
+// Dev (127.0.0.1): ?cut=<depth>[&cutaz=<rad>] holds the cut open instead (perf.mjs --cut).
+// Dev (127.0.0.1): globalThis.__page = {renderer, scene, camera, post, world, kit, quality(), orbit(), story()} for the gate.
 import * as THREE from 'three';
 import * as kit from './kit.js';
 import { createWorld } from './world.js';
@@ -13,6 +13,7 @@ import { page } from './page.js';
 import { makeCtx, checkModel, wire } from './contract.js';
 import { createPost } from './post.js';
 import * as cut from './cut.js';
+import * as story from './story.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const q = new URLSearchParams(location.search);
@@ -44,13 +45,13 @@ for (const name of page) {
   const bad = checkModel(m, profiles[name]);
   if (bad.length) { console.error(`main: ${name}: ${bad.join('; ')}`); continue; }
   wire(m, world);
-  m.pose(6); // live finale; story.js drives P from W3
   scene.add(m.root);
   models.push(m);
 }
 
 cut.compose(models);
-if (dev && q.has('cut')) world.write('clip', 'story', cut.at(Number(q.get('cut')), Number(q.get('cutaz') || 0)));
+const cutKnob = dev && q.has('cut');
+if (cutKnob) world.write('clip', 'story', cut.at(Number(q.get('cut')), Number(q.get('cutaz') || 0)));
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -73,16 +74,19 @@ function host() {
   }
 }
 
-// Orbit (drag, wheel/pinch; no pan) around the finale look point. The first touch takes the camera from
-// the sway; 45 s after the last input it glides back. Limits keep the camera off the massif and above the valley floor.
-const look = new THREE.Vector3(...finale.look), swayPos = new THREE.Vector3();
+// Orbit (drag, wheel/pinch; no pan) around the current section's look point (05, R5: the mouse always orbits). The
+// first touch takes the camera from the story keyframe; a story step, or 45 s after the last input, glides it back.
+// Limits keep the camera off the massif and above the valley floor.
+const key = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
 const orbit = new OrbitControls(camera, renderer.domElement);
 Object.assign(orbit, { enablePan: false, enableDamping: true, dampingFactor: 0.08, minDistance: 110, maxDistance: 260,
   minPolarAngle: 0.9, maxPolarAngle: 1.7, rotateSpeed: 0.6, zoomSpeed: 0.8 });
-orbit.target.copy(look);
 let orbiting = false, idleAt = 0;
 orbit.addEventListener('start', () => { orbiting = true; idleAt = 0; });
 orbit.addEventListener('end', () => { idleAt = performance.now() + 45000; });
+const tale = story.createStory({ world, onStep: () => { if (orbiting) idleAt = performance.now(); } });
+if (dev) globalThis.__page.story = () => ({ P: tale.P, section: tale.section, hash: location.hash, clip: world.clip });
+let lastP = NaN;
 
 const DT = 1 / 30;
 // Adaptive draw rate (heat/battery): a ladder of [fps, pixel ratio] from cheapest to richest. 60 fps is
@@ -123,18 +127,23 @@ renderer.setAnimationLoop((now) => {
     t += DT;
   }
   host();
+  const P = tale.tick(now);
+  if (P !== lastP) { // pose + cut follow P only while it moves
+    lastP = P;
+    if (!cutKnob) world.write('clip', 'story', story.clip(P));
+    for (const m of models) m.pose(P);
+  }
   kit.U.uSnowline.value = world.snowline;
   kit.U.uHMax.value = world.hmax; // deposits and resyncs move the summit
   cut.apply(world);
   const tc = t + acc; // camera time between sim steps: smooth at 60 fps
-  const az = finale.sway * Math.min(1, camera.aspect) * Math.sin((2 * Math.PI * tc) / finale.period); // narrower on portrait: the pool stays in frame
-  swayPos.set(finale.radius * Math.sin(az), finale.height, finale.radius * Math.cos(az));
-  if (!orbiting) { camera.position.copy(swayPos); camera.lookAt(look); }
-  else if (idleAt && now > idleAt) { // idle: glide back to the sway, then hand the camera back to it
-    camera.position.lerp(swayPos, 0.05);
-    orbit.target.lerp(look, 0.05);
+  story.view(P, tc, camera.aspect, key);
+  if (!orbiting) { camera.position.copy(key.pos); camera.lookAt(key.look); orbit.target.copy(key.look); }
+  else if (idleAt && now > idleAt) { // idle or a step: glide back onto the keyframe, then hand the camera back to it
+    camera.position.lerp(key.pos, 0.05);
+    orbit.target.lerp(key.look, 0.05);
     camera.lookAt(orbit.target);
-    if (camera.position.distanceTo(swayPos) < 0.5) { orbiting = false; idleAt = 0; orbit.target.copy(look); }
+    if (camera.position.distanceTo(key.pos) < 0.5) { orbiting = false; idleAt = 0; }
   } else orbit.update();
   if (post) post.render(t);
   else renderer.render(scene, camera);

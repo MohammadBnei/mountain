@@ -4,7 +4,7 @@
 // no hooks). Thresholds exit non-zero. Headless GPU is SwiftShader (software): frame times are pessimistic and
 // GPU-bound, so the default frame threshold is a regression guard, not device fps. Ported from pi-lab dev/perf.mjs.
 //
-//   node www/dev/perf.mjs [url|/path]   http(s) URL as is; a /path is served from www/ (default /index.html?fixture=1)
+//   node www/dev/perf.mjs [url|/path]   http(s) URL as is; a /path is served from www/ (default /index.html?fixture=1#live: the finale camera the budgets were set on)
 // Options: --cpu 4  --secs 8  --max-p95 <ms, default 400>  --max-draws 220  --max-tris 200000  --desktop
 //          --cut <depth> (opens the cut, main.js dev knob: the cap mesh's fill cost)
 // Env: CHROME, DPR. gl_FragDepth: none since W3a (cut.js chose the cap mesh over the back-face cap; numbers in cut.js).
@@ -15,8 +15,8 @@ const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i
 const desktop = argv.includes('--desktop');
 const lim = { p95: Number(opt('max-p95', 400)), draws: Number(opt('max-draws', 220)), tris: Number(opt('max-tris', 200000)) };
 const arg = argv[0]?.startsWith('--') ? null : argv[0], srv = arg?.startsWith('http') ? null : await serveStatic();
-let url = srv ? `${srv.origin}${arg || '/index.html?fixture=1'}` : arg;
-if (opt('cut')) url += `${url.includes('?') ? '&' : '?'}cut=${opt('cut')}`;
+let url = srv ? `${srv.origin}${arg || '/index.html?fixture=1#live'}` : arg;
+if (opt('cut')) { const u = new URL(url); u.searchParams.set('cut', opt('cut')); url = u.href; } // before the #hash
 
 const page = await launch(desktop ? { w: 1280, h: 800 } : { w: 393, h: 873, mobile: true, dpr: Number(process.env.DPR || 2.75) });
 if (!desktop) {

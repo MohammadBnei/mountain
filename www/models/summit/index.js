@@ -34,12 +34,15 @@ export default async function build({ THREE, kit, world }) {
     apps.forEach((app, a) => {
       const s = world.sites.get(app), r = kit.mulberry(hash(app)), H = H0 + HB * (reps[app] ?? 0);
       const [t, glow] = HEALTH[health[app]] || NONE, yaw = r() * Math.PI * 2;
+      // not clipped (01), so a site on the cut-away side would float in front of the cut face: hide it while open
+      const cp = world.clip.plane, gone = cp[0] * s.x + cp[1] * s.y + cp[2] * s.z + cp[3] < 0;
       kit.rampColor('health', t, C);
       for (let k = 0; k < K; k++) {
         const i = a * K + k, az = yaw + (k * Math.PI * 2) / (K - 1) + r() * 0.6, tilt = k ? 0.3 + r() * 0.3 : r() * 0.08, h = k ? H * (0.35 + r() * 0.3) : H, w = k ? W * 0.6 : W;
         O.position.set(s.x + (k ? Math.sin(az) * 0.9 : 0), s.y - SINK, s.z + (k ? Math.cos(az) * 0.9 : 0));
         O.rotation.set(Math.cos(az) * tilt, r() * Math.PI, -Math.sin(az) * tilt);
-        O.scale.set(w, h, w);
+        const g = gone ? 0 : 1;
+        O.scale.set(w * g, h * g, w * g);
         O.updateMatrix();
         mesh.setMatrixAt(i, O.matrix);
         kit.setRampAt(mesh, i, s.group === 'platform' ? 0 : 1);
@@ -56,7 +59,8 @@ export default async function build({ THREE, kit, world }) {
   let dirty = true, seen = null, sig = NaN, acc = 0;
   const add = (s) => { acc += s.x * 1.3 + s.y * 7.1 + s.z * 3.7 + s.app.length; };
   const sync = () => {
-    acc = world.sites.size;
+    const cp = world.clip.plane;
+    acc = world.sites.size + cp[0] * 5.3 + cp[2] * 11.7 + cp[3] * 0.013; // the cut moving re-hides sites (rebuild per frame only while it animates)
     world.sites.forEach(add);
     if (!dirty && seen === world.state && acc === sig) return;
     dirty = false; seen = world.state; sig = acc;
