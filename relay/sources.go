@@ -172,11 +172,13 @@ type State struct {
 	Health   map[string]string `json:"health"`   // app -> ArgoCD health (ev argo.health)
 	Replicas map[string]int    `json:"replicas"` // app -> replica bucket (ev replicas)
 	Builds   map[string]string `json:"builds"`   // app -> queued|running: builds in flight (ev build, W3c)
+	Marks    []Mark            `json:"marks"`    // W4: active visitor marks (world:mark), oldest first, ≤ marksMax; gone removes
+	Clouds   []Cloud           `json:"clouds"`   // W4: live toy clouds (world:cloud), one per id, ≤ cloudsMax; state gone removes
 }
 
 func newState() State {
 	return State{Alerts: []Alert{}, Veins: []worldcore.Vein{}, Glacier: worldcore.NewGlacier(), Ash: []worldcore.Ash{},
-		Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}}
+		Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}, Marks: []Mark{}, Clouds: []Cloud{}}
 }
 
 // Fire broadcasts ev alert.fire{fp, sev, layer, startsAt}; the hub tap adds it to hello.state.alerts (replacing the
@@ -198,7 +200,7 @@ type frameF struct {
 	T, Kind, ID, FP, Sev, Layer, App, Status, State, Day, Title string
 	StartsAt, TS                                                int64
 	DurS, Bucket, N                                             int
-	OK                                                          bool
+	OK, Gone                                                    bool
 	worldcore.Glacier                                           // mass, tongues, ash
 }
 
@@ -232,6 +234,31 @@ func (s *State) apply(f frameF, raw []byte) {
 		s.Glacier = worldcore.Glacier{Mass: f.Mass, Tongues: f.Tongues, Ash: f.Ash}
 	case "world:ash":
 		s.Ash, _ = worldcore.AddAshLine(s.Ash, worldcore.Ash{Day: f.Day, Title: f.Title})
+	case "world:mark": // W4 (validators.go): a new id appends (the oldest beyond marksMax drops out), gone removes
+		var m Mark
+		if json.Unmarshal(raw, &m) == nil {
+			s.Marks = slices.DeleteFunc(s.Marks, func(x Mark) bool { return x.ID == m.ID })
+			if !f.Gone {
+				s.Marks = append(s.Marks, m)
+				s.Marks = s.Marks[max(0, len(s.Marks)-marksMax):]
+			}
+		}
+	case "world:cloud": // W4: replaces its id in place (a new id appends, oldest beyond cloudsMax drop), state gone removes
+		var c Cloud
+		if json.Unmarshal(raw, &c) == nil {
+			i := slices.IndexFunc(s.Clouds, func(x Cloud) bool { return x.ID == c.ID })
+			switch {
+			case c.State == "gone":
+				if i >= 0 {
+					s.Clouds = slices.Delete(s.Clouds, i, i+1)
+				}
+			case i >= 0:
+				s.Clouds[i] = c
+			default:
+				s.Clouds = append(s.Clouds, c)
+				s.Clouds = s.Clouds[max(0, len(s.Clouds)-cloudsMax):]
+			}
+		}
 	}
 }
 
@@ -279,7 +306,8 @@ type Metrics struct {
 	Rx             float64               `json:"rx"`
 	River          float64               `json:"river"`
 	Hosts          map[string]Host       `json:"hosts"`
-	Stale          map[string]int64      `json:"stale"` // source -> since (unix ms)
+	Stale          map[string]int64      `json:"stale"`    // source -> since (unix ms)
+	Visitors       bool                  `json:"visitors"` // W4 kill switch (VISITORS_ENABLED, validators.go): false = hide the surface layer, marks rejected
 }
 
 // AppMetrics values are bucketed (B suffix) before they leave the relay.
@@ -319,7 +347,7 @@ type Host struct {
 
 func emptyMetrics(snowline float64) Metrics {
 	return Metrics{T: "metrics", Apps: map[string]AppMetrics{}, Storage: Storage{Pools: []Pool{}}, Snowline: snowline,
-		Hosts: map[string]Host{"h1": {}, "h2": {}, "h3": {}}, Stale: map[string]int64{}}
+		Hosts: map[string]Host{"h1": {}, "h2": {}, "h3": {}}, Stale: map[string]int64{}, Visitors: true}
 }
 
 // ULID returns a 26-char Crockford ULID (48-bit ms time + 80 random bits).

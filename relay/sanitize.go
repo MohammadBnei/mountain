@@ -5,6 +5,7 @@ package main
 // and copied into a NEW map. A label value never reaches the wire as-is unless it IS an allowlist key.
 
 import (
+	"math"
 	"regexp"
 	"slices"
 	"strings"
@@ -106,6 +107,12 @@ const (
 	fTongues        // []worldcore.Tongue of allowlisted apps
 	fDays           // []string of YYYY-MM-DD
 	fBuild          // queued|running|success|failure
+	fToy            // a registered toy name (validators.go RegisterToy)
+	fPose           // a toy's sanitised pose: ≤ 16 keys [a-z][A-Za-z0-9]{0,15} -> finite number | bool | ≤ 16 finite numbers (no text)
+	fHandle         // a moderated handle (handle(), validators.go) or "a visitor"
+	fHandles        // ≤ 16 of fHandle
+	fCloud          // drift|rain|gone
+	fPos3           // []float64 of 3, finite (a pose from a toy's simulation)
 )
 
 // spec: frame kind -> field -> type. Every field is required, except a "name?" field, which is left out when
@@ -129,6 +136,10 @@ var spec = map[string]map[string]int{
 	"world:vein":       {"fp": fFP, "a": fVec3, "b": fVec3, "thick": fNum, "layer": fLayer, "ref": fBool},
 	"world:glacier":    {"mass": fNum, "tongues": fTongues, "ash": fDays},
 	"world:ash":        {"day": fDay, "title?": fTitle},
+	// W4 seam: the visitor layer (validators.go, toy_<name>.go). by = the opt-in handle; gone = removed (cap, admin)
+	"world:mark":  {"id": fULID, "mark": fToy, "pose": fPose, "weight": fNum, "by?": fHandle, "gone?": fBool},
+	"world:cloud": {"id": fULID, "pos": fPos3, "state": fCloud, "credits": fHandles},
+	"world:rain":  {"x": fNum, "z": fNum, "r": fNum},
 }
 
 var (
@@ -185,8 +196,8 @@ func (c *Config) valid(typ int, v any) bool {
 		s, ok := v.(string)
 		return ok && healthOK[s]
 	case fNum:
-		_, ok := v.(float64)
-		return ok
+		f, ok := v.(float64)
+		return ok && finite(f)
 	case fGroup:
 		return v == "platform" || v == "user"
 	case fULID:
@@ -228,6 +239,59 @@ func (c *Config) valid(typ int, v any) bool {
 		return ok
 	case fBuild:
 		return v == "queued" || v == "running" || v == "success" || v == "failure"
+	case fToy:
+		s, ok := v.(string)
+		_, in := toys[s]
+		return ok && in
+	case fPose:
+		m, ok := v.(map[string]any)
+		if !ok || len(m) > 16 {
+			return false
+		}
+		for k, x := range m {
+			if !poseKeyRE.MatchString(k) || !poseValue(x) {
+				return false
+			}
+		}
+		return true
+	case fHandle:
+		s, ok := v.(string)
+		return ok && (s == anonHandle || handle(s) == s)
+	case fHandles:
+		l, ok := v.([]string)
+		for _, s := range l {
+			ok = ok && c.valid(fHandle, s)
+		}
+		return ok && len(l) <= 16
+	case fCloud:
+		return v == "drift" || v == "rain" || v == "gone"
+	case fPos3:
+		l, ok := v.([]float64)
+		return ok && len(l) == 3 && finite(l...)
 	}
 	return false
+}
+
+var poseKeyRE = regexp.MustCompile(`^[a-z][A-Za-z0-9]{0,15}$`)
+
+func poseValue(x any) bool {
+	switch x := x.(type) {
+	case bool, int:
+		return true
+	case float64:
+		return finite(x)
+	case []float64:
+		return len(x) <= 16 && finite(x...)
+	}
+	return false
+}
+
+// finite: json.Marshal fails on NaN and ±Inf (mustJSON would panic), and no pose needs them.
+func finite(fs ...float64) bool {
+	for _, f := range fs {
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return false
+		}
+	}
+	return true
 }

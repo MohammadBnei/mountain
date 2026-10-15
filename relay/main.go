@@ -5,7 +5,8 @@
 //
 // Env: MOUNTAIN_FP_SALT (alert fp salt), DATABASE_URL (Postgres; empty = memory-only, store.go),
 // MOUNTAIN_GITHUB_TOKEN (fine-grained read-only PAT; empty = src_github off, src_github.go),
-// MOUNTAIN_OIDC_ISSUER / _CLIENT_ID / _CLIENT_SECRET + MOUNTAIN_SESSION_KEY (detail mode; any unset = off, oidc.go).
+// MOUNTAIN_OIDC_ISSUER / _CLIENT_ID / _CLIENT_SECRET + MOUNTAIN_SESSION_KEY (detail mode; any unset = off, oidc.go),
+// VISITORS_ENABLED (W4 kill switch; the mounted file /etc/mountain/flags/VISITORS_ENABLED wins, re-read live: validators.go).
 // dump-hello restores from DATABASE_URL when it is set.
 //
 // main.go, hub.go, sources.go, metrics.go and config.yaml are ORCHESTRATOR-OWNED (W1a seam).
@@ -130,6 +131,8 @@ type App struct {
 	names map[string]string // salted fp -> alertname (src_alerts)
 	refs  map[string]bool   // alert names found in the runbook notes (src_github daily scan)
 
+	MarkSubs map[string]string // W4: active mark id -> account (OIDC sub), never public (toy-clouds: 3 distinct accounts)
+
 	snapLand []int16           // hello.snapshot.land: h.land at the latest snapshot (store.go)
 	since    []json.RawMessage // hello.deltas: the world frames broadcast since that snapshot
 	store    *Store            // nil = memory-only; set before serving, never after
@@ -146,7 +149,7 @@ func newApp(cfg *Config, o Opts, day string) *App {
 	w := worldcore.Base(uint32(o.Seed))
 	a := &App{Cfg: cfg, Opts: o, World: w, Land: make([]int16, len(w.Base)), State: newState(), Day: day,
 		Metrics: emptyMetrics(worldcore.Snowline(w.HMax, worldcore.NewGlacier().Mass)), base: worldcore.EncodeI16(w.Base), bench: base64.StdEncoding.EncodeToString(w.Bench),
-		snapLand: make([]int16, len(w.Base)), since: []json.RawMessage{}, names: map[string]string{}, refs: map[string]bool{}}
+		snapLand: make([]int16, len(w.Base)), since: []json.RawMessage{}, names: map[string]string{}, refs: map[string]bool{}, MarkSubs: map[string]string{}}
 	a.Hub = NewHub(o.Dev, a.Hello)
 	a.Hub.tap = a.record
 	return a
@@ -292,11 +295,14 @@ func serve(o Opts) error {
 		log.Printf("relay: MOUNTAIN_FP_SALT unset: alerts are dropped until it is set")
 	}
 	app = newApp(cfg, o, utcDay(time.Now()))
+	app.Metrics.Visitors = visitorsFlag()
 	auth = authFromEnv(o.Dev)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	app.attach(ctx, os.Getenv("DATABASE_URL"), false) // before the sources: src_alerts seeds from the restored state
 	go app.persist(ctx)
+	go app.watchVisitors(ctx)
+	go app.tickToys(ctx)
 	if err := startSources(ctx, app); err != nil {
 		return err
 	}

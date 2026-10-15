@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mark.json",
+  "title": "mark frames (W4, 06; relay validators.go): client -> server mark / mark.delete, and the server's answer to that client alone",
+  "description": "mark: place a toy mark (session visitor|admin; named = sign it with the moderated handle); the pose is the toy's own shape (03-model-<toy>), validated by relay toy_<toy>.go. mark.delete: admin only. Answer {t:'mark', ref?, id} (accepted; the mark itself arrives as world:mark) or {t:'mark', ref?, error}: off | auth | toy | rate | bad | unknown | a toy's own reason.",
+  "type": "object",
+  "required": ["t"],
+  "oneOf": [
+    {
+      "required": ["t", "mark", "pose"],
+      "additionalProperties": false,
+      "properties": {
+        "t": { "const": "mark" },
+        "ref": { "$ref": "#/$defs/ref" },
+        "mark": { "type": "string", "pattern": "^[a-z-]{1,24}$" },
+        "pose": { "type": "object" },
+        "named": { "type": "boolean" }
+      }
+    },
+    {
+      "required": ["t", "id"],
+      "additionalProperties": false,
+      "properties": { "t": { "const": "mark.delete" }, "ref": { "$ref": "#/$defs/ref" }, "id": { "type": "string" } }
+    },
+    {
+      "required": ["t", "id"],
+      "additionalProperties": false,
+      "properties": { "t": { "const": "mark" }, "ref": { "$ref": "#/$defs/ref" }, "id": { "type": "string" } }
+    },
+    {
+      "required": ["t", "error"],
+      "additionalProperties": false,
+      "properties": { "t": { "const": "mark" }, "ref": { "$ref": "#/$defs/ref" }, "error": { "type": "string", "pattern": "^[a-z-]{1,24}$" } }
+    }
+  ],
+  "$defs": { "ref": { "type": "string", "pattern": "^[A-Za-z0-9]{1,16}$" } }
+}

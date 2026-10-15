@@ -55,11 +55,30 @@ envFrom:
 # verbatim via envFrom. Without the key the relay boots and drops alerts (fail closed).
 # MOUNTAIN_GITHUB_TOKEN (same project, optional): fine-grained read-only PAT for src_github.
 # Unset = builds / gitops snow / ADR ash / vein refs off, logged once, no stale alarm.
+# VISITORS_ENABLED (same project, optional; W4 kill switch, 06): "false" hides the surface layer and
+# rejects marks. It must flip WITHOUT a restart, so autoReload is off (the operator would otherwise
+# roll the pod on every change of this Secret): the key is also mounted as a file below, which the
+# kubelet refreshes in place, and the relay re-reads it every 10 s (Infisical resync 60 s + kubelet
+# sync ≈ 1–2 min end to end). Missing key = enabled. The env copies (envFrom) are bound at start:
+# after rotating MOUNTAIN_GITHUB_TOKEN (or adding a key), restart the pod by hand.
 infisical:
   enabled: true
   projectSlug: mountain-8c-cz
   envSlug: dev
-  autoReload: true
+  autoReload: false
+
+extraVolumes:
+  - name: flags
+    secret:
+      secretName: mountain-infisical
+      optional: true
+      items:
+        - key: VISITORS_ENABLED
+          path: VISITORS_ENABLED
+extraVolumeMounts:
+  - name: flags
+    mountPath: /etc/mountain/flags
+    readOnly: true
 
 livenessProbe:
   enabled: true

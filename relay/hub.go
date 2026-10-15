@@ -41,6 +41,8 @@ type Client struct {
 	IP      string
 	Role    string    // session role at upgrade (oidc.go): admin | visitor | "" (view)
 	RoleExp time.Time // the session cookie's expiry: Role lapses with it
+	Sub     string    // the account (OIDC sub) of a visitor/admin session: never public (W4 marks, rate limits)
+	Name    string    // its OIDC username, unfiltered: moderated at each use (handle(), validators.go)
 	conn    *websocket.Conn
 	send    chan []byte
 	scrubAt time.Time // last scrub (scrub.go); the reader goroutine only
@@ -156,7 +158,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SetReadLimit(maxFrame)
 	c := &Client{IP: ip, conn: conn, send: make(chan []byte, sendBuffer)}
-	c.Role, c.RoleExp = sessionRole(r)
+	s, exp := sessionOf(r)
+	c.Role, c.RoleExp, c.Sub, c.Name = s.Role, exp, s.Sub, s.Name
 	// hello + register under the broadcast lock: every frame lands either in the snapshot or after it.
 	// Lock order h.mu → app.mu (Hello); nothing may Broadcast while holding app.mu.
 	h.mu.Lock()
