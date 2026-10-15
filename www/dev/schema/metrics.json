@@ -17,7 +17,8 @@
   "rx",
   "river",
   "hosts",
-  "stale"
+  "stale",
+  "visitors"
  ],
  "properties": {
   "t": {
@@ -187,6 +188,10 @@
     "type": "integer",
     "minimum": 0
    }
+  },
+  "visitors": {
+   "description": "W4 kill switch (VISITORS_ENABLED, relay validators.go): false = the surface layer is hidden and marks are rejected",
+   "type": "boolean"
   }
  },
  "$defs": {

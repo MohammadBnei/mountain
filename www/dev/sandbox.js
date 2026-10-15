@@ -98,6 +98,7 @@ try {
 
   const gl = renderer.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight;
   const render = (buf) => {
+    kit.drawStamps(renderer); // W4 footprint RT (offscreen; not counted: footprints draws 0 in the main scene)
     renderer.info.reset();
     renderer.render(scene, camera);
     if (buf) gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buf);

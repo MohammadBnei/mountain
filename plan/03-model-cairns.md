@@ -6,7 +6,7 @@ Layer: **surface**. Contract, world, bus and budgets: see `01-architecture.md`. 
 Stack a stone on a flat spot
 
 ## Technique
-cannon Box collider under the rock mesh, solver 20, friction 0.8. Settle, then send `{pos, quat}`. Relay checks slope, snowline, reach, upright, rate
+cannon Box collider under the rock mesh, solver 20, friction 0.8. Settle, then send `{pos, quat}`. Relay checks slope, snowline, reach, upright, rate. **Settle (W4):** the relay keeps the dropped cell, then the stone settles within 2 cells (≈ 3 m): onto the nearest cairn with room (7 stones max), else the nearest cell with |∇heightSolid| ≤ 0.7 (≈ 35°, a stone's angle of repose) above the snowline; none → `full` or `slope`. "Flat" is 0.7, not less, because the snow cap is steep (seed 1: ≈ 20 cells qualify at 0.7, 6 at 0.35). The client mirrors the settle (models/cairns `target`)
 
 ## Surface-layer rules (shared)
 (W4)

@@ -2,7 +2,8 @@ package main
 
 // Detail mode (08 "W3 detail mode", 06 "Security"): one authentik OIDC app `mountain`, authorization code with
 // PKCE (S256) + random state + nonce. No token reaches the client and none is kept: the callback verifies the ID
-// token (iss, aud, signature, nonce), maps its groups claim to a role and sets a signed session cookie {role, exp},
+// token (iss, aud, signature, nonce), maps its groups claim to a role and sets a signed session cookie
+// {v: {role, sub, name}, exp} (W4: sub keys the mark rate limits, name is the OIDC username, moderated at each use),
 // TTL 1 h; the groups are re-checked at the next sign-in. The return view rides a 10 min signed flow cookie.
 // /ws reads the session at upgrade (Client.Role), so signing in or out takes a reconnect (06 "Keepalive").
 //
@@ -15,9 +16,10 @@ package main
 //	GET  /auth/login?return=/#view  → authentik
 //	GET  /auth/callback             → session cookie, 303 to the return view
 //	POST /auth/logout               (same Origin only: CSRF) → cookie cleared, 303 to /
-//	GET  /auth/me                   → {"enabled": bool, "role": "admin"|"visitor"|"view"}
+//	GET  /auth/me                   → {"enabled": bool, "role": "admin"|"visitor"|"view", "handle"?: moderated username}
 
 import (
+	"cmp"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -146,17 +148,21 @@ func (au *Auth) get(r *http.Request, name string, v any) (time.Time, bool) {
 	return time.Unix(s.Exp, 0), ok
 }
 
-// sessionRole is the role of r's session cookie ("" = view: no auth, no cookie, a bad MAC or expired) and its
-// expiry: a socket's role lapses with it (Hub.Detail), so a sign-out or a lost group ends detail within the 1 h TTL.
-func sessionRole(r *http.Request) (string, time.Time) {
-	var role string
+// Session is the session cookie's value. A pre-W4 cookie (a bare role string) no longer decodes: it views until
+// the next sign-in.
+type Session struct{ Role, Sub, Name string }
+
+// sessionOf is r's session ({} = view: no auth, no cookie, a bad MAC or expired) and its expiry: a socket's role
+// lapses with it (Hub.Detail, marks), so a sign-out or a lost group ends detail and marks within the 1 h TTL.
+func sessionOf(r *http.Request) (Session, time.Time) {
+	var s Session
 	if auth == nil {
-		return "", time.Time{}
+		return s, time.Time{}
 	}
-	if exp, ok := auth.get(r, sessionCookie, &role); ok {
-		return role, exp
+	if exp, ok := auth.get(r, sessionCookie, &s); ok {
+		return s, exp
 	}
-	return "", time.Time{}
+	return Session{}, time.Time{}
 }
 
 func (au *Auth) login(w http.ResponseWriter, r *http.Request) {
@@ -202,9 +208,12 @@ func (au *Auth) callback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "sign-in failed", http.StatusForbidden)
 		return
 	}
-	var c struct{ Groups []string }
+	var c struct {
+		Groups []string
+		Name   string `json:"preferred_username"`
+	}
 	idt.Claims(&c) // no groups claim = view (a missing claim yields the LOW role)
-	au.set(w, sessionCookie, roleOf(c.Groups), sessionTTL)
+	au.set(w, sessionCookie, Session{Role: roleOf(c.Groups), Sub: idt.Subject, Name: c.Name}, sessionTTL)
 	http.Redirect(w, r, f.Return, http.StatusSeeOther)
 }
 
@@ -220,13 +229,14 @@ func (au *Auth) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func me(w http.ResponseWriter, r *http.Request) {
-	role, _ := sessionRole(r)
-	if role == "" {
-		role = "view"
+	s, _ := sessionOf(r)
+	m := map[string]any{"enabled": auth != nil, "role": cmp.Or(s.Role, "view")}
+	if h := handle(s.Name); s.Role != "" && h != "" { // what "sign my marks" would show (the toolbar)
+		m["handle"] = h
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(mustJSON(map[string]any{"enabled": auth != nil, "role": role}))
+	w.Write(mustJSON(m))
 }
 
 func init() {

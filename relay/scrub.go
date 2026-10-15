@@ -49,10 +49,19 @@ var scrubBuilds = make(chan struct{}, 2)
 
 func init() { onClientMsg = clientMsg }
 
-// clientMsg handles client frames. Only scrub exists so far (subscribe and mark: W3/W4); others are ignored.
+// clientMsg handles client frames: scrub here, mark and mark.delete in validators.go; others are ignored (subscribe
+// is not built). The hub's read limit already closes on a frame > maxFrame; the check here covers direct callers
+// (fixture marks).
 func clientMsg(c *Client, msg []byte) {
 	var f struct{ T, Day string }
-	if json.Unmarshal(msg, &f) != nil || f.T != "scrub" {
+	if len(msg) > maxFrame || json.Unmarshal(msg, &f) != nil {
+		return
+	}
+	if f.T == "mark" || f.T == "mark.delete" {
+		app.markMsg(c, msg)
+		return
+	}
+	if f.T != "scrub" {
 		return
 	}
 	now := time.Now()

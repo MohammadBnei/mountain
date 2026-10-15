@@ -206,8 +206,8 @@ async function pageMode() {
   }
   const port = await freePort(), origin = `http://127.0.0.1:${port}`;
   let relay, relayLog = '';
-  const start = async () => {
-    relay = spawn(bin, ['--dev', `--listen=127.0.0.1:${port}`, '--metrics=127.0.0.1:0', `--source=fixture:${fx}`], { cwd: repo });
+  const start = async (env = {}) => {
+    relay = spawn(bin, ['--dev', `--listen=127.0.0.1:${port}`, '--metrics=127.0.0.1:0', `--source=fixture:${fx}`], { cwd: repo, env: { ...process.env, VISITORS_ENABLED: '', ...env } });
     relay.stdout.on('data', (d) => (relayLog += d)); relay.stderr.on('data', (d) => (relayLog += d));
     for (let i = 0; i < 100; i++) { if (await fetch(`${origin}/healthz`).then((r) => r.ok, () => false)) return true; await sleep(100); }
     return false;
@@ -270,7 +270,7 @@ async function pageMode() {
       let d = 0; for (let i = 0; i < a.length; i += 4) for (let c = 0; c < 3; c++) d += Math.abs(a[i + c] - b[i + c]);
       return +(d / (w * h * 3)).toFixed(3);
     };
-    const fog = scene.fog, withFog = diff(); p.kit.setKey('day'); const dayFog = '#' + fog.color.getHexString() + ' want ' + p.kit.TOKENS.day.rig.fog; p.kit.setKey('dusk'); scene.fog = null; const noFog = diff(); scene.fog = fog;
+    p.kit.setKey('dusk'); const fog = scene.fog, withFog = diff(); /* the real sun sets the phase: measure at the canonical key, not the clock */ p.kit.setKey('day'); const dayFog = '#' + fog.color.getHexString() + ' want ' + p.kit.TOKENS.day.rig.fog; p.kit.setKey('dusk'); scene.fog = null; const noFog = diff(); scene.fog = fog;
     const rt = post.composer.renderTarget1;
     return { post: true, passes: post.composer.passes.map((x) => x.constructor.name).join(','), samples: rt.samples, half: rt.texture.type === 1016, threshold: post.bloom.threshold, noFog, withFog, dayFog };
   })()`).catch((e) => ({ err: e.message }));
@@ -323,6 +323,27 @@ async function pageMode() {
     console.log(`story: ${JSON.stringify(sy)}  ${await shot(page, `page-live-${W}.png`)}`);
   }
 
+  // W4 visitor layer: no toolbar without a session (detail mode off here); the footprint RT is drawn where the terrain
+  // reads it (texel ((x + 100) / 200, (z + 100) / 200)); the hostile fixture's marks reached state only sanitised
+  const vz = await page.evalJSON(`(async () => {
+    const p = globalThis.__page, THREE = await import('three'), k = p.kit, $ = (id) => document.getElementById(id);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(8, 8).rotateX(-Math.PI / 2).translate(50, 30, -50), k.stamp());
+    k.stampScene.add(m); k.stampScene.userData.dirty = true; k.drawStamps(p.renderer);
+    const px = (x, y) => { const b = new Uint8Array(4); p.renderer.readRenderTargetPixels(k.footprintRT, x, y, 1, 1, b); return b[0]; };
+    const at = px(384, 128), mirrored = px(384, 384) + px(128, 128);
+    k.stampScene.remove(m); k.stampScene.userData.dirty = true; k.drawStamps(p.renderer);
+    const marks = p.world.state.marks;
+    return { at, mirrored, cleared: px(384, 128), toys: getComputedStyle($('toys')).display === 'none', play: getComputedStyle($('play')).display === 'none', visitors: p.world.metrics.visitors, surface: p.surface.visible,
+      marks: marks.length, clean: marks.every((x) => !/script|10\.233|u-/.test(JSON.stringify(x))) };
+  })()`).catch((e) => ({ err: e.message }));
+  if (vz.err) fail(`visitors: ${vz.err}`);
+  else {
+    if (!(vz.at > 200) || vz.mirrored || vz.cleared) fail(`visitors: footprint RT orientation/clear wrong: ${JSON.stringify(vz)}`);
+    if (!vz.toys || !vz.play) fail(`visitors: toolbar or sign-in links shown without a session: ${JSON.stringify(vz)}`);
+    if (vz.visitors !== true || !vz.surface || !vz.clean) fail(`visitors: ${JSON.stringify(vz)}`);
+    console.log(`visitors: ${JSON.stringify(vz)}`);
+  }
+
   // relay restart: the socket must reconnect with backoff and resync through a fresh hello
   restarting = true;
   await stop();
@@ -332,13 +353,16 @@ async function pageMode() {
   const staleEl = `(e => e && !e.hidden && e.textContent)(document.getElementById('stale'))`;
   const label = await page.evalJSON(staleEl);
   if (!/^stale since \d\d:\d\d/.test(label || '')) fail(`stale label not shown while the relay is down (got ${JSON.stringify(label)})`);
-  if (!(await start())) fail('relay restart failed');
+  if (!(await start({ VISITORS_ENABLED: 'false' }))) fail('relay restart failed'); // + the kill switch: hides the surface layer
   for (let i = 0; i < 400 && ws.hello < 2; i++) await sleep(100); // ≤ 1 s + 2 s backoff × 1.5 jitter, plus slack
   restarting = false;
   if (ws.hello < 2) fail(`no resync hello after the relay restart (created=${ws.created})`);
   else console.log(`resync: reconnect ok (sockets created=${ws.created}, hello=${ws.hello})  label while down: ${JSON.stringify(label)}`);
   await sleep(300);
   if (await page.evalJSON(staleEl)) fail('stale label still shown after the resync hello');
+  const off = await page.evalJSON(`(p => ({ visitors: p.world.metrics.visitors, surface: p.surface.visible, stamps: p.kit.stampScene.visible }))(globalThis.__page)`);
+  if (off.visitors !== false || off.surface || off.stamps) fail(`kill switch: VISITORS_ENABLED=false did not hide the surface layer: ${JSON.stringify(off)}`);
+  else console.log(`kill switch: ${JSON.stringify(off)}`);
   await sleep(1000);
   clearTimeout(timer);
   await finish(cleanup);

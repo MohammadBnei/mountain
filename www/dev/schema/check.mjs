@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
-const schemas = Object.fromEntries(['hello', 'ev', 'metrics', 'world', 'replay', 'scrub'].map((n) => [n, JSON.parse(readFileSync(join(DIR, `${n}.json`), 'utf8'))]));
+const schemas = Object.fromEntries(['hello', 'ev', 'metrics', 'world', 'replay', 'scrub', 'mark'].map((n) => [n, JSON.parse(readFileSync(join(DIR, `${n}.json`), 'utf8'))]));
 const typeOf = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : Number.isInteger(v) ? 'integer' : typeof v);
 
 function check(s, v, root, path, errs) {
@@ -34,6 +34,7 @@ function check(s, v, root, path, errs) {
   }
   if (t === 'object') {
     for (const k of s.required || []) if (!(k in v)) at(`missing ${k}`);
+    if (s.maxProperties !== undefined && Object.keys(v).length > s.maxProperties) at(`${Object.keys(v).length} properties > ${s.maxProperties}`);
     for (const [k, x] of Object.entries(v)) {
       if (s.propertyNames) check(s.propertyNames, k, root, `${path}/${k} (name)`, errs);
       if (s.properties?.[k]) check(s.properties[k], x, root, `${path}/${k}`, errs);
@@ -49,7 +50,7 @@ function check(s, v, root, path, errs) {
 
 /** validate(frame) → [] or error strings; the schema is picked by frame.t. */
 export function validate(f) {
-  const s = schemas[f?.t];
+  const s = schemas[f?.t === 'mark.delete' ? 'mark' : f?.t];
   if (!s) return [`unknown frame t=${f?.t}`];
   const errs = [];
   check(s, f, s, '', errs);
@@ -84,7 +85,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const dw = createWorld({ dev: true }), seen = []; // dev world throws on an unknown bus type
     for (const k of ['deposit', 'site', 'mark']) dw.on(`world:${k}`, (p, type) => seen.push(type));
     for (const f of valid.filter((f) => f.t === 'world')) { try { dw.applyFrame(f); } catch (e) { seen.push(e.message); } }
-    report('valid world frames → world:<kind> bus', seen.join() === 'world:deposit,world:site,world:mark' ? [] : [seen.join()]);
+    report('valid world frames → world:<kind> bus', seen.join() === 'world:deposit,world:site,world:mark,world:mark' ? [] : [seen.join()]);
   }
   console.log(bad ? `SCHEMA FAIL (${bad})` : 'SCHEMA PASS');
   process.exit(bad ? 1 : 0);

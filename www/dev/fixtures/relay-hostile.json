@@ -1,5 +1,5 @@
 {
- "_": "Hostile relay timeline for --source=fixture: (06, 04). Labels carry IPs, namespaces, hostnames, versions and non-allowlisted apps; none may reach /ws. Steps are sparse (unnamed queries keep their last answer). \"gh\" is the fake GitHub API (src_github): run, commit and tree payloads carry SHAs, emails, private repo names and branch names; only app + state, n, a day and a vein ref bool may leave.",
+ "_": "Hostile relay timeline for --source=fixture: (06, 04). Labels carry IPs, namespaces, hostnames, versions and non-allowlisted apps; none may reach /ws. Steps are sparse (unnamed queries keep their last answer). \"gh\" is the fake GitHub API (src_github): run, commit and tree payloads carry SHAs, emails, private repo names and branch names; only app + state, n, a day and a vein ref bool may leave. \"marks\" (W4) are visitor frames, one session each: honest marks for the four toys (pose shapes per the W4 seam: pos [x, y, z] for every toy, + quat for cairns, from for toss, path for footprints), a forged y (recomputed), below the snowline, out of reach, an unknown toy, text in a pose, an anonymous and a lapsed-role session, a hostile handle, then rate spam, an oversized and a malformed frame.",
  "step_s": 2,
  "steps": [
   {
@@ -1370,7 +1370,249 @@
       "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
      }
     ]
-   }
+   },
+   "marks": [
+    {
+     "sub": "u-cairn",
+     "name": "ana_k",
+     "role": "visitor",
+     "ref": "c1",
+     "mark": "cairns",
+     "pose": {
+      "pos": [
+       3,
+       0,
+       3
+      ],
+      "quat": [
+       0,
+       0,
+       0,
+       1
+      ]
+     },
+     "named": true
+    },
+    {
+     "sub": "u-toss",
+     "name": "bo-42",
+     "role": "visitor",
+     "ref": "t1",
+     "mark": "toss",
+     "pose": {
+      "pos": [
+       -3,
+       0,
+       2
+      ],
+      "from": [
+       -3,
+       0,
+       8
+      ]
+     },
+     "named": true
+    },
+    {
+     "sub": "u-foot",
+     "name": "cy_9",
+     "role": "visitor",
+     "ref": "f1",
+     "mark": "footprints",
+     "pose": {
+      "pos": [
+       2,
+       0,
+       -3
+      ],
+      "path": [
+       2,
+       -3,
+       3,
+       -3,
+       4,
+       -2
+      ]
+     },
+     "named": false
+    },
+    {
+     "sub": "u-cloud",
+     "name": "dee",
+     "role": "visitor",
+     "ref": "k1",
+     "mark": "toy-clouds",
+     "pose": {
+      "pos": [
+       0,
+       0,
+       4
+      ]
+     },
+     "named": true
+    },
+    {
+     "sub": "u-forge",
+     "name": "eve",
+     "role": "visitor",
+     "ref": "forge",
+     "mark": "cairns",
+     "pose": {
+      "pos": [
+       4,
+       999,
+       0
+      ],
+      "quat": [
+       0,
+       0,
+       0,
+       1
+      ]
+     },
+     "named": false
+    },
+    {
+     "sub": "u-low",
+     "name": "fay",
+     "role": "visitor",
+     "ref": "low",
+     "mark": "cairns",
+     "pose": {
+      "pos": [
+       60,
+       0,
+       60
+      ],
+      "quat": [
+       0,
+       0,
+       0,
+       1
+      ]
+     },
+     "named": false
+    },
+    {
+     "sub": "u-far",
+     "name": "gus",
+     "role": "visitor",
+     "ref": "far",
+     "mark": "toss",
+     "pose": {
+      "pos": [
+       0,
+       50,
+       140
+      ],
+      "from": [
+       0,
+       50,
+       130
+      ]
+     },
+     "named": false
+    },
+    {
+     "sub": "u-lava",
+     "name": "hal",
+     "role": "visitor",
+     "ref": "toy",
+     "mark": "lava",
+     "pose": {
+      "pos": [
+       3,
+       0,
+       3
+      ]
+     },
+     "named": false
+    },
+    {
+     "sub": "u-text",
+     "name": "ivy",
+     "role": "visitor",
+     "ref": "text",
+     "mark": "cairns",
+     "pose": {
+      "pos": [
+       3,
+       0,
+       -2
+      ],
+      "quat": [
+       0,
+       0,
+       0,
+       1
+      ],
+      "note": "10.233.66.30 wird-pg-0 <script>alert(1)</script>"
+     },
+     "named": false
+    },
+    {
+     "sub": "",
+     "name": "",
+     "role": "",
+     "ref": "anon",
+     "mark": "cairns",
+     "pose": {
+      "pos": [
+       3,
+       0,
+       3
+      ],
+      "quat": [
+       0,
+       0,
+       0,
+       1
+      ]
+     },
+     "named": false
+    },
+    {
+     "sub": "u-view",
+     "name": "jo",
+     "role": "view",
+     "ref": "view",
+     "mark": "cairns",
+     "pose": {
+      "pos": [
+       3,
+       0,
+       3
+      ],
+      "quat": [
+       0,
+       0,
+       0,
+       1
+      ]
+     },
+     "named": false
+    },
+    {
+     "sub": "u-name",
+     "name": "Admin_Root",
+     "role": "visitor",
+     "ref": "name",
+     "mark": "toss",
+     "pose": {
+      "pos": [
+       -2,
+       0,
+       -2
+      ],
+      "from": [
+       -2,
+       0,
+       4
+      ]
+     },
+     "named": true
+    }
+   ]
   },
   {
    "prom": {
@@ -1820,7 +2062,63 @@
       "html_url": "https://github.com/MohammadBnei/infra-bootstrap/commit/ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0ad0a"
      }
     ]
-   }
+   },
+   "marks": [
+    {
+     "sub": "u-cairn",
+     "name": "ana_k",
+     "role": "visitor",
+     "ref": "spam1",
+     "mark": "cairns",
+     "pose": {
+      "pos": [
+       2,
+       0,
+       3
+      ],
+      "quat": [
+       0,
+       0,
+       0,
+       1
+      ]
+     },
+     "named": true
+    },
+    {
+     "sub": "u-cairn",
+     "name": "ana_k",
+     "role": "visitor",
+     "ref": "spam2",
+     "mark": "cairns",
+     "pose": {
+      "pos": [
+       1,
+       0,
+       3
+      ],
+      "quat": [
+       0,
+       0,
+       0,
+       1
+      ]
+     },
+     "named": true
+    },
+    {
+     "sub": "u-big",
+     "name": "kim",
+     "role": "visitor",
+     "raw": "{\"t\": \"mark\", \"ref\": \"big\", \"mark\": \"toss\", \"pose\": {\"pos\": [1, 0, 1], \"pad\": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}"
+    },
+    {
+     "sub": "u-bad",
+     "name": "lu",
+     "role": "visitor",
+     "raw": "{\"t\":\"mark\",\"mark\":\"toss\",\"pose\":"
+    }
+   ]
   },
   {
    "prom": {

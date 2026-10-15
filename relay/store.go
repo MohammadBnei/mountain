@@ -218,6 +218,38 @@ func (s *Store) snapshot(day string, ts time.Time, seed uint32, land []int16, st
 	})
 }
 
+// mark stores an accepted mark's private record (validators.go place).
+func (s *Store) mark(id, sub, handle, toy string, ts time.Time, pose map[string]any, weight float64) {
+	pb := mustJSON(pose) // now: the caller's map is shared with the broadcast frame
+	s.save(func(ctx context.Context) error {
+		_, err := s.pool.Exec(ctx, "INSERT INTO marks (id, sub, handle, toy, ts, day, pose, weight) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+			id, sub, handle, toy, ts, utcDay(ts), json.RawMessage(pb), weight)
+		return err
+	})
+}
+
+// unmark records an admin mark.delete.
+func (s *Store) unmark(id string, ts time.Time) {
+	s.save(func(ctx context.Context) error {
+		_, err := s.pool.Exec(ctx, "UPDATE marks SET deleted_at = $2 WHERE id = $1", id, ts)
+		return err
+	})
+}
+
+// marksBoot returns the accounts of the active marks ids and every account's marks of the last 24 h (rate limits).
+func (s *Store) marksBoot(ctx context.Context, ids []string, now time.Time) (map[string]string, map[string][]time.Time, error) {
+	subs, recent := map[string]string{}, map[string][]time.Time{}
+	rows, _ := s.pool.Query(ctx, "SELECT id, sub FROM marks WHERE id = ANY($1)", ids)
+	var id, sub string
+	if _, err := pgx.ForEachRow(rows, []any{&id, &sub}, func() error { subs[id] = sub; return nil }); err != nil {
+		return nil, nil, err
+	}
+	var ts time.Time
+	rows, _ = s.pool.Query(ctx, "SELECT sub, ts FROM marks WHERE ts > $1 ORDER BY ts", now.Add(-24*time.Hour))
+	_, err := pgx.ForEachRow(rows, []any{&sub, &ts}, func() error { recent[sub] = append(recent[sub], ts); return nil })
+	return subs, recent, err
+}
+
 func (s *Store) metrics(ts time.Time, b []byte) {
 	s.save(func(ctx context.Context) error {
 		_, err := s.pool.Exec(ctx, "INSERT INTO metrics_5m (ts, day, frame) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", ts, utcDay(ts), json.RawMessage(b))
@@ -368,12 +400,24 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 	}
 	land, st := slices.Clone(r.land), r.state
 	since := fold(land, &st, r.frames)
+	ids := make([]string, len(st.Marks))
+	for i, m := range st.Marks {
+		ids[i] = m.ID
+	}
+	subs, recent, err := a.store.marksBoot(ctx, ids, time.Now())
+	if err != nil {
+		return err
+	}
 	r.metrics.T, r.metrics.Stale = "metrics", map[string]int64{} // sources re-mark what is still down
 	r.metrics.Snowline = worldcore.Snowline(a.World.HMax, st.Glacier.Mass)
+	visits.Lock()
+	visits.at = recent
+	visits.Unlock()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.Land, a.snapLand, a.since, a.State, a.Metrics = land, r.land, since, st, r.metrics
-	log.Printf("db: restored snapshot + %d frames, %d firing alerts, %d veins, %d ash lines", len(r.frames), len(st.Alerts), len(st.Veins), len(st.Ash))
+	r.metrics.Visitors = a.Metrics.Visitors // the kill switch is the flag's, never the snapshot's
+	a.Land, a.snapLand, a.since, a.State, a.Metrics, a.MarkSubs = land, r.land, since, st, r.metrics, subs
+	log.Printf("db: restored snapshot + %d frames, %d firing alerts, %d veins, %d ash lines, %d marks", len(r.frames), len(st.Alerts), len(st.Veins), len(st.Ash), len(st.Marks))
 	return nil
 }
 

@@ -59,7 +59,7 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"access_token": "at", "token_type": "Bearer", "expires_in": 300,
-			"id_token": p.sign(t, map[string]any{"iss": p.URL, "aud": "mountain", "sub": "u1", "nonce": g.nonce, "groups": g.groups,
+			"id_token": p.sign(t, map[string]any{"iss": p.URL, "aud": "mountain", "sub": "u1", "preferred_username": "ana_k", "nonce": g.nonce, "groups": g.groups,
 				"iat": time.Now().Unix(), "exp": time.Now().Add(5 * time.Minute).Unix()})})
 	})
 	return p

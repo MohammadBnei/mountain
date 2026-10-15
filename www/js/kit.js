@@ -14,7 +14,10 @@
 //      setVeins → uVeins/uVeinN, main/socket → uSnowline, cut.js (from world.clip) → uClip; shimmer → uWobble, and the post haze
 //      uHaze (amplitude) + uMask (world x, y, z, radius; radius 0 = the frame's foot), which post.js projects to the screen);
 //      setPool(...)  setVeins(caps)
-//   footprintRT, stampScene (W4)
+//   footprintRT (512² RGBA8, sampled by terrain uFootprint: .r = trodden, snow × (1 − .5 r)), stampScene, stampCamera,
+//      drawStamps(renderer) (W4): footprints adds stamp() meshes to stampScene (instance colour r = weight, additive) and sets
+//      stampScene.userData.dirty; the host (main.js) calls drawStamps each frame, which redraws the RT only when dirty.
+//      stampCamera looks UP from below (up +z), so RT u = (x + 100) / 200, v = (z + 100) / 200: the terrain's lookup.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import T from './tokens.json' with { type: 'json' };
@@ -135,8 +138,19 @@ export function points(name, size = 1) {
 const VEINS_MAX = 64;
 const veinTex = new THREE.DataTexture(new Float32Array(VEINS_MAX * 3 * 4), VEINS_MAX, 3, THREE.RGBAFormat, THREE.FloatType);
 veinTex.needsUpdate = true;
-export const footprintRT = new THREE.WebGLRenderTarget(512, 512);
+export const footprintRT = new THREE.WebGLRenderTarget(512, 512, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat, depthBuffer: false });
 export const stampScene = new THREE.Scene();
+export const stampCamera = new THREE.OrthographicCamera(-100, 100, 100, -100, 1, 2000);
+stampCamera.position.set(0, -1000, 0); stampCamera.up.set(0, 0, 1); stampCamera.lookAt(0, 0, 0); stampCamera.updateMatrixWorld();
+/** Redraw the footprint RT from stampScene when it is dirty (cleared first: the scene is the whole picture). */
+export function drawStamps(renderer) {
+  if (!stampScene.userData.dirty) return;
+  stampScene.userData.dirty = false;
+  const prev = renderer.getRenderTarget(), c = renderer.getClearColor(new THREE.Color()), a = renderer.getClearAlpha();
+  renderer.setRenderTarget(footprintRT); renderer.setClearColor(0x000000, 0); renderer.clear();
+  renderer.render(stampScene, stampCamera);
+  renderer.setRenderTarget(prev); renderer.setClearColor(c, a);
+}
 export const U = {
   uClip: { value: new THREE.Vector4(0, 1, 0, 1e4) }, uSnowline: { value: 1e4 }, uHMax: { value: 60 },
   uWobble: { value: 0 }, uHeat: { value: 0 }, uStale: { value: 0 }, uSnowLift: { value: 0 }, uEmber: { value: 1 }, uPoolK: { value: 1 },
@@ -207,7 +221,8 @@ export function clipped(m) {
   m.customProgramCacheKey = () => `kit-clip-${m.type}`;
   return m;
 }
-export const stamp = () => tag(new THREE.MeshBasicMaterial({ color: 0xffffff }), 'stamp');
+/** Footprint stamp (stampScene only): white × instance colour, summed (trails where many walk), both faces. */
+export const stamp = () => tag(new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide, fog: false }), 'stamp');
 
 /** Cut-face field provider (09 field(), cut.js composes it): glsl defines `vec4 <name>Field(vec3 p, vec4 base)`
  *  (p world, base/return = linear rgb + glow weight a). uniforms {name: token | value}: a token name becomes a colour

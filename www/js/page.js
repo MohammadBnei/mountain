@@ -6,4 +6,6 @@
 // shell over the body, the summit crystals and the scree rocks.
 // W3c: the river ribbon over the glacier/scree surface (1 draw), sky-full, shimmer last (0 draws: uniforms after the
 // models it hazes).
-export const page = ['mountain', 'strata', 'aquifers', 'magma', 'veins', 'glacier', 'summit', 'scree', 'river', 'eruption', 'sky', 'cauldron', 'lightning', 'shimmer'];
+// W4: the surface toys (toys.js SURFACE, layout.js order), before shimmer so its haze covers them.
+export const page = ['mountain', 'strata', 'aquifers', 'magma', 'veins', 'glacier', 'summit', 'scree', 'river', 'eruption', 'sky', 'cauldron', 'lightning',
+  'toy-clouds', 'cairns', 'footprints', 'toss', 'shimmer'];

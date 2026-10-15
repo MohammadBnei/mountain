@@ -1,0 +1,11 @@
+{
+  "_": "toss behaviour fixture: world:mark frames as the relay sends them (pose {pos, from}; y is filled in by test.js from heightSolid, as the relay would). A throw, one onto a steep face (rests by 6 s), a mark of another toy, a hello state with persisted pebbles, a flood past the 100 cap, and slingshot drags (a pull, a long pull clamped to 24 m, a tap).",
+  "throw": { "id": "01JTOSS0000000000000000001", "pos": [-3, 2], "from": [-3, 8] },
+  "steep": { "id": "01JTOSS0000000000000000002", "pos": [12, -6], "from": [4, -6] },
+  "other": { "id": "01JCAIRN000000000000000001", "mark": "cairns", "pos": [0, 4] },
+  "hello": [[-6, 0], [-5, 3], [-2, -4]],
+  "flood": { "n": 105, "x0": -10, "z0": -10 },
+  "pull": { "start": [-2, 6], "end": [-2, 8] },
+  "long": { "start": [-2, 6], "end": [-2, 26] },
+  "tap": { "start": [-2, 6], "end": [-2, 6.2] }
+}

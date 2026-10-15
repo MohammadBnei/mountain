@@ -36,8 +36,8 @@
     },
     "deltas": { "type": "array", "items": { "type": "object", "required": ["t"], "properties": { "t": { "enum": ["ev", "world"] } } } },
     "state": {
-      "description": "Live state a reload must not lose, persisted with the snapshot (W1b: firing alerts; W3b: veins, glacier, ash lines, health, replicas, builds in flight). It changes only through frames (relay State.apply, mirrored by world.js).",
-      "type": "object", "required": ["alerts", "veins", "glacier", "ash", "health", "replicas", "builds"], "additionalProperties": false,
+      "description": "Live state a reload must not lose, persisted with the snapshot (W1b: firing alerts; W3b: veins, glacier, ash lines, health, replicas, builds in flight; W4: visitor marks, toy clouds). It changes only through frames (relay State.apply, mirrored by world.js).",
+      "type": "object", "required": ["alerts", "veins", "glacier", "ash", "health", "replicas", "builds", "marks", "clouds"], "additionalProperties": false,
       "properties": {
         "alerts": {
           "type": "array", "maxItems": 256,
@@ -82,12 +82,40 @@
         },
         "health": { "description": "app -> ArgoCD health", "type": "object", "propertyNames": { "$ref": "world.json#/$defs/app" }, "additionalProperties": { "enum": ["Healthy", "Progressing", "Degraded", "Suspended", "Missing", "Unknown"] } },
         "replicas": { "description": "app -> replica bucket", "type": "object", "propertyNames": { "$ref": "world.json#/$defs/app" }, "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 8 } },
-        "builds": { "description": "app -> build in flight (ev build queued|running; success|failure removes it)", "type": "object", "propertyNames": { "$ref": "world.json#/$defs/app" }, "additionalProperties": { "enum": ["queued", "running"] } }
+        "builds": { "description": "app -> build in flight (ev build queued|running; success|failure removes it)", "type": "object", "propertyNames": { "$ref": "world.json#/$defs/app" }, "additionalProperties": { "enum": ["queued", "running"] } },
+        "marks": {
+          "description": "W4: the active visitor marks, world:mark payloads (never gone), oldest first; a new one beyond 2000 drops the oldest, gone removes its id.",
+          "type": "array", "maxItems": 2000,
+          "items": {
+            "type": "object", "required": ["id", "mark", "pose", "weight"], "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "mark": { "type": "string", "pattern": "^[a-z-]{1,24}$" },
+              "pose": { "$ref": "#/$defs/pose" },
+              "weight": { "type": "number" },
+              "by": { "type": "string", "pattern": "^[a-z0-9_-]{3,20}$" }
+            }
+          }
+        },
+        "clouds": {
+          "description": "W4: the live toy clouds, world:cloud payloads, one per id (a frame replaces its id; state gone removes it), ≤ 256.",
+          "type": "array", "maxItems": 256,
+          "items": {
+            "type": "object", "required": ["id", "pos", "state", "credits"], "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "pos": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+              "state": { "enum": ["drift", "rain"] },
+              "credits": { "type": "array", "maxItems": 16, "items": { "$ref": "world.json#/$defs/handle" } }
+            }
+          }
+        }
       }
     },
     "metrics": { "$ref": "metrics.json" }
   },
   "$defs": {
+    "pose": { "type": "object", "maxProperties": 16, "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]{0,15}$" }, "additionalProperties": { "oneOf": [{ "type": "number" }, { "type": "boolean" }, { "type": "array", "items": { "type": "number" }, "maxItems": 16 }] } },
     "grid16": { "type": "string", "pattern": "^[A-Za-z0-9+/]+=*$", "minLength": 43692, "maxLength": 43692 }
   }
 }
