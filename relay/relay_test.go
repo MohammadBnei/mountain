@@ -119,12 +119,13 @@ func TestConfigAllowlist(t *testing.T) {
 	}
 }
 
+// mountain_ws_connections: the type line only, its value is shared with the WS tests, whose closes are async
 func TestMetricsAndULID(t *testing.T) {
 	rec := httptest.NewRecorder()
 	SourceLastSuccess.Set("prom", 1)
 	serveMetrics(rec, nil)
 	body, _ := io.ReadAll(rec.Body)
-	for _, want := range []string{"# TYPE mountain_ws_connections gauge", // the value is shared with the WS tests, whose closes are async `mountain_source_last_success{source="prom"} 1`, "# TYPE mountain_unmapped_total counter"} {
+	for _, want := range []string{"# TYPE mountain_ws_connections gauge", `mountain_source_last_success{source="prom"} 1`, "# TYPE mountain_unmapped_total counter"} {
 		if !strings.Contains(string(body), want) {
 			t.Errorf("metrics missing %q:\n%s", want, body)
 		}
