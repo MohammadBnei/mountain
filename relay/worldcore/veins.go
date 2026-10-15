@@ -20,7 +20,9 @@ type Vein struct {
 const VeinMin = 600
 
 // layerY is the altitude band (world y) of each stratum, matching strata's platform bands (proxmox ≤ 4, k8s ≤ 34).
-var layerY = map[string][2]float64{"bedrock": {-12, 4}, "k8s": {6, 32}, "apps": {36, 56}}
+// Bedrock starts at 0, not lower: the body fades into the haze below y −4 (shaders.js) but the gold core is emissive,
+// so a deeper seam would hang lit in the fog.
+var layerY = map[string][2]float64{"bedrock": {0, 4}, "k8s": {6, 32}, "apps": {36, 56}}
 
 // PlaceVein seeds the capsule of alert fp from FNV-1a of fp: a seam on the surface of solid (h.base + h.land) at a
 // seeded azimuth and altitude inside its layer's band, running along the contour with a seeded dip, sunk 0.2 m so it

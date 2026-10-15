@@ -15,8 +15,11 @@ vec4 magmaField(vec3 p, vec4 base) {
   float d = (length((p - uMagmaC) / uMagmaR) - 1.) * uMagmaR.y; // ponytail: ellipsoid distance, exact on y only
   for (int i = 0; i < ${MAXD}; i++) {
     if (i >= uMagmaN) break;
-    vec3 a = uMagmaA[i].xyz, ab = uMagmaB[i].xyz - a; float t = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-6), 0., 1.);
-    d = min(d, length(p - a - ab * t) - mix(uMagmaA[i].w, uMagmaB[i].w, t));
+    // projected onto the cut plane, thinning with depth behind it: a dyke ends under its site, which sits inside the
+    // plane on most cuts, so the exact capsule would rarely cross the face (ponytail: x-ray, not geology)
+    vec3 n = uClip.xyz, a = uMagmaA[i].xyz, b = uMagmaB[i].xyz; float sa = dot(n, a) + uClip.w, sb = dot(n, b) + uClip.w;
+    vec3 ap = a - n * sa, ab = b - n * sb - ap; float t = clamp(dot(p - ap, ab) / max(dot(ab, ab), 1e-6), 0., 1.);
+    d = min(d, length(p - ap - ab * t) - mix(uMagmaA[i].w, uMagmaB[i].w, t) * (1. - .7 * smoothstep(10., 40., abs(mix(sa, sb, t)))));
   }
   float fw = fwidth(d), k = 1. - smoothstep(-fw, fw, d), crust = 1. - smoothstep(0., 1.2 + fw, d);
   vec3 c = mix(uMagmaCol, uMagmaHot, (1. - smoothstep(-5., -.5, d)) * uMagmaGlow / 1.6); // hotter inward

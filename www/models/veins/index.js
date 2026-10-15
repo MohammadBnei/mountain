@@ -37,7 +37,8 @@ export default async function build({ THREE, kit, world }) {
     return [x, world.heightAt(x, z) - sink, z];
   };
   // one relay capsule → per segments: a T-segment jittered trunk a→b along the contour (radius 0.2 + 0.3 thick, tapering
-  // to 70 %) plus per − T forks dropping `fork` m from interior joints and tapering to 0.1
+  // to 70 %) plus per − T forks dropping `fork` m from interior joints (not below y −3, where the body fades into the haze) and
+  // tapering to 0.1
   const expand = (v, per) => {
     const rnd = kit.mulberry(fnv(v.fp)), r0 = 0.2 + 0.3 * v.thick, T = Math.min(4, per), out = [];
     const ta = Math.atan2(v.a[0], v.a[2]), R = Math.max(10, Math.hypot(v.a[0], v.a[2]));
@@ -50,7 +51,7 @@ export default async function build({ THREE, kit, world }) {
     for (let i = 0; i < T; i++) out.push({ a: pts[i], b: pts[i + 1], ra: rad(i / T), rb: rad((i + 1) / T), ref: v.ref });
     for (let f = 0; f < per - T; f++) {
       const i = 1 + (f % (T - 1)), t = i / T, p = pts[i]; // forks only when per > 4, so T = 4
-      out.push({ a: p, b: surf(Math.atan2(p[0], p[2]) + j(4) / R, p[1] - params.fork * (0.6 + 0.8 * rnd()), 0.04), ra: rad(t) * 0.7, rb: 0.1, ref: v.ref });
+      out.push({ a: p, b: surf(Math.atan2(p[0], p[2]) + j(4) / R, Math.max(-3, p[1] - params.fork * (0.6 + 0.8 * rnd())), 0.04), ra: rad(t) * 0.7, rb: 0.1, ref: v.ref });
     }
     return out;
   };

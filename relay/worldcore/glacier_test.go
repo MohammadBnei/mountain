@@ -82,3 +82,18 @@ func TestPlaceVein(t *testing.T) {
 		t.Fatal("a longer incident gives a thicker vein")
 	}
 }
+
+func TestAshTrimmedIsNoChange(t *testing.T) {
+	g := Glacier{}
+	var l []Ash
+	for i := range AshMax {
+		g, _ = g.AddAsh(fmt.Sprintf("2026-10-%02d", i+1))
+		l, _ = AddAshLine(l, Ash{Day: fmt.Sprintf("2026-10-%02d", i+1)})
+	}
+	if _, ok := g.AddAsh("2026-01-01"); ok {
+		t.Fatal("AddAsh: a day older than a full list reported a change")
+	}
+	if _, ok := AddAshLine(l, Ash{Day: "2026-01-01"}); ok {
+		t.Fatal("AddAshLine: a day older than a full list reported a change")
+	}
+}

@@ -92,7 +92,7 @@ func (g Glacier) AddAsh(day string) (Glacier, bool) {
 	g.Ash = append(g.Ash, day)
 	slices.SortFunc(g.Ash, func(a, b string) int { return strings.Compare(b, a) })
 	g.Ash = g.Ash[:min(len(g.Ash), AshMax)]
-	return g, true
+	return g, slices.Contains(g.Ash, day) // a day older than a full list is trimmed: no change
 }
 
 // AddAshLine adds a to the ash lines (newest day first, ≤ AshMax; same day + title once); ok = it was new.
@@ -102,7 +102,8 @@ func AddAshLine(l []Ash, a Ash) ([]Ash, bool) {
 	}
 	l = append(slices.Clone(l), a)
 	slices.SortStableFunc(l, func(x, y Ash) int { return strings.Compare(y.Day, x.Day) })
-	return l[:min(len(l), AshMax)], true
+	l = l[:min(len(l), AshMax)]
+	return l, slices.Contains(l, a) // a day older than a full list is trimmed: no change
 }
 
 // AddVein adds v (the same fp keeps its seam and the thicker radius; ≤ VeinsMax, oldest dropped).
