@@ -36,7 +36,7 @@ export const profiles = {
   sky: { // sky-min: layer + mass cumulus (2 InstancedMesh draws, 584 lumps × 80 tris); the dome is the kit rig's.
     // sky-full (W3): SunCalc sun → rig, moisture from steam + melt, visitor + steam clouds (within the same budget)
     tris: 50000, draws: 4, peak: { tris: 50000, draws: 4 }, stepMs: 2,
-    writes: ['clouds', 'rig', 'sun', 'moisture'], emits: [], listens: ['steam', 'melt'],
+    writes: ['clouds', 'rig', 'sun', 'moisture'], emits: [], listens: ['steam', 'melt', 'world:cloud'], // W3c: visitor clouds (01 bus)
     clipped: false, visibleFrom: 0, goneFrom: null, footprint: WORLD, yRange: [-10, 200], facet: 'cloud',
   },
   lightning: { // glow from rpsB, St. Elmo corona (line + glow), bolt on spike from the mass base (world.clouds)
@@ -85,7 +85,7 @@ export const profiles = {
     writes: [], emits: [], listens: ['melt', 'aquifer.seep', 'jokulhlaup'],
     clipped: false, visibleFrom: 0, goneFrom: null, footprint: WORLD, yRange: [-70, 75], facet: 'exempt', minCoverage: 0,
   },
-  shimmer: { // uniforms only (kit uWobble / uHeat)
+  shimmer: { // uniforms only: kit uWobble (low tier) / uHaze + uMask (desktop post haze; W3c: uHeat is magma's)
     tris: 0, draws: 0, peak: { tris: 0, draws: 0 }, stepMs: 0.5,
     writes: [], emits: [], listens: [],
     clipped: false, visibleFrom: 0, goneFrom: null, footprint: WORLD, yRange: [-70, 75], facet: 'exempt', minCoverage: 0,

@@ -92,7 +92,10 @@ const unbuilt = (s) => [...s.matchAll(/\/models\/([^/]+)\/index\.js/g)].some((m)
 function watch(page, origin, { allow = () => false } = {}) {
   const ok = (...xs) => { const s = xs.join(' '); return allow(s) || unbuilt(s); };
   page.on(({ method, params }) => {
-    if (method === 'Runtime.consoleAPICalled' && (params.type === 'error' || params.type === 'assert' || params.type === 'warning')) fail(`console.${params.type}: ${params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 400)}`);
+    if (method === 'Runtime.consoleAPICalled' && (params.type === 'error' || params.type === 'assert' || params.type === 'warning')) {
+      const s = params.args.map((a) => a.value ?? a.description ?? '').join(' ');
+      if (!(params.type === 'warning' && unbuilt(s))) fail(`console.${params.type}: ${s.slice(0, 400)}`); // main.js warns on an unbuilt page.js model
+    }
     if (method === 'Runtime.exceptionThrown') fail(`exception: ${(params.exceptionDetails.exception?.description || params.exceptionDetails.text).slice(0, 400)}`);
     if (method === 'Log.entryAdded' && params.entry.level === 'error' && !ok(params.entry.text, params.entry.url)) fail(`log error: ${params.entry.text.slice(0, 300)} ${params.entry.url || ''}`);
     if (method === 'Network.requestWillBeSent') { const u = params.request.url; if (!u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:')) fail(`foreign request: ${u}`); }
@@ -262,7 +265,8 @@ async function pageMode() {
     const gl = r.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, a = new Uint8Array(w * h * 4), b = new Uint8Array(w * h * 4);
     const diff = () => {
       r.render(scene, camera); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, a);
-      post.bloom.enabled = false; post.composer.render(); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, b); post.bloom.enabled = true;
+      const hz = post.haze.enabled; // haze (uHeat / shimmer's uHaze) is a deliberate offset: compare without it
+      post.bloom.enabled = post.haze.enabled = false; post.composer.render(); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, b); post.bloom.enabled = true; post.haze.enabled = hz;
       let d = 0; for (let i = 0; i < a.length; i += 4) for (let c = 0; c < 3; c++) d += Math.abs(a[i + c] - b[i + c]);
       return +(d / (w * h * 3)).toFixed(3);
     };

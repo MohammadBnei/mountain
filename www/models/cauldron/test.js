@@ -2,6 +2,7 @@
 // critical → deeper sag, red under-glow, steam visible, vertex-animated and emitted; resolve → recovers (ring gone,
 // sag 0); a Watchdog-style severity never sags; state restored without a bus event (reload) sags too.
 export default async function test({ model, world, inject, step, fixture, assert }) {
+  world.state.alerts = []; // a restored hello may carry firing alerts (a long critical would burst at once): start from none
   const ring = model.root.getObjectByName('sag'), steam = model.root.getObjectByName('steam');
   const got = { 'cauldron.sag': [], jokulhlaup: [], steam: [] };
   const offs = Object.keys(got).map((k) => world.on(k, (p) => got[k].push(p)));
