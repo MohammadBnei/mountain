@@ -39,6 +39,8 @@ var onClientMsg = func(c *Client, msg []byte) {}
 // Client is one /ws connection. Send queues a frame to it alone (e.g. a scrub replay).
 type Client struct {
 	IP      string
+	Role    string    // session role at upgrade (oidc.go): admin | visitor | "" (view)
+	RoleExp time.Time // the session cookie's expiry: Role lapses with it
 	conn    *websocket.Conn
 	send    chan []byte
 	scrubAt time.Time // last scrub (scrub.go); the reader goroutine only
@@ -97,6 +99,19 @@ func (h *Hub) broadcastLocked(bs ...[]byte) {
 	}
 }
 
+// Detail queues b to admin sessions only (08: non-admins never receive detail frames). Not tapped: the public
+// state and the replay never see it.
+func (h *Hub) Detail(b []byte) {
+	now := time.Now()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		if c.Role == roleAdmin && now.Before(c.RoleExp) && !c.Send(b) {
+			c.conn.CloseNow()
+		}
+	}
+}
+
 // originOK: exact scheme + host; empty rejects; --dev also allows http://127.0.0.1:<port>.
 func originOK(o string, dev bool) bool {
 	if o == origin {
@@ -141,6 +156,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SetReadLimit(maxFrame)
 	c := &Client{IP: ip, conn: conn, send: make(chan []byte, sendBuffer)}
+	c.Role, c.RoleExp = sessionRole(r)
 	// hello + register under the broadcast lock: every frame lands either in the snapshot or after it.
 	// Lock order h.mu → app.mu (Hello); nothing may Broadcast while holding app.mu.
 	h.mu.Lock()

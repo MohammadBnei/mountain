@@ -194,6 +194,15 @@ func (s *Store) frame(t, kind, id string, ts time.Time, b []byte) {
 	})
 }
 
+// detail stores an admin detail frame on its event's row (queued after the row's insert: same writer, same order).
+// The snapshot write clears details older than 30 days (02).
+func (s *Store) detail(id string, b []byte) {
+	s.save(func(ctx context.Context) error {
+		_, err := s.pool.Exec(ctx, "UPDATE events SET detail = $2 WHERE id = $1", id, json.RawMessage(b))
+		return err
+	})
+}
+
 func (s *Store) snapshot(day string, ts time.Time, seed uint32, land []int16, state, metrics []byte) {
 	lb := landBytes(land) // now: the caller may change land after we return
 	s.save(func(ctx context.Context) error {
@@ -202,6 +211,9 @@ func (s *Store) snapshot(day string, ts time.Time, seed uint32, land []int16, st
 			ON CONFLICT (day) DO UPDATE SET seq = excluded.seq, ts = excluded.ts, seed = excluded.seed,
 				land = excluded.land, state = excluded.state, metrics = excluded.metrics`,
 			day, ts, int64(seed), lb, json.RawMessage(state), json.RawMessage(metrics))
+		if err == nil { // detail retention (02) rides the 10 min snapshot: no job of its own, runs with no alert firing
+			_, err = s.pool.Exec(ctx, "UPDATE events SET detail = NULL WHERE detail IS NOT NULL AND day < current_date - 30")
+		}
 		return err
 	})
 }

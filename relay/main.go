@@ -4,7 +4,8 @@
 //	relay dump-hello [--seed N] [--day YYYY-MM-DD] [--events file.json] [--out www/dev/fixtures/hello.json|-]
 //
 // Env: MOUNTAIN_FP_SALT (alert fp salt), DATABASE_URL (Postgres; empty = memory-only, store.go),
-// MOUNTAIN_GITHUB_TOKEN (fine-grained read-only PAT; empty = src_github off, src_github.go).
+// MOUNTAIN_GITHUB_TOKEN (fine-grained read-only PAT; empty = src_github off, src_github.go),
+// MOUNTAIN_OIDC_ISSUER / _CLIENT_ID / _CLIENT_SECRET + MOUNTAIN_SESSION_KEY (detail mode; any unset = off, oidc.go).
 // dump-hello restores from DATABASE_URL when it is set.
 //
 // main.go, hub.go, sources.go, metrics.go and config.yaml are ORCHESTRATOR-OWNED (W1a seam).
@@ -291,6 +292,7 @@ func serve(o Opts) error {
 		log.Printf("relay: MOUNTAIN_FP_SALT unset: alerts are dropped until it is set")
 	}
 	app = newApp(cfg, o, utcDay(time.Now()))
+	auth = authFromEnv(o.Dev)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	app.attach(ctx, os.Getenv("DATABASE_URL"), false) // before the sources: src_alerts seeds from the restored state

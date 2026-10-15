@@ -97,6 +97,17 @@ func (o *Out) Ev(kind string, fields map[string]any) string {
 	return id
 }
 
+// Detail sends {t:"detail", id, detail} for the ev id to admin sessions only (Hub.Detail) and stores it in
+// events.detail (02: kept 30 days). Unsanitised by design: it never reaches a non-admin, a replay or the public row.
+func (o *Out) Detail(id string, detail map[string]any) {
+	if id == "" { // its ev was dropped
+		return
+	}
+	b := mustJSON(map[string]any{"t": "detail", "id": id, "detail": detail})
+	o.app.Hub.Detail(b)
+	o.app.store.detail(id, b)
+}
+
 // World sanitises and broadcasts {t:"world", kind, ...payload} (kind = deposit|vein|glacier|ash|site|mark|cloud|rain).
 func (o *Out) World(kind string, payload map[string]any) {
 	o.app.Hub.Broadcast(o.worldFrame(kind, payload))

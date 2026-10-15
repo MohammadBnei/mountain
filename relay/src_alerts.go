@@ -31,7 +31,8 @@ type alertsSource struct {
 	url    string
 	hc     *http.Client
 	layers []layerRule
-	firing map[string]Alert // salted fp -> alert
+	firing map[string]Alert             // salted fp -> alert
+	labels map[string]map[string]string // salted fp -> raw labels of the last fetch: admin detail only (Out.Detail)
 	stale  bool
 }
 
@@ -97,8 +98,12 @@ func (s *alertsSource) poll(ctx context.Context, out *Out, now time.Time) {
 		}
 	}
 	for _, fp := range slices.Sorted(maps.Keys(cur)) {
-		if _, ok := s.firing[fp]; !ok && out.Fire(cur[fp]) != "" {
+		if _, ok := s.firing[fp]; ok {
+			continue
+		}
+		if id := out.Fire(cur[fp]); id != "" {
 			s.firing[fp] = cur[fp]
+			out.Detail(id, map[string]any{"labels": s.labels[fp]}) // ponytail: fire only; a resolve's detail is its fire's
 		}
 	}
 }
@@ -125,6 +130,7 @@ func (s *alertsSource) fetch(ctx context.Context) (map[string]Alert, error) {
 		return nil, fmt.Errorf("alertmanager: status %d, %v", resp.StatusCode, err) // a null body is no answer, not "none firing"
 	}
 	out := map[string]Alert{}
+	s.labels = map[string]map[string]string{}
 	for _, x := range r {
 		name, sev := x.Labels["alertname"], x.Labels["severity"]
 		fp := s.a.FP(x.Fingerprint)
@@ -133,6 +139,7 @@ func (s *alertsSource) fetch(ctx context.Context) (map[string]Alert, error) {
 			continue
 		}
 		out[fp] = Alert{FP: fp, Sev: sev, Layer: s.layer(name), StartsAt: x.StartsAt.UnixMilli(), Name: name}
+		s.labels[fp] = x.Labels
 	}
 	return out, nil
 }
