@@ -48,5 +48,9 @@ export function connect({ url = wsURL(), world, onStatus = () => {} }) {
     };
   };
   open();
+  // a page kept in the back/forward cache would hold its socket (and one of the 4 per IP, 06): drop it on
+  // pagehide, reconnect when the page comes back (the hello resyncs)
+  globalThis.addEventListener?.('pagehide', (e) => { if (e.persisted && !closed) { clearTimeout(timer); ws.onclose = null; ws.close(); } });
+  globalThis.addEventListener?.('pageshow', (e) => { if (e.persisted && !closed) open(); });
   return { close() { closed = true; clearTimeout(timer); ws?.close(); } };
 }

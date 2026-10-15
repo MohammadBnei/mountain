@@ -12,7 +12,7 @@ canvas:active { cursor: grabbing; }
 #story button:hover:not(:disabled) { background: rgb(18 11 10 / .8); }
 #story button:focus-visible { outline: 2px solid #ece6dc; outline-offset: 2px; }
 #story button:disabled { opacity: .3; cursor: default; }
-#signin { position: absolute; top: 16px; right: 16px; font-size: 13px; color: inherit; opacity: .7; }
+#signin { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; font-size: 13px; color: inherit; opacity: .7; } /* ≥ 44 px target, text where it was */
 #signin:hover, #signin:focus-visible { opacity: 1; }
 [hidden] { display: none !important; } /* the display: flex rules below must not override the hidden attribute */
 /* W4 visitor layer (toys.js): toolbar on the right edge, ≥ 44 px targets; the sign-in links in the same place */

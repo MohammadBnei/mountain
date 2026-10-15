@@ -65,7 +65,7 @@ export default async function build({ THREE, kit, world }) {
     for (let i = 0; i <= SEG; i++) {
       const t = i / SEG, d = curve.getTangentAt(t);
       cx[i] = p[i].x; cz[i] = p[i].z; sx[i] = -d.z; sz[i] = d.x;
-      taper[i] = 0.35 + 0.65 * Math.min(1, t * 6); // a spring at the source
+      taper[i] = (0.35 + 0.65 * Math.min(1, t * 6)) * Math.min(1, (1 - t) * 10); // a spring at the source; thins out at the world edge
       for (let c = 0; c <= ACROSS; c++) uv.set([(t * len) / 32, c / ACROSS], (i * (ACROSS + 1) + c) * 2); // foam bands every 4 m
     }
     geo.attributes.uv.needsUpdate = true;
