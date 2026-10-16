@@ -67,9 +67,8 @@ export function createCards({ world, camera, canvas, models, toys }) {
     if (app?.url) { go.href = app.url; go.textContent = `${new URL(app.url).host} ↗`; go.setAttribute('aria-label', `${T['card.open']} ${app.name}`); }
     means.textContent = app ? T['legend.summit'] : '';
     stopRec();
-    tryBox.hidden = !app?.try;
-    rec.textContent = T[signedIn ? 'card.tryStart' : 'card.trySignin'];
-    said.textContent = signedIn ? T['card.tryHint'] : '';
+    tryBox.hidden = !app?.try || !signedIn; // signed out: the bar's one Sign in is the way in, no second one here
+    said.textContent = T['card.tryHint'];
     pinned = pin;
     card.setAttribute('role', pin ? 'dialog' : 'tooltip');
     legendOpen(false);
@@ -85,12 +84,11 @@ export function createCards({ world, camera, canvas, models, toys }) {
     clearTimeout(stopAt);
     const d = dict;
     dict = null;
-    rec.textContent = T[signedIn ? 'card.tryStart' : 'card.trySignin'];
+    rec.textContent = T['card.tryStart'];
     return d?.stop();
   }
-  rec.addEventListener('pointerenter', () => { if (signedIn) prewarm().catch(() => {}); }); // no mic yet: warms the worklet
+  rec.addEventListener('pointerenter', () => { prewarm().catch(() => {}); }); // no mic yet: warms the worklet
   rec.addEventListener('click', async () => {
-    if (!signedIn) { location.href = '/auth/login?return=%2F'; return; }
     if (dict) return stopRec();
     const stream = crypto.randomUUID(), d = createDictation({
       send: async (pcm, last) => {
@@ -115,7 +113,7 @@ export function createCards({ world, camera, canvas, models, toys }) {
     at = null;
     if (!tap || toys.active) return;
     const c = hitAt(e.clientX, e.clientY, true);
-    if (c) show(c, true); else close();
+    if (c) show(c, true); else { close(); legendOpen(false); } // tap away: the slot goes back to the story line
   });
   canvas.addEventListener('pointermove', (e) => {
     if (e.pointerType !== 'mouse' || e.buttons || pinned) return;

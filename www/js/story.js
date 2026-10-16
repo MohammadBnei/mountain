@@ -83,6 +83,7 @@ export function createStory({ world, onStep }) {
     line.textContent = T[`story.${sections[i]}`];
     login.href = `/auth/login?return=${encodeURIComponent(`/#${sections[i]}`)}`; // back to this section
     factsAt = 0;
+    signin.open = false;
     onStep?.();
   }
   const fromHash = () => { const i = sections.indexOf(location.hash.slice(1)); return i < 0 ? 5 : i; };
@@ -94,6 +95,9 @@ export function createStory({ world, onStep }) {
     else if (e.key === 'ArrowRight') go(to + 1);
   });
   addEventListener('hashchange', () => go(fromHash()));
+  // the open sign-in choices hide the story line: Escape or a press anywhere else closes them
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') signin.open = false; });
+  addEventListener('pointerdown', (e) => { if (!signin.contains(e.target)) signin.open = false; });
   signin.querySelector('summary').textContent = T['auth.signin'];
   login.textContent = T['auth.account'];
   Object.assign($('enroll'), { href: ENROLL, textContent: T['auth.enroll'] });

@@ -13,10 +13,10 @@ canvas:active { cursor: grabbing; }
 #panel p { margin: 0; }
 #panel #facts { margin-top: 6px; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; opacity: .75; }
 #toolhint:not([hidden]) + #line { display: none; } /* a selected tool's hint stands in for the story line */
-#panel #toystatus { margin-top: 6px; font-size: 13px; }
+#toystatus { margin: 0; padding: 6px 12px; border-radius: 8px; background: rgb(18 11 10 / .75); font-size: 13px; } /* outside the slot: a legend never hides it */
 #dock > #bar { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; width: auto; max-width: 100%; }
 #story, #toys { display: flex; gap: 8px; }
-#bar button, #signin summary { min-width: 48px; min-height: 48px; border: 1px solid rgb(236 230 220 / .35); border-radius: 24px; background: rgb(18 11 10 / .55); color: inherit; font: 20px/1 Georgia, serif; cursor: pointer; }
+#bar button, #signin summary { min-width: 48px; min-height: 48px; border: 1px solid rgb(236 230 220 / .35); border-radius: 24px; background: rgb(18 11 10 / .78); color: inherit; font: 20px/1 Georgia, serif; cursor: pointer; }
 #bar button:hover:not(:disabled), #signin summary:hover { background: rgb(18 11 10 / .8); }
 #bar button:focus-visible, #signin summary:focus-visible, #signin a:focus-visible { outline: 2px solid #ece6dc; outline-offset: 2px; }
 #bar button:disabled { opacity: .3; cursor: default; }
@@ -36,7 +36,7 @@ canvas:active { cursor: grabbing; }
 #legend dl { margin: 0; }
 #legend dd { margin: 0 0 6px; }
 #card { padding: 14px 18px 16px; border: 1px solid rgb(236 230 220 / .18); border-top: 2px solid #ddb153; border-radius: 12px; box-shadow: 0 12px 32px rgb(0 0 0 / .45); }
-#card .kicker { margin: 0 0 2px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; opacity: .6; }
+#card .kicker { margin: 0 0 2px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .75; }
 #card h2 { font-size: 22px; line-height: 1.2; }
 #card .desc { margin: 0; font-size: 14px; line-height: 1.45; }
 #card .go { display: inline-flex; align-items: center; min-height: 44px; margin-top: 10px; padding: 0 16px; border: 1px solid rgb(221 177 83 / .6); border-radius: 22px; color: #ddb153; font-size: 14px; text-decoration: none; }
