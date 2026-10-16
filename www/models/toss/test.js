@@ -1,8 +1,9 @@
 // toss behaviour (03-model-toss): a world:mark toss flies from `from` to `pos` and rests (asleep or after 6 s) on the
 // terrain near pos; other toys' marks are ignored; gone removes it; a hello / replay state redraws the persisted
 // pebbles at rest; ≤ 100 pebbles (the newest); the slingshot sends {pos, from} = from + 3 × the pull, ≤ 24 m, and a tap
-// sends nothing; a refused place() is caught.
+// sends nothing; tool.ok() mid-drag = the landing is a relay Spot; a refused place() is caught.
 import * as THREE from 'three';
+import { GRID, CELL } from '../../js/world.js';
 
 export default async function test({ model, world, inject, step, fixture, assert }) {
   const mesh = model.root.getObjectByName('toss');
@@ -78,6 +79,16 @@ export default async function test({ model, world, inject, step, fixture, assert
     model.tool.drag('start', V(0, 0)); model.tool.drag('cancel', null);
     model.tool.drag('start', V(0, 0)); model.tool.drag('end', null);
     assert(sent.length === 2, 'a tap, a cancel or a release off the terrain sends nothing');
+    // ok(): mid-drag, a release there lands on a relay Spot (the aiming ring); the peak throws onto snow, the lowest cell under it
+    const hs = world.fields.heightSolid, at = (k) => V(-100 + (k % GRID) * CELL, -100 + Math.floor(k / GRID) * CELL);
+    const peak = at(hs.reduce((b, v, k) => (v > hs[b] ? k : b), 0)), low = at(hs.reduce((b, v, k) => (v < hs[b] ? k : b), 0));
+    model.tool.drag('start', peak);
+    assert(model.tool.ok(V(peak.x + 1, peak.z)) && !model.tool.ok(peak), 'ok() for a throw from the peak, not for a tap');
+    model.tool.drag('cancel', null);
+    model.tool.drag('start', low);
+    assert(!model.tool.ok(V(low.x + 1, low.z)), 'not ok() for a throw that lands under the snowline');
+    model.tool.drag('cancel', null);
+    assert(sent.length === 2, 'ok() sends nothing');
     world.place = () => Promise.reject(new Error('snowline'));
     drag(fixture.pull);
     await new Promise((r) => setTimeout(r, 0));

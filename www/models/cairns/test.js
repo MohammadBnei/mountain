@@ -1,7 +1,7 @@
 // cairns behaviour (03-model-cairns): relay marks draw as stacked stones (one per mark, levelled per cell in mark
 // order, other toys and malformed poses ignored); a gone mark lets the stones above drop; a hello/replay reseeds from
 // state.marks; the tool settles a cannon Box on a flat cell above the snowline (onto a cairn within 2 cells first,
-// as the relay does) and sends {pos, quat} upright; a refusal or a drop with nowhere to stand leaves nothing; rain
+// as the relay does) and sends {pos, quat} upright; tool.ok() mirrors that settle; a refusal or a drop with nowhere to stand leaves nothing; rain
 // darkens the stones under it until they dry; at most 200 stones (the newest) are drawn.
 import * as THREE from 'three';
 import { GRID, CELL } from '../../js/world.js';
@@ -41,6 +41,7 @@ export default async function test({ model, world, inject, step, fixture, assert
   // the tool: the relay echo is stubbed (place → the mark id, then its world:mark)
   const { tool } = model, place = world.place, sent = [];
   assert(tool?.label === 'tool.cairns' && typeof tool.drag === 'function', 'joins the toolbar (tool.cairns)');
+  assert(tool.ok(hit(fixture.steep)) && !tool.ok(hit(fixture.low)), 'ok() where a stone finds a cell, not under the snowline (the aiming ring)');
   let reply = () => Promise.resolve(`01JA00000000000000000S${String(sent.length).padStart(4, '0')}`);
   world.place = (mark, pose) => { sent.push({ mark, pose }); return reply(); };
   const throwAt = async (xz) => {

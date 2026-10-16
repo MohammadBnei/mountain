@@ -1,9 +1,11 @@
 // toy-clouds behaviour (03-model-toy-clouds): a world:cloud draws K lumps at its pos, bigger with more contributors;
 // between relay frames it drifts on world.wind (the relay's ∫wind), a new frame moves it there smoothly; state rain
-// drops streaks under it, gone removes it; pick credits its contributors; the tool sends {pos} through world.place
+// drops streaks under it, gone removes it; pick → {kind: 'marks', d, credits}; tool.ok() is the relay's Spot (above the
+// snowline); the tool sends {pos} through world.place
 // and shows a provisional cloud (expires unless the relay owns it, a refusal shows nothing); a replaced world.state
 // (hello, replay) reseeds from state.clouds.
 import * as THREE from 'three';
+import { GRID, CELL } from '../../js/world.js';
 
 export default async function test({ model, world, inject, step, fixture, assert }) {
   const lumps = model.root.getObjectByName('clouds'), rain = model.root.getObjectByName('rain');
@@ -52,6 +54,7 @@ export default async function test({ model, world, inject, step, fixture, assert
 
   const card = model.pick(new THREE.Ray(new THREE.Vector3(c.x, 150, c.z), new THREE.Vector3(0, -1, 0)));
   assert(card?.credits?.join() === fixture.rain.credits.join(), `pick credits the contributors (${JSON.stringify(card)})`);
+  assert(card.kind === 'marks' && card.d > 150 - fixture.rain.pos[1] - 8 && card.d < 150 - fixture.rain.pos[1] + 8, `the card is a mark at its distance along the ray (R6; d ${card.d?.toFixed(1)})`);
   assert(model.pick(new THREE.Ray(new THREE.Vector3(90, 150, 90), new THREE.Vector3(0, -1, 0))) === null, 'pick misses the open sky');
 
   inject('world:cloud', { ...fixture.rain, state: 'gone', credits: [] });
@@ -61,6 +64,9 @@ export default async function test({ model, world, inject, step, fixture, assert
   // the tool: world.place → {t:'mark', mark:'toy-clouds', pose:{pos}}; a provisional cloud until the relay's frame
   const sent = [], { x, z } = { x: fixture.spawn.pos[0], z: fixture.spawn.pos[2] }, hit = new THREE.Vector3(x, world.heightAt(x, z), z);
   world.send = (f) => sent.push(f) > 0;
+  const hs = world.fields.heightSolid, low = hs.reduce((b, v, k) => (v < hs[b] ? k : b), 0), lowHit = new THREE.Vector3(-100 + (low % GRID) * CELL, 0, -100 + Math.floor(low / GRID) * CELL);
+  assert(hit.y > world.snowline && model.tool.ok(hit), 'ok() on a spot above the snowline (the aiming ring is healthOk)');
+  assert(!model.tool.ok(lowHit), `not ok() under the snowline (the relay would refuse: snowline; ${hs[low].toFixed(1)} m)`);
   try {
     model.tool.drag('start', hit);
     model.tool.drag('end', hit);

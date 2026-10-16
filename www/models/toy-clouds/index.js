@@ -5,7 +5,10 @@
 // (pos + wind · DRIFT · t since its frame: the relay re-sends only every unit of drift), and rains under a cloud in
 // state rain: falling streaks, one LineSegments on kit line('water'). Reseeds from world.state.clouds when world.state
 // is replaced (hello, replay). tool: a tap on the terrain sends {pos} (world.place); a provisional cloud shows over the
-// spot until the relay's frame (or for PROV s: the relay may merge it into a neighbour). pick(ray) → {credits}.
+// spot until the relay's frame (or for PROV s: the relay may merge it into a neighbour); tool.ok(hit) = the spot is a
+// relay Spot. pick(ray) → {kind: 'marks', d, credits} (R6 card).
+import { spot } from '../../js/toys.js';
+
 const DRIFT = 0.05, ALT = 14; // relay cloudDrift, cloudAlt
 const K = 4, MAX = 24; // lumps a cloud, clouds drawn: K · MAX · ≤ 100 tris ≤ the 10k budget
 const SIZE = 2.6, TAU = 2, PROV = 40; // lump scale, easing toward the relay's pos (s), provisional cloud life (s)
@@ -105,12 +108,13 @@ export default async function build({ THREE, kit, world }) {
         const { x, y, z } = hit;
         world.place('toy-clouds', { pos: [x, y, z] }).then((id) => { if (!list.some((c) => c.id === id)) put({ id, pos: [x, y + ALT, z], state: 'drift', credits: [] }, true); }, () => {});
       },
+      ok: (hit) => spot(world, hit.x, hit.z), // the relay's rule (toy_toy_clouds.go: Place.Spot)
     },
     pick(ray) {
       caster.ray.copy(ray);
       lumps.boundingSphere = null; // instances moved
       const hit = caster.intersectObject(lumps)[0], c = hit && list[Math.floor(hit.instanceId / K)];
-      return c ? { credits: c.credits } : null;
+      return c ? { kind: 'marks', d: hit.distance, credits: c.credits } : null;
     },
     busy: () => list.length > 0,
     dispose() { kit.dispose(root); },
