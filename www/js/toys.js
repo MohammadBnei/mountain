@@ -9,10 +9,15 @@
 //                                 friction 0.8, heightSolid as a Heightfield (collider() re-reads it: call it before a
 //                                 drop, deposits move the land), body(opts) = a CANNON.Body in the surface group,
 //                                 cap = max bodies (low tier: half). The model steps phys itself in step(dt).
-//   createToys({world, camera, canvas, orbit, tale, models, surface}) → {tick()}: the toolbar + input routing; tick() per frame
+//   spot(world, x, z) → bool: the relay's Place.Spot mirrored (in the world, the cell's heightSolid above the snowline),
+//                                 the base of most tools' ok(hit)
+//   createToys({world, camera, canvas, orbit, tale, models, surface}) → {tick(), active}: the toolbar + input routing; tick()
+//                                 per frame; active = a tool is selected and usable (cards.js leaves the pointer to it)
 //
 // A model joins the toolbar by exposing `tool` (optional, beside the contract's members):
-//   model.tool = { icon: '▲', label: 'tool.<name>' (i18n key), drag(phase, hit, e) }
+//   model.tool = { icon: '▲', label: 'tool.<name>' (i18n key), drag(phase, hit, e), ok?(hit) → bool }
+//     W5 feedback: hint.<name> (i18n) shows while the tool is selected, toys.ok.<name> on an accepted place(); ok(hit) is
+//     the model's own pre-check of a spot (the relay's rule mirrored, e.g. cairns target()), for the aiming ring's colour.
 //     phase 'start' | 'move' | 'end' | 'cancel'; hit = THREE.Vector3 on the terrain (reused: copy it) or null off it.
 //     The model then sends its mark with world.place('<name>', pose) → Promise<id> (world.js), e.g. pose {pos: [x, y, z]}
 //     (the relay recomputes y, quantises x/z, checks the snowline: Place.Spot), and draws it when world:mark arrives
@@ -20,15 +25,27 @@
 // Tool mode exists only in the Live section with the story at rest (explore), for a signed-in visitor or admin while
 // visitors are enabled. A drag that starts on the terrain goes to the tool; one that starts on the sky, or any second
 // finger, orbits (pi-lab compose/www/js/main.js:217-307 routing). Admins also get an eraser: a tap on a mark deletes it.
+// Feedback (W5, R6): each tool button carries its label (span.name, desktop only). A selected tool shows hint.<name> in
+// #toolhint (hidden by its first terrain drag, shown again by a drag that starts on the sky) and gives the canvas class
+// 'aiming' while usable; a tool with ok() gets a ring (RING m, LineLoop under `surface`) draped on the terrain under the
+// pointer, hover and drag, kit line healthOk where ok(hit) else healthDown. The status line (#toystatus) says
+// toys.ok.<mark> on an accepted place(), toys.err.<reason> on a refusal (4 s), and while world.quota says to wait
+// (Date.now() < at + next s) every model tool is disabled and it counts down toys.wait {t m:ss} + toys.left {n},
+// refreshed once a second from tick() (the DOM only on change).
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GRID, CELL } from './world.js';
-import { QUALITY } from './kit.js';
+import { QUALITY, line } from './kit.js';
 import S from './i18n.json' with { type: 'json' };
 
 export const SURFACE = new Set(['toy-clouds', 'cairns', 'footprints', 'toss']);
 const ENROLL = 'https://authentik.bnei.dev/if/flow/mountain-enrollment/'; // 08 item 4: the brand enrollment_flow is unset on purpose
 const T = S[navigator.language?.toLowerCase().startsWith('fr') ? 'fr' : 'en'];
+const RING = 1.2, SEG = 48, SAY = 4000; // aiming ring radius (m) and segments; ms a status message stays
+
+export function spot(world, x, z) {
+  return Math.abs(x) <= 100 && Math.abs(z) <= 100 && world.fields.heightSolid[world.cell(x, z)] > world.snowline;
+}
 
 export function pickTerrain(world, ray, out = new THREE.Vector3(), far = 600) {
   const o = ray.origin, d = ray.direction, below = (t) => {
@@ -67,9 +84,16 @@ export function surfacePhysics({ max = 40 } = {}) {
 }
 
 export function createToys({ world, camera, canvas, orbit, tale, models, surface }) {
-  const $ = (id) => document.getElementById(id), bar = $('toys'), play = $('play'), status = $('toystatus');
+  const $ = (id) => document.getElementById(id), bar = $('toys'), play = $('play'), status = $('toystatus'), hint = $('toolhint');
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), hit = new THREE.Vector3(), down = new Set();
-  let role = null, tool = null, drag = null, shown = null;
+  let role = null, tool = null, drag = null, shown = null, hinting = false, waiting = false, msg = '', until = 0, said = '', sec = 0;
+
+  // the aiming ring: re-draped on the terrain at every move (frustum culling would use a stale bound)
+  const ring = new THREE.LineLoop(new THREE.BufferGeometry(), line('healthOk')), OK = ring.material, NO = line('healthDown');
+  ring.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SEG * 3), 3));
+  ring.name = 'aim';
+  ring.frustumCulled = ring.visible = false;
+  surface.add(ring); // the kill switch hides it with the marks
 
   const button = (label, icon, onclick) => {
     const b = Object.assign(document.createElement('button'), { type: 'button', textContent: icon, title: T[label] || label, onclick });
@@ -78,18 +102,62 @@ export function createToys({ world, camera, canvas, orbit, tale, models, surface
     bar.append(b);
     return b;
   };
-  const say = (k) => { status.textContent = T[`toys.err.${k}`] || T['toys.err.bad']; status.hidden = false; setTimeout(() => (status.hidden = true), 4000); };
-  const select = (t, b) => {
-    tool = tool === t ? null : t;
-    for (const x of bar.querySelectorAll('button[data-tool]')) x.setAttribute('aria-pressed', String(x === b && !!tool));
-  };
-  bar.setAttribute('aria-label', T['toys.label']);
-  for (const m of models) if (m.tool) {
-    const b = button(m.tool.label, m.tool.icon, () => select(m.tool, b));
+  const toolButton = (t) => {
+    const b = button(t.label, t.icon, () => select(t, b));
     b.dataset.tool = '';
+    b.append(Object.assign(document.createElement('span'), { className: 'name', textContent: T[t.label] || t.label }));
+    return b;
+  };
+  const usable = () => !!tool && shown === 'tools' && (!waiting || tool === eraser); // the quota does not hold an admin's eraser
+  /** Hint, cursor and ring follow the selected tool and whether it can be used now. */
+  function sync() {
+    const text = tool && T[`hint.${tool.label.replace('tool.', '')}`];
+    hint.textContent = text || '';
+    hint.hidden = !(text && hinting && shown === 'tools');
+    canvas.classList.toggle('aiming', usable());
+    if (!usable()) ring.visible = false;
   }
+  function select(t, b) {
+    tool = tool === t ? null : t;
+    hinting = !!tool;
+    for (const x of bar.querySelectorAll('button[data-tool]')) x.setAttribute('aria-pressed', String(x === b && !!tool));
+    sync();
+  }
+  /** The ring at terrain hit h (null: off the terrain), coloured by the tool's own pre-check; none for a tool without ok. */
+  function aim(h) {
+    ring.visible = !!(h && usable() && tool.ok);
+    if (!ring.visible) return;
+    const p = ring.geometry.attributes.position;
+    for (let i = 0; i < SEG; i++) {
+      const a = (i / SEG) * 2 * Math.PI, x = h.x + RING * Math.cos(a), z = h.z + RING * Math.sin(a);
+      p.setXYZ(i, x, world.heightAt(x, z) + 0.1, z);
+    }
+    p.needsUpdate = true;
+    ring.material = tool.ok(h) ? OK : NO;
+  }
+
+  const mmss = (ms) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  /** The status line: the last message for SAY ms, the quota with it and while it makes you wait (tools disabled). */
+  function render(now = Date.now()) {
+    const q = world.quota, wait = q ? q.at + q.next * 1000 - now : 0, fresh = now < until;
+    if ((wait > 0) !== waiting) {
+      waiting = wait > 0;
+      for (const b of tools) b.disabled = waiting;
+      sync();
+    }
+    const left = q?.left != null && (fresh || waiting) && T['toys.left'].replace('{n}', q.left);
+    const text = [fresh && msg, waiting && T['toys.wait'].replace('{t}', mmss(wait)), left].filter(Boolean).join(' · ');
+    if (text === said) return;
+    said = status.textContent = text;
+    status.hidden = !text;
+  }
+  const say = (text) => { msg = text; until = Date.now() + SAY; render(); };
+  const refused = (k) => say(T[`toys.err.${k}`] || T['toys.err.bad']);
+
+  bar.setAttribute('aria-label', T['toys.label']);
+  const tools = models.filter((m) => m.tool).map((m) => toolButton(m.tool));
   // admin eraser (08 moderation, detail mode): the nearest active mark within 3 m of the tap
-  const eraser = { drag(phase, h) {
+  const eraser = { label: 'toys.erase', icon: '✕', drag(phase, h) {
     if (phase !== 'end' || !h) return;
     let best = null, bd = 9;
     for (const m of world.state.marks || []) {
@@ -97,10 +165,9 @@ export function createToys({ world, camera, canvas, orbit, tale, models, surface
       const d = p ? (p[0] - h.x) ** 2 + (p[2] - h.z) ** 2 : 1e9;
       if (d < bd) { bd = d; best = m; }
     }
-    if (best) world.unmark(best.id).catch((e) => say(e.message));
+    if (best) world.unmark(best.id).catch((e) => refused(e.message));
   } };
-  const erase = button('toys.erase', '✕', () => select(eraser, erase));
-  erase.dataset.tool = '';
+  const erase = toolButton(eraser);
   erase.hidden = true;
   const named = button('toys.named', '✎', () => { world.named = !world.named; named.setAttribute('aria-pressed', String(world.named)); });
   $('enroll').href = ENROLL;
@@ -112,13 +179,11 @@ export function createToys({ world, camera, canvas, orbit, tale, models, surface
     erase.hidden = role !== 'admin';
     if (a?.handle) named.title = `${T['toys.named']} (${a.handle})`;
   }, () => {});
-  // every refused place() shows its reason on the status line; the model still gets the rejection (models see world
-  // through world.as views, which inherit this)
+  // every place() answer shows on the status line (accepted: toys.ok.<mark>, refused: its reason); the model still gets
+  // the result (models see world through world.as views, which inherit this)
   const place = world.place;
-  world.place = (mark, pose) => place(mark, pose).catch((e) => { say(e.message); throw e; });
-  const tools = models.filter((m) => m.tool).length;
+  world.place = (mark, pose) => place(mark, pose).then((id) => { say(T[`toys.ok.${mark}`] || ''); return id; }, (e) => { refused(e.message); throw e; });
 
-  const allowed = () => shown === 'tools';
   const pick = (e) => {
     const r = canvas.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -136,29 +201,43 @@ export function createToys({ world, camera, canvas, orbit, tale, models, surface
     down.add(e.pointerId);
     if (drag) { if (down.size > 1) stop('cancel', e); return; } // a second finger: the gesture is the orbit's
     // ponytail: OrbitControls missed the first finger, so after a cancel it orbits on the second alone until both lift
-    if (!tool || !allowed() || down.size > 1 || e.button !== 0 || !pick(e)) return; // the sky orbits
+    if (!usable() || down.size > 1 || e.button !== 0) return;
+    hinting = !pick(e); // the sky orbits: show again how the tool works; the terrain: the tool is understood
+    sync();
+    if (hinting) return;
     drag = { tool, id: e.pointerId };
     orbit.enabled = false;
     canvas.setPointerCapture(e.pointerId);
-    tool.drag('start', hit, e);
+    tool.drag('start', hit, e); // the ring keeps its hover colour until the first move (toss: no pull yet at the start)
   }, { capture: true });
-  canvas.addEventListener('pointermove', (e) => { if (drag?.id === e.pointerId) drag.tool.drag('move', pick(e), e); });
+  canvas.addEventListener('pointermove', (e) => {
+    const mine = drag?.id === e.pointerId;
+    if (!mine && (e.buttons || drag || !tool?.ok || !usable())) { ring.visible = false; return; } // an orbit, or nothing to aim
+    const h = pick(e);
+    if (mine) drag.tool.drag('move', h, e);
+    aim(h);
+  });
+  canvas.addEventListener('pointerleave', () => { ring.visible = false; });
   for (const type of ['pointerup', 'pointercancel']) canvas.addEventListener(type, (e) => {
     down.delete(e.pointerId);
     if (drag?.id === e.pointerId) stop(type === 'pointerup' ? 'end' : 'cancel', e);
   });
 
   return {
-    /** Per frame: the surface layer follows the kill switch; the toolbar or the sign-in links follow section + role. */
+    get active() { return usable(); },
+    /** Per frame: the surface layer follows the kill switch; the toolbar or the sign-in links follow section + role; the
+     *  status line (quota countdown, message expiry) once a second. */
     tick() {
-      const on = world.metrics?.visitors !== false, live = tale.section === 'live' && tale.P === 5;
-      const want = !on || !live || !role ? 'none' : role === 'view' ? 'play' : tools || role === 'admin' ? 'tools' : 'none';
+      const on = world.metrics?.visitors !== false, live = tale.section === 'live' && tale.P === 5, now = Date.now();
+      const want = !on || !live || !role ? 'none' : role === 'view' ? 'play' : tools.length || role === 'admin' ? 'tools' : 'none';
       if (surface.visible !== on) surface.visible = on; // main.js redraws the stamp RT on this change
+      if (Math.floor(now / 1000) !== sec) { sec = Math.floor(now / 1000); render(now); }
       if (want === shown) return;
       shown = want;
       bar.hidden = want !== 'tools';
       play.hidden = want !== 'play';
       if (want !== 'tools' && drag) stop('cancel', null);
+      sync();
     },
   };
 }

@@ -4,3 +4,5 @@ relay/relay
 .DS_Store
 # gate input built from a restored DB snapshot (W2 pose check), never committed
 www/dev/fixtures/hello-restored.json
+# agent worktrees
+.claude/worktrees/

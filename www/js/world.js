@@ -5,7 +5,7 @@
 //   world.fields      {'h.base': Int16Array, 'h.land': Int16Array (HEIGHT_Q steps), heightSolid: Float32Array (units),
 //                      'h.talus': Float32Array, temp, moisture (GRID²), ice: Float32Array (ICE²)}
 //   world.bench       Uint8Array GRID² (0..255);  world.caves [{x, z, y, yaw, seed}];  world.hmax (units)
-//   world.metrics world.state world.sites(Map app→site) world.wind world.snowline world.clouds world.sun
+//   world.metrics world.state world.sites(Map app→site) world.wind world.snowline world.clouds world.sun world.moon (W5)
 //   world.rig {elev, rising} world.clip world.stale   (shared state; writers in WRITERS)
 //   world.state  hello.state, then kept current by the frames, each BEFORE its bus emit (a model reads it at build and on
 //                a resync, so a reload keeps what live frames built; the relay's State.apply has the same rules):
@@ -37,7 +37,8 @@
 //   world.place(mark, pose) → Promise<id> (W4): sends {t:'mark', ref, mark, pose, named: world.named}; resolves with the
 //                mark id once the relay accepted it (the mark itself arrives as world:mark, to everyone), rejects with
 //                Error(reason): off | auth | toy | rate | bad | a toy's reason | timeout (10 s) | offline.  world.named: the
-//                toolbar's "sign my marks" (the host sets it).  world.unmark(id) → Promise<id>: admin mark.delete, same answers.
+//                toolbar's "sign my marks" (the host sets it).  world.quota null | {next (s), left, at (ms)}: the last
+//                accept or rate refusal's budget (W5; set in answer(), the toolbar counts down from at + next).  world.unmark(id) → Promise<id>: admin mark.delete, same answers.
 // Dev mode throws on a write by a non-writer and on an emit by a non-emitter or of an unknown bus type.
 import U from './units.json' with { type: 'json' };
 
@@ -48,7 +49,7 @@ export const cellXZ = (i, j) => [-U.EXTENT / 2 + i * CELL, -U.EXTENT / 2 + j * C
 export const WRITERS = {
   'h.base': 'world', 'h.land': 'world', heightSolid: 'world', 'h.talus': 'scree', ice: 'glacier', temp: 'magma', moisture: 'sky',
   metrics: 'socket', state: 'socket', sites: 'world', wind: 'socket', snowline: 'socket', stale: 'socket',
-  clouds: 'sky', sun: 'sky', rig: 'sky', clip: 'story',
+  clouds: 'sky', sun: 'sky', moon: 'sky', rig: 'sky', clip: 'story',
 };
 
 // Bus registry: type → emitters (listeners are declared per profile in layout.js). Payloads per 01.
@@ -80,9 +81,9 @@ export function createWorld({ dev = false } = {}) {
       'h.talus': new Float32Array(N), temp: new Float32Array(N), moisture: new Float32Array(N), ice: new Float32Array(ICE * ICE),
     },
     bench: new Uint8Array(N), caves: [], hmax: 0, day: null, seed: null,
-    metrics: null, state: { alerts: [] }, sites: new Map(), wind: { x: 0, z: 0 }, snowline: 1e4, clouds: [], sun: null,
+    metrics: null, state: { alerts: [] }, sites: new Map(), wind: { x: 0, z: 0 }, snowline: 1e4, clouds: [], sun: null, moon: null,
     rig: { elev: 0, rising: false }, // dusk until sky-full (W3)
-    clip: { plane: [0, 1, 0, 1e4], depth: 0 }, stale: null, replay: null, named: false,
+    clip: { plane: [0, 1, 0, 1e4], depth: 0 }, stale: null, replay: null, named: false, quota: null,
     ready: new Promise((r) => (resolveReady = r)),
 
     cell(x, z) { const i = Math.round((x + 100) / CELL), j = Math.round((z + 100) / CELL); return Math.min(GRID - 1, Math.max(0, j)) * GRID + Math.min(GRID - 1, Math.max(0, i)); },
@@ -237,6 +238,7 @@ export function createWorld({ dev = false } = {}) {
     const a = acks.get(f.ref);
     if (!a) return;
     acks.delete(f.ref); clearTimeout(a[2]);
+    if (f.next != null) w.quota = { next: f.next, left: f.left, at: Date.now() };
     if (f.error) a[1](new Error(f.error)); else a[0](f.id);
   }
   /** A replay frame: rebuild land + state from its snapshot, then step() plays its frames (ev/world, live, not silent). */

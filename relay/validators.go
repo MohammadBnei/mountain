@@ -204,13 +204,32 @@ func allowVisit(sub string, now time.Time) bool {
 	return len(l) < marksPerDay && now.Sub(l[len(l)-1]) >= markEvery
 }
 
+// quota is sub's mark budget at now (visits locked): whole seconds until the next mark is allowed (0 = now) and the
+// marks left in the rolling 24 h. The toolbar's countdown reads it from the ack.
+func quota(sub string, now time.Time) (next, left int) {
+	l := slices.DeleteFunc(slices.Clone(visits.at[sub]), func(t time.Time) bool { return now.Sub(t) >= 24*time.Hour })
+	left = marksPerDay - len(l)
+	var wait time.Duration
+	if len(l) > 0 {
+		wait = markEvery - now.Sub(l[len(l)-1])
+	}
+	if left <= 0 {
+		wait = max(wait, 24*time.Hour-now.Sub(l[0]))
+	}
+	return int((max(wait, 0) + time.Second - 1) / time.Second), max(left, 0)
+}
+
 // ---------- client frames ----------
 
 var refRE, reasonRE = regexp.MustCompile(`^[A-Za-z0-9]{1,16}$`), regexp.MustCompile(`^[a-z-]{1,24}$`)
 
-// markAck is the sender's answer: {t:"mark", ref?, id} or {t:"mark", ref?, error}.
-func markAck(ref, id, why string) []byte {
+// markAck is the sender's answer: {t:"mark", ref?, id} or {t:"mark", ref?, error}; an accept or a rate refusal also
+// carries the sender's quota {next, left}.
+func markAck(ref, id, why string, q ...[2]int) []byte {
 	f := map[string]any{"t": "mark"}
+	for _, x := range q {
+		f["next"], f["left"] = x[0], x[1]
+	}
 	if refRE.MatchString(ref) {
 		f["ref"] = ref
 	}
@@ -263,7 +282,8 @@ func (a *App) place(c *Client, ref, toy string, pose map[string]any, named bool,
 	visits.Lock()
 	defer visits.Unlock()
 	if !allowVisit(c.Sub, now) {
-		return markAck(ref, "", "rate")
+		n, l := quota(c.Sub, now)
+		return markAck(ref, "", "rate", [2]int{n, l})
 	}
 	h := anonHandle
 	if x := handle(c.Name); named && x != "" {
@@ -302,7 +322,8 @@ func (a *App) place(c *Client, ref, toy string, pose map[string]any, named bool,
 	a.mu.Unlock()
 	a.Hub.Broadcast(b)
 	a.store.mark(id, c.Sub, h, toy, now, out, w)
-	return markAck(ref, id, "")
+	n, l := quota(c.Sub, now)
+	return markAck(ref, id, "", [2]int{n, l})
 }
 
 // runValidate runs a toy's Validate; a panic (a lane bug reached by client input) rejects instead of killing the relay.

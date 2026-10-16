@@ -1,6 +1,8 @@
 // cauldron behaviour (03-model-cauldron): a critical older than 30 min → one jokulhlaup; warning → sag > 0, no steam;
 // critical → deeper sag, red under-glow, steam visible, vertex-animated and emitted; resolve → recovers (ring gone,
-// sag 0); a Watchdog-style severity never sags; state restored without a bus event (reload) sags too.
+// sag 0); a Watchdog-style severity never sags; state restored without a bus event (reload) sags too; pick → alerts card.
+import * as THREE from 'three';
+
 export default async function test({ model, world, inject, step, fixture, assert }) {
   world.state.alerts = []; // a restored hello may carry firing alerts (a long critical would burst at once): start from none
   const ring = model.root.getObjectByName('sag'), steam = model.root.getObjectByName('steam');
@@ -33,6 +35,9 @@ export default async function test({ model, world, inject, step, fixture, assert
   assert(warnDip < 1, `the ring dishes at its inner edge (${warnDip.toFixed(2)} m over the terrain, 1.2 at rest)`);
   const w = ring.material.emissive; // 09 dusk legibility: a cool water lift so the dish reads as deep ice, not a void
   assert(w.b > 0.05 && w.b > w.r, `warning: cool lift, no red glow (${w.r.toFixed(3)}, ${w.g.toFixed(3)}, ${w.b.toFixed(3)})`);
+  const down = new THREE.Ray(new THREE.Vector3(0, 200, 0), new THREE.Vector3(0, -1, 0)), card = model.pick(down);
+  assert(card?.kind === 'cauldron' && Number.isFinite(card.d) && card.alerts === world.state.alerts.length, `pick the sag → its card (${JSON.stringify(card)})`);
+  assert(model.pick(new THREE.Ray(down.origin, new THREE.Vector3(0, 1, 0))) === null, 'pick into the sky → null');
 
   fire(fixture.critical);
   step(180);

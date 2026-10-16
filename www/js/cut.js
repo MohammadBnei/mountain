@@ -12,7 +12,7 @@
 //                      defines `vec4 <name>Field(vec3 p, vec4 base)` for a layout.js `fields` name is chained in that order
 //                      (strata → aquifers → magma → veins → caves); missing ones are skipped; a field that matches no name, or
 //                      two fields matching one, throw. The chain starts at
-//                      (deep, glow 0); a provider returns linear rgb + glow weight. Returns the names used.
+//                      (stone2, glow 0; W5, was deep); a provider returns linear rgb + glow weight. Returns the names used.
 //   cap()              → the cap Mesh (the mountain's)
 //   at(depth, az = 0)  → a world.clip value: the vertical plane facing the camera azimuth az (camera at (sin az, ·, cos az))
 //                      that removes what lies nearer than `depth` from the world edge (r 100). ≤ 0 = closed
@@ -32,17 +32,19 @@ import N from './units.json' with { type: 'json' };
 const G = QUALITY === 'low' ? N.GRID_LOW : N.GRID, CELL = N.EXTENT / N.GRID, X0 = -N.EXTENT / 2, S = (CELL * (N.GRID - 1)) / (G - 1), X1 = X0 + S * (G - 1), YB = -70;
 const f = (v) => v.toFixed(5);
 const hs = new Float32Array(G * G), hTex = new THREE.DataTexture(hs, G, G, THREE.RedFormat, THREE.FloatType);
-const base = field('', { uCutDeep: 'deep' });
+const base = field('', { uCutBase: 'stone2', uCutRim: 'ink' }); // W5: a lighter chain start + a bright rim (the slice must read as one)
 // cap quad (fill cost): centred at y 28, ±48 up a vertical plane (the solid above the haze floor, −20…76), ±142 across (the chord)
 const QUAD = { value: new THREE.Vector3(28, 48, 142) };
 
-const PARS = `uniform sampler2D uCutH; uniform vec3 uCutDeep; uniform float uWobble;
+const PARS = `uniform sampler2D uCutH; uniform vec3 uCutBase, uCutRim; uniform float uWobble;
 float kCutH(vec2 xz) { // heightSolid as the G² body mesh interpolates it: quad (i, j) = tris (a, b, c), (c, b, d)
   vec2 g = (xz - ${f(X0)}) / ${f(S)}; ivec2 i = ivec2(clamp(floor(g), vec2(0.), vec2(${G - 2}.))); g -= vec2(i);
   float a = texelFetch(uCutH, i, 0).r, b = texelFetch(uCutH, i + ivec2(0, 1), 0).r, c = texelFetch(uCutH, i + ivec2(1, 0), 0).r, d = texelFetch(uCutH, i + ivec2(1, 1), 0).r;
   // + the body's vertex wobble (shaders.js), per fragment: off from the per-vertex lerp by a sub-cell curvature only
   return (g.x + g.y <= 1. ? a + g.x * (c - a) + g.y * (b - a) : d + (1. - g.x) * (b - d) + (1. - g.y) * (c - d)) + uWobble * sin(xz.x * .7 + xz.y * .5);
 }
+// the rim: the band where the plane meets the outer surface (≥ ~1.5 px wide at any distance)
+float kCutRim(vec3 p) { return 1. - smoothstep(.3, .3 + 2. * fwidth(p.y), kCutH(p.xz) - p.y); }
 bool kCutIn(vec3 p) { return p.y >= ${f(YB)} && all(greaterThanEqual(p.xz, vec2(${f(X0)}))) && all(lessThanEqual(p.xz, vec2(${f(X1)}))) && p.y <= kCutH(p.xz); }
 `;
 
@@ -63,12 +65,12 @@ export function compose(models) {
   }
   const names = used.map(([n]) => n);
   Object.assign(CUT, {
-    pars: PARS + used.map(([, x]) => x.glsl).join('\n') + `\nvec4 kCutField(vec3 p) { vec4 c = vec4(uCutDeep, 0.); ${names.map((n) => `c = ${n}Field(p, c);`).join(' ')} return c; }\n`,
+    pars: PARS + used.map(([, x]) => x.glsl).join('\n') + `\nvec4 kCutField(vec3 p) { vec4 c = vec4(uCutBase, 0.); ${names.map((n) => `c = ${n}Field(p, c);`).join(' ')} return c; }\n`,
     uniforms, key: `cap:${names.join(',')}`,
   });
   return names;
 }
-compose([]); // a host that never composes still gets the plain (deep) cap
+compose([]); // a host that never composes still gets the plain (stone2) cap
 
 let capMesh = null;
 export function cap() {

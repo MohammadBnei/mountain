@@ -4,6 +4,7 @@
 // widening and dishing with depth); critical → red under-glow (magma emissive on the ring: no third draw) + a Points
 // steam column. A critical alert firing for breakMin → one jokulhlaup per alert.
 // Emits cauldron.sag {x, z, depth, sev} on each change, steam {x, z, vol} every STEAM_S while critical.
+// pick(ray) → {kind 'cauldron', d, alerts: world.state.alerts count} on the sag ring's bounding box while it shows.
 const X = 0, Z = 0; // the summit of the live seed (layout profile footprint)
 const SEV = { __proto__: null, info: 0.75, warning: 2, critical: 5 }; // sag depth, units
 const SEG = 32, RAD = 4, RI = 2, LIFT = 1.2, BREAK_MS = 30 * 60e3, STEAM_S = 5, RISE = 40, LIFE = 6;
@@ -40,7 +41,9 @@ export default async function build({ THREE, kit, world, rng }) {
       rp.setXYZ(i, x, H(x, z) + LIFT - depth * 0.4 * (1 - u) * (1 - u), z);
     }
     rp.needsUpdate = true; // lit is flatShading: no normals to recompute
+    geo.computeBoundingBox(); // the pick volume (reuses its Box3)
   }
+  const hit = new THREE.Vector3(); // pick scratch
   shape();
   ring.visible = steam.visible = false;
 
@@ -78,6 +81,10 @@ export default async function build({ THREE, kit, world, rng }) {
         sp[i * 3] = X + Math.cos(a) * s; sp[i * 3 + 1] = y0 + h; sp[i * 3 + 2] = Z + Math.sin(a) * s;
       }
       sg.attributes.position.needsUpdate = true;
+    },
+    pick(ray) {
+      if (!ring.visible || !ray.intersectBox(geo.boundingBox, hit)) return null;
+      return { kind: 'cauldron', d: hit.distanceTo(ray.origin), alerts: (world.state.alerts || []).length };
     },
     busy: () => depth > 0,
     dispose() { geo.dispose(); mat.dispose(); sg.dispose(); steam.material.dispose(); },

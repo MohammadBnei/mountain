@@ -70,6 +70,9 @@ void kVeins(vec3 p) {
   ${veins ? 'if (!kCapOn) kVeins(vKObj);' : ''}
   diffuseColor.rgb = mix(diffuseColor.rgb, uGold * .55, kVein);
   if (kCapOn) diffuseColor.rgb = kCutC.rgb;
+  #ifdef K_CUT_CAP
+  float kRim = kCutRim(vKWorld); diffuseColor.rgb *= 1. - kRim;
+  #endif
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(.2126, .7152, .0722))) * .6, uStale * .5);`);
   f = afterIf(f, '#include <metalnessmap_fragment>', 'metalnessFactor = mix(metalnessFactor, .85, kVein);');
   f = afterIf(f, '#include <roughnessmap_fragment>', 'roughnessFactor = mix(roughnessFactor, .4, kVein);');
@@ -81,10 +84,13 @@ void kVeins(vec3 p) {
     + uGold * kVein * .12 + mix(uGold * .7, uVeinRef * 1.4, kRef) * kCore
     + uPoolCol * max(uHeat, .45) * uPoolK * (1. - smoothstep(.25, 1., length((vKWorld.xz - uPool.xy) / uPool.zw)))
       * smoothstep(.45, .75, abs(kN.y)) * (1. - smoothstep(.1, .16, kH)); // the foot band (h < ~10 % of the summit), gentle faces only, never up the face
-  if (kCapOn) totalEmissiveRadiance = kCutC.rgb * kCutC.a;`);
-  // Rim (09 Freeze item 2): below y = -4 the terrain dissolves into the fog/haze colour, fully at the
-  // valley haze floor (y = -16), so the dropped rim never shows a hard mesa edge against the floor.
-  f = after(f, '#include <fog_fragment>', '#ifdef USE_FOG\ngl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, 1. - smoothstep(-16., -4., vKWorld.y));\n#endif');
+  #ifdef K_CUT_CAP // W5: the face glows at half its own colour (a slice, not more rock); the rim where it meets the surface is
+  // pure ink at .7 (unlit: diffuse zeroed above), under the 09 luminance ceiling so it never blooms
+  totalEmissiveRadiance = mix(kCutC.rgb * max(kCutC.a, .5), uCutRim * .7, kRim);
+  #endif`);
+  // Shore (R6 island, was the 09 Freeze item 2 fog fade): the rim dives under the sea at y = -16 (kit SEA); the last
+  // 1.5 m above it is wet rock (darker), so the waterline reads as a shore, not a fade into haze.
+  f = after(f, '#include <normal_fragment_maps>', 'if (!kCapOn) diffuseColor.rgb *= mix(.55, 1., smoothstep(-16., -14.5, vKWorld.y));');
   sh.fragmentShader = f;
 }
 

@@ -39,8 +39,10 @@ export default async function test({ model, world, inject, step, fixture, assert
 
   const s = fixture.sites.find((x) => x.app === 'wird'), ray = (x) => new THREE.Ray(new THREE.Vector3(x.x, 200, x.z), new THREE.Vector3(0, -1, 0));
   const card = model.pick(ray(s));
-  assert(card?.app === 'wird' && card.group === 'user' && card.health === 'Degraded' && card.replicas === 6, `pick → wird's card (${JSON.stringify(card)})`);
+  assert(card?.kind === 'summit' && card.name === 'wird' && card.group === 'user' && card.health === 'Degraded' && card.replicas === 6 && Number.isFinite(card.d), `pick → wird's card (${JSON.stringify(card)})`);
+  assert(Math.abs(card.d - (200 - (s.y - 0.6 + 1.5 + 1.1 * 6))) < 1e-3, `d = distance to the crystal top (${card.d})`);
   assert(model.pick(new THREE.Ray(new THREE.Vector3(0, 200, 90), new THREE.Vector3(0, -1, 0))) === null, 'pick off the crystals → null');
+  assert(model.pick(new THREE.Ray(new THREE.Vector3(s.x, s.y + 20, s.z), new THREE.Vector3(0, 1, 0))) === null, 'pick into the sky → null');
 
   const gone = fixture.sites.find((x) => x.app === fixture.gone.app);
   inject('ev:app.gone', fixture.gone);

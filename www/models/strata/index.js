@@ -1,7 +1,8 @@
 // strata (03-model-strata): the reference cut-face field provider (cut.js). 0 draws: it colours the mountain's cut face.
 // Platform bands by height (proxmox → k8s → apps, the Aretē strata; k8s in sediment beds, deep seams between them) and
 // ≤ 32 ash lines from world.state.ash (hello, replay) + world:ash (one per ADR day, 02): the newest at y TOP, each older one RATE m lower per day of age,
-// so time buries them under the haze floor. pick(ray) → {day, title?} of the ash line under the ray on the cut face.
+// so time buries them under the haze floor. pick(ray) → {kind 'strata', d, name day, title?} of the ash line under the
+// ray on the cut face.
 import { pick as cutPick } from '../../js/cut.js';
 
 const MAX = 32, TOP = 30, RATE = 0.25, DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -49,7 +50,7 @@ export default async function build({ THREE, kit, world }) {
     on: { 'world:ash': add },
     pick(ray) {
       const p = cutPick(ray, world), a = p && ash.find((x) => Math.abs(p.y - x.y) < 0.6);
-      return a ? { day: a.day, ...(a.title ? { title: a.title } : {}) } : null;
+      return a ? { kind: 'strata', d: p.distanceTo(ray.origin), name: a.day, ...(a.title ? { title: a.title } : {}) } : null;
     },
     busy: () => false,
     dispose() { tex.dispose(); },

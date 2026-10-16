@@ -3,7 +3,8 @@
 // to the world edge; it is laid out again on a hello (world.caves identity, as the glacier). Width and foam
 // speed = metrics.river (Σ public traffic bytes, 0..1); the visual feeds melt, aquifer.seep and jokulhlaup add a surge
 // that widens and quickens it, then decays. The model writes only uTime (speed = how fast it advances); width is the
-// ribbon geometry, draped on the mountain's own triangles so it never sinks into the faceted body.
+// ribbon geometry, draped on the mountain's own triangles so it never sinks into the faceted body. pick(ray) → {kind
+// 'river', d, traffic: metrics.river in %} where the ray passes within the half width of the draped centre line.
 import U from '../../js/units.json' with { type: 'json' };
 import { cellXZ, GRID } from '../../js/world.js';
 
@@ -43,7 +44,7 @@ export default async function build({ THREE, kit, world }) {
   root.add(ribbon);
 
   // centre line (x, z), side unit vector (sx, sz) and taper per row; drape() writes the vertices from them
-  const cx = new Float32Array(SEG + 1), cz = new Float32Array(SEG + 1), sx = new Float32Array(SEG + 1), sz = new Float32Array(SEG + 1), taper = new Float32Array(SEG + 1);
+  const cx = new Float32Array(SEG + 1), cy = new Float32Array(SEG + 1), cz = new Float32Array(SEG + 1), sx = new Float32Array(SEG + 1), sz = new Float32Array(SEG + 1), taper = new Float32Array(SEG + 1);
   let cavesSeen, hw = W0, surge = 0, drapeT = 0, drawn = -1;
   function course() {
     cavesSeen = world.caves;
@@ -76,6 +77,7 @@ export default async function build({ THREE, kit, world }) {
     for (let i = 0; i <= SEG; i++) for (let c = 0; c <= ACROSS; c++) {
       const o = (2 * c / ACROSS - 1) * hw * taper[i], x = cx[i] + sx[i] * o, z = cz[i] + sz[i] * o;
       pos[n++] = x; pos[n++] = ground(x, z) + LIFT; pos[n++] = z;
+      if (c * 2 === ACROSS) cy[i] = pos[n - 2]; // the centre line's height, for pick
     }
     geo.attributes.position.needsUpdate = true;
     drawn = hw; drapeT = 0;
@@ -86,6 +88,7 @@ export default async function build({ THREE, kit, world }) {
   drape();
 
   const want = () => W0 + WK * river() + surge;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), on = new THREE.Vector3(); // pick scratch
   return {
     root,
     params: {},
@@ -102,6 +105,15 @@ export default async function build({ THREE, kit, world }) {
       if (hw !== drawn || (drapeT += dt) >= 1) drape();
     },
     on: Object.fromEntries(Object.entries(FEED).map(([t, f]) => [t, (p) => { surge = Math.min(SURGE, surge + f(p)); }])),
+    pick(ray) {
+      if (!ribbon.visible) return null;
+      let d = Infinity;
+      for (let i = 0; i < SEG; i++) { // the drawn band as capsules: centre-line segment ± its half width
+        const w = drawn * Math.max(taper[i], taper[i + 1]);
+        if (ray.distanceSqToSegment(a.set(cx[i], cy[i], cz[i]), b.set(cx[i + 1], cy[i + 1], cz[i + 1]), on) < w * w) d = Math.min(d, on.distanceTo(ray.origin));
+      }
+      return d < Infinity ? { kind: 'river', d, traffic: Math.round(river() * 100) } : null;
+    },
     busy: () => surge > 0 || hw !== want(),
     dispose() { kit.dispose(root); },
   };

@@ -3,9 +3,10 @@
 // ends, recomputes y and checks the snowline and the reach; the accepted world:mark {pose: {pos, from}} reaches everyone,
 // and each client flies a cannon Sphere (surface group) from `from` to `pos` on a ballistic arc. It rests on sleep or
 // after REST s and is drawn snapped to the render height. hello / replay marks are drawn at rest at their pos.
-// ≤ MAX pebbles (the newest), one InstancedMesh of kit rock() on lit('rock').
+// ≤ MAX pebbles (the newest), one InstancedMesh of kit rock() on lit('rock'). tool.ok(hit): mid-drag, a release there
+// lands on a Spot (the aiming ring); before a drag, any terrain is a valid `from`.
 import * as CANNON from 'cannon-es';
-import { surfacePhysics } from '../../js/toys.js';
+import { surfacePhysics, spot } from '../../js/toys.js';
 
 const MAX = 100, THROW = 24, K = 3, REST = 6, G = 9.82; // MAX × 80 tris = 8000 (profile); THROW = relay tossMax
 
@@ -94,17 +95,26 @@ export default async function build({ THREE, kit, world }) {
 
   // the slingshot: start = where the pebble sits, release = the pull; a tap (pull < 0.5 m) throws nothing
   let from = null;
+  /** Where a release at hit lands: [x, z], K × the pull the other way, ≤ THROW m; null for a tap. */
+  const land = (hit) => {
+    const dx = from.x - hit.x, dz = from.z - hit.z, d = Math.hypot(dx, dz), k = Math.min(K, THROW / Math.max(d, 1e-6));
+    return d < 0.5 ? null : [from.x + dx * k, from.z + dz * k];
+  };
   const tool = {
     icon: '•',
     label: 'tool.toss',
     drag(phase, hit) {
       if (phase === 'start') { from = hit ? F.copy(hit) : null; return; }
       if (phase !== 'end' || !from || !hit) { if (phase !== 'move') from = null; return; }
-      const dx = from.x - hit.x, dz = from.z - hit.z, d = Math.hypot(dx, dz), k = Math.min(K, THROW / Math.max(d, 1e-6));
-      const f = [from.x, from.y, from.z];
+      const p = land(hit), f = [from.x, from.y, from.z];
       from = null;
-      if (d < 0.5) return;
-      world.place('toss', { pos: [f[0] + dx * k, 0, f[2] + dz * k], from: f }).catch(() => {}); // the toolbar shows the reason
+      if (p) world.place('toss', { pos: [p[0], 0, p[1]], from: f }).catch(() => {}); // the toolbar shows the reason
+    },
+    // the relay's rule (toy_toss.go): any spot in the world can be `from`; pos must be a Spot (the reach is clamped)
+    ok(hit) {
+      if (!from) return true;
+      const p = land(hit);
+      return !!p && spot(world, p[0], p[1]);
     },
   };
 

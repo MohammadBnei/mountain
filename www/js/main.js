@@ -1,6 +1,7 @@
 // Page: kit rig + world + socket + the models of page.js, the story camera (story.js), post on desktop.
 // Orchestrator-owned. ?fixture=1 loads dev/fixtures/hello.json instead of /ws (static serving).
-// Host duties: world.rig → kit.setPhase on change; world.stale → the "stale since" label (sky dims via kit.setStale);
+// Host duties: world.rig → kit.setPhase on change; world.sun + world.moon → kit.setSky (W5, once a second: sky writes them);
+// cards.js: the cards + legend (W5); world.stale → the "stale since" label (sky dims via kit.setStale);
 // cut.js: compose the field providers once, then world.clip → uClip every frame; story.js writes world.clip from P.
 // W4 (toys.js): the surface models hang under one group the kill switch hides (metrics.visitors), the toolbar + tool input,
 // and the footprint RT (kit.drawStamps; its stamp scene hides with the group).
@@ -17,6 +18,7 @@ import { createPost } from './post.js';
 import * as cut from './cut.js';
 import * as story from './story.js';
 import { SURFACE, createToys } from './toys.js';
+import { createCards } from './cards.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const q = new URLSearchParams(location.search);
@@ -68,9 +70,10 @@ addEventListener('resize', resize);
 resize();
 
 const staleEl = document.getElementById('stale'), hhmm = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit' });
-let staleShown, rig;
+let staleShown, rig, sunSeen;
 function host() {
   if (world.rig !== rig) { rig = world.rig; kit.setPhase(rig.elev, rig.rising); } // sky writes a new object per change
+  if (world.sun !== sunSeen) { sunSeen = world.sun; kit.setSky(world.sun, world.moon); } // both written together, once a second
   if (world.stale !== staleShown) {
     staleShown = world.stale;
     staleEl.hidden = staleShown == null;
@@ -93,7 +96,8 @@ const tale = story.createStory({ world, onStep: () => { if (orbiting) idleAt = p
 if (dev) globalThis.__page.story = () => ({ P: tale.P, section: tale.section, hash: location.hash, clip: world.clip });
 let lastP = NaN;
 const toys = createToys({ world, camera, canvas: renderer.domElement, orbit, tale, models, surface });
-if (dev) globalThis.__page.surface = surface;
+createCards({ world, camera, canvas: renderer.domElement, models, toys });
+if (dev) Object.assign(globalThis.__page, { surface, models });
 
 const DT = 1 / 30;
 // Adaptive draw rate (heat/battery): a ladder of [fps, pixel ratio] from cheapest to richest. 60 fps is

@@ -1,12 +1,14 @@
 // scree behaviour (03-model-scree): a pebble per restart and a boulder per OOM / CrashLoop fall at the app's site,
 // tumble downhill and come to rest on the terrain (snapped, asleep); ice.calve drops a pale boulder where it calved;
-// past 80 bodies the oldest go to talus (heaps + h.talus); talus holds while churn goes on and erodes once stable.
+// past 80 bodies the oldest go to talus (heaps + h.talus); talus holds while churn goes on and erodes once stable;
+// pick → the churn card.
 import * as THREE from 'three';
 
 export default async function test({ model, world, inject, step, fixture, assert }) {
   const live = model.root.getObjectByName('scree'), talus = model.root.getObjectByName('talus');
   const M = new THREE.Matrix4(), P = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3();
-  const at = (i) => { live.getMatrixAt(i, M); M.decompose(P, Q, S); return { x: P.x, y: P.y, z: P.z, s: Math.max(S.x, S.y, S.z) }; };
+  // s 0 = a retired slot (scale 0: decompose reads a singular matrix as scale 1)
+  const at = (i) => { live.getMatrixAt(i, M); M.decompose(P, Q, S); return { x: P.x, y: P.y, z: P.z, s: M.determinant() ? Math.max(S.x, S.y, S.z) : 0 }; };
   const sum = () => world.fields['h.talus'].reduce((a, b) => a + b, 0);
   const settle = () => { for (let k = 0; k < 60 && model.busy(); k++) step(30); }; // ≤ 60 s (bodies sleep by 25 s)
   const { site } = fixture;
@@ -32,6 +34,9 @@ export default async function test({ model, world, inject, step, fixture, assert
     assert(Math.abs(r.y - world.heightAt(r.x, r.z)) < 1, `rests snapped on the terrain (${(r.y - world.heightAt(r.x, r.z)).toFixed(2)} m)`);
     assert(world.heightAt(r.x, r.z) <= world.heightAt(site.x, site.z) + 0.5, 'came to rest at or below the site');
   }
+  const kept = [0, 1, 2].map(at).filter((x) => x.s), r = kept[0], o = new THREE.Vector3(r.x, r.y + 50, r.z), card = model.pick(new THREE.Ray(o, new THREE.Vector3(0, -1, 0)));
+  assert(card?.kind === 'scree' && Number.isFinite(card.d) && card.d < 50 && card.churn === kept.length, `pick a pebble → the churn card, rocks still on the world (${JSON.stringify(card)})`);
+  assert(model.pick(new THREE.Ray(o, new THREE.Vector3(0, 1, 0))) === null, 'pick into the sky → null');
 
   inject('ev:pod.churn', fixture.oom);
   step(1);
