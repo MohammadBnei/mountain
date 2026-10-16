@@ -47,7 +47,7 @@ mountain/
 ```js
 // (ctx) => Promise<Model>;  ctx = { THREE, kit, world, plot:{x,z,r,yRange}, params, rng }
 // Model = { root, params, pose(P) /* pure given world snapshot+state */, step(dt,t) /* 1/30, no alloc */,
-//           on?:{[busType]:fn}, field?:{glsl,uniforms}, pick?(ray)->card|null, busy(), dispose() }
+//           on?:{[busType]:fn}, field?:{glsl,uniforms}, pick?(ray)->{kind, d, name?, ...raw}|null (R6: d = distance along the ray, kind = an i18n legend.<kind>; raw sanitised state only, cards.js formats it), busy(), dispose() }
 ```
 Every model folder ships `fixture.json` (a scripted event and world-delta timeline) plus `test.js`, which checks behaviour. Example: "after 3× `argo.sync`, `ice` at the site grows by at least X". The gate runs both.
 

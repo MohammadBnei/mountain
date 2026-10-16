@@ -3,11 +3,11 @@
 // they feed the real floor). Steam (glacier, cauldron) rises as short-lived puffs. Three InstancedMeshes of flat-based
 // lumps on kit lit('cloud'), colour per lump on ramp('cloud') by its height in the cluster (board.html shapes).
 // Writes world.clouds [{x, z, y (base), r, mass}] (mass first: lightning's bolt source; then layer, steam, visitors),
-// world.sun (js/sun.js, Paris, real clock), world.rig = {elev, rising} (a new object only when the sun moved enough:
+// world.sun + world.moon (js/sun.js, Paris, real clock), world.rig = {elev, rising} (a new object only when the sun moved enough:
 // the host re-lerps the whole kit on each), world.fields.moisture (steam + melt splats, decaying). The dome + stars are
 // the kit rig's (uStars per key via setPhase); sky only eases kit.setStale toward world.stale. Never creates lights.
 import { cellXZ, GRID, CELL } from '../../js/world.js';
-import { sun } from '../../js/sun.js';
+import { sun, moon, now } from '../../js/sun.js';
 
 const TAU_RX = 4, TAU_STALE = 1, BASE = 13; // mass base 13 m over the summit: above the St Elmo corona
 const SUN_S = 1, RIG_DEG = 0.2; // sun recomputed every second; a new rig only past 0.2° (keyMix blends over 8–9°)
@@ -119,9 +119,10 @@ export default async function build({ THREE, kit, world }) {
       if (d2 <= SPLAT * SPLAT) M[k] = Math.min(1, M[k] + 0.25 * vol * Math.exp(-d2 / SPLAT));
     }
   }
-  function sky() { // the real sun (Paris, wall clock): world.sun every call, world.rig only when it matters
-    const s = sun(Date.now()), r = world.rig; // ponytail: sun() allocates once a second, not per frame
+  function sky() { // the real sun + moon (Paris, wall clock): world.sun/moon every call, world.rig only when it matters
+    const t = now(), s = sun(t), r = world.rig; // ponytail: sun()/moon() allocate once a second, not per frame
     world.write('sun', s);
+    world.write('moon', moon(t));
     if (Math.abs(s.elev - r.elev) >= RIG_DEG || s.rising !== r.rising) world.write('rig', { elev: s.elev, rising: s.rising });
   }
   world.write('clouds', clouds);

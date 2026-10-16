@@ -9,10 +9,13 @@
 //                                 friction 0.8, heightSolid as a Heightfield (collider() re-reads it: call it before a
 //                                 drop, deposits move the land), body(opts) = a CANNON.Body in the surface group,
 //                                 cap = max bodies (low tier: half). The model steps phys itself in step(dt).
-//   createToys({world, camera, canvas, orbit, tale, models, surface}) → {tick()}: the toolbar + input routing; tick() per frame
+//   createToys({world, camera, canvas, orbit, tale, models, surface}) → {tick(), active}: the toolbar + input routing; tick()
+//                                 per frame; active = a tool is selected and usable (cards.js leaves the pointer to it)
 //
 // A model joins the toolbar by exposing `tool` (optional, beside the contract's members):
-//   model.tool = { icon: '▲', label: 'tool.<name>' (i18n key), drag(phase, hit, e) }
+//   model.tool = { icon: '▲', label: 'tool.<name>' (i18n key), drag(phase, hit, e), ok?(hit) → bool }
+//     W5 feedback: hint.<name> (i18n) shows while the tool is selected, toys.ok.<name> on an accepted place(); ok(hit) is
+//     the model's own pre-check of a spot (the relay's rule mirrored, e.g. cairns target()), for the aiming ring's colour.
 //     phase 'start' | 'move' | 'end' | 'cancel'; hit = THREE.Vector3 on the terrain (reused: copy it) or null off it.
 //     The model then sends its mark with world.place('<name>', pose) → Promise<id> (world.js), e.g. pose {pos: [x, y, z]}
 //     (the relay recomputes y, quantises x/z, checks the snowline: Place.Spot), and draws it when world:mark arrives
@@ -149,6 +152,7 @@ export function createToys({ world, camera, canvas, orbit, tale, models, surface
   });
 
   return {
+    get active() { return !!tool && allowed(); },
     /** Per frame: the surface layer follows the kill switch; the toolbar or the sign-in links follow section + role. */
     tick() {
       const on = world.metrics?.visitors !== false, live = tale.section === 'live' && tale.P === 5;

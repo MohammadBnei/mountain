@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { createWorld, encodeI16, GRID, HQ } from '../js/world.js';
 import { connect } from '../js/socket.js';
-import { sun } from '../js/sun.js';
+import { sun, moon } from '../js/sun.js';
 
 let bad = 0;
 const ok = (c, m) => { console.log(`${c ? 'ok  ' : 'BAD '} ${m}`); if (!c) bad++; };
@@ -247,6 +247,11 @@ ok(/while :; do \$K port-forward [^;]*\|\|/.test(dp), 'devpod: port-forward is l
 const at = (iso) => sun(Date.parse(iso));
 ok(Math.abs(at('2026-06-21T11:52:00Z').elev - 64.6) < 0.3 && Math.abs(at('2026-12-21T11:52:00Z').elev - 17.7) < 0.3, 'sun: solstice noon elevations over Paris (64.6°, 17.7°)');
 ok(Math.abs(at('2026-03-20T06:00:00Z').elev) < 0.5 && at('2026-03-20T06:00:00Z').rising && Math.abs(at('2026-03-20T06:00:00Z').az - 90) < 2, 'sun: equinox sunrise ≈ 06:00 UTC, due east, rising');
+{ // SunCalc's own test vector (2013-03-05 UTC, 50.5 N 30.5 E): azimuth −0.97840 rad from south, altitude 0.0146 rad
+  // with refraction (≈ 0.3° without), lit fraction 0.4848
+  const m = moon(Date.UTC(2013, 2, 5), 50.5, 30.5);
+  ok(Math.abs(m.az - (180 - 0.9784 / (Math.PI / 180))) < 0.5 && Math.abs(m.elev - 0.3) < 0.6 && Math.abs(m.frac - 0.4848) < 0.01, `moon: SunCalc test vector (az ${m.az.toFixed(2)}, elev ${m.elev.toFixed(2)}, frac ${m.frac.toFixed(3)})`);
+}
 ok(at('2026-10-15T17:00:00Z').elev < 0 && !at('2026-10-15T17:00:00Z').rising && at('2026-10-15T15:00:00Z').elev > 6, 'sun: an October dusk sets (not rising) after 15:00 UTC daylight');
 
 console.log(bad ? `CORE FAIL (${bad})` : 'CORE PASS');

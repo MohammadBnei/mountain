@@ -34,9 +34,9 @@ export const profiles = {
     clipped: false, visibleFrom: 0, goneFrom: null, footprint: { x: 0, z: 0, r: 18 }, yRange: [30, 140], facet: 'ring', minCoverage: 0,
   },
   sky: { // sky-min: layer + mass cumulus (2 InstancedMesh draws, 584 lumps × 80 tris); the dome is the kit rig's.
-    // sky-full (W3): SunCalc sun → rig, moisture from steam + melt, visitor + steam clouds (within the same budget)
+    // sky-full (W3): SunCalc sun → rig (W5: + moon), moisture from steam + melt, visitor + steam clouds (within the same budget)
     tris: 50000, draws: 4, peak: { tris: 50000, draws: 4 }, stepMs: 2,
-    writes: ['clouds', 'rig', 'sun', 'moisture'], emits: [], listens: ['steam', 'melt', 'world:cloud'], // W3c: visitor clouds (01 bus)
+    writes: ['clouds', 'rig', 'sun', 'moon', 'moisture'], emits: [], listens: ['steam', 'melt', 'world:cloud'], // W3c: visitor clouds (01 bus)
     clipped: false, visibleFrom: 0, goneFrom: null, footprint: WORLD, yRange: [-10, 200], facet: 'cloud',
   },
   lightning: { // glow from rpsB, St. Elmo corona (line + glow), bolt on spike from the mass base (world.clouds)

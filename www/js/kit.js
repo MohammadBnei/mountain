@@ -9,7 +9,8 @@
 //   dome()  terrain({veins, closed}?)  crystal()  lava()  flow(token)  stamp()  cave(caves, heightAt)  field(glsl, uniforms)
 //   clipped(material) → material (adds the uClip discard)
 //   rock(seed)  puff(seed)  shard(seed)  setRampAt(mesh, i, t)  lavaHeat(material, v)  dispose(root)
-//   rig(renderer, scene) → {hemi, dir, dome, floor};  setPhase(elev, rising);  setKey(key);  setComposed(on) (post.js);  setStale(k)
+//   rig(renderer, scene) → {hemi, dir, moon, dome, floor (the sea), discs};  setPhase(elev, rising);  setKey(key);  setComposed(on) (post.js);  setStale(k)
+//   setSky(sun, moon) (W5: real light directions + discs, from world.sun / world.moon);  SEA (sea level, units)
 //   U (terrain uniforms; writers: setPhase → stops/uSnowLift/uEmber/uPoolK, setPool → uPool/uPoolCol/uHeat, setStale (sky) → uStale,
 //      setVeins → uVeins/uVeinN, main/socket → uSnowline, cut.js (from world.clip) → uClip; shimmer → uWobble, and the post haze
 //      uHaze (amplitude) + uMask (world x, y, z, radius; radius 0 = the frame's foot), which post.js projects to the screen);
@@ -26,6 +27,7 @@ import { patchTerrain, patchClip, patchCrystal, patchLava, domeVert, domeFrag, f
 export const QUALITY = globalThis.__quality || 'high';
 const LOW = QUALITY === 'low';
 export const KEYS = ['night', 'dawn', 'day', 'dusk'];
+export const SEA = -16; // sea level (R6 island; the old valley haze floor's height): shaders darken wet rock just above it
 export const TOKENS = T;
 export const RAMPS = { ...T.ramps.semantic, ...T.ramps.env };
 const ENV_RAMP = new Set(Object.keys(T.ramps.env));
@@ -165,7 +167,7 @@ export const U = {
 color('magma', U.uPoolCol.value).multiplyScalar(0.6);
 
 /** Ember pool (09): centre (x, z), radii (rx, rz), heat. Writer: magma. Default (0, 66, 30, 9): the board's (0, 86)
- *  sits below the haze floor once the rim is softened (Freeze item 2), and at (0, 76) the foot is a steep drop with
+ *  sits below the sea (then the haze floor) once the rim is softened (Freeze item 2), and at (0, 76) the foot is a steep drop with
  *  no flat ground under the mask (W1b carry, Freeze item 3), so it sits on the visible foot terrace. */
 export function setPool(x, z, rx, rz, heat) {
   U.uPool.value.set(x, z, rx, rz);
@@ -367,24 +369,48 @@ export function dispose(root) {
 }
 
 // ---------- rig ----------
-// Directional light direction per key (board.html SUN table: [azimuth°, elevation°], camera on +z).
+// Lights (W5, R6: "real sun light, and real moon light + an ambient light"): the directional sun and moon come FROM the
+// real bodies (setSky), each with its disc on the same vector; the hemisphere is the ambient floor. Until the first
+// setSky (gate, styleboard, sandbox) the sun is the board's per-key direction (SUN: [azimuth°, elevation°], camera on +z)
+// and no disc shows.
 const SUN = { night: [-35, 35], dawn: [-60, 8], day: [20, 50], dusk: [55, 6] };
 const sunDir = (k) => { const [az, el] = SUN[k].map((d) => (d * Math.PI) / 180); return new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el) * 0.4 + 0.6).normalize(); };
+// Compass → world: south is −z (the finale camera on +z looks south, so the day arc crosses its view), west is +x.
+const toWorld = (az, el, out) => { const a = az * Math.PI / 180, e = el * Math.PI / 180; return out.set(-Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)); };
+const above = (el) => Math.min(1, Math.max(0, (el + 1) / 5)); // fades in over the first degrees above the horizon
+const DISC = 800, SUN_D = 56, MOON_D = 34, MOON_I = 0.8; // disc distance and sizes (m, ~4° / 2.4°: legible, not real); full-moon light
+let SKY = null; // {sun, moon} from setSky
 let RIG = null;
 
-/** Pins tone mapping, exposure, fog, hemisphere + directional, dome, valley haze floor. No shadows. */
+/** Pins tone mapping, exposure, fog, hemisphere + sun and moon directionals with their discs, dome, the sea. No shadows. */
 export function rig(renderer, scene) {
   renderer.toneMapping = THREE.LinearToneMapping;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = false;
   scene.fog = new THREE.FogExp2(0x000000, 0.0035);
-  const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1), dir = new THREE.DirectionalLight(0xffffff, 1);
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(900, 48).rotateX(-Math.PI / 2).translate(0, -16, 0), tag(new THREE.MeshBasicMaterial({ fog: true }), 'floor', { kitToken: 'horizon' }));
+  const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1), dir = new THREE.DirectionalLight(0xffffff, 1), moon = new THREE.DirectionalLight(0xffffff, 0);
+  // the sea (R6 island): the land dives under it at the rim (r ≈ 84–88). iceDeep around the island, turning to the horizon
+  // colour by r 400, so the far sea already is the horizon where it meets the sky (styleboard haze seam: a camera-distance
+  // fog alone leaves a few-pixel band). Out to r 1700, past the dome.
+  const seaG = new THREE.RingGeometry(0, 1700, 48, 12).rotateX(-Math.PI / 2).translate(0, SEA, 0), sp = seaG.attributes.position;
+  seaG.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(sp.count * 3), 3));
+  const paintSea = () => {
+    const c = seaG.attributes.color, a = color('iceDeep'), b = color('horizon'), t = new THREE.Color();
+    for (let i = 0; i < sp.count; i++) { const r = Math.hypot(sp.getX(i), sp.getZ(i)), k = Math.min(1, Math.max(0, (r - 120) / 280)); c.setXYZ(i, ...t.lerpColors(a, b, k * k * (3 - 2 * k)).toArray()); }
+    c.needsUpdate = true;
+  };
+  hooks.add(paintSea);
+  paintSea();
+  const floor = new THREE.Mesh(seaG, tag(new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), 'sea'));
+  floor.userData.kitHook = paintSea;
+  const sunD = new THREE.Sprite(glow('sunCore', 1.2)), halo = new THREE.Sprite(glow('sunMid', 0.5)), moonD = new THREE.Sprite(glow('ink', 0.9));
+  sunD.scale.setScalar(SUN_D); halo.scale.setScalar(SUN_D * 3); moonD.scale.setScalar(MOON_D);
+  for (const x of [sunD, halo, moonD]) Object.assign(x, { visible: false, renderOrder: -0.9 });
   const sky = dome();
-  scene.add(hemi, dir, dir.target, floor, sky);
+  scene.add(hemi, dir, dir.target, moon, moon.target, floor, sky, sunD, halo, moonD);
   const prev = renderer.getRenderTarget();
   renderer.setRenderTarget(footprintRT); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.setRenderTarget(prev);
-  RIG = { renderer, scene, hemi, dir, floor, dome: sky };
+  RIG = { renderer, scene, hemi, dir, moon, floor, dome: sky, discs: { sun: sunD, halo, moon: moonD } };
   apply();
   return RIG;
 }
@@ -414,8 +440,28 @@ function apply() {
   unit(hemi.groundColor.set(rigHex('hemiGround')));
   hemi.intensity = rigAt('hemiI');
   unit(dir.color.set(rigHex('dir')));
-  dir.intensity = rigAt('dirI');
-  dir.position.copy(sunDir(ph.a).lerp(sunDir(ph.b), ph.w).normalize().multiplyScalar(100));
+  lights();
+}
+/** Light directions + intensities and the discs (setSky alone redoes only this). */
+function lights() {
+  if (!RIG) return;
+  const { dir, moon, discs: D } = RIG;
+  if (!SKY) {
+    dir.intensity = rigAt('dirI');
+    dir.position.copy(sunDir(ph.a).lerp(sunDir(ph.b), ph.w).normalize().multiplyScalar(100));
+    moon.intensity = 0;
+    return;
+  }
+  const { sun: s, moon: m } = SKY;
+  dir.intensity = rigAt('dirI') * above(s.elev);
+  toWorld(s.az, s.elev, dir.position);
+  D.sun.position.copy(dir.position).multiplyScalar(DISC); D.halo.position.copy(D.sun.position);
+  D.sun.visible = D.halo.visible = s.elev > -1;
+  dir.position.multiplyScalar(100);
+  unit(color('ice', moon.color));
+  moon.intensity = m ? MOON_I * m.frac * above(m.elev) : 0;
+  D.moon.visible = !!m && m.elev > -1;
+  if (m) { toWorld(m.az, m.elev, moon.position); D.moon.position.copy(moon.position).multiplyScalar(DISC); moon.position.multiplyScalar(100); }
 }
 
 /** Key blend for a sun elevation (09 "Phase"). */
@@ -434,6 +480,9 @@ export function setKey(k) { if (!KEYS.includes(k)) throw new Error(`kit: unknown
 export const phase = () => ({ ...ph });
 /** Stale dimming 0..1 (sky eases it toward world.stale ? 1 : 0): terrain desaturates, the dome and its stars dim. Writer: sky. */
 export const setStale = (k) => (U.uStale.value = Math.min(1, Math.max(0, k)));
+/** The real sun {elev, az} and moon {elev, az, frac} (js/sun.js; the host passes world.sun / world.moon once a second):
+ *  light directions, intensities and discs. Colours stay per key (setPhase). */
+export function setSky(sun, moon) { if (!sun) return; SKY = { sun, moon }; lights(); }
 /** post.js: the composer renders this rig (fog colour not pre-exposed). */
 export function setComposed(on) { RIG.composed = on; apply(); }
 apply();

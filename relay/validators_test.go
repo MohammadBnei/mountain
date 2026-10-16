@@ -142,11 +142,20 @@ func TestMarkLimits(t *testing.T) {
 	if _, why := ackOf(t, a.place(c, "", "test-toy", pose, false, t0.Add(19*time.Minute+30*time.Second))); why != "rate" {
 		t.Errorf("2 in a minute: %q", why)
 	}
+	var q struct{ Next, Left *int }
+	json.Unmarshal(a.place(c, "", "test-toy", pose, false, t0.Add(19*time.Minute+30*time.Second)), &q)
+	if q.Next == nil || q.Left == nil || *q.Left != 0 || *q.Next != int((24*time.Hour-19*time.Minute-30*time.Second)/time.Second) {
+		t.Errorf("rate quota next %v left %v", q.Next, q.Left)
+	}
 	if _, why := ackOf(t, a.place(c, "", "test-toy", pose, false, t0.Add(time.Hour))); why != "rate" {
 		t.Errorf("21st in a day: %q", why)
 	}
-	if _, why := ackOf(t, a.place(visitor("u2", ""), "", "test-toy", pose, false, t0.Add(time.Hour))); why != "" {
+	b := a.place(visitor("u2", ""), "", "test-toy", pose, false, t0.Add(time.Hour))
+	if _, why := ackOf(t, b); why != "" {
 		t.Errorf("another account: %q", why)
+	}
+	if json.Unmarshal(b, &q); q.Next == nil || *q.Next != 60 || *q.Left != 19 {
+		t.Errorf("accept quota %s", b)
 	}
 	if _, why := ackOf(t, a.place(c, "", "test-toy", pose, false, t0.Add(24*time.Hour+time.Minute))); why != "" {
 		t.Errorf("a day later: %q", why)

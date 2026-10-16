@@ -148,13 +148,16 @@ The R4 first-draft rig (hemi 0.35–1.1, dir 0.25–1.4, fog 0.004–0.010, ACES
 - The writer is **sky**, via `world.rig = {elev, rising}` (01). Until sky-full (W3) it is fixed at **dusk**.
 - **The user approves the 4 keys from the swatch + styleboard screenshots** at the end of W0.5.
 
-## World edge (no visible rim)
+## World edge: an island (R6, was "no visible rim")
 
 | Layer | Rule |
 |---|---|
-| Go `h.base` | beyond r = 78 m the height falls by 34 m (smoothstep 78 → 100) and by 30 m more out to the corners (100 → 141): the massif drops into the valley, no flat apron, no plane corners |
-| Skirt | the mountain's closed skirt (cut) continues down from the dropped rim |
-| Valley haze floor | kit-owned horizontal disc (r 900) at y = −16 in the key's `horizon` colour, fogged: the dropped rim dissolves into haze and meets the dome's horizon band. 1 draw, 48 tris |
+| Go `h.base` | beyond r = 78 m the height falls by 34 m (smoothstep 78 → 100) and by 30 m more out to the corners (100 → 141): the massif drops under the sea (it crosses y −16 at r ≈ 84–88), no flat apron, no plane corners |
+| Skirt | the mountain's closed skirt (cut) continues down from the dropped rim, under water |
+| Sea | kit-owned horizontal disc (r 1700, past the dome) at y = −16 (`kit.SEA`): vertex colour `iceDeep` around the island, smoothstep to `horizon` by r 400, fogged, so it meets the dome's horizon band as a ramp, never a line (styleboard seam check). 1 draw |
+| Shore | terrain(): the last 1.5 m above the sea are wet rock (× .55 → 1); no fog fade |
+| Sun, moon | `kit.setSky(sun, moon)` from the real Paris bodies (js/sun.js): directional sun (dirI × the first 5° above the horizon) and moon (0.8 × lit fraction) lights FROM them, each with a fog-free `glow` disc on the same vector (`sunCore` + `sunMid` halo, `ink` moon) at r 800; hemisphere = the ambient floor. Compass → world: south −z, west +x. Until the first setSky (gate, styleboard, sandbox) the per-key board direction, no discs |
+| Cut face | chain start `stone2`, emissive = its colour × max(glow, .5), an `ink` × .7 rim (unlit) where the plane meets the surface; under the luminance ceiling |
 
 ## Kit factories
 

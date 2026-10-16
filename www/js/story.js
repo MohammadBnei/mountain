@@ -1,11 +1,12 @@
 // Story (05, R5). Orchestrator-owned. Six sections, P 0 (Hero) … 5 (Live). Previous/Next and ←/→ step one section;
 // P eases there over 1.5 s (a press mid-move retargets from the current P; prefers-reduced-motion jumps). No scroll:
-// the wheel stays the orbit zoom (main.js). The URL hash names the section (#hero … #live), so a reload or a shared
-// link lands on it.
+// the wheel stays the orbit zoom (main.js). The page opens on Live (R6: the story never replays on its own); at Live,
+// Previous becomes "Story ↺" and plays it from Hero. A #hero … #live hash is a deep link (read on load and on
+// hashchange, never written: a reload lands on Live again).
 //   view(P, tc, aspect, out) → out.{pos, look}: the keyframe camera (pi-lab CatmullRom keys); at P 5 it is exactly
 //                              the live finale sway of layout.js, eased in from P 4
 //   clip(P)                  → a world.clip value (cut.at): closed, shallow, aquifers, bands, deepest, closes
-//   createStory({world, onStep}) → {tick(now) → P, P, section}: the buttons, keys, hash and panel
+//   createStory({world, onStep}) → {tick(now) → P, P, section}: the buttons, keys, hash, panel and the cut label
 import * as THREE from 'three';
 import * as cut from './cut.js';
 import { finale } from './layout.js';
@@ -62,10 +63,9 @@ function facts(i, w) {
 }
 
 export function createStory({ world, onStep }) {
-  const $ = (id) => document.getElementById(id), prev = $('prev'), next = $('next'), line = $('line'), fact = $('facts'), signin = $('signin');
+  const $ = (id) => document.getElementById(id), prev = $('prev'), next = $('next'), line = $('line'), fact = $('facts'), signin = $('signin'), cutl = $('cutlabel');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
   document.documentElement.lang = lang;
-  prev.setAttribute('aria-label', T['story.prev']);
   next.setAttribute('aria-label', T['story.next']);
   let P = 0, from = 0, to = 0, t0 = -Infinity, factsAt = 0;
 
@@ -74,16 +74,17 @@ export function createStory({ world, onStep }) {
     if (i === to && !jump) return;
     from = P; to = i;
     t0 = jump || reduce.matches ? -Infinity : performance.now();
-    if (location.hash !== `#${sections[i]}`) history.replaceState(null, '', `#${sections[i]}`);
     prev.disabled = i === 0;
+    prev.textContent = i === 5 ? T['story.replayShort'] : '\u2190';
+    prev.setAttribute('aria-label', T[i === 5 ? 'story.replay' : 'story.prev']);
     next.disabled = i === 5;
     line.textContent = T[`story.${sections[i]}`];
     signin.href = `/auth/login?return=${encodeURIComponent(`/#${sections[i]}`)}`; // back to this section
     factsAt = 0;
     onStep?.();
   }
-  const fromHash = () => Math.max(0, sections.indexOf(location.hash.slice(1)));
-  prev.addEventListener('click', () => go(to - 1));
+  const fromHash = () => { const i = sections.indexOf(location.hash.slice(1)); return i < 0 ? 5 : i; };
+  prev.addEventListener('click', () => go(to === 5 ? 0 : to - 1));
   next.addEventListener('click', () => go(to + 1));
   addEventListener('keydown', (e) => {
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return; // leave browser shortcuts alone
@@ -92,6 +93,7 @@ export function createStory({ world, onStep }) {
   });
   addEventListener('hashchange', () => go(fromHash()));
   signin.textContent = T['auth.signin'];
+  cutl.textContent = T['cut.label'];
   go(fromHash(), true);
   P = to;
   // detail mode (08): the sign-in link only when the relay has OIDC on and this session views (static serving: no link)
@@ -101,6 +103,7 @@ export function createStory({ world, onStep }) {
     tick(now) {
       const x = (now - t0) / MOVE;
       P = x >= 1 ? to : from + (to - from) * x * x * (3 - 2 * x);
+      if (cutl.hidden === world.clip.depth > 0) cutl.hidden = !(world.clip.depth > 0); // the slice says it is one (W5)
       if (now > factsAt) { // ponytail: 1 s poll, the bus has no write hook
         factsAt = now + 1000;
         const f = facts(to, world);

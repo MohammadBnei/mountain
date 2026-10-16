@@ -50,8 +50,9 @@ try {
   const camera = new THREE.PerspectiveCamera(finale.fov, cw / ch, 1, 2000);
   const labels = document.getElementById('labels');
   renderer.setScissorTest(true);
-  // Haze seam (09 valley haze floor): the fogged floor must meet the dome with no hard horizon line. Largest
-  // step between neighbouring pixels down the left edge of each cell (sky → floor), 0..255.
+  // Haze seam (09, R6 sea): the fogged sea must meet the dome with no hard horizon line. Down the left edge of each cell
+  // (sky → sea): the largest step between neighbouring pixels beyond the steps 2 px either side, 0..255. A line is a lone
+  // jump; the sea fading into the horizon is a steady ramp (5–6 /px in a 200 px cell) and scores ~0.
   const gl = renderer.getContext(), px = new Uint8Array(4 * ch), haze = {};
   const cell = (key, row, col) => {
     const az = (col * Math.PI) / 2;
@@ -62,7 +63,8 @@ try {
     renderer.setScissor(col * cw, y, cw, ch);
     renderer.render(scene, camera);
     gl.readPixels(col * cw + 2, y, 1, ch, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    for (let i = 4; i < 4 * Math.round(ch * 0.45); i += 4) haze[key] = Math.max(haze[key] || 0, ...[0, 1, 2].map((c) => Math.abs(px[i + c] - px[i - 4 + c])));
+    const step = (i) => (i < 1 ? 0 : Math.max(...[0, 1, 2].map((c) => Math.abs(px[4 * i + c] - px[4 * i - 4 + c]))));
+    for (let i = 1; i < Math.round(ch * 0.45); i++) haze[key] = Math.max(haze[key] || 0, step(i) - Math.max(step(i - 2), step(i + 2)));
   };
   // stale (kit.setStale(1)) dims the sky: it must still meet the fogged floor with no seam. Measured in cell 0,
   // which the key loop then repaints.

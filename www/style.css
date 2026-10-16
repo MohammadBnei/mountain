@@ -2,7 +2,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #120b0a; col
 canvas { display: block; width: 100%; height: 100%; cursor: grab; }
 canvas:active { cursor: grabbing; }
 #fallback { position: absolute; inset: auto 16px 16px; }
-#stale { position: absolute; top: 16px; left: 16px; margin: 0; font-size: 13px; opacity: .7; letter-spacing: .02em; }
+#stale { position: absolute; top: 68px; left: 16px; margin: 0; font-size: 13px; opacity: .7; letter-spacing: .02em; }
 /* story (05): panel bottom left (above the buttons on phones), Previous/Next bottom centre, ≥ 44 px targets */
 #panel { position: absolute; left: 16px; bottom: 16px; max-width: min(380px, calc(100% - 32px)); pointer-events: none; padding: 8px 12px; border-radius: 8px; background: rgb(18 11 10 / .55); } /* the buttons' backing: legible on the day sky */
 #panel p { margin: 0; }
@@ -12,6 +12,7 @@ canvas:active { cursor: grabbing; }
 #story button:hover:not(:disabled) { background: rgb(18 11 10 / .8); }
 #story button:focus-visible { outline: 2px solid #ece6dc; outline-offset: 2px; }
 #story button:disabled { opacity: .3; cursor: default; }
+#prev { padding: 0 14px; } /* at Live it reads "Story ↺" */
 #signin { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; font-size: 13px; color: inherit; opacity: .7; } /* ≥ 44 px target, text where it was */
 #signin:hover, #signin:focus-visible { opacity: 1; }
 [hidden] { display: none !important; } /* the display: flex rules below must not override the hidden attribute */
@@ -25,4 +26,28 @@ canvas:active { cursor: grabbing; }
 #play { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); margin: 0; display: flex; flex-direction: column; gap: 8px; text-align: right; }
 #play a { display: inline-flex; align-items: center; justify-content: flex-end; min-height: 44px; padding: 0 14px; border-radius: 22px; background: rgb(18 11 10 / .55); color: inherit; font-size: 14px; }
 #play a#signin2 { font-size: 13px; opacity: .8; }
-@media (max-width: 900px) { #panel { bottom: 80px; right: 16px; } #toys, #play { top: 52px; transform: none; } #toys { flex-direction: row; right: 16px; } #toystatus { bottom: 140px; } }
+/* W5: legend (top left), card (top centre), cut label, tool hint; one shared look */
+#legendbtn { position: absolute; top: 12px; left: 16px; width: 44px; height: 44px; border: 1px solid rgb(236 230 220 / .35); border-radius: 22px; background: rgb(18 11 10 / .55); color: inherit; font: 18px/1 Georgia, serif; cursor: pointer; }
+#legendbtn[aria-expanded="true"] { border-color: #ece6dc; }
+#legend, #card { position: absolute; padding: 10px 14px; border-radius: 8px; background: rgb(18 11 10 / .85); font-size: 13px; overflow-y: auto; }
+#legend { top: 64px; left: 16px; width: min(360px, calc(100% - 32px)); max-height: calc(100% - 200px); }
+#legend h2, #card h2 { margin: 0 0 6px; font-size: 15px; font-weight: normal; }
+#legend dl, #card dl { margin: 0; }
+#legend dd { margin: 0 0 6px; }
+#card { top: 64px; left: 50%; transform: translateX(-50%); width: min(300px, calc(100% - 32px)); }
+#card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+#card dt { opacity: .7; } #card dd { margin: 0; }
+#card .means { margin: 8px 0 0; opacity: .8; }
+#cardclose { float: right; width: 44px; height: 44px; margin: -10px -14px 0 0; border: 0; background: none; color: inherit; font-size: 20px; cursor: pointer; }
+#cardclose:focus-visible, #legendbtn:focus-visible { outline: 2px solid #ece6dc; outline-offset: 2px; }
+#cutlabel { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 12px; border: 1px solid rgb(236 230 220 / .5); border-radius: 16px; background: rgb(18 11 10 / .55); font-size: 13px; white-space: nowrap; }
+#toolhint { position: absolute; right: 16px; bottom: 124px; max-width: 320px; margin: 0; padding: 6px 10px; border-radius: 8px; background: rgb(18 11 10 / .55); font-size: 13px; }
+canvas.aiming { cursor: crosshair; }
+#toys button .name { margin-left: 8px; font-size: 13px; }
+#toys button:has(.name) { padding: 0 14px; border-radius: 24px; text-align: left; }
+@media (max-width: 900px) {
+  #panel { bottom: 80px; right: 16px; } #toys, #play { top: 60px; transform: none; } #toys { flex-direction: row; right: 16px; }
+  #toys button .name { display: none; } #toys button:has(.name) { padding: 0; }
+  #toolhint, #toystatus { left: 16px; right: 16px; max-width: none; bottom: auto; } #toolhint { top: 116px; } #toystatus { top: 164px; }
+  #card { top: 116px; } #cutlabel { top: 64px; }
+}
