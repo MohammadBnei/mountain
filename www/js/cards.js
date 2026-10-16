@@ -7,22 +7,24 @@
 // with `pick` (01 contract: pick(ray) → {kind, d, name?, ...raw} | null; d = distance along the ray, kind = a legend.<kind>
 // key) and shows the nearest answer that the terrain or the cut face does not hide. A tap pins the card (a dialog: Esc,
 // its close button or a tap on empty space closes it); a hover shows it as a tooltip until the pointer leaves the feature.
-// While a toy tool is active (toys.active) the pointer is the tool's: no cards. Models return raw, sanitised state
-// (world.state / world.sites / metrics) only: the rows are formatted here, card.<field> labels, legend.<kind> the meaning.
-// The legend button lists every legend.<kind> line.
+// While a toy tool is active (toys.active) the pointer is the tool's: no cards. The card is public (user: no internal
+// information): a crystal shows its app's name, description and URL (apps.json), any other feature its legend.<kind> line
+// ("Title: meaning"); the raw pick fields stay unread. The model that answered gets focus(name, 1 hover | 2 pinned) and
+// focus(null, 0) when the card goes (summit: the crystal glows). The legend button lists every legend.<kind> line.
 import * as THREE from 'three';
 import { pickTerrain } from './toys.js';
 import * as cut from './cut.js';
 import S from './i18n.json' with { type: 'json' };
+import APPS from './apps.json' with { type: 'json' };
 
-const T = S[navigator.language?.toLowerCase().startsWith('fr') ? 'fr' : 'en'];
+const lang = navigator.language?.toLowerCase().startsWith('fr') ? 'fr' : 'en', T = S[lang];
 const TAP = 6, HOVER = 150, NEAR = 14; // px: a tap also tries a ring of rays this far out (a crystal is a few px wide)
-const fmt = (v) => (typeof v === 'number' ? String(Math.round(v * 100) / 100) : typeof v === 'boolean' ? (v ? '✓' : '✗') : Array.isArray(v) ? v.join(', ') : String(v));
 
 export function createCards({ world, camera, canvas, models, toys }) {
-  const $ = (id) => document.getElementById(id), card = $('card'), title = card.querySelector('h2'), rows = card.querySelector('dl'), means = card.querySelector('.means');
+  const $ = (id) => document.getElementById(id), card = $('card'), q = (s) => card.querySelector(s);
+  const kicker = q('.kicker'), title = q('h2'), desc = q('.desc'), go = q('.go'), means = q('.means');
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), ground = new THREE.Vector3(), pickers = models.filter((m) => m.pick);
-  let pinned = false, at = null, timer = 0;
+  let pinned = false, at = null, timer = 0, lit = null; // lit: the card shown {m, name}
 
   /** The nearest card at client (x, y) that nothing solid hides, else null; fuzzy: then within NEAR px around it. */
   function hitAt(x, y, fuzzy) {
@@ -41,20 +43,31 @@ export function createCards({ world, camera, canvas, models, toys }) {
     let best = null;
     for (const m of pickers) {
       const c = m.pick(ray.ray);
-      if (c && c.d <= wall && (!best || c.d < best.d)) best = c;
+      if (c && c.d <= wall && (!best || c.d < best.d)) best = { ...c, m };
     }
     return best;
   }
+  function focus(c, lv) {
+    if (lit && (lit.m !== c?.m || lit.name !== c?.name)) lit.m.focus?.(null, 0);
+    lit = c;
+    c?.m.focus?.(c.name, lv);
+  }
   function show(c, pin) {
-    const { kind, d, name, ...raw } = c;
-    title.textContent = name != null ? fmt(name) : '';
-    rows.replaceChildren(...Object.entries(raw).filter(([, v]) => v != null).flatMap(([k, v]) => [Object.assign(document.createElement('dt'), { textContent: T[`card.${k}`] || k }), Object.assign(document.createElement('dd'), { textContent: fmt(v) })]));
-    means.textContent = T[`legend.${kind}`] || '';
+    const app = c.kind === 'summit' ? APPS[c.name] || { name: c.name } : null;
+    const [head, ...rest] = (T[`legend.${c.kind}`] || '').split(':'); // "Crystal: one app. …"
+    kicker.textContent = T[app ? 'card.app' : 'card.feature'];
+    title.textContent = app ? app.name : head.trim();
+    desc.textContent = app ? app[lang] || '' : rest.join(':').trim();
+    go.hidden = !app?.url;
+    if (app?.url) { go.href = app.url; go.textContent = `${new URL(app.url).host} ↗`; go.setAttribute('aria-label', `${T['card.open']} ${app.name}`); }
+    means.textContent = app ? T['legend.summit'] : '';
     pinned = pin;
     card.setAttribute('role', pin ? 'dialog' : 'tooltip');
     card.hidden = false;
+    focus(c, pin ? 2 : 1);
   }
-  const close = () => { pinned = false; card.hidden = true; };
+  const hide = () => { card.hidden = true; focus(null); };
+  const close = () => { pinned = false; hide(); };
 
   canvas.addEventListener('pointerdown', (e) => { at = [e.clientX, e.clientY]; });
   canvas.addEventListener('pointerup', (e) => {
@@ -69,10 +82,10 @@ export function createCards({ world, camera, canvas, models, toys }) {
     clearTimeout(timer);
     timer = setTimeout(() => {
       const c = toys.active ? null : hitAt(e.clientX, e.clientY);
-      if (c) show(c, false); else if (!pinned) card.hidden = true;
+      if (c) show(c, false); else if (!pinned) hide();
     }, HOVER);
   });
-  canvas.addEventListener('pointerleave', () => { clearTimeout(timer); if (!pinned) card.hidden = true; });
+  canvas.addEventListener('pointerleave', () => { clearTimeout(timer); if (!pinned) hide(); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape') { close(); legendOpen(false); } });
   $('cardclose').setAttribute('aria-label', T['card.close']);
   $('cardclose').addEventListener('click', close);

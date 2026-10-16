@@ -14,7 +14,7 @@ const fixed = {
   elmo: '#d9c8ff', above: '#c9b6ff', slopes: '#9fd0b9', water: '#8fc3df', ink: '#ece6dc',
 };
 const keys = {
-  night: { a: -0.45, tint: fixed.water, t: 0.08 },
+  night: { a: -0.15, tint: fixed.water, t: 0.08 },
   dawn:  { a: 0.8,  tint: fixed.above, t: 0.08 },
   // day relaxes the 10 % tint for the sky group only (R4 style review): sky0/sky1/ridge -> water .5, horizon -> water .6, cloud -> ink .5
   day:   { a: 1.6,  tint: fixed.water, t: 0.10, sky: { sky0: [fixed.water, 0.5], sky1: [fixed.water, 0.5], ridge: [fixed.water, 0.5], horizon: [fixed.water, 0.6], cloud: [fixed.ink, 0.5] }, hemiGround: 'stone' },
@@ -26,7 +26,7 @@ const keys = {
 const rig = {
   // snowLift: terrain-shader snow term, unlit snow × lift (keeps the cap white-blue under violet hemi). stars: dome star-field weight. ember: rock-ramp root warmth.
   // pool: ember-pool glow weight (W2: decoupled from ember, which fades by day; lifted by day so the pool reads on lit rock).
-  night: { hemiI: 0.5, dir: '#b6d3e0' /* ice@dusk, pinned */, dirI: 0.8, fogD: 0.0045, exposure: 1, snowLift: 0.12, stars: 1, ember: 1, pool: 1 },
+  night: { hemiI: 1.5, dir: '#b6d3e0' /* ice@dusk, pinned */, dirI: 0.8, fogD: 0.0045, exposure: 1.15, snowLift: 0.12, stars: 1, ember: 1, pool: 1 },
   dawn:  { hemiI: 1.4, dir: fixed.sunHalo, dirI: 2.4, fogD: 0.0035, exposure: 1, snowLift: 0.3, stars: 0.15, ember: 0.5, pool: 1.2 },
   day:   { hemiI: 2.0, dir: fixed.ink, dirI: 3.2, fogD: 0.0022, exposure: 1.25, snowLift: 0.05, stars: 0, ember: 0.12, pool: 2.4 },
   dusk:  { hemiI: 2.0, dir: fixed.sunMid, dirI: 1.6, fogD: 0.0035, exposure: 1, snowLift: 0.45, stars: 0.3, ember: 1, pool: 1 },

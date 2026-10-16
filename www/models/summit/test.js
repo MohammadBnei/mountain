@@ -1,8 +1,8 @@
 // summit behaviour (03-model-summit): one crystal (K shards) per site, at the site's y; height follows the replicas
 // bucket, glow the health (aHealth on ramp('health') × aGlow), hue the group; live ev:replicas / ev:argo.health /
-// ev:app.gone and a new world.state (reload) all rebuild; pick(ray) → the app's card.
+// ev:app.gone and a new world.state (reload) all rebuild; pick(ray) → the app's card; focus lights the hovered / pinned one.
 import * as THREE from 'three';
-import { rampColor } from '../../js/kit.js';
+import { rampColor, color } from '../../js/kit.js';
 
 export default async function test({ model, world, inject, step, fixture, assert }) {
   const mesh = model.root.getObjectByName('crystals'), K = 5, hello = world.state;
@@ -43,6 +43,15 @@ export default async function test({ model, world, inject, step, fixture, assert
   assert(Math.abs(card.d - (200 - (s.y - 0.6 + 1.5 + 1.1 * 6))) < 1e-3, `d = distance to the crystal top (${card.d})`);
   assert(model.pick(new THREE.Ray(new THREE.Vector3(0, 200, 90), new THREE.Vector3(0, -1, 0))) === null, 'pick off the crystals → null');
   assert(model.pick(new THREE.Ray(new THREE.Vector3(s.x, s.y + 20, s.z), new THREE.Vector3(0, 1, 0))) === null, 'pick into the sky → null');
+
+  const g0 = glow(at('wird')), hue0 = health(at('wird'));
+  model.focus('wird', 1); step(1);
+  const g1 = glow(at('wird'));
+  assert(g1 > g0 && health(at('wird')) === hue0 && glow(at('mountain')) < g1, `hover → wird alone glows brighter, same hue (${g0} → ${g1})`);
+  model.focus('wird', 2); step(1);
+  assert(glow(at('wird')) > g1 && health(at('wird')) === color('sunCore').getHexString(), 'pinned → brighter still, in sunCore');
+  model.focus(null, 0); step(1);
+  assert(glow(at('wird')) === g0 && health(at('wird')) === hue0, 'focus(null) → back to its health glow');
 
   const gone = fixture.sites.find((x) => x.app === fixture.gone.app);
   inject('ev:app.gone', fixture.gone);

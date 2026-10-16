@@ -90,29 +90,29 @@ A ramp is a list of stops `[t, colour]`. An instance colour must **equal a stop 
 
 | Key | `a` | Tint (`t`) |
 |---|---|---|
-| `night` | −0.45 | water `#8fc3df` (.08) |
+| `night` | −0.15 (W5: was −0.45, "too dark, don't even see the sea") | water `#8fc3df` (.08) |
 | `dawn` | +0.8 | above `#c9b6ff` (.08) |
 | `day` | +1.6 | water `#8fc3df` (.10); sky group per the exception |
 | `dusk` | 0 | — |
 
 | Token | night | dawn | day | dusk |
 |---|---|---|---|---|
-| `sky0` | `#181d2e` | `#393c71` | `#6c8bbd` | `#191b38` |
-| `sky1` | `#212136` | `#56498a` | `#8298cb` | `#2a2347` |
-| `horizon` | `#3a293c` | `#a8619f` | `#a5b8d6` | `#5c3254` |
-| `cloud` | `#1d2333` | `#4a4f82` | `#a7abc5` | `#232742` |
-| `ridge` | `#292537` | `#72548c` | `#93a2ca` | `#3b2a48` |
-| `rock0` | `#21232c` | `#564f69` | `#706e8e` | `#2a2733` |
-| `rock1` | `#171a20` | `#363041` | `#444255` | `#17141b` |
-| `emberRoot` | `#291b1a` | `#70332f` | `#96473c` | `#3a1610` |
-| `stone` | `#191f24` | `#3d4052` | `#4d5a6d` | `#1b1e25` |
-| `stone2` | `#1d232a` | `#4a4f64` | `#606e87` | `#232730` |
-| `deep` | `#151517` | `#2e2125` | `#392e2e` | `#120b0a` |
-| `snow` | `#748289` | `#cfdeec` | `#c9dfe9` | `#cfe2ea` |
-| `ice` | `#677a83` | `#b8d1e2` | `#b2d1e0` | `#b6d3e0` |
-| `iceDeep` | `#19252d` | `#3d546c` | `#4d7693` | `#1b2a35` |
-| `cloudLit` | `#696c6e` | `#bbb6bc` | `#b6b7ba` | `#bab6b6` |
-| `trail` | `#2d2b2e` | `#7e6871` | `#a4979c` | `#423638` |
+| `sky0` | `#1f253e` | `#393c71` | `#6c8bbd` | `#191b38` |
+| `sky1` | `#2d2b49` | `#56498a` | `#8298cb` | `#2a2347` |
+| `horizon` | `#533753` | `#a8619f` | `#a5b8d6` | `#5c3254` |
+| `cloud` | `#272e45` | `#4a4f82` | `#a7abc5` | `#232742` |
+| `ridge` | `#39314a` | `#72548c` | `#93a2ca` | `#3b2a48` |
+| `rock0` | `#2d2e39` | `#564f69` | `#706e8e` | `#2a2733` |
+| `rock1` | `#1e1f27` | `#363041` | `#444255` | `#17141b` |
+| `emberRoot` | `#39211f` | `#70332f` | `#96473c` | `#3a1610` |
+| `stone` | `#21272e` | `#3d4052` | `#4d5a6d` | `#1b1e25` |
+| `stone2` | `#272e38` | `#4a4f64` | `#606e87` | `#232730` |
+| `deep` | `#19181a` | `#2e2125` | `#392e2e` | `#120b0a` |
+| `snow` | `#adc0c9` | `#cfdeec` | `#c9dfe9` | `#cfe2ea` |
+| `ice` | `#9ab4c1` | `#b8d1e2` | `#b2d1e0` | `#b6d3e0` |
+| `iceDeep` | `#21313b` | `#3d546c` | `#4d7693` | `#1b2a35` |
+| `cloudLit` | `#9d9ea0` | `#bbb6bc` | `#b6b7ba` | `#bab6b6` |
+| `trail` | `#3f3a3e` | `#7e6871` | `#a4979c` | `#423638` |
 
 ### Light rig per key (kit-owned; tuned on the lit styleboard, `w05/style/board.png`)
 
@@ -122,14 +122,14 @@ three r186 lights are physically based (diffuse = albedo/π × irradiance), and 
 
 | Value | night | dawn | day | dusk | Shifts with key? |
 |---|---|---|---|---|---|
-| hemisphere sky (= `sky1` of the key) | `#212136` | `#56498a` | `#8298cb` | `#2a2347` | **yes** |
-| hemisphere ground (= `emberRoot` of the key; **day: `stone`**, so daylight rock is not warmed) | `#291b1a` | `#70332f` | `#4d5a6d` | `#3a1610` | **yes** |
-| hemisphere intensity | 0.5 | 1.4 | 2.0 | 2.0 | — |
+| hemisphere sky (= `sky1` of the key) | `#2d2b49` | `#56498a` | `#8298cb` | `#2a2347` | **yes** |
+| hemisphere ground (= `emberRoot` of the key; **day: `stone`**, so daylight rock is not warmed) | `#39211f` | `#70332f` | `#4d5a6d` | `#3a1610` | **yes** |
+| hemisphere intensity | 1.5 (W5, was 0.5) | 1.4 | 2.0 | 2.0 | — |
 | directional colour | `ice@dusk` `#b6d3e0`, **pinned** (moon) | `sunHalo` `#ffd59a` | `ink` `#ece6dc` | `sunMid` `#f2a65e` | **no** (fixed / pinned) |
 | directional intensity | 0.8 | 2.4 | 3.2 | 1.6 | — |
-| fog colour (= `horizon` of the key) | `#3a293c` | `#a8619f` | `#a5b8d6` (blue-white haze) | `#5c3254` | **yes** |
+| fog colour (= `horizon` of the key) | `#533753` | `#a8619f` | `#a5b8d6` (blue-white haze) | `#5c3254` | **yes** |
 | fog density (`FogExp2`, world 200, camera ≈ 200 out) | 0.0045 | 0.0035 | 0.0022 | 0.0035 | — |
-| exposure | 1 | 1 | 1.25 | 1 | — |
+| exposure | 1.15 (W5) | 1 | 1.25 | 1 | — |
 | `uSnowLift` (terrain snow term) | 0.12 | 0.30 | 0.05 | 0.45 | — |
 | `uStars` (dome star field) | 1 | 0.15 | 0 | 0.3 | — |
 | `uEmber` (rock-ramp root warmth) | 1 | 0.5 | 0.12 | 1 | — |
