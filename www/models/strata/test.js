@@ -32,7 +32,8 @@ export default async function test({ model, world, inject, step, fixture, assert
   assert(x < 60, `the cut face at z ${zc} rises above the newest line somewhere`);
   const ray = (y) => new THREE.Ray(new THREE.Vector3(x, y, 200), new THREE.Vector3(0, 0, -1));
   const card = model.pick(ray(30.1));
-  assert(card?.day === '2026-10-14' && card.title === fixture.ash[1].title, `newest line → its day + title (${JSON.stringify(card)})`);
+  assert(card?.kind === 'strata' && card.name === '2026-10-14' && card.title === fixture.ash[1].title && Number.isFinite(card.d) && card.d > 0, `newest line → its day + title (${JSON.stringify(card)})`);
+  assert(model.pick(new THREE.Ray(new THREE.Vector3(x, 30.1, 200), new THREE.Vector3(0, 1, 0))) === null, 'into the sky → no card');
   assert(model.pick(ray(23)) === null, 'between lines → no card');
   assert(cut.pick(ray(world.heightAt(x, zc) + 2), world) === null, 'above the terrain → no cut face');
   world.write('clip', 'story', cut.at(0));

@@ -4,7 +4,8 @@
 // is a thinned band in the ice (newest near the top, RATE m lower per day of age, as strata); cauldron.sag dishes the
 // cap; magma's `temp` thins it cosmetically and emits melt/steam (the persisted mass never changes here). A tongue that
 // vanishes from world:glacier (app.gone; a melted-out one is < 1 m) calves RoundedBox chunks + one ice.calve.
-// Corners with no ice put top = bottom, so the shell closes without walls.
+// Corners with no ice put top = bottom, so the shell closes without walls. pick(ray) → {kind 'glacier', d, mass}: the
+// first point of the ray under the ice top of its nearest iced node, on the kept side of the cut.
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { cellXZ, GRID, ICE } from '../../js/world.js';
 
@@ -186,6 +187,16 @@ export default async function build({ THREE, kit, world, rng }) {
         }
       },
       'cauldron.sag': (p) => { sag = p; target(); },
+    },
+    pick(ray) {
+      const o = ray.origin, v = ray.direction, [px, py, pz, pw] = world.clip.plane;
+      for (let t = 0.5; t <= 600; t += 0.5) { // ponytail: a 0.5 m march (as toys pickTerrain), ≤ 1200 array reads per hover
+        const x = o.x + v.x * t, y = o.y + v.y * t, z = o.z + v.z * t, i = Math.round((x - X0) / S), j = Math.round((z - X0) / S);
+        if (i < 0 || j < 0 || i > Q || j > Q) continue;
+        const k = j * ICE + i;
+        if (cur[k] > 0 && y < hv[k] + cur[k] && px * x + py * y + pz * z + pw >= 0) return { kind: 'glacier', d: t, mass: g.mass };
+      }
+      return null;
     },
     busy: () => ramp || chunks.count > 0,
     dispose() { kit.dispose(root); },
