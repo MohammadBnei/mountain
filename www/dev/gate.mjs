@@ -337,13 +337,13 @@ async function pageMode() {
     const at = px(384, 128), mirrored = px(384, 384) + px(128, 128);
     k.stampScene.remove(m); k.stampScene.userData.dirty = true; k.drawStamps(p.renderer);
     const marks = p.world.state.marks;
-    return { at, mirrored, cleared: px(384, 128), toys: getComputedStyle($('toys')).display === 'none', play: getComputedStyle($('play')).display === 'none', visitors: p.world.metrics.visitors, surface: p.surface.visible,
+    return { at, mirrored, cleared: px(384, 128), toys: getComputedStyle($('toys')).display === 'none', play: getComputedStyle($('signin')).display === 'none', visitors: p.world.metrics.visitors, surface: p.surface.visible,
       marks: marks.length, clean: marks.every((x) => !/script|10\.233|u-/.test(JSON.stringify(x))) };
   })()`).catch((e) => ({ err: e.message }));
   if (vz.err) fail(`visitors: ${vz.err}`);
   else {
     if (!(vz.at > 200) || vz.mirrored || vz.cleared) fail(`visitors: footprint RT orientation/clear wrong: ${JSON.stringify(vz)}`);
-    if (!vz.toys || !vz.play) fail(`visitors: toolbar or sign-in links shown without a session: ${JSON.stringify(vz)}`);
+    if (!vz.toys || !vz.play) fail(`visitors: toolbar or sign-in entry shown without a session: ${JSON.stringify(vz)}`);
     if (vz.visitors !== true || !vz.surface || !vz.clean) fail(`visitors: ${JSON.stringify(vz)}`);
     console.log(`visitors: ${JSON.stringify(vz)}`);
   }

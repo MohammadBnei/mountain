@@ -10,7 +10,8 @@
 // While a toy tool is active (toys.active) the pointer is the tool's: no cards. The card is public (user: no internal
 // information): a crystal shows its app's name, description and URL (apps.json), any other feature its legend.<kind> line
 // ("Title: meaning"); the raw pick fields stay unread. The model that answered gets focus(name, 1 hover | 2 pinned) and
-// focus(null, 0) when the card goes (summit: the crystal glows). The legend button lists every legend.<kind> line.
+// focus(null, 0) when the card goes (summit: the crystal glows). The legend button (in the bottom bar) lists every
+// legend.<kind> line. Card and legend share the dock's one slot with the story panel (style.css): opening one closes the other.
 // An app with `try` (ukubi-stt) gets a live transcription test: signed-in visitors and admins (/auth/me) record up to
 // 60 s, stt-capture.js posts the chunks to the relay's /api/transcribe (relay/stt.go), the words appear in the card.
 import * as THREE from 'three';
@@ -56,6 +57,7 @@ export function createCards({ world, camera, canvas, models, toys }) {
     c?.m.focus?.(c.name, lv);
   }
   function show(c, pin) {
+    if (!pin && !legend.hidden) return; // one sheet at a time: no hover tooltip over an open legend; a tap replaces it
     const app = c.kind === 'summit' ? APPS[c.name] || { name: c.name } : null;
     const [head, ...rest] = (T[`legend.${c.kind}`] || '').split(':'); // "Crystal: one app. …"
     kicker.textContent = T[app ? 'card.app' : 'card.feature'];
@@ -70,6 +72,7 @@ export function createCards({ world, camera, canvas, models, toys }) {
     said.textContent = signedIn ? T['card.tryHint'] : '';
     pinned = pin;
     card.setAttribute('role', pin ? 'dialog' : 'tooltip');
+    legendOpen(false);
     card.hidden = false;
     focus(c, pin ? 2 : 1);
   }
@@ -134,7 +137,10 @@ export function createCards({ world, camera, canvas, models, toys }) {
   $('legendtitle').textContent = T['legend.title'];
   legend.querySelector('dl').replaceChildren(...Object.keys(T).filter((k) => k.startsWith('legend.') && !['legend.open', 'legend.title'].includes(k))
     .map((k) => Object.assign(document.createElement('dd'), { textContent: T[k] })));
-  const legendOpen = (on) => { legend.hidden = !on; btn.setAttribute('aria-expanded', String(on)); };
+  function legendOpen(on) {
+    if (on) close();
+    legend.hidden = !on; btn.setAttribute('aria-expanded', String(on));
+  }
   btn.addEventListener('click', () => legendOpen(legend.hidden));
 
   return { close };
