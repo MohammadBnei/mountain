@@ -1,6 +1,8 @@
 // river behaviour (03-model-river): the ribbon runs downhill from under the snowline, on the terrain, never under it;
 // metrics.river widens it and quickens the foam (uTime advances faster, the only uniform the model writes); melt,
-// aquifer.seep and jokulhlaup each surge it (the jokulhlaup most), then it settles back to the metric's width.
+// aquifer.seep and jokulhlaup each surge it (the jokulhlaup most), then it settles back to the metric's width; pick → traffic.
+import * as THREE from 'three';
+
 export default async function test({ model, world, inject, step, fixture, assert }) {
   const rib = model.root.getObjectByName('ribbon'), p = rib.geometry.attributes.position, u = rib.material.uniforms, A = 5; // verts per row
   const rows = p.count / A;
@@ -37,4 +39,9 @@ export default async function test({ model, world, inject, step, fixture, assert
   }
   assert(peak.jokulhlaup > peak.melt + 3 && peak.jokulhlaup > peak['aquifer.seep'] + 3, `the jokulhlaup is the flood (${JSON.stringify(peak)})`);
   assert(Object.keys(u).join() === keys && u.uOpacity.value === op, 'only uTime is written');
+
+  // pick: straight down onto the middle of the centre line → the river card, straight up → nothing
+  const m = Math.floor(rows / 2) * A + 2, o = new THREE.Vector3(p.getX(m), p.getY(m) + 50, p.getZ(m)), card = model.pick(new THREE.Ray(o, new THREE.Vector3(0, -1, 0)));
+  assert(card?.kind === 'river' && Math.abs(card.d - 50) < 0.5 && card.traffic === Math.round(fixture.base * 100), `pick the ribbon → its card (${JSON.stringify(card)})`);
+  assert(model.pick(new THREE.Ray(o, new THREE.Vector3(0, 1, 0))) === null, 'pick into the sky → null');
 }

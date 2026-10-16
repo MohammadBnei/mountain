@@ -1,7 +1,9 @@
 // glacier behaviour (03-model-glacier): the hello's glacier is on the shell at build; snowfall thickens the cap; a tongue
 // advance reaches further down-slope; a tongue gone (app.gone) calves chunks + one ice.calve, a melted-out one does not;
 // ash days thin bands in the ice at their heights; a lower snowline widens the cap; cauldron.sag dishes it and recovers;
-// hot temp thins it and emits melt + steam without touching the mass; a new state object (reload) snaps, never calves.
+// hot temp thins it and emits melt + steam without touching the mass; a new state object (reload) snaps, never calves;
+// pick → the mass card.
+import * as THREE from 'three';
 import { ICE } from '../../js/world.js';
 
 export default async function test({ model, world, inject, step, fixture, assert }) {
@@ -75,4 +77,10 @@ export default async function test({ model, world, inject, step, fixture, assert
   world.write('state', 'socket', { ...world.state, glacier: fixture.gone });
   step(1);
   assert(got['ice.calve'].length === 1 && count() < c5 && !model.busy(), `a reload snaps (${c5} → ${count()} nodes), no calving`);
+
+  // pick: straight down onto the thickest ice → the glacier card at its top, straight up → nothing
+  const top = ice.indexOf(max()), [x, z] = xz(top), y = world.heightAt(x, z) + ice[top];
+  const o = new THREE.Vector3(x, y + 50, z), card = model.pick(new THREE.Ray(o, new THREE.Vector3(0, -1, 0)));
+  assert(card?.kind === 'glacier' && Math.abs(card.d - 50) <= 0.5 && card.mass === fixture.gone.mass, `pick the ice → its card (${JSON.stringify(card)})`);
+  assert(model.pick(new THREE.Ray(o, new THREE.Vector3(0, 1, 0))) === null, 'pick into the sky → null');
 }

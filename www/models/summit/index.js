@@ -2,11 +2,12 @@
 // shard() prisms in ONE InstancedMesh with the kit crystal() material. Height = replicas bucket (world.state.replicas),
 // glow = health (aHealth on ramp('health') × aGlow, world.state.health), hue = group (instanceColor on ramp('group')).
 // world.js updates sites/state before each emit, so every listened event (and a new state object, or the sites map
-// changing under a /api/topology answer) just marks the cluster dirty; step() rebuilds it. pick(ray) → {app, group,
-// health, replicas} of the crystal under the ray.
+// changing under a /api/topology answer) just marks the cluster dirty; step() rebuilds it. pick(ray) → {kind 'summit',
+// d, name app, group, health, replicas} of the nearest crystal's bounding box (analytic: no mesh raycast on hover).
 const MAX = 32, K = 5; // apps (allowlist is 8) × shards per crystal: 160 × 24 tris
 const W = 3, SINK = 0.6; // main prism width scale (hex radius 0.9 m), sunk into the slope
 const H0 = 1.5, HB = 1.1; // height = H0 + HB × bucket (0..8 → 1.5..10.3 m)
+const R = 1.5; // pick box half-width: main prism + tilted satellites
 // argo health (sanitize.go healthOK) → [ramp('health') t, aGlow]; no status yet → dark
 const HEALTH = { Healthy: [0, 0.3], Progressing: [0, 0.2], Degraded: [0.5, 0.55], Suspended: [0.5, 0.25], Missing: [1, 0.75], Unknown: [0.5, 0.12] }; // day luminance ceiling < 1 (09)
 const NONE = [0, 0];
@@ -24,7 +25,8 @@ export default async function build({ THREE, kit, world }) {
   const root = new THREE.Group();
   root.add(mesh);
 
-  const apps = [], O = new THREE.Object3D(), C = kit.rampColor('health', 0); // scratch colour
+  const apps = [], top = new Float32Array(MAX), O = new THREE.Object3D(), C = kit.rampColor('health', 0); // top: pick height per app, 0 = hidden
+  const box = new THREE.Box3(), hit = new THREE.Vector3(); // pick scratch
   const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
   function rebuild() {
     apps.length = 0;
@@ -36,6 +38,7 @@ export default async function build({ THREE, kit, world }) {
       const [t, glow] = HEALTH[health[app]] || NONE, yaw = r() * Math.PI * 2;
       // not clipped (01), so a site on the cut-away side would float in front of the cut face: hide it while open
       const cp = world.clip.plane, gone = cp[0] * s.x + cp[1] * s.y + cp[2] * s.z + cp[3] < 0;
+      top[a] = gone ? 0 : H;
       kit.rampColor('health', t, C);
       for (let k = 0; k < K; k++) {
         const i = a * K + k, az = yaw + (k * Math.PI * 2) / (K - 1) + r() * 0.6, tilt = k ? 0.3 + r() * 0.3 : r() * 0.08, h = k ? H * (0.35 + r() * 0.3) : H, w = k ? W * 0.6 : W;
@@ -68,7 +71,6 @@ export default async function build({ THREE, kit, world }) {
   };
   sync();
   const mark = () => { dirty = true; };
-  const caster = new THREE.Raycaster();
 
   return {
     root,
@@ -77,12 +79,19 @@ export default async function build({ THREE, kit, world }) {
     step: sync,
     on: { 'world:site': mark, 'ev:argo.health': mark, 'ev:replicas': mark, 'ev:app.gone': mark },
     pick(ray) {
-      caster.ray.copy(ray);
-      mesh.updateMatrixWorld();
-      const hit = caster.intersectObject(mesh)[0], app = hit && apps[Math.floor(hit.instanceId / K)];
+      let d = Infinity, app = null;
+      for (let i = 0; i < apps.length; i++) {
+        const s = world.sites.get(apps[i]);
+        if (!s || !top[i]) continue;
+        box.min.set(s.x - R, s.y - SINK, s.z - R);
+        box.max.set(s.x + R, s.y - SINK + top[i], s.z + R);
+        if (!ray.intersectBox(box, hit)) continue;
+        const t = hit.distanceTo(ray.origin);
+        if (t < d) { d = t; app = apps[i]; }
+      }
       if (!app) return null;
-      const s = world.state;
-      return { app, group: world.sites.get(app)?.group ?? null, health: s.health?.[app] ?? null, replicas: s.replicas?.[app] ?? null };
+      const st = world.state;
+      return { kind: 'summit', d, name: app, group: world.sites.get(app).group ?? null, health: st.health?.[app] ?? null, replicas: st.replicas?.[app] ?? null };
     },
     busy: () => false,
     dispose() { kit.dispose(root); },

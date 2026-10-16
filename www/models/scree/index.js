@@ -3,6 +3,7 @@
 // bodies tumble down the 128² heightSolid collider and sleep; a resting body is drawn snapped to the render height.
 // ≤ 80 bodies: the oldest retires into a talus heap (≤ 20, one flattened rock each, mirrored into h.talus); talus
 // erodes once churn has been quiet for STABLE s. Live only (nothing persisted). Both meshes share kit rock() + lit('rock').
+// pick(ray) → {kind 'scree', d, churn: live rocks} on the nearest rock or heap, each as its bounding sphere.
 import * as CANNON from 'cannon-es';
 import { GRID, CELL } from '../../js/world.js';
 
@@ -44,6 +45,9 @@ export default async function build({ THREE, kit, world, rng }) {
   let dirty = false;
   const O = new THREE.Object3D(), H = world.heightAt;
   const heapS = (k) => Math.min(1.8, 0.5 + Math.cbrt(hv[k])); // ≤ 1.8: facet band rock (median edge ≤ 1.2)
+  const ball = new THREE.Sphere(), hit = new THREE.Vector3(); // pick scratch
+  /** Distance along the ray to the ball, else Infinity. */
+  const along = (ray) => (ray.intersectSphere(ball, hit) ? hit.distanceTo(ray.origin) : Infinity);
 
   function retire(i) {
     const b = body[i];
@@ -157,6 +161,25 @@ export default async function build({ THREE, kit, world, rng }) {
         if (n > 0) spawn(...siteOf(ev.app), n, big);
       },
       'ice.calve': (c) => spawn(c.x, c.z, Math.min(3, Math.max(1, Math.round(c.size))), 3, 1), // calved chunks: boulders, the palest rock
+    },
+    pick(ray) {
+      let d = Infinity, churn = 0;
+      for (let i = 0; i < live.count; i++) {
+        const b = body[i];
+        if (!b) continue;
+        churn++;
+        const p = b.position, rest = b.sleepState === CANNON.Body.SLEEPING; // where step() draws it
+        ball.center.set(p.x, rest ? H(p.x, p.z) + sy[i] * 0.4 : p.y, p.z);
+        ball.radius = Math.max(sx[i], sy[i], sz[i]);
+        d = Math.min(d, along(ray));
+      }
+      for (let k = 0; k < talus.count; k++) {
+        const s = heapS(k);
+        ball.center.set(hx[k], H(hx[k], hz[k]) + s * 0.1, hz[k]);
+        ball.radius = s;
+        d = Math.min(d, along(ray));
+      }
+      return d < Infinity ? { kind: 'scree', d, churn } : null;
     },
     busy: () => body.some((b) => b && b.sleepState !== CANNON.Body.SLEEPING), // talus erosion is hours of slow drift, not animation
     dispose() { for (let i = 0; i < MAX; i++) if (body[i]) phys.removeBody(body[i]); kit.dispose(root); }, // kit drops them from the env-ramp set
