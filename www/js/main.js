@@ -97,7 +97,7 @@ if (dev) globalThis.__page.story = () => ({ P: tale.P, section: tale.section, ha
 let lastP = NaN;
 const toys = createToys({ world, camera, canvas: renderer.domElement, orbit, tale, models, surface });
 createCards({ world, camera, canvas: renderer.domElement, models, toys });
-if (dev) globalThis.__page.surface = surface;
+if (dev) Object.assign(globalThis.__page, { surface, models });
 
 const DT = 1 / 30;
 // Adaptive draw rate (heat/battery): a ladder of [fps, pixel ratio] from cheapest to richest. 60 fps is

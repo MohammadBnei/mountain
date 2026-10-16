@@ -2,7 +2,8 @@
 //
 //   createCards({world, camera, canvas, models, toys}) → {close()}
 //
-// A tap (pointerup within 6 px of its pointerdown: an orbit drag is not a tap) or a 150 ms mouse hover asks every model
+// A tap (pointerup within 6 px of its pointerdown: an orbit drag is not a tap; it also tries rays 14 px around, a finger
+// is wider than a crystal) or a 150 ms mouse hover asks every model
 // with `pick` (01 contract: pick(ray) → {kind, d, name?, ...raw} | null; d = distance along the ray, kind = a legend.<kind>
 // key) and shows the nearest answer that the terrain or the cut face does not hide. A tap pins the card (a dialog: Esc,
 // its close button or a tap on empty space closes it); a hover shows it as a tooltip until the pointer leaves the feature.
@@ -15,7 +16,7 @@ import * as cut from './cut.js';
 import S from './i18n.json' with { type: 'json' };
 
 const T = S[navigator.language?.toLowerCase().startsWith('fr') ? 'fr' : 'en'];
-const TAP = 6, HOVER = 150;
+const TAP = 6, HOVER = 150, NEAR = 14; // px: a tap also tries a ring of rays this far out (a crystal is a few px wide)
 const fmt = (v) => (typeof v === 'number' ? String(Math.round(v * 100) / 100) : typeof v === 'boolean' ? (v ? '✓' : '✗') : Array.isArray(v) ? v.join(', ') : String(v));
 
 export function createCards({ world, camera, canvas, models, toys }) {
@@ -23,8 +24,13 @@ export function createCards({ world, camera, canvas, models, toys }) {
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), ground = new THREE.Vector3(), pickers = models.filter((m) => m.pick);
   let pinned = false, at = null, timer = 0;
 
-  /** The nearest card at client (x, y) that nothing solid hides, else null. */
-  function hitAt(x, y) {
+  /** The nearest card at client (x, y) that nothing solid hides, else null; fuzzy: then within NEAR px around it. */
+  function hitAt(x, y, fuzzy) {
+    let c = hitRay(x, y);
+    for (let k = 0; !c && fuzzy && k < 8; k++) c = hitRay(x + NEAR * Math.cos(k * Math.PI / 4), y + NEAR * Math.sin(k * Math.PI / 4));
+    return c;
+  }
+  function hitRay(x, y) {
     const r = canvas.getBoundingClientRect();
     ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
@@ -42,7 +48,7 @@ export function createCards({ world, camera, canvas, models, toys }) {
   function show(c, pin) {
     const { kind, d, name, ...raw } = c;
     title.textContent = name != null ? fmt(name) : '';
-    rows.replaceChildren(...Object.entries(raw).flatMap(([k, v]) => [Object.assign(document.createElement('dt'), { textContent: T[`card.${k}`] || k }), Object.assign(document.createElement('dd'), { textContent: fmt(v) })]));
+    rows.replaceChildren(...Object.entries(raw).filter(([, v]) => v != null).flatMap(([k, v]) => [Object.assign(document.createElement('dt'), { textContent: T[`card.${k}`] || k }), Object.assign(document.createElement('dd'), { textContent: fmt(v) })]));
     means.textContent = T[`legend.${kind}`] || '';
     pinned = pin;
     card.setAttribute('role', pin ? 'dialog' : 'tooltip');
@@ -55,7 +61,7 @@ export function createCards({ world, camera, canvas, models, toys }) {
     const tap = at && Math.hypot(e.clientX - at[0], e.clientY - at[1]) < TAP;
     at = null;
     if (!tap || toys.active) return;
-    const c = hitAt(e.clientX, e.clientY);
+    const c = hitAt(e.clientX, e.clientY, true);
     if (c) show(c, true); else close();
   });
   canvas.addEventListener('pointermove', (e) => {
