@@ -378,7 +378,7 @@ const sunDir = (k) => { const [az, el] = SUN[k].map((d) => (d * Math.PI) / 180);
 // Compass → world: south is −z (the finale camera on +z looks south, so the day arc crosses its view), west is +x.
 const toWorld = (az, el, out) => { const a = az * Math.PI / 180, e = el * Math.PI / 180; return out.set(-Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)); };
 const above = (el) => Math.min(1, Math.max(0, (el + 1) / 5)); // fades in over the first degrees above the horizon
-const DISC = 800, SUN_D = 56, MOON_D = 34, MOON_I = 0.8; // disc distance and sizes (m, ~4° / 2.4°: legible, not real); full-moon light
+const DISC = 800, SUN_D = 56, MOON_D = 34, MOON_I = 1.6; // disc distance and sizes (m, ~4° / 2.4°: legible, not real); full-moon light
 let SKY = null; // {sun, moon} from setSky
 let RIG = null;
 
@@ -389,13 +389,14 @@ export function rig(renderer, scene) {
   renderer.shadowMap.enabled = false;
   scene.fog = new THREE.FogExp2(0x000000, 0.0035);
   const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1), dir = new THREE.DirectionalLight(0xffffff, 1), moon = new THREE.DirectionalLight(0xffffff, 0);
-  // the sea (R6 island): the land dives under it at the rim (r ≈ 84–88). iceDeep around the island, turning to the horizon
+  // the sea (R6 island): the land dives under it at the rim (r ≈ 84–88). iceDeep lifted 20 % toward ice (night: still
+  // reads as water, not a hole) around the island, turning to the horizon
   // colour by r 400, so the far sea already is the horizon where it meets the sky (styleboard haze seam: a camera-distance
   // fog alone leaves a few-pixel band). Out to r 1700, past the dome.
   const seaG = new THREE.RingGeometry(0, 1700, 48, 12).rotateX(-Math.PI / 2).translate(0, SEA, 0), sp = seaG.attributes.position;
   seaG.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(sp.count * 3), 3));
   const paintSea = () => {
-    const c = seaG.attributes.color, a = color('iceDeep'), b = color('horizon'), t = new THREE.Color();
+    const c = seaG.attributes.color, a = color('iceDeep').lerp(color('ice'), 0.2), b = color('horizon'), t = new THREE.Color();
     for (let i = 0; i < sp.count; i++) { const r = Math.hypot(sp.getX(i), sp.getZ(i)), k = Math.min(1, Math.max(0, (r - 120) / 280)); c.setXYZ(i, ...t.lerpColors(a, b, k * k * (3 - 2 * k)).toArray()); }
     c.needsUpdate = true;
   };

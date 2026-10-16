@@ -32,12 +32,17 @@ canvas:active { cursor: grabbing; }
 #legend, #card { position: absolute; z-index: 1; padding: 10px 14px; border-radius: 8px; background: rgb(18 11 10 / .94); font-size: 13px; overflow-y: auto; }
 #legend { top: 64px; left: 16px; width: min(360px, calc(100% - 32px)); max-height: calc(100% - 200px); }
 #legend h2, #card h2 { margin: 0 0 6px; font-size: 15px; font-weight: normal; }
-#legend dl, #card dl { margin: 0; }
+#legend dl { margin: 0; }
 #legend dd { margin: 0 0 6px; }
-#card { top: 64px; left: 50%; transform: translateX(-50%); width: min(300px, calc(100% - 32px)); }
-#card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; }
-#card dt { opacity: .7; } #card dd { margin: 0; }
-#card .means { margin: 8px 0 0; opacity: .8; }
+#card { top: 64px; left: 50%; transform: translateX(-50%); width: min(320px, calc(100% - 32px)); padding: 14px 18px 16px; border: 1px solid rgb(236 230 220 / .18); border-top: 2px solid #ddb153; border-radius: 12px; box-shadow: 0 12px 32px rgb(0 0 0 / .45); }
+#card .kicker { margin: 0 0 2px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; opacity: .6; }
+#card h2 { font-size: 22px; line-height: 1.2; }
+#card .desc { margin: 0; font-size: 14px; line-height: 1.45; }
+#card .go { display: inline-flex; align-items: center; min-height: 44px; margin-top: 10px; padding: 0 16px; border: 1px solid rgb(221 177 83 / .6); border-radius: 22px; color: #ddb153; font-size: 14px; text-decoration: none; }
+#card .go:hover { background: rgb(221 177 83 / .14); }
+#card .go:focus-visible { outline: 2px solid #ddb153; outline-offset: 2px; }
+#card .means { margin: 12px 0 0; font-size: 12px; opacity: .6; }
+#card .means:empty { display: none; }
 #cardclose { float: right; width: 44px; height: 44px; margin: -10px -14px 0 0; border: 0; background: none; color: inherit; font-size: 20px; cursor: pointer; }
 #cardclose:focus-visible, #legendbtn:focus-visible { outline: 2px solid #ece6dc; outline-offset: 2px; }
 #cutlabel { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 12px; border: 1px solid rgb(236 230 220 / .5); border-radius: 16px; background: rgb(18 11 10 / .55); font-size: 13px; white-space: nowrap; }
