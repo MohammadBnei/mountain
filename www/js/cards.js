@@ -11,18 +11,21 @@
 // information): a crystal shows its app's name, description and URL (apps.json), any other feature its legend.<kind> line
 // ("Title: meaning"); the raw pick fields stay unread. The model that answered gets focus(name, 1 hover | 2 pinned) and
 // focus(null, 0) when the card goes (summit: the crystal glows). The legend button lists every legend.<kind> line.
+// An app with `try` (ukubi-stt) gets a live transcription test: signed-in visitors and admins (/auth/me) record up to
+// 60 s, stt-capture.js posts the chunks to the relay's /api/transcribe (relay/stt.go), the words appear in the card.
 import * as THREE from 'three';
 import { pickTerrain } from './toys.js';
 import * as cut from './cut.js';
 import S from './i18n.json' with { type: 'json' };
 import APPS from './apps.json' with { type: 'json' };
+import { createDictation, prewarm } from './stt-capture.js';
 
 const lang = navigator.language?.toLowerCase().startsWith('fr') ? 'fr' : 'en', T = S[lang];
-const TAP = 6, HOVER = 150, NEAR = 14; // px: a tap also tries a ring of rays this far out (a crystal is a few px wide)
+const TAP = 6, HOVER = 150, NEAR = 14, REC = 60000; // px: a tap also tries a ring of rays this far out (a crystal is a few px wide)
 
 export function createCards({ world, camera, canvas, models, toys }) {
   const $ = (id) => document.getElementById(id), card = $('card'), q = (s) => card.querySelector(s);
-  const kicker = q('.kicker'), title = q('h2'), desc = q('.desc'), go = q('.go'), means = q('.means');
+  const kicker = q('.kicker'), title = q('h2'), desc = q('.desc'), go = q('.go'), means = q('.means'), tryBox = q('.try'), rec = q('.rec'), said = q('.said');
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), ground = new THREE.Vector3(), pickers = models.filter((m) => m.pick);
   let pinned = false, at = null, timer = 0, lit = null; // lit: the card shown {m, name}
 
@@ -61,12 +64,46 @@ export function createCards({ world, camera, canvas, models, toys }) {
     go.hidden = !app?.url;
     if (app?.url) { go.href = app.url; go.textContent = `${new URL(app.url).host} ↗`; go.setAttribute('aria-label', `${T['card.open']} ${app.name}`); }
     means.textContent = app ? T['legend.summit'] : '';
+    stopRec();
+    tryBox.hidden = !app?.try;
+    rec.textContent = T[signedIn ? 'card.tryStart' : 'card.trySignin'];
+    said.textContent = signedIn ? T['card.tryHint'] : '';
     pinned = pin;
     card.setAttribute('role', pin ? 'dialog' : 'tooltip');
     card.hidden = false;
     focus(c, pin ? 2 : 1);
   }
-  const hide = () => { card.hidden = true; focus(null); };
+  const hide = () => { card.hidden = true; focus(null); stopRec(); };
+
+  // the live transcription test: one dictation at a time, stopped by the button, the card going or REC
+  let signedIn = false, dict = null, stopAt = 0;
+  fetch('/auth/me').then((r) => (r.ok ? r.json() : null)).then((a) => { signedIn = a?.role === 'admin' || a?.role === 'visitor'; }, () => {});
+  function stopRec() {
+    clearTimeout(stopAt);
+    const d = dict;
+    dict = null;
+    rec.textContent = T[signedIn ? 'card.tryStart' : 'card.trySignin'];
+    return d?.stop();
+  }
+  rec.addEventListener('pointerenter', () => { if (signedIn) prewarm().catch(() => {}); }); // no mic yet: warms the worklet
+  rec.addEventListener('click', async () => {
+    if (!signedIn) { location.href = '/auth/login?return=%2F'; return; }
+    if (dict) return stopRec();
+    const stream = crypto.randomUUID(), d = createDictation({
+      send: async (pcm, last) => {
+        const r = await fetch(`/api/transcribe?stream=${stream}&lang=${lang}${last ? '&last=1' : ''}`, { method: 'POST', body: pcm });
+        if (!r.ok) throw new Error(`transcribe ${r.status}`);
+        const { text } = await r.json();
+        if (text && dict === d) said.textContent = `${said.textContent} ${text}`.trim();
+      },
+      onError: () => { if (dict === d) { said.textContent = T['card.tryErr']; stopRec(); } },
+    });
+    dict = d;
+    said.textContent = '';
+    rec.textContent = T['card.tryStop'];
+    stopAt = setTimeout(stopRec, REC);
+    try { await d.start(); } catch { if (dict === d) { said.textContent = T['card.tryMic']; stopRec(); } }
+  });
   const close = () => { pinned = false; hide(); };
 
   canvas.addEventListener('pointerdown', (e) => { at = [e.clientX, e.clientY]; });

@@ -28,12 +28,13 @@ export async function serveStatic(root = ROOT) {
 
 /**
  * Headless Chrome with its own profile and debugging port (parallel runs never collide), one page attached.
+ * args: extra Chrome flags (e.g. the fake microphone).
  * → { s(method, params) (page session), on(fn({method, params})), evalJSON(expr), close() }
  */
-export async function launch({ w = 1280, h = 800, mobile = false, dpr = 1 } = {}) {
+export async function launch({ w = 1280, h = 800, mobile = false, dpr = 1, args = [] } = {}) {
   const profileDir = await mkdtemp(join(tmpdir(), 'mountain-chrome-'));
   const chrome = spawn(CHROME, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profileDir}`, '--no-first-run', '--no-default-browser-check',
-    '--hide-scrollbars', '--mute-audio', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${w},${h}`, 'about:blank'], { stdio: 'ignore' });
+    '--hide-scrollbars', '--mute-audio', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${w},${h}`, ...args, 'about:blank'], { stdio: 'ignore' });
   let ws;
   const close = async () => { try { ws?.close(); } catch {} chrome.kill('SIGKILL'); await rm(profileDir, { recursive: true, force: true }).catch(() => {}); };
   let port;
