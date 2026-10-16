@@ -39,7 +39,6 @@ import { QUALITY, line } from './kit.js';
 import S from './i18n.json' with { type: 'json' };
 
 export const SURFACE = new Set(['toy-clouds', 'cairns', 'footprints', 'toss']);
-const ENROLL = 'https://authentik.bnei.dev/if/flow/mountain-enrollment/'; // 08 item 4: the brand enrollment_flow is unset on purpose
 const T = S[navigator.language?.toLowerCase().startsWith('fr') ? 'fr' : 'en'];
 const RING = 1.2, SEG = 48, SAY = 4000; // aiming ring radius (m) and segments; ms a status message stays
 
@@ -84,7 +83,7 @@ export function surfacePhysics({ max = 40 } = {}) {
 }
 
 export function createToys({ world, camera, canvas, orbit, tale, models, surface }) {
-  const $ = (id) => document.getElementById(id), bar = $('toys'), play = $('play'), status = $('toystatus'), hint = $('toolhint');
+  const $ = (id) => document.getElementById(id), bar = $('toys'), status = $('toystatus'), hint = $('toolhint');
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), hit = new THREE.Vector3(), down = new Set();
   let role = null, tool = null, drag = null, shown = null, hinting = false, waiting = false, msg = '', until = 0, said = '', sec = 0;
 
@@ -170,10 +169,6 @@ export function createToys({ world, camera, canvas, orbit, tale, models, surface
   const erase = toolButton(eraser);
   erase.hidden = true;
   const named = button('toys.named', '✎', () => { world.named = !world.named; named.setAttribute('aria-pressed', String(world.named)); });
-  $('enroll').href = ENROLL;
-  $('enroll').textContent = T['toys.play'];
-  $('signin2').textContent = T['toys.signin'];
-  $('signin2').href = '/auth/login?return=%2F%23live';
   fetch('/auth/me').then((r) => (r.ok ? r.json() : null)).then((a) => {
     role = a?.enabled ? a.role : null;
     erase.hidden = role !== 'admin';
@@ -225,17 +220,16 @@ export function createToys({ world, camera, canvas, orbit, tale, models, surface
 
   return {
     get active() { return usable(); },
-    /** Per frame: the surface layer follows the kill switch; the toolbar or the sign-in links follow section + role; the
+    /** Per frame: the surface layer follows the kill switch; the toolbar follows section + role (signing in is story.js's); the
      *  status line (quota countdown, message expiry) once a second. */
     tick() {
       const on = world.metrics?.visitors !== false, live = tale.section === 'live' && tale.P === 5, now = Date.now();
-      const want = !on || !live || !role ? 'none' : role === 'view' ? 'play' : tools.length || role === 'admin' ? 'tools' : 'none';
+      const want = on && live && role && role !== 'view' && (tools.length || role === 'admin') ? 'tools' : 'none';
       if (surface.visible !== on) surface.visible = on; // main.js redraws the stamp RT on this change
       if (Math.floor(now / 1000) !== sec) { sec = Math.floor(now / 1000); render(now); }
       if (want === shown) return;
       shown = want;
       bar.hidden = want !== 'tools';
-      play.hidden = want !== 'play';
       if (want !== 'tools' && drag) stop('cancel', null);
       sync();
     },

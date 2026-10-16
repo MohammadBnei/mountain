@@ -13,15 +13,14 @@
 <body>
 <canvas id="c"></canvas>
 <p id="stale" hidden></p>
-<button id="legendbtn" type="button" aria-expanded="false" aria-controls="legend">?</button>
-<section id="legend" hidden><h2 id="legendtitle"></h2><dl></dl></section>
 <p id="cutlabel" hidden></p>
+<div id="dock">
+<section id="legend" hidden><h2 id="legendtitle"></h2><dl></dl></section>
 <div id="card" hidden><button id="cardclose" type="button">&#215;</button><p class="kicker"></p><h2></h2><p class="desc"></p><a class="go" target="_blank" rel="noopener" hidden></a><div class="try" hidden><button type="button" class="rec"></button><p class="said" aria-live="polite"></p></div><p class="means"></p></div>
-<section id="panel"><p id="line" aria-live="polite"></p><p id="facts"></p></section>
-<a id="signin" hidden>Sign in</a>
-<nav id="toys" hidden></nav><p id="toolhint" aria-live="polite" hidden></p><p id="toystatus" role="status" hidden></p>
-<p id="play" hidden><a id="enroll" rel="noopener">Sign in to play</a><a id="signin2">I have an account</a></p>
-<nav id="story"><button id="prev" type="button" aria-label="Previous section">&#8592;</button><button id="next" type="button" aria-label="Next section">&#8594;</button></nav>
+<section id="panel"><p id="toolhint" aria-live="polite" hidden></p><p id="line" aria-live="polite"></p><p id="facts"></p></section>
+<p id="toystatus" role="status" hidden></p>
+<div id="bar"><nav id="toys" hidden></nav><nav id="story"><button id="prev" type="button" aria-label="Previous section">&#8592;</button><button id="next" type="button" aria-label="Next section">&#8594;</button></nav><button id="legendbtn" type="button" aria-expanded="false" aria-controls="legend">?</button><details id="signin" hidden><summary>Sign in</summary><p><a id="login">I have an account</a><a id="enroll" rel="noopener">Create an account</a></p></details></div>
+</div>
 <p id="fallback" hidden>This page draws the cluster as a 3D mountain and needs WebGL2.</p>
 </body>
 </html>

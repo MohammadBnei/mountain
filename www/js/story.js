@@ -6,7 +6,8 @@
 //   view(P, tc, aspect, out) → out.{pos, look}: the keyframe camera (pi-lab CatmullRom keys); at P 5 it is exactly
 //                              the live finale sway of layout.js, eased in from P 4
 //   clip(P)                  → a world.clip value (cut.at): closed, shallow, aquifers, bands, deepest, closes
-//   createStory({world, onStep}) → {tick(now) → P, P, section}: the buttons, keys, hash, panel and the cut label
+//   createStory({world, onStep}) → {tick(now) → P, P, section}: the buttons, keys, hash, panel, cut label and the one
+//                              sign-in entry (#signin, in the bottom bar: an account → back to this section, or enrolment)
 import * as THREE from 'three';
 import * as cut from './cut.js';
 import { finale } from './layout.js';
@@ -14,6 +15,7 @@ import S from './i18n.json' with { type: 'json' };
 
 export const sections = ['hero', 'summit', 'water', 'strata', 'bedrock', 'live'];
 const TAU = 2 * Math.PI, MOVE = 1500;
+const ENROLL = 'https://authentik.bnei.dev/if/flow/mountain-enrollment/'; // 08 item 4: the brand enrollment_flow is unset on purpose
 // ponytail: placeholder keys; the tuning is human-gated (M BN). [camera azimuth (camera at (sin, ·, cos)), camera
 // height, radius, look y, cut depth from the world edge (r 100; 100 = through the summit)]
 const keys = [
@@ -63,7 +65,7 @@ function facts(i, w) {
 }
 
 export function createStory({ world, onStep }) {
-  const $ = (id) => document.getElementById(id), prev = $('prev'), next = $('next'), line = $('line'), fact = $('facts'), signin = $('signin'), cutl = $('cutlabel');
+  const $ = (id) => document.getElementById(id), prev = $('prev'), next = $('next'), line = $('line'), fact = $('facts'), signin = $('signin'), login = $('login'), cutl = $('cutlabel');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
   document.documentElement.lang = lang;
   next.setAttribute('aria-label', T['story.next']);
@@ -79,8 +81,9 @@ export function createStory({ world, onStep }) {
     prev.setAttribute('aria-label', T[i === 5 ? 'story.replay' : 'story.prev']);
     next.disabled = i === 5;
     line.textContent = T[`story.${sections[i]}`];
-    signin.href = `/auth/login?return=${encodeURIComponent(`/#${sections[i]}`)}`; // back to this section
+    login.href = `/auth/login?return=${encodeURIComponent(`/#${sections[i]}`)}`; // back to this section
     factsAt = 0;
+    signin.open = false;
     onStep?.();
   }
   const fromHash = () => { const i = sections.indexOf(location.hash.slice(1)); return i < 0 ? 5 : i; };
@@ -92,11 +95,16 @@ export function createStory({ world, onStep }) {
     else if (e.key === 'ArrowRight') go(to + 1);
   });
   addEventListener('hashchange', () => go(fromHash()));
-  signin.textContent = T['auth.signin'];
+  // the open sign-in choices hide the story line: Escape or a press anywhere else closes them
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') signin.open = false; });
+  addEventListener('pointerdown', (e) => { if (!signin.contains(e.target)) signin.open = false; });
+  signin.querySelector('summary').textContent = T['auth.signin'];
+  login.textContent = T['auth.account'];
+  Object.assign($('enroll'), { href: ENROLL, textContent: T['auth.enroll'] });
   cutl.textContent = T['cut.label'];
   go(fromHash(), true);
   P = to;
-  // detail mode (08): the sign-in link only when the relay has OIDC on and this session views (static serving: no link)
+  // detail mode (08): the sign-in entry only when the relay has OIDC on and this session views (static serving: no link)
   fetch('/auth/me').then((r) => (r.ok ? r.json() : null)).then((a) => { signin.hidden = !(a?.enabled && a.role === 'view'); }, () => {});
 
   return {
