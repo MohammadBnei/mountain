@@ -62,7 +62,7 @@ export function createCards({ world, camera, canvas, models, toys }) {
     const [head, ...rest] = (T[`legend.${c.kind}`] || '').split(':'); // "Crystal: one app. …"
     kicker.textContent = T[app ? 'card.app' : 'card.feature'];
     title.textContent = app ? app.name : head.trim();
-    desc.textContent = app ? app[lang] || '' : rest.join(':').trim();
+    desc.textContent = app ? app[lang] || '' : rest.join(':').trim().replace(/^./, (ch) => ch.toUpperCase());
     go.hidden = !app?.url;
     if (app?.url) { go.href = app.url; go.textContent = `${new URL(app.url).host} ↗`; go.setAttribute('aria-label', `${T['card.open']} ${app.name}`); }
     means.textContent = app ? T['legend.summit'] : '';
