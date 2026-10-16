@@ -1,10 +1,10 @@
 // cairns (03-model-cairns): visitors stack stones on flat spots above the snowline, one stone per mark. The tool
 // drops a cannon Box (surfacePhysics: group surface, solver 20, friction 0.8) onto the cell the relay will keep, lets
 // it settle, then sends {pos, quat}; the relay (toy_cairns.go) quantises, re-heights and settles it, and the stone is
-// drawn when its world:mark arrives; tool.ok(hit) = target() finds a cell (the aiming ring). Each stone's level is its rank among the cairn marks on its cell (oldest at the
-// bottom), so a deleted or capped-out stone lets the ones above it drop. world:rain wets the stones it falls on (darker
-// rock ramp) and they dry over WET s. One InstancedMesh of kit rock() + lit('rock'): the newest MAX − 1 stones + the
-// one in hand.
+// drawn when its world:mark arrives; tool.ok(hit) = target() finds a cell (the aiming ring). Each stone's level is its
+// rank among the cairn marks on its cell (oldest at the bottom), so a deleted or capped-out stone lets the ones above
+// it drop. world:rain wets the stones it falls on (darker rock ramp) and they dry over WET s. One InstancedMesh of kit
+// rock() + lit('rock'): the newest MAX − 1 stones + the one in hand.
 import * as CANNON from 'cannon-es';
 import { GRID, CELL } from '../../js/world.js';
 import { surfacePhysics } from '../../js/toys.js';

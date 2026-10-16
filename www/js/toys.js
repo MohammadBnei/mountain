@@ -208,8 +208,7 @@ export function createToys({ world, camera, canvas, orbit, tale, models, surface
     drag = { tool, id: e.pointerId };
     orbit.enabled = false;
     canvas.setPointerCapture(e.pointerId);
-    tool.drag('start', hit, e);
-    aim(hit);
+    tool.drag('start', hit, e); // the ring keeps its hover colour until the first move (toss: no pull yet at the start)
   }, { capture: true });
   canvas.addEventListener('pointermove', (e) => {
     const mine = drag?.id === e.pointerId;
