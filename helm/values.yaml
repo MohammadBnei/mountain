@@ -55,6 +55,8 @@ envFrom:
 # verbatim via envFrom. Without the key the relay boots and drops alerts (fail closed).
 # MOUNTAIN_GITHUB_TOKEN (same project, optional): fine-grained read-only PAT for src_github.
 # Unset = builds / gitops snow / ADR ash / vein refs off, logged once, no stale alarm.
+# STT_TOKEN_MOUNTAIN (same project AND ukubi-stt's own project, optional; relay/stt.go): the relay's
+# ukubi-stt client token for the stt card's live test (signed-in visitors/admins). Unset = the test answers 503.
 # VISITORS_ENABLED (same project, optional; W4 kill switch, 06): "false" hides the surface layer and
 # rejects marks. It must flip WITHOUT a restart, so autoReload is off (the operator would otherwise
 # roll the pod on every change of this Secret): the key is also mounted as a file below, which the

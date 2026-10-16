@@ -41,6 +41,12 @@ canvas:active { cursor: grabbing; }
 #card .go { display: inline-flex; align-items: center; min-height: 44px; margin-top: 10px; padding: 0 16px; border: 1px solid rgb(221 177 83 / .6); border-radius: 22px; color: #ddb153; font-size: 14px; text-decoration: none; }
 #card .go:hover { background: rgb(221 177 83 / .14); }
 #card .go:focus-visible { outline: 2px solid #ddb153; outline-offset: 2px; }
+#card .try { margin-top: 12px; }
+#card .rec { min-height: 44px; padding: 0 16px; border: 1px solid rgb(236 230 220 / .35); border-radius: 22px; background: rgb(236 230 220 / .06); color: inherit; font: 14px Georgia, serif; cursor: pointer; }
+#card .rec:hover { background: rgb(236 230 220 / .14); }
+#card .rec:focus-visible { outline: 2px solid #ece6dc; outline-offset: 2px; }
+#card .said { margin: 8px 0 0; font-size: 14px; line-height: 1.45; font-style: italic; }
+#card .said:empty { display: none; }
 #card .means { margin: 12px 0 0; font-size: 12px; opacity: .6; }
 #card .means:empty { display: none; }
 #cardclose { float: right; width: 44px; height: 44px; margin: -10px -14px 0 0; border: 0; background: none; color: inherit; font-size: 20px; cursor: pointer; }
