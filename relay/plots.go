@@ -64,12 +64,7 @@ func (c *Config) roleOf(app string) string {
 	if a.Building != "" {
 		return a.Building
 	}
-	return map[string]string{"user": "home", "platform": "tower", "service": "warehouse"}[a.Group]
-}
-
-func (c *Config) inner(app string) bool {
-	g := c.Apps[app].Group
-	return g == "service" || g == "platform"
+	return map[string]string{"user": "home", "platform": "house", "service": "warehouse"}[a.Group]
 }
 
 // hostIndex: "h1" → 1 (mark poses carry hosts as numbers: sanitize keeps poses numeric).
@@ -170,7 +165,7 @@ func (pl *placer) place(a *App, o *Out, pods []sample, ready map[string]bool, no
 		for x := range plants[host] {
 			avoid[x] = true
 		}
-		x, ok := town.Slot(app, host, a.Cfg.inner(app), taken, avoid)
+		x, ok := town.Slot(app, host, a.Cfg.roleOf(app), taken, avoid)
 		if m, planted := plants[host][x]; ok && planted { // the island is full: the plant on the chosen hex gives way
 			o.World("mark", goneMark(m))
 			a.store.unmark(m.ID, now)

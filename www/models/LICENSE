@@ -4,4 +4,10 @@ Creative Commons Zero v1.0 Universal (CC0 1.0): https://creativecommons.org/publ
 
 They came through pi-lab (compose/www/models), where they were repainted onto one shared clay atlas
 (clay.png, 8×4 cells, a derivative of the pack's own texture, also CC0). No attribution is required;
-it is given anyway (page panel: "Models: KayKit …").
+it is given anyway (page panel: "3D models: KayKit (CC0), repainted").
+
+R8 added eleven more straight from the pack (KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0, same licence):
+building_tower_B_blue, building_tower_catapult_blue, building_mine_blue, building_blacksmith_blue,
+building_lumbermill_blue, building_windmill_blue, building_watermill_blue, building_grain, crate_long_A,
+fence_stone_straight, tent. www/dev/tools/import-kaykit.mjs converts them the same way (textures stripped, UVs
+kept, quantized); they use the same atlas, so they paint with clay.png unchanged.

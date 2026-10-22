@@ -2,7 +2,10 @@
 // square, then the shortest grass path (hex BFS around the other buildings) to its door, and go in.
 // metrics.apps[app]: rpsB (log2 bucket 0..10) → how many walk at once; errB → how many of them are turned back at the
 // door (they turn red and walk away); spike → twice the crowd. Pure in t: offsets spread them along the loop.
-import { hexXZ, ring } from '../layout.js';
+// R8: from the square they keep to the roads and the streets (buildings.js streets()), and cut across the grass only
+// where no street reaches the door.
+import { hexXZ, islandsOf, ring } from '../layout.js';
+import { streets } from './buildings.js';
 
 const SPEED = 1.1, PAUSE = 0.6; // world units / s, seconds at the door
 const NEIGH = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
@@ -23,9 +26,12 @@ export default async function build({ THREE, kit, world }) {
   world.on('metrics', () => { dirty = true; });
 
   // BFS over walkable local hexes (not a plot, on the island) from the square to a neighbour of the target plot
-  function path(is, plots, to) {
+  function path(is, plots, to, paved) {
     const tiles = new Map();
-    for (let i = 0; i < is.tilesList.length; i++) tiles.set(`${is.tilesList[i][0]},${is.tilesList[i][1]}`, is.tiles[i]);
+    for (let i = 0; i < is.tilesList.length; i++) {
+      const k = `${is.tilesList[i][0]},${is.tilesList[i][1]}`;
+      if (!paved || 'rsb'.includes(is.tiles[i]) || paved.has(k)) tiles.set(k, is.tiles[i]);
+    }
     const blocked = new Set(plots.filter((p) => p.host === is.host).map((p) => `${p.q},${p.r}`));
     const goal = `${to.q},${to.r}`, prev = new Map([['0,0', null]]), queue = [[0, 0]];
     while (queue.length) {
@@ -38,7 +44,7 @@ export default async function build({ THREE, kit, world }) {
         queue.push([q + dq, r + dr]);
       }
     }
-    return [[0, 0]];
+    return paved ? path(is, plots, to) : [[0, 0]]; // no paved way to that door: across the grass
   }
 
   function relayout() {
@@ -54,12 +60,14 @@ export default async function build({ THREE, kit, world }) {
     }
     const total = list.reduce((a, x) => a + x.n, 0), k = total > MAX ? MAX / total : 1;
     let id = 0;
+    const paved = new Map(islandsOf(t).map((is) => [is.host, new Set(streets(is, s.plots.filter((x) => x.host === is.host)).map(([q, r]) => `${q},${r}`))]));
     for (const { p, n, bad } of list) {
       const is = t.islands.find((i) => i.host === p.host);
       is.tilesList ||= [];
-      if (!is.tilesList.length) for (let r = -t.radius; r <= t.radius; r++) for (let q = Math.max(-t.radius, -r - t.radius); q <= Math.min(t.radius, -r + t.radius); q++) is.tilesList.push([q, r]);
+      const R = is.radius;
+      if (!is.tilesList.length) for (let r = -R; r <= R; r++) for (let q = Math.max(-R, -r - R); q <= Math.min(R, -r + R); q++) is.tilesList.push([q, r]);
       const heads = t.bridges.flatMap((b) => (b.a === p.host ? [[b.aq, b.ar]] : b.b === p.host ? [[b.bq, b.br]] : []));
-      const inner = path(is, s.plots, p);
+      const inner = path(is, s.plots, p, paved.get(p.host));
       const count = Math.max(1, Math.round(n * k));
       for (let i = 0; i < count; i++) {
         const [hq, hr] = heads[i % heads.length], len = ring(hq, hr);

@@ -1,14 +1,17 @@
-// Package town is the live town's geometry (R7): three hex islands, one per Proxmox host bucket h1..h3, joined by
+// Package town is the live town's geometry (R7, R8): three hex islands, one per Proxmox host bucket h1..h3, joined by
 // bridges. The relay owns it so Go and the page never disagree about which hex is what: hello.town carries the tile
 // map and the page only renders it. Pure and deterministic, no I/O.
 //
 // Hexes are pointy-top axial (q, r), the pi-lab kit.hex grid: world x = 2(q + r/2), z = √3·r (flat-to-flat 2).
-// Each island is a disc of radius Radius around its centre (local q, r); global = Centre + local.
+// Each island is a disc of its own radius around its centre (local q, r); global = Centre + local.
 //
-//	ring 0          the square (a well), never built on
-//	rings 1..3      building ring: plots, except the road spokes
-//	ring Radius     meadow: visitor plants only
-//	spokes          road from the square to each bridge head (the bridge head is on ring Radius)
+// R8: an island's radius follows its host's power (static hardware, ARCHITECTURE.md): see Radii.
+//
+//	ring 0              the square (a well), never built on
+//	rings 1..r-2        the town: plots, except the road spokes
+//	ring r-1            the outskirts: plots too (Industry first)
+//	ring r              meadow: visitor plants only
+//	spokes              road from the square to each bridge head (the bridge head is on ring r)
 package town
 
 import (
@@ -16,11 +19,21 @@ import (
 	"slices"
 )
 
-// Radius is an island's hex radius (61 hexes).
-const Radius = 4
-
 // Hosts are the island keys, in order.
 var Hosts = []string{"h1", "h2", "h3"}
+
+// Radii: each island's hex radius, from its host's hardware (R8). score = 0.45·threads + 0.40·ram + 0.15·disk, each
+// normalised to the strongest host; radius = 4 + round(3·(s − s_min)/(1 − s_min)). h1 bnei 12 threads/32 GB/2 TB = 1.00
+// → 7; h2 server1 6/32/476 = 0.66 → 5; h3 ex-laptop 4/15/238 = 0.36 → 4. Hard-coded (this package builds at init,
+// before the config); TestRadii recomputes the formula from the specs.
+var Radii = map[string]int{"h1": 7, "h2": 5, "h3": 4}
+
+// MaxRadius bounds a local hex coordinate on any island (sanitize).
+const MaxRadius = 7
+
+// channel is the hex distance between the two facing bridge heads of the widest pair (h1–h2): 2 hexes of open water.
+// The other pairs are smaller islands, so their straits are wider.
+const channel = 3
 
 // Hex is an axial coordinate.
 type Hex struct{ Q, R int }
@@ -37,43 +50,63 @@ func abs(x int) int {
 	return x
 }
 
-// Centre is each island's global axial centre: an equilateral triangle (side 12 hexes, 24 world units) around the
-// origin. h3 sits at the front (+z, the default camera side).
-var Centre = map[string]Hex{"h1": {-4, -4}, "h2": {8, -4}, "h3": {-4, 8}}
-
-// bridges: each pair of islands, with the unit direction from the first to the second (axial).
+// bridges: each pair of islands, with the unit direction from the first to the second (axial). The three directions
+// make the islands an equilateral triangle; h3 sits at the front (+z, the default camera side).
 var bridges = []struct {
 	A, B string
 	Dir  Hex
 }{{"h1", "h2", Hex{1, 0}}, {"h1", "h3", Hex{0, 1}}, {"h2", "h3", Hex{-1, 1}}}
 
+// Side is the triangle's side in hexes: the widest facing pair plus the channel, so no two islands touch.
+var Side = func() int {
+	s := 0
+	for _, b := range bridges {
+		s = max(s, Radii[b.A]+Radii[b.B])
+	}
+	return s + channel
+}()
+
+// Centre is each island's global axial centre: h1 at the back left, h2 = h1 + Side·(1,0), h3 = h1 + Side·(0,1), the
+// triangle roughly centred on the origin.
+var Centre = func() map[string]Hex {
+	o := -Side / 3
+	h1 := Hex{o, o}
+	return map[string]Hex{"h1": h1, "h2": h1.Add(Hex{Side, 0}), "h3": h1.Add(Hex{0, Side})}
+}()
+
 // Tile kinds (one byte each in Island.Tiles).
 const (
 	Square = 's'
-	Grass  = 'g' // building ring, free for a plot or a plant
+	Grass  = 'g' // town and outskirts, free for a plot or a plant
 	Road   = 'r'
 	Bridge = 'b' // a bridge head (on the rim)
 	Meadow = 'm' // the rim: plants only
 )
 
-// Hexes lists an island's local hexes in canonical order: r from −Radius to Radius, then q ascending. Island.Tiles
-// and the page index tiles in this order.
-var Hexes = func() []Hex {
+// HexesOf lists a radius-r island's local hexes in canonical order: r from −radius to radius, then q ascending.
+// Island.Tiles and the page index tiles in this order.
+func HexesOf(radius int) []Hex {
 	var l []Hex
-	for r := -Radius; r <= Radius; r++ {
-		for q := max(-Radius, -r-Radius); q <= min(Radius, -r+Radius); q++ {
+	for r := -radius; r <= radius; r++ {
+		for q := max(-radius, -r-radius); q <= min(radius, -r+radius); q++ {
 			l = append(l, Hex{q, r})
 		}
 	}
 	return l
-}()
+}
+
+var hexesOf = map[string][]Hex{}
+
+// Hexes is host's island hexes in canonical order (shared, read-only); nil for an unknown host.
+func Hexes(host string) []Hex { return hexesOf[host] }
 
 // Island is hello.town.islands[i].
 type Island struct {
 	Host   string `json:"host"`
 	Q      int    `json:"q"` // global axial centre
 	R      int    `json:"r"`
-	Tiles  string `json:"tiles"` // one kind byte per Hexes entry
+	Radius int    `json:"radius"`
+	Tiles  string `json:"tiles"` // one kind byte per Hexes(host) entry
 	tileOf map[Hex]byte
 }
 
@@ -87,9 +120,8 @@ type BridgeLink struct {
 	BR int    `json:"br"`
 }
 
-// Layout is hello.town: static for a build (Radius 4, side 12), sent so the page renders exactly what Go validates.
+// Layout is hello.town: static for a build, sent so the page renders exactly what Go validates.
 type Layout struct {
-	Radius  int          `json:"radius"`
 	Islands []Island     `json:"islands"`
 	Bridges []BridgeLink `json:"bridges"`
 }
@@ -102,12 +134,14 @@ func Get() Layout { return layout }
 func build() Layout {
 	tiles := map[string]map[Hex]byte{}
 	for _, h := range Hosts {
+		r := Radii[h]
+		hexesOf[h] = HexesOf(r)
 		m := map[Hex]byte{}
-		for _, x := range Hexes {
+		for _, x := range hexesOf[h] {
 			switch x.Ring() {
 			case 0:
 				m[x] = Square
-			case Radius:
+			case r:
 				m[x] = Meadow
 			default:
 				m[x] = Grass
@@ -115,12 +149,13 @@ func build() Layout {
 		}
 		tiles[h] = m
 	}
-	l := Layout{Radius: Radius}
+	var l Layout
 	spoke := func(host string, dir Hex) Hex {
-		for i := 1; i < Radius; i++ {
+		r := Radii[host]
+		for i := 1; i < r; i++ {
 			tiles[host][Hex{dir.Q * i, dir.R * i}] = Road
 		}
-		head := Hex{dir.Q * Radius, dir.R * Radius}
+		head := Hex{dir.Q * r, dir.R * r}
 		tiles[host][head] = Bridge
 		return head
 	}
@@ -130,12 +165,12 @@ func build() Layout {
 		l.Bridges = append(l.Bridges, BridgeLink{A: b.A, B: b.B, AQ: ha.Q, AR: ha.R, BQ: hb.Q, BR: hb.R})
 	}
 	for _, h := range Hosts {
-		t := make([]byte, len(Hexes))
-		for i, x := range Hexes {
+		t := make([]byte, len(hexesOf[h]))
+		for i, x := range hexesOf[h] {
 			t[i] = tiles[h][x]
 		}
 		c := Centre[h]
-		l.Islands = append(l.Islands, Island{Host: h, Q: c.Q, R: c.R, Tiles: string(t), tileOf: tiles[h]})
+		l.Islands = append(l.Islands, Island{Host: h, Q: c.Q, R: c.R, Radius: Radii[h], Tiles: string(t), tileOf: tiles[h]})
 	}
 	return l
 }
@@ -156,36 +191,121 @@ func Plantable(host string, x Hex) bool {
 	return t == Grass || t == Meadow
 }
 
-// Kinds: the building kinds a plot can carry (world:plot role). Services use their own role; apps get one of the
-// house kinds by group unless config.yaml names one.
-var Kinds = []string{"home", "house", "market", "tavern", "tower", "church", "castle",
-	"gate", "guardhouse", "craneyard", "watchtower", "warehouse", "vault", "granary", "depot"}
+// Family is a building's class by what it does (R8 typology): it decides where on the island it stands, the ground
+// under it and its label tier.
+type Family string
 
-// Slot picks a plot for key on host's island: the first free grass hex in a deterministic order. Services and
-// platform apps prefer the inner rings (1, 2), user apps the outer ones (2, 3); the start inside each ring set is
-// fnv(key), so the same app lands on the same hex every time. taken: hexes already holding a plot. avoid: hexes to
-// use only when nothing else is free (visitor plants; the caller evicts the plant). ok = false when the island is full.
-func Slot(key, host string, inner bool, taken, avoid map[Hex]bool) (Hex, bool) {
-	order := []int{2, 3, 1}
-	if inner {
-		order = []int{1, 2, 3}
+const (
+	Defense  Family = "defense"  // security and control: walls, towers, keeps
+	Public   Family = "public"   // the shared platform: town hall, market, granary, library, bathhouse
+	Industry Family = "industry" // the infra machines: barracks, forge, mills
+	Shops    Family = "shops"    // user apps with public traffic
+	Houses   Family = "houses"   // small or internal apps
+)
+
+// families maps every building kind (world:plot role) to its family. Kinds are role-like words, never product names.
+var families = map[string]Family{
+	// Defense
+	"gate": Defense, "guardhouse": Defense, "watchtower": Defense, "vault": Defense, "keep": Defense,
+	"castle": Defense, "tower": Defense, // R7 kinds, still valid in replays of older days
+	// Public
+	"craneyard": Public, "depot": Public, "warehouse": Public, "granary": Public, "archive": Public, "cellar": Public,
+	"market": Public, // R7
+	// Industry
+	"hall": Industry, "forge": Industry, "witness": Industry, "mill": Industry,
+	// Shops
+	"church": Shops, "tavern": Shops, "inn": Shops, "alehouse": Shops, "bookshop": Shops, "playhouse": Shops,
+	// Houses
+	"home": Houses, "house": Houses,
+}
+
+// Kinds: every building kind a plot can carry (world:plot role), sorted.
+var Kinds = func() []string {
+	l := make([]string, 0, len(families))
+	for k := range families {
+		l = append(l, k)
 	}
-	var cands []Hex
+	slices.Sort(l)
+	return l
+}()
+
+// FamilyOf is kind's family; Houses for an unknown kind.
+func FamilyOf(kind string) Family {
+	if f, ok := families[kind]; ok {
+		return f
+	}
+	return Houses
+}
+
+// rings is a family's ring preference on a radius-r island (the meadow ring r is never built on).
+func rings(f Family, r int) []int {
+	span := func(a, b int) []int { // a..b inclusive, either direction
+		var l []int
+		if a <= b {
+			for i := a; i <= b; i++ {
+				l = append(l, i)
+			}
+		} else {
+			for i := a; i >= b; i-- {
+				l = append(l, i)
+			}
+		}
+		return l
+	}
+	switch f {
+	case Public: // around the square
+		return span(1, r-1)
+	case Defense: // the town's edge, falling back inwards, then the outskirts
+		return append(span(r-2, 1), r-1)
+	case Industry: // the outskirts first
+		return span(r-1, 1)
+	default: // Shops, Houses: the town, then the outskirts, the square's ring last
+		return append(append(span(2, r-2), r-1), 1)
+	}
+}
+
+// onSpoke: x touches a road hex (a spoke), the street front.
+func onSpoke(host string, x Hex) bool {
+	for _, d := range []Hex{{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}} {
+		if Tile(host, x.Add(d)) == Road {
+			return true
+		}
+	}
+	return false
+}
+
+// Slot picks a plot for key (a building of kind) on host's island: the first free grass hex in a deterministic order.
+// The order follows the kind's family (rings); Shops take the street front (next to a spoke) of each ring first. The
+// start inside each ring is fnv(key), so the same app lands on the same hex every time. taken: hexes already holding a
+// plot. avoid: hexes to use only when nothing else is free (visitor plants; the caller evicts the plant). ok = false
+// when the island is full.
+func Slot(key, host, kind string, taken, avoid map[Hex]bool) (Hex, bool) {
+	r := Radii[host]
+	f := FamilyOf(kind)
 	h := fnv.New32a()
 	h.Write([]byte(key))
 	seed := int(h.Sum32() & 0x7fffffff)
-	for _, ring := range order {
-		var rs []Hex
-		for _, x := range Hexes {
-			if x.Ring() == ring && Tile(host, x) == Grass {
-				rs = append(rs, x)
+	var cands []Hex
+	add := func(rs []Hex) {
+		if len(rs) > 0 {
+			s := seed % len(rs)
+			cands = append(cands, append(slices.Clone(rs[s:]), rs[:s]...)...)
+		}
+	}
+	for _, ring := range rings(f, r) {
+		var front, rest []Hex
+		for _, x := range Hexes(host) {
+			if x.Ring() != ring || Tile(host, x) != Grass {
+				continue
+			}
+			if f == Shops && onSpoke(host, x) {
+				front = append(front, x)
+			} else {
+				rest = append(rest, x)
 			}
 		}
-		if len(rs) == 0 {
-			continue
-		}
-		s := seed % len(rs)
-		cands = append(cands, append(slices.Clone(rs[s:]), rs[:s]...)...)
+		add(front)
+		add(rest)
 	}
 	var fallback *Hex
 	for _, x := range cands {

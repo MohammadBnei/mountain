@@ -203,6 +203,70 @@ func TestDBTownEpoch(t *testing.T) {
 	}
 }
 
+// TestDBR8: the first R8 boot drops the plots of an R7 snapshot (the first poll re-places them by family), a later
+// boot keeps R8's own; the rollback script hides R8's frames, snapshots and plants and puts the R7.1 day row back.
+func TestDBR8(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+	a := storedApp(t, dsn)
+	pl, prom := newPlacer(), &Out{app: a, name: "prom"}
+	pl.place(a, prom, []sample{pod("wird", "wird-1", "k8s-cp-01")}, allReady, time.Now())
+	a.snapshot(time.Now())
+	a.store.Close(5 * time.Second)
+	c, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close(ctx)
+	// as if that town were R7.1's and 005 ran now: its day row is archived, R8 starts after it
+	for _, q := range []string{"UPDATE town_r8 SET started = now()", "INSERT INTO r7_archive_day_snapshot SELECT * FROM snapshots"} {
+		if _, err := c.Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b := storedApp(t, dsn)
+	if len(b.State.Plots) != 0 {
+		t.Fatalf("R8's first boot keeps R7 plots: %+v", b.State.Plots)
+	}
+	pl, prom = newPlacer(), &Out{app: b, name: "prom"}
+	pl.place(b, prom, []sample{pod("wird", "wird-1", "k8s-cp-01")}, allReady, time.Now())
+	withToys(t, b)
+	if _, why := ackOf(t, b.place(visitor("s1", "ana"), "r", "plant", map[string]any{"h": 1.0, "q": 6.0, "r": -1.0}, false, time.Now())); why != "" {
+		t.Fatalf("plant on ring 6: %s", why)
+	}
+	b.snapshot(time.Now())
+	b.store.Close(5 * time.Second)
+	d := storedApp(t, dsn)
+	if len(d.State.Plots) != 1 || len(d.State.Marks) != 1 {
+		t.Fatalf("a later R8 boot: plots %+v marks %d", d.State.Plots, len(d.State.Marks))
+	}
+	d.store.Close(5 * time.Second)
+	down, err := os.ReadFile("rollback/005_r8_down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 2 { // twice: r8_archive_* already exists the second time
+		if _, err := c.Exec(ctx, string(down)); err != nil {
+			t.Fatalf("rollback %d: %v", i, err)
+		}
+		if i == 0 {
+			m, _ := migrations.ReadFile("migrations/005_r8.sql")
+			c.Exec(ctx, string(m))
+			c.Exec(ctx, "UPDATE town_r8 SET started = now() - interval '1 hour'") // R8 again, from before the rows
+			c.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ('005_r8.sql')")
+		}
+	}
+	var deltas, hidden, done int
+	var state string
+	c.QueryRow(ctx, "SELECT count(*) FROM world_deltas").Scan(&deltas)
+	c.QueryRow(ctx, "SELECT count(*) FROM marks WHERE deleted_at IS NOT NULL").Scan(&hidden)
+	c.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE version = '005_r8.sql'").Scan(&done)
+	c.QueryRow(ctx, "SELECT state::text FROM snapshots").Scan(&state)
+	if deltas != 0 || hidden != 1 || done != 0 || !strings.Contains(state, `"app": "wird"`) {
+		t.Fatalf("after the rollback: %d R8 deltas left, %d plants hidden, 005 applied %d, day row %s", deltas, hidden, done, state)
+	}
+}
+
 // TestDBReplay: scrub yesterday and today from stored frames; the start-of-day state folds in the frames after
 // yesterday's last snapshot; a day before the town (town_epoch) is unavailable; the frame validates against
 // www/dev/schema/replay.json.

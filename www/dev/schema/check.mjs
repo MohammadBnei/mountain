@@ -74,7 +74,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const al = { fp: '0123456789abcdef', sev: 'critical', layer: 'k8s', startsAt: 1760450000000 };
     report('hello.state with a firing alert', validate({ ...hello, state: { ...hello.state, alerts: [al] } }));
     report('hello.state with a raw fingerprint', validate({ ...hello, state: { ...hello.state, alerts: [{ ...al, fp: 'a1b2c3d4e5f6a7b8c9d0' }] } }), false);
-    report('hello.town: 3 islands of 61 tiles, 3 bridges', hello.town.islands.length === 3 && hello.town.islands.every((i) => i.tiles.length === 61) && hello.town.bridges.length === 3 ? [] : ['town shape']);
+    report('hello.town: 3 islands of 3r(r+1)+1 tiles, 3 bridges', hello.town.islands.length === 3 && hello.town.islands.every((i) => i.tiles.length === 3 * i.radius * (i.radius + 1) + 1) && hello.town.bridges.length === 3 ? [] : ['town shape']);
     const { valid, invalid } = JSON.parse(readFileSync(join(fx, 'frames.json'), 'utf8'));
     valid.forEach((f, i) => report(`frames.valid[${i}] ${f.t}:${f.kind || ''}`, validate(f)));
     invalid.forEach((f, i) => report(`frames.invalid[${i}] ${f.t}:${f.kind || ''}`, validate(f), false));

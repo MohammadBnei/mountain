@@ -126,9 +126,10 @@ func parseServe(args []string) (Opts, error) {
 
 // App is the relay's live state. Lanes read and mutate it under mu.
 type App struct {
-	Cfg  *Config
-	Opts Opts
-	Hub  *Hub
+	Cfg   *Config
+	Opts  Opts
+	Hub   *Hub
+	Build string // the served www's build id (static: /v/<build>/); hello.build. Empty in dump-hello and tests
 
 	mu      sync.Mutex
 	Metrics Metrics
@@ -164,14 +165,18 @@ type Snapshot struct {
 func (a *App) Hello() []byte {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	b, _ := json.Marshal(map[string]any{
+	h := map[string]any{
 		"t":        "hello",
 		"snapshot": a.snap(a.Day),
 		"deltas":   a.since,
 		"state":    a.State,
 		"metrics":  a.Metrics,
 		"town":     town.Get(), // R7: static geometry, so the page renders exactly what plots.go validates
-	})
+	}
+	if a.Build != "" { // R8: a page from another build reloads once (main.js), so it never reads a hello it predates
+		h["build"] = a.Build
+	}
+	b, _ := json.Marshal(h)
 	return b
 }
 
@@ -296,7 +301,9 @@ func serve(o Opts) error {
 		// fail closed without a crashloop: App.FP returns "", so sanitize drops every alert (no unsalted fp leaves)
 		log.Printf("relay: MOUNTAIN_FP_SALT unset: alerts are dropped until it is set")
 	}
+	www, _ := fs.Sub(mountain.WWW, "www")
 	app = newApp(cfg, o, utcDay(time.Now()))
+	app.Build = buildID(www)
 	app.Metrics.Visitors = visitorsFlag()
 	auth = authFromEnv(o.Dev)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -308,7 +315,6 @@ func serve(o Opts) error {
 		return err
 	}
 
-	www, _ := fs.Sub(mountain.WWW, "www")
 	Public.Handle("GET /ws", app.Hub)
 	Public.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	Public.Handle("GET /", static(www, o.Dev))

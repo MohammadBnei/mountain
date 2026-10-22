@@ -58,6 +58,12 @@ async function start() {
       : 'Can’t reach the town yet, retrying… (too many tabs open on this network?)';
   }, 8000);
   await world.loaded;
+  // R8 build guard: a hello from another build means a deploy happened while this page was open (a reconnect after
+  // the relay restarted). Its town may not be the one this code draws: reload once onto the current index.
+  const mine = import.meta.url.match(/\/v\/([0-9a-f]{12})\//)?.[1];
+  const guard = (h) => { if (mine && h.build && h.build !== mine) failed(new Error(`build ${mine} → ${h.build}`)); };
+  guard({ build: world.build });
+  world.on('hello', guard);
   clearTimeout(slow);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
@@ -91,23 +97,71 @@ async function start() {
   // ---- camera: overview of the three islands, or one island / building up close
   const centres = islands.islands.map((i) => i.centre);
   const mid = centres.reduce((a, c) => [a[0] + c[0] / 3, a[1] + c[1] / 3], [0, 0]);
-  const span = 0.85 * (Math.max(...centres.map((c) => Math.hypot(c[0] - mid[0], c[1] - mid[1]))) + 2 * world.town.radius);
-  let fly = null;
-  function view(target, radius) {
-    // distance so a sphere of `radius` fits the narrower screen axis, seen from the front-high angle
-    const fov = THREE.MathUtils.degToRad(camera.fov), aspect = camera.aspect;
-    const half = Math.min(fov / 2, Math.atan(Math.tan(fov / 2) * aspect));
-    const d = radius / Math.sin(half);
-    const dir = new THREE.Vector3(0.15, 0.85, 0.85).normalize(); // front-high: the islands read as a map, buildings still stand up
-    return { pos: target.clone().addScaledVector(dir, d), target };
+  // R8: the shadow camera fits the town (the islands' rims around mid, plus a margin for the tallest buildings)
+  const townR = Math.max(...islands.islands.map((i) => Math.hypot(i.centre[0] - mid[0], i.centre[1] - mid[1]) + 2 * i.radius + 2));
+  Object.assign(sun.shadow.camera, { left: -townR, right: townR, top: townR, bottom: -townR, far: 60 + 2 * townR });
+  sun.shadow.camera.updateProjectionMatrix();
+  // R8: the dock (panel or card) covers the bottom of the canvas. The projection centre sits in the middle of the free
+  // area above it (setViewOffset), so every view, the fly-ins too, centres above the dock, never behind it; and the
+  // overview is fitted: the distance at which every island's rim (tiles, building tops, the cone's tip) is on screen.
+  const dock = document.getElementById('dock'), Y = new THREE.Vector3(0, 1, 0), V = new THREE.Vector3();
+  const FRONT = new THREE.Vector3(0.15, 0.85, 0.85).normalize(); // front-high: the islands read as a map, buildings still stand up
+  const rim = islands.islands.flatMap((is) => {
+    const [cx, cz] = is.centre, R = 2 * is.radius + 0.4, pts = [new THREE.Vector3(cx, -7.5 * is.radius / 4, cz)];
+    for (let i = 0; i < 12; i++) for (const y of [0, 2.6]) pts.push(new THREE.Vector3(cx + R * Math.cos(i * Math.PI / 6), y, cz + R * Math.sin(i * Math.PI / 6)));
+    return pts;
+  });
+  let free = 1, dockBox = null; // the fraction of the canvas height above the dock; the dock in canvas px (labels)
+  function lens() {
+    const dr = dock.getBoundingClientRect(), cr = canvas.getBoundingClientRect(), top = dr.top - cr.top;
+    dockBox = [dr.left - cr.left, top, dr.right - cr.left, dr.bottom - cr.top];
+    free = Math.min(1, Math.max(0.45, (top - 8) / h));
+    const u = free * h, H = 2 * h - u; // a virtual image H tall whose centre is the free area's: the canvas is its bottom h
+    camera.aspect = w / H;
+    camera.setViewOffset(w, H, 0, h - u, w, h);
+    camera.updateProjectionMatrix();
   }
-  const overview = () => view(new THREE.Vector3(mid[0], 0, mid[1] + 3), span); // a little forward: the dock covers the bottom
+  let fly = null, home = true, moved = false;
+  function view(target, radius) {
+    // distance so a sphere of `radius` fits the free area's narrower axis
+    const t = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), H = 2 * h - free * h;
+    const half = Math.atan(t * Math.min(free * h, w) / H);
+    return { pos: target.clone().addScaledVector(FRONT, radius / Math.sin(half)), target };
+  }
+  // portrait: a steeper look (the depth axis foreshortens least) from whichever side lets the town come closest
+  const STEEP = new THREE.Vector3(0.1, 0.92, 0.5).normalize();
+  const PORTRAIT = [FRONT, STEEP].flatMap((d) => [0, Math.PI / 2, -Math.PI / 2].map((a) => d.clone().applyAxisAngle(Y, a)));
+  function overview() {
+    const target = new THREE.Vector3(mid[0], 0, mid[1]), cam = camera.clone();
+    const fit = (dir) => { // the closest distance at which the whole town is on screen above the dock (binary search)
+      const fits = (d) => {
+        cam.position.copy(target).addScaledVector(dir, d); cam.lookAt(target); cam.updateMatrixWorld();
+        return rim.every((p) => (V.copy(p).project(cam), V.z < 1 && Math.abs(V.x) <= 0.95 && V.y <= 0.95 && V.y >= 1.03 - 2 * free));
+      };
+      let lo = 5, hi = 400;
+      for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (fits(m)) hi = m; else lo = m; }
+      return hi;
+    };
+    let best = { dir: FRONT, d: fit(FRONT) };
+    if (w < 0.8 * h) for (const dir of PORTRAIT) { const d = fit(dir); if (d < best.d - 0.5) best = { dir, d }; }
+    controls.maxDistance = Math.max(120, 1.3 * best.d);
+    return { pos: target.clone().addScaledVector(best.dir, best.d), target, home: true };
+  }
   function flyTo(v, dur = reduced ? 0.01 : 1.2) {
     fly = { from: camera.position.clone(), fromT: controls.target.clone(), to: v.pos, toT: v.target, t0: performance.now(), dur: dur * 1000 };
-    overviewBtn.hidden = v.home === true;
+    home = v.home === true;
+    if (home) moved = false;
+    overviewBtn.hidden = home;
   }
+  controls.addEventListener('start', () => { moved = true; overviewBtn.hidden = false; });
+  // the dock grows or shrinks (a card opens, the panel's text wraps): re-centre; at home and untouched, refit
+  function refit() {
+    lens();
+    if (home && !moved && !fly) { const v = overview(); camera.position.copy(v.pos); controls.target.copy(v.target); }
+  }
+  new ResizeObserver(() => { if (w) refit(); }).observe(dock);
   const overviewBtn = document.getElementById('overview');
-  overviewBtn.onclick = () => { closeCard(); flyTo({ ...overview(), home: true }); };
+  overviewBtn.onclick = () => { closeCard(); flyTo(overview()); };
 
   // ---- picking: a tap (not a drag) picks a building, else an island, else flies home
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -137,11 +191,11 @@ async function start() {
     const hi = r.intersectObjects(islands.pickables, false)[0];
     if (hi) {
       closeCard();
-      const c = islands.islands.find((i) => i.host === hi.object.userData.pick.host).centre;
-      return flyTo(view(new THREE.Vector3(c[0], 0, c[1]), 2 * world.town.radius + 1.5));
+      const is = islands.islands.find((i) => i.host === hi.object.userData.pick.host);
+      return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5));
     }
     closeCard();
-    flyTo({ ...overview(), home: true });
+    flyTo(overview());
   }
 
   // ---- card + panel
@@ -183,7 +237,7 @@ async function start() {
   led.onclick = () => world.state.alerts[0] && goAlert(world.state.alerts[0]);
   function fillPanel() {
     const F = fr(), s = world.state, n = s.plots.filter((p) => !p.ruinAt).length;
-    line.textContent = F ? `Le cluster ukubi en direct : ${n} bâtiments sur 3 îles, une par hôte.` : `The ukubi cluster, live: ${n} buildings on 3 islands, one per host.`;
+    line.textContent = F ? `Le cluster ukubi en direct : ${n} bâtiments sur 3 îles.` : `The ukubi cluster, live: ${n} buildings on 3 islands.`;
     const parts = world.town.islands.map((i) => world.ready[i.host] === false ? word('bad', `${i.host} ${F ? 'hors ligne' : 'down'}`) : word('ok', `${i.host} ${F ? 'en ligne' : 'up'}`));
     const al = s.alerts.length;
     if (al) { // the LED: lit only while something fires; it takes you there (one button, updated in place: taps land)
@@ -199,8 +253,8 @@ async function start() {
     const p = al.app && buildings.plots().find((x) => x.app === al.app);
     if (p) { openCard(p); return flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5)); }
     const host = al.host || buildings.plots().find((x) => x.role === 'watchtower')?.host || 'h1';
-    const c = islands.islands.find((i) => i.host === host).centre;
-    flyTo(view(new THREE.Vector3(c[0], 0, c[1]), 2 * world.town.radius + 1.5));
+    const is = islands.islands.find((i) => i.host === host);
+    flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5));
   }
   world.on('state', fillPanel); world.on('metrics', fillPanel); world.on('hello', fillPanel);
   const toys = createToys({ THREE, kit, world, canvas, camera, lang });
@@ -238,10 +292,10 @@ async function start() {
     if (canvas.clientWidth === w && canvas.clientHeight === h) return;
     w = canvas.clientWidth; h = canvas.clientHeight;
     renderer.setSize(w, h, false);
-    camera.aspect = w / h; camera.updateProjectionMatrix();
+    refit();
   }
   resize();
-  { const v = overview(); camera.position.copy(v.pos); controls.target.copy(v.target); controls.update(); }
+  controls.update();
   sky(pinned ?? clock());
   document.getElementById('loader').hidden = true;
   renderer.setAnimationLoop((nowMs) => {
@@ -263,7 +317,10 @@ async function start() {
     people.update(t);
     toys.tick();
     world.step(dt);
-    labels.update(buildings.plots(), camera, w, h);
+    labels.update(buildings.plots(), camera, w, h, {
+      obstacle: dockBox,
+      chips: w < 600 && home && !moved && !fly ? islands.islands : null, // the phone's overview: one chip per island
+    });
     renderer.render(scene, camera);
   });
 
@@ -275,8 +332,8 @@ async function start() {
       const p = buildings.plots().find((x) => x.app === what);
       if (p) { openCard(p); flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5), 0.01); return; }
       const is = islands.islands.find((i) => i.host === what);
-      if (is) return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * world.town.radius + 1.5), 0.01);
-      closeCard(); flyTo({ ...overview(), home: true }, 0.01);
+      if (is) return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5), 0.01);
+      closeCard(); flyTo(overview(), 0.01);
     },
     info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length }),
   };

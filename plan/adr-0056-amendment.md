@@ -1,3 +1,6 @@
+> **Landed (R8):** infra-bootstrap ADR-0064 (`docs/adr/0064-mountain-town-roles-and-guest-probes.md`, PR #366) folds
+> this draft in, together with R8's machines and guest probes. ADR-0064 is canonical; this draft is kept for history.
+
 # Draft: amendment to infra-bootstrap ADR-0056 (public telemetry)
 
 For M BN to land in infra-bootstrap. It records a decision already made for the town (R7, 2026-10-22): platform

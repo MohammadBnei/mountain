@@ -134,11 +134,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // ---- layout: the page reads the relay's tile map the way Go wrote it (relay/town Hexes order, pi-lab hex grid) ----
 {
   const { hexes, hexXZ, worldToHex, ring, islandsOf } = await import('../js/layout.js');
-  const hx = hexes(hello.town.radius);
+  const hx = hexes(4);
   ok(hx.length === 61 && hx[0].join() === '0,-4' && hx[60].join() === '0,4', 'hexes(): r ascending, then q (relay town.Hexes)');
+  ok(hello.town.islands.map((i) => `${i.host}:${i.radius}:${i.tiles.length}`).join() === 'h1:7:169,h2:5:91,h3:4:61', 'R8: island radii follow the hosts (7/5/4)');
   const isl = islandsOf(hello.town);
   ok(hello.town.bridges.every((b) => isl.find((i) => i.host === b.a).tileAt(b.aq, b.ar).kind === 'b' && isl.find((i) => i.host === b.b).tileAt(b.bq, b.br).kind === 'b'), 'every bridge head is a "b" tile');
-  ok(isl.every((i) => i.tileAt(0, 0).kind === 's' && i.tiles.filter((t) => t.kind === 'g').length === 30), 'each island: the square at its centre, 30 building-ring grass tiles');
+  ok(isl.every((i) => i.tileAt(0, 0).kind === 's' && i.tiles.filter((t) => t.kind === 'g').length === 3 * (i.radius - 1) * i.radius - 2 * (i.radius - 1)), 'each island: the square at its centre, its rings 1..r−1 grass but the 2 spokes');
   ok(hx.every(([q, r]) => worldToHex(...hexXZ(q + 7, r - 3)).join() === `${q + 7},${r - 3}`), 'worldToHex inverts hexXZ (picking a tile)');
   ok(ring(-4, 4) === 4 && ring(2, -1) === 2, 'ring() is the hex distance');
 }

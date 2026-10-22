@@ -8,6 +8,7 @@
   "additionalProperties": false,
   "properties": {
     "t": { "const": "hello" },
+    "build": { "description": "R8: the relay's www build id (the /v/<build>/ prefix). A page whose own build differs reloads once (main.js). Absent from dev dumps.", "type": "string", "pattern": "^[0-9a-f]{12}$" },
     "snapshot": {
       "type": "object", "required": ["day", "epoch"], "additionalProperties": false,
       "properties": {
@@ -63,18 +64,18 @@
     },
     "metrics": { "$ref": "metrics.json" },
     "town": {
-      "description": "R7: the static town geometry (relay/town): islands h1..h3 (global axial centre q, r; tiles = one kind per local hex in canonical order: r ascending, then q; s square, g grass, r road, b bridge head, m meadow) and the bridges between their heads.",
-      "type": "object", "required": ["radius", "islands", "bridges"], "additionalProperties": false,
+      "description": "R7/R8: the static town geometry (relay/town): islands h1..h3, each with its own radius (R8: sized by its host's hardware), global axial centre q, r, and tiles = one kind per local hex in canonical order (r ascending, then q; s square, g grass, r road, b bridge head, m meadow; 3·radius·(radius+1)+1 of them), and the bridges between their heads.",
+      "type": "object", "required": ["islands", "bridges"], "additionalProperties": false,
       "properties": {
-        "radius": { "const": 4 },
         "islands": {
           "type": "array", "minItems": 3, "maxItems": 3,
           "items": {
-            "type": "object", "required": ["host", "q", "r", "tiles"], "additionalProperties": false,
+            "type": "object", "required": ["host", "q", "r", "radius", "tiles"], "additionalProperties": false,
             "properties": {
               "host": { "$ref": "world.json#/$defs/host" },
               "q": { "type": "integer" }, "r": { "type": "integer" },
-              "tiles": { "type": "string", "pattern": "^[sgrbm]{61}$" }
+              "radius": { "type": "integer", "minimum": 2, "maximum": 7 },
+              "tiles": { "type": "string", "pattern": "^[sgrbm]{19,169}$" }
             }
           }
         },

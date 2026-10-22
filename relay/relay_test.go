@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/coder/websocket"
@@ -160,6 +161,25 @@ func TestHelloRegisterAtomic(t *testing.T) {
 		if err != nil || !strings.Contains(string(b), `"t":"`+want+`"`) {
 			t.Fatalf("want %s frame, got %s %v", want, b, err)
 		}
+	}
+}
+
+// TestHelloBuild: hello.build is the served build id (R8 build guard), absent when unset (dump-hello).
+func TestHelloBuild(t *testing.T) {
+	cfg, err := loadConfig(configYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := newApp(cfg, Opts{}, "2026-10-14")
+	var h map[string]any
+	json.Unmarshal(a.Hello(), &h)
+	if _, ok := h["build"]; ok {
+		t.Fatal("no build id: hello.build must be absent")
+	}
+	a.Build = buildID(fstest.MapFS{"index.html": {Data: []byte("<!doctype html>")}})
+	json.Unmarshal(a.Hello(), &h)
+	if h["build"] != a.Build || len(a.Build) != 12 {
+		t.Fatalf("hello.build %v, want %s", h["build"], a.Build)
 	}
 }
 
