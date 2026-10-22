@@ -68,7 +68,7 @@ building (it is an LXC). The owner's answers, one question at a time, are the R8
 |---|---|---|
 | Phase 1 | infra-bootstrap PR #366: ADR-0064 (amends ADR-0056 Decisions 2–3) and seven `guest-<role>` blackbox probes | Open, the owner checks the Patroni and etcd probes by hand, then merges |
 | Deploy A | Islands 7/5/4, families and ring order, eleven more KayKit models, ground caps, streets, bridge-head walls, fitted camera, island chips, label shapes, build guard, migration 005 + rollback | **Live** (PR #23, `aa59d30`, 2026-10-22) |
-| Deploy B | The machines: keeps, halls, guests from `guest-*` probes, debounced state, admin names via `/auth/me` | Built on the branch; **styleboard → owner sign-off**, then PR once #366 has been live about 24 h |
+| Deploy B | The machines: keeps, halls, guests from `guest-*` probes, debounced state, admin names via `/auth/me` | Built; styleboard **signed off by the owner** (2026-10-22). PR once #366 has been live about 24 h |
 | Deploy C | Annexes for minority pods | After B |
 
 **Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads
