@@ -218,6 +218,14 @@
    "startsAt": 1,
    "host": "h2",
    "app": "wird"
+  },
+  {
+   "t": "ev",
+   "id": "01JA00000000000000000000M1",
+   "ts": 1792000000000,
+   "kind": "machine",
+   "app": "witness",
+   "state": "down"
   }
  ],
  "invalid": [
@@ -415,6 +423,14 @@
    "layer": "apps",
    "startsAt": 1,
    "host": "k8s-cp-02"
+  },
+  {
+   "t": "ev",
+   "id": "01JA00000000000000000000M2",
+   "ts": 1792000000000,
+   "kind": "machine",
+   "app": "witness",
+   "state": "flapping"
   }
  ]
 }

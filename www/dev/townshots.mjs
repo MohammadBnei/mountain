@@ -62,6 +62,14 @@ const views = [
   ['card-wird-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('wird')`, 2],
   ['kinds-h1', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${KINDS}; __town.fly('h1')`, 3],
   ['kinds-h1-dusk', 1280, 800, `__town.sunAt('2026-10-22T16:20:00Z'); ${KINDS}; __town.fly('h1')`, 3],
+  // R8 machines: every machine on its island; a guest not answering (the states fixture's witness, held 3 steps);
+  // the admin card with a (placeholder) real name; machine labels up close but not in the overview
+  ['machines-overview', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('home')`, 2],
+  ['machines-h3', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('h3')`, 2, SF],
+  ['machines-h2', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('h2')`, 2],
+  ['machines-h1-night', 1280, 800, `__town.sunAt('2026-10-22T21:00:00Z'); __town.fly('h1')`, 3],
+  ['card-witness-admin', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('witness')`, 2, SF, '&role=admin&names=1'],
+  ['card-keep-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('keep-h2')`, 2],
   // the styleboard: every state at once (injected frames on top of the fixture's live ones)
   ['states-overview', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${STATES}; __town.fly('home')`, 3, SF],
   ['states-h2', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${STATES}; __town.fly('h2')`, 3, SF],

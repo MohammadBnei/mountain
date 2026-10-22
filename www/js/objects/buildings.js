@@ -161,7 +161,8 @@ export default async function build({ THREE, kit, world, apps }) {
       const is = world.town.islands.find((i) => i.host === p.host), [cx, cz] = plotXZ(world.town, p.host, 0, 0);
       const yaw = Math.atan2(cx - x, cz - z);
       const a = apps[p.app] || {}, health = s.health[p.app], down = world.ready[p.host] === false;
-      list.push({ ...p, k, x, z, yaw, is, wire: wireOf(apps, p.app), down, health,
+      // R8: off = a probed machine not answering (its own state, 10 min held): greyed and dark, but not sunk: its island is up
+      list.push({ ...p, k, x, z, yaw, is, wire: wireOf(apps, p.app), down, health, off: s.machines?.[p.app] === 'down',
         building: !!s.builds[p.app] || health === 'Progressing', smoke: health === 'Degraded', faded: health === 'Missing' || health === 'Suspended' });
     }
     plots = list;
@@ -239,11 +240,11 @@ export default async function build({ THREE, kit, world, apps }) {
         M.compose(P.set(p.x, dy - (p.down ? SINK : 0), p.z), Q.setFromEuler(E.set(0, p.yaw + spin, 0)), S.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq)));
         k.body.setMatrixAt(i, M);
         k.roof.setMatrixAt(i, M);
-        k.body.setColorAt(i, p.down ? grey : C.setScalar(p.faded ? 0.72 : 1));
-        k.roof.setColorAt(i, p.down ? grey : C.set(wires[p.wire]).multiplyScalar(p.faded ? 0.6 : 1));
+        k.body.setColorAt(i, p.down || p.off ? grey : C.setScalar(p.faded ? 0.72 : 1));
+        k.roof.setColorAt(i, p.down || p.off ? grey : C.set(wires[p.wire]).multiplyScalar(p.faded ? 0.6 : 1));
         k.apps[i] = p.app;
         const fx = (lx, lz) => [p.x + Math.cos(p.yaw) * lx + Math.sin(p.yaw) * lz, p.z - Math.sin(p.yaw) * lx + Math.cos(p.yaw) * lz];
-        if (nL < N) { const [x, z] = fx(0.5 * k.width, 0.5 * k.width); M.compose(P.set(x, p.down ? -SINK : 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); lampPost.setMatrixAt(nL, M); lamp.setMatrixAt(nL++, M); }
+        if (nL < N && !p.off) { const [x, z] = fx(0.5 * k.width, 0.5 * k.width); M.compose(P.set(x, p.down ? -SINK : 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); lampPost.setMatrixAt(nL, M); lamp.setMatrixAt(nL++, M); }
         if ((failed.get(p.app) ?? -1) > t && nF < N) { const [x, z] = fx(-0.5 * k.width, 0.45 * k.width); M.compose(P.set(x, 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); failPole.setMatrixAt(nF, M); failCloth.setMatrixAt(nF++, M); }
         if (p.building && nS < N) {
           M.compose(P.set(p.x, 0, p.z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(k.width / 1.6, Math.max(0.8, k.height / 1.5), k.width / 1.6));

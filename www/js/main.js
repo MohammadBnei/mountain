@@ -202,6 +202,7 @@ async function start() {
   const card = document.getElementById('card'), fr = () => lang() === 'fr';
   let carded = null;
   function openCard(p) { carded = p.app; card.hidden = false; fillCard(); }
+  world.on('names', () => { if (carded) fillCard(); }); // R8: an admin's names arrive (or leave) with /auth/me
   function closeCard() { carded = null; card.hidden = true; }
   document.getElementById('cardclose').onclick = closeCard;
   // Status always comes with a word (Ukubi): the colour only repeats it.
@@ -213,12 +214,20 @@ async function start() {
     if (!p) return closeCard();
     const a = apps[p.app] || {}, s = world.state, F = fr();
     card.style.setProperty('--wire', `var(--wire-${p.wire})`);
-    card.querySelector('.kicker').textContent = `${a.group === 'service' ? 'service' : (F ? 'application' : 'app')} · ${F ? 'hôte' : 'host'} ${p.host}`;
+    const machine = a.group === 'machine';
+    card.querySelector('.kicker').textContent = `${machine || a.group === 'service' ? a.group : (F ? 'application' : 'app')} · ${F ? 'hôte' : 'host'} ${p.host}`;
     card.querySelector('h2').textContent = a.name || p.app;
+    const real = card.querySelector('.realname'), nm = machine && world.names?.[p.app]; // R8: a platform admin's real name
+    real.hidden = !nm;
+    real.textContent = nm || '';
     card.querySelector('.desc').textContent = a[lang()] || a.en || '';
     const st = [];
-    if (p.ruinAt) st.push(word('bad', F ? 'retirée du cluster' : 'removed from the cluster'));
+    if (p.ruinAt) st.push(word('bad', machine ? (F ? 'disparue de la topologie' : 'gone from the topology') : (F ? 'retirée du cluster' : 'removed from the cluster')));
     else {
+      if (a.probed) { // R8: a guest's state, shown 10 min after it changed; none yet = still checking
+        const m = s.machines?.[p.app];
+        st.push(m === 'up' ? word('ok', F ? 'en ligne' : 'up') : m === 'down' ? word('bad', F ? 'injoignable' : 'not answering') : word('info', F ? 'vérification' : 'checking'));
+      }
       const h = healthText[s.health[p.app]];
       if (h) st.push(word(h[2], h[F ? 1 : 0]));
       if (s.builds[p.app]) st.push(word('warn', F ? 'construction en cours' : 'build in progress'));
@@ -239,6 +248,8 @@ async function start() {
     const F = fr(), s = world.state, n = s.plots.filter((p) => !p.ruinAt).length;
     line.textContent = F ? `Le cluster ukubi en direct : ${n} bâtiments sur 3 îles.` : `The ukubi cluster, live: ${n} buildings on 3 islands.`;
     const parts = world.town.islands.map((i) => world.ready[i.host] === false ? word('bad', `${i.host} ${F ? 'hors ligne' : 'down'}`) : word('ok', `${i.host} ${F ? 'en ligne' : 'up'}`));
+    const off = Object.entries(s.machines || {}).filter(([app, st]) => st === 'down' && s.plots.some((p) => p.app === app && !p.ruinAt)).length;
+    if (off) parts.push(word('bad', F ? `${off} machine${off > 1 ? 's' : ''} injoignable${off > 1 ? 's' : ''}` : `${off} machine${off > 1 ? 's' : ''} not answering`));
     const al = s.alerts.length;
     if (al) { // the LED: lit only while something fires; it takes you there (one button, updated in place: taps land)
       ledText.textContent = F ? `${al} alerte${al > 1 ? 's' : ''}` : `${al} alert${al > 1 ? 's' : ''}`;
@@ -320,6 +331,7 @@ async function start() {
     labels.update(buildings.plots(), camera, w, h, {
       obstacle: dockBox,
       chips: w < 600 && home && !moved && !fly ? islands.islands : null, // the phone's overview: one chip per island
+      machines: !(home && !moved), // R8: machine names only once the camera leaves the overview
     });
     renderer.render(scene, camera);
   });

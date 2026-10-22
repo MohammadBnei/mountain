@@ -2,8 +2,9 @@
 // and readable at phone size, and costs no draw call. Labels never overlap: nearest first, apps before services,
 // a label that would cover one already placed waits until the camera comes closer. A ruin says so.
 // R8: the dot's shape says the class (round: an app, diamond: a platform service, square: a machine), its colour the
-// wire. The dock is an obstacle: no label hides behind the panel. chips (the phone's overview, where forty names would
-// be noise): one label per island instead, "h1 · 12 buildings", and no building names.
+// wire. Apps are placed first, then services, then machines, which are named only once the camera leaves the
+// overview. The dock is an obstacle: no label hides behind the panel. chips (the phone's overview, where forty names
+// would be noise): one label per island instead, "h1 · 12 buildings", and no building names.
 const SINK = 0.5; // islands.js: a down island sinks this far
 
 export function createLabels({ THREE, layer, apps, lang }) {
@@ -11,7 +12,7 @@ export function createLabels({ THREE, layer, apps, lang }) {
   document.fonts?.ready.then(() => { for (const el of els.values()) el._w = 0; }); // widths measured before the web font swap in
   return {
     /** plots: buildings.plots(); obstacle: [x0, y0, x1, y1] in canvas px (the dock); chips: islands → island labels. */
-    update(plots, camera, w, h, { obstacle, chips } = {}) {
+    update(plots, camera, w, h, { obstacle, chips, machines = true } = {}) {
       const seen = new Set(), cand = [];
       if (chips) {
         for (const is of chips) {
@@ -38,15 +39,16 @@ export function createLabels({ THREE, layer, apps, lang }) {
         el.classList.toggle('service', a.group === 'service');
         el.classList.toggle('machine', a.group === 'machine');
         el.style.setProperty('--wire', `var(--wire-${a.wire || 'app'})`);
-        el.classList.toggle('down', !!p.down);
+        el.classList.toggle('down', !!p.down || !!p.off);
         el.classList.toggle('gone', !!p.ruinAt);
+        if (a.group === 'machine' && !machines) { el.hidden = true; continue; } // R8: machines are named up close only
         v.set(p.x, (p.ruinAt ? 0.5 : p.k.height) + 0.35 + (p.down ? -SINK : 0), p.z);
         const d = v.distanceTo(camera.position);
         v.project(camera);
         if (v.z >= 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) { el.hidden = true; continue; }
-        cand.push({ el, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, d, svc: a.group === 'service' });
+        cand.push({ el, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, d, svc: { service: 1, machine: 2 }[a.group] || 0 });
       }
-      cand.sort((a, b) => a.svc - b.svc || a.d - b.d);
+      cand.sort((a, b) => a.svc - b.svc || a.d - b.d); // apps first, then services, then machines
       placed.length = 0;
       if (obstacle) placed.push(obstacle);
       for (const c of cand) {

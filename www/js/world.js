@@ -4,7 +4,7 @@
 //   createWorld() → world
 //   world.town       hello.town: {islands:[{host, q, r, radius, tiles}], bridges:[{a, b, aq, ar, bq, br}]} (R8: a radius per island)
 //   world.build      hello.build: the relay's www build id (R8; main.js reloads a page from another build)
-//   world.state      {alerts, health, replicas, builds, marks, plots}: hello.state, then every frame, BEFORE its emit
+//   world.state      {alerts, health, replicas, builds, marks, plots, machines}: hello.state, then every frame, BEFORE its emit
 //   world.metrics    the last metrics frame;  world.stale  null | unix ms (oldest stale source, or the socket drop)
 //   world.ready      host → bool (ev node.ready, metrics.hosts; absent = not measured yet: draw it up)
 //   world.quorum     [hosts] | null (hello.state.quorum, then ev quorum; null = not known yet)
@@ -20,7 +20,7 @@
 export function createWorld() {
   const subs = new Map(), acks = new Map();
   let refN = 0, resolveReady, play = null; // play: {day, queue, gap, t, timer, done: [resolve, reject]}
-  const emptyState = () => ({ alerts: [], health: {}, replicas: {}, builds: {}, marks: [], plots: [] });
+  const emptyState = () => ({ alerts: [], health: {}, replicas: {}, builds: {}, marks: [], plots: [], machines: {} });
   const w = {
     town: null, build: null, state: emptyState(), metrics: null, stale: null, ready: {}, quorum: null, quota: null, named: false, replay: null,
     loaded: new Promise((r) => (resolveReady = r)),
@@ -94,7 +94,8 @@ export function createWorld() {
         case 'argo.health': s.health[f.app] = f.status; break;
         case 'replicas': s.replicas[f.app] = f.bucket; break;
         case 'build': if (f.state === 'queued' || f.state === 'running') s.builds[f.app] = f.state; else delete s.builds[f.app]; break;
-        case 'app.gone': for (const k of ['health', 'replicas', 'builds']) delete s[k][f.app]; break;
+        case 'app.gone': for (const k of ['health', 'replicas', 'builds', 'machines']) delete s[k][f.app]; break;
+        case 'machine': s.machines[f.app] = f.state; break; // R8: a probed machine's up|down, after 10 min held
         case 'node.ready': w.ready[f.host] = f.ready; break;
         case 'quorum': w.quorum = s.quorum = f.up; break;
       }
@@ -117,6 +118,7 @@ export function createWorld() {
     clearTimeout(play.timer);
     if (f.error) { play = null; w.replay = null; w.resync?.(); return no(new Error(f.error)); }
     w.state = { ...emptyState(), ...f.state };
+    for (const k of Object.keys(emptyState())) if (w.state[k] == null) w.state[k] = emptyState()[k]; // a day from before a field
     w.quorum = f.state?.quorum ?? null;
     play.queue = f.frames.slice(); play.gap = Math.min(0.25, 20 / Math.max(1, f.frames.length));
     w.replay = { day: f.day, left: f.frames.length };

@@ -31,6 +31,11 @@ export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
       if (pin) role = pin;
       signin.hidden = !(a?.enabled && role === 'view' && !a?.signedIn);
       world.named = !!a?.handle;
+      // R8: the machines' real names, for a platform admin only (/auth/me). Kept here, never stored, gone with the session
+      const names = a?.names && typeof a.names === 'object' ? a.names : null;
+      const namePin = location.hostname === '127.0.0.1' && new URLSearchParams(location.search).has('names'); // dev shots: placeholders
+      world.names = namePin ? new Proxy({}, { get: (_, k) => (typeof k === 'string' ? `vm-${k}` : undefined) }) : names;
+      world.emit('names', world.names);
       if (a?.next != null) world.quota = { next: a.next, left: a.left, at: Date.now() };
       known = true;
       if (a?.signedIn && role === 'view' && !noted) { noted = true; say(WHY[L()].norole); } // no loop back to "Sign in"
