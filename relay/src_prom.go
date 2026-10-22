@@ -19,17 +19,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/MohammadBnei/mountain/relay/worldcore"
 )
 
 var promEvery = 15 * time.Second // the fixture hook shortens it to the fixture's step
 
 const (
 	goneAfter  = 10 * time.Minute
-	heatWindow = 5 * time.Minute
 	gib        = 1 << 30
 	staleAfter = 40 // polls (10 min) before a vanished counter series is forgotten
 )
@@ -37,17 +33,6 @@ const (
 // afterPoll runs after each successful poll: the fixture source advances its timeline here, so
 // the fake Prometheus and the poll share one clock and no step goes unseen.
 var afterPoll = func() {}
-
-// liveApps: allowlisted apps seen in argocd_app_info and not gone (/api/topology). Guarded by app.mu.
-// ponytail: package-level like `app`; one relay, one prom source.
-var liveApps = map[string]bool{}
-
-// polled is closed by the first complete poll: /api/topology waits for it so a fresh relay does not
-// answer an empty site list. ponytail: package-level like liveApps.
-var (
-	polled     = make(chan struct{})
-	polledOnce sync.Once
-)
 
 // optionalQ: queries whose failure is no answer (logged once per outage) instead of a failed poll.
 var optionalQ = map[string]bool{"pods": true}
@@ -105,7 +90,6 @@ type promSource struct {
 	ready     map[string]bool      // host -> Ready
 	quorum    string
 	base      map[string]float64 // app -> rps baseline (30 min EWMA); keyed by allowlist, bounded
-	syncs     []time.Time        // syncs in the heat window
 	plots     *placer            // R7 town plots (plots.go)
 	optWarned map[string]bool    // optionalQ already logged as failing
 }
@@ -228,47 +212,6 @@ func (p *promSource) prune(r map[string][]sample) {
 	p.polls++
 }
 
-func siteMap(s worldcore.Site) map[string]any {
-	return map[string]any{"app": s.App, "x": s.X, "z": s.Z, "y": s.Y, "tier": s.Tier, "group": s.Group}
-}
-
-// sites places every live allowlisted app on the current solid. Caller holds a.mu.
-func (a *App) sites() []worldcore.Site {
-	solid := worldcore.Solid(a.World.Base, a.Land)
-	s := []worldcore.Site{}
-	for _, name := range slices.Sorted(maps.Keys(liveApps)) {
-		if c, ok := a.Cfg.Apps[name]; ok {
-			s = append(s, worldcore.PlaceSite(name, c.Group, solid))
-		}
-	}
-	return s
-}
-
-// deposit broadcasts a successful sync's argo.sync ev, rasterises its land at the app's site into
-// h.land, and broadcasts world:deposit (id = the ev id) and the site's new y, all in one hub-lock critical
-// section (lock order h.mu -> a.mu, hub.go): a client connecting meanwhile gets either the old land and
-// all three frames or the new land and none of them, never a deposit without its ev, never one twice.
-func (p *promSource) deposit(o *Out, app string, heat float64) {
-	a := p.a
-	a.Hub.mu.Lock()
-	defer a.Hub.mu.Unlock()
-	id, ev := o.evFrame("argo.sync", map[string]any{"app": app, "ok": true})
-	if ev == nil {
-		return
-	}
-	a.mu.Lock()
-	solid := worldcore.Solid(a.World.Base, a.Land)
-	g := a.Cfg.Apps[app].Group
-	s := worldcore.PlaceSite(app, g, solid)
-	d := worldcore.RasterDeposit(id, s.X, s.Z, heat, solid)
-	d.AddTo(a.Land)
-	s = worldcore.PlaceSite(app, g, worldcore.Solid(a.World.Base, a.Land))
-	a.mu.Unlock()
-	a.Hub.broadcastLocked(ev,
-		o.worldFrame("deposit", map[string]any{"id": id, "x0": d.X0, "z0": d.Z0, "w": d.W, "h": d.H, "cells": worldcore.EncodeI16(d.Cells)}),
-		o.worldFrame("site", siteMap(s)))
-}
-
 var code5xx = regexp.MustCompile(`^5\d\d$`)
 
 // logB buckets x ≥ 0 on a log2 scale: 0 → 0, (0, 1] → 1, (1, 3] → 2, …, capped at max.
@@ -312,14 +255,6 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		dt = 0
 	}
 
-	// heat = f(syncs in flight, builds in flight): syncs in the last 5 min + src_github's builds in flight. Same value
-	// sizes deposits, so a build running when its app syncs makes the bigger eruption (02 builds row: no SHA matching).
-	p.syncs = slices.DeleteFunc(p.syncs, func(t time.Time) bool { return now.Sub(t) > heatWindow })
-	p.a.mu.Lock()
-	builds := p.a.Metrics.BuildsInFlight
-	p.a.mu.Unlock()
-	heatOf := func() float64 { return math.Min(1, float64(len(p.syncs)+builds)/5) }
-
 	// argo.sync: counter diff per (name, phase).
 	type syncEv struct {
 		app string
@@ -333,14 +268,8 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 			}
 		}
 	}
-	for _, s := range syncs {
-		p.syncs = append(p.syncs, now)
-		heat := heatOf()
-		if s.ok {
-			p.deposit(o, s.app, heat)
-		} else {
-			o.Ev("argo.sync", map[string]any{"app": s.app, "ok": false})
-		}
+	for _, s := range syncs { // the town drops the building in on ok, flies a red flag otherwise
+		o.Ev("argo.sync", map[string]any{"app": s.app, "ok": s.ok})
 	}
 
 	// argo.health + app.gone (absent 10 min while the controller is up; an empty answer is no answer).
@@ -550,7 +479,6 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	}
 
 	pools := p.pools(r)
-	heat := heatOf()
 	one := func(n string) float64 {
 		if len(r[n]) > 0 {
 			return r[n][0].V
@@ -558,13 +486,10 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		return 0
 	}
 	rx := norm(one("rx"), 100e6)
-	ang := 2 * math.Pi * float64(now.UTC().Hour()) / 24 // ponytail: wind direction turns with the hour; magnitude is real (net rx)
 	o.Metrics(func(m *Metrics) {
-		liveApps = maps.Clone(p.seen)
-		m.Apps, m.Storage.Pools, m.Heat = apps, pools, heat
+		m.Apps, m.Storage.Pools = apps, pools
 		m.CPU, m.Mem = math.Round(one("cpu")*100)/100, math.Round(one("mem")*100)/100
 		m.Rx, m.River = rx, norm(river, 10e6)
-		m.Wind = XZ{X: math.Round(rx*math.Sin(ang)*100) / 100, Z: math.Round(rx*math.Cos(ang)*100) / 100}
 		for _, h := range []string{"h1", "h2", "h3"} {
 			a := hs[h]
 			hm := Host{Ready: p.ready[h]}
@@ -580,7 +505,6 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	})
 	p.last, p.warm = now, true
 	p.prune(r)
-	polledOnce.Do(func() { close(polled) })
 	return nil
 }
 

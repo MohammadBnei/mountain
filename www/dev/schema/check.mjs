@@ -70,22 +70,22 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const fx = join(DIR, '../fixtures');
     const hello = JSON.parse(readFileSync(join(fx, 'hello.json'), 'utf8'));
     report('fixtures/hello.json', validate(hello));
-    const { decodeI16, createWorld } = await import('../../js/world.js');
-    const base = decodeI16(hello.snapshot.base);
+    const { createWorld } = await import('../../js/world.js');
     const al = { fp: '0123456789abcdef', sev: 'critical', layer: 'k8s', startsAt: 1760450000000 };
     report('hello.state with a firing alert', validate({ ...hello, state: { ...hello.state, alerts: [al] } }));
     report('hello.state with a raw fingerprint', validate({ ...hello, state: { ...hello.state, alerts: [{ ...al, fp: 'a1b2c3d4e5f6a7b8c9d0' }] } }), false);
-    report('hello.base decodes to 128² int16', base.length === 128 * 128 && Math.max(...base) > 3000 ? [] : [`len ${base.length}`]);
+    report('hello.town: 3 islands of 61 tiles, 3 bridges', hello.town.islands.length === 3 && hello.town.islands.every((i) => i.tiles.length === 61) && hello.town.bridges.length === 3 ? [] : ['town shape']);
     const { valid, invalid } = JSON.parse(readFileSync(join(fx, 'frames.json'), 'utf8'));
     valid.forEach((f, i) => report(`frames.valid[${i}] ${f.t}:${f.kind || ''}`, validate(f)));
     invalid.forEach((f, i) => report(`frames.invalid[${i}] ${f.t}:${f.kind || ''}`, validate(f), false));
     const replay = { t: 'replay', day: '2026-10-13', snapshot: hello.snapshot, state: hello.state, frames: valid.filter((f) => f.t === 'ev' || f.t === 'world'), metrics: [hello.metrics] };
     report('replay built from hello + the valid ev/world frames', validate(replay));
     report('replay with a metrics frame among its frames', validate({ ...replay, frames: [hello.metrics] }), false);
-    const dw = createWorld({ dev: true }), seen = []; // dev world throws on an unknown bus type
-    for (const k of ['deposit', 'site', 'mark']) dw.on(`world:${k}`, (p, type) => seen.push(type));
+    const dw = createWorld(), seen = [];
+    dw.applyHello(hello);
+    for (const k of ['plot', 'mark']) dw.on(`world:${k}`, (p, type) => seen.push(type));
     for (const f of valid.filter((f) => f.t === 'world')) { try { dw.applyFrame(f); } catch (e) { seen.push(e.message); } }
-    report('valid world frames → world:<kind> bus', seen.join() === 'world:deposit,world:site,world:mark,world:mark' ? [] : [seen.join()]);
+    report('valid world frames → world:<kind> bus', seen.join() === 'world:mark,world:mark,world:plot,world:plot,world:plot' ? [] : [seen.join()]);
   }
   console.log(bad ? `SCHEMA FAIL (${bad})` : 'SCHEMA PASS');
   process.exit(bad ? 1 : 0);

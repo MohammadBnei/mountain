@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -21,8 +19,7 @@ func testApp(t *testing.T) (*App, *Client) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := newApp(cfg, Opts{Seed: 1}, "2026-10-14")
-	liveApps = map[string]bool{}
+	a := newApp(cfg, Opts{}, "2026-10-14")
 	c := &Client{send: make(chan []byte, 1<<14)}
 	a.Hub.clients[c] = struct{}{}
 	return a, c
@@ -194,27 +191,13 @@ func TestFixtureTimeline(t *testing.T) {
 	if s := evs(steps[1], "argo.sync"); len(s) != 1 {
 		t.Errorf("step 1: only the allowlisted sync may pass, got %v", s)
 	}
-	if sync := one(1, "argo.sync", map[string]any{"app": "wird", "ok": true}); sync != nil {
-		var dep, site bool
-		for _, w := range steps[1] {
-			dep = dep || w["t"] == "world" && w["kind"] == "deposit" && w["id"] == sync["id"]
-			site = site || w["t"] == "world" && w["kind"] == "site" && w["app"] == "wird"
-		}
-		if !dep || !site {
-			t.Errorf("wird sync needs world:deposit (id = ev id) and world:site: deposit=%v site=%v", dep, site)
-		}
-	}
+	one(1, "argo.sync", map[string]any{"app": "wird", "ok": true})
 	one(1, "pod.churn", map[string]any{"app": "editable-blog", "restarts": 2, "oom": true, "crashloop": false})
 	if n := len(evs(steps[1], "pod.churn")); n != 1 {
 		t.Errorf("step 1: only editable-blog churns publicly, got %d", n)
 	}
 	one(2, "pod.churn", map[string]any{"app": "dream-analyst", "restarts": 0, "oom": false, "crashloop": true})
 	one(2, "argo.sync", map[string]any{"app": "vos-monolith", "ok": false})
-	for _, w := range steps[2] {
-		if w["t"] == "world" && w["kind"] == "deposit" {
-			t.Error("a failed sync must not deposit land")
-		}
-	}
 	one(2, "node.ready", map[string]any{"host": "h3", "ready": false})
 	one(2, "replicas", map[string]any{"app": "vos-monolith", "bucket": 5})
 	one(2, "argo.health", map[string]any{"app": "wird", "status": "Degraded"})
@@ -248,25 +231,16 @@ func TestFixtureTimeline(t *testing.T) {
 		t.Errorf("pools: %v", pools)
 	}
 
-	// /api/topology: live apps only (never-seen and gone apps have no site)
-	app = a
-	rec := httptest.NewRecorder()
-	topology(rec, httptest.NewRequest("GET", "/api/topology", nil))
-	var topo struct{ Sites []struct{ App string } }
-	json.Unmarshal(rec.Body.Bytes(), &topo)
-	var names []string
-	for _, x := range topo.Sites {
-		names = append(names, x.App)
-	}
-	if got := strings.Join(names, ","); got != "editable-blog,mountain,vos-monolith,wird" {
-		t.Errorf("topology sites: %s", got)
+	// town plots: wird's pods run on h1 (its hostile pod labels never leave); a private namespace and an unmapped
+	// node get none
+	if ps := plotsOf(steps[0]); len(ps) != 1 || ps[0]["app"] != "wird" || ps[0]["host"] != "h1" {
+		t.Errorf("plots: %v", ps)
 	}
 
-	validate(t, steps) // before the leak scan, which strips cells
+	validate(t, steps)
 
 	// nothing hostile leaves the relay
 	for _, fr := range all {
-		delete(fr, "cells") // base64 can spell anything
 		b, _ := json.Marshal(fr)
 		s := string(b)
 		if ipRE.MatchString(s) || versionRE.MatchString(s) {
@@ -303,68 +277,6 @@ func validate(t *testing.T, steps [][]map[string]any) {
 		t.Fatalf("schema check (%d frames): %v\n%s", n, err, out)
 	}
 	t.Logf("schema: %d frames, SCHEMA PASS", n)
-}
-
-// TestDepositHubLock: the land must not change while the hub lock is held (a client registering
-// then would get the deposit in its hello AND as a frame).
-func TestDepositHubLock(t *testing.T) {
-	a, c := testApp(t)
-	p := newProm(a)
-	a.Hub.mu.Lock()
-	done := make(chan struct{})
-	go func() { p.deposit(&Out{app: a}, "wird", 1); close(done) }()
-	time.Sleep(50 * time.Millisecond)
-	a.mu.Lock()
-	changed := slices.ContainsFunc(a.Land, func(v int16) bool { return v != 0 })
-	a.mu.Unlock()
-	a.Hub.mu.Unlock()
-	<-done
-	if changed {
-		t.Fatal("deposit changed h.land outside the hub lock")
-	}
-	if n := len(drain(c)); n != 4 {
-		t.Fatalf("want ev:argo.sync + world:deposit + world:site + world:glacier, got %d frames", n)
-	}
-}
-
-// TestSyncDepositAtomic: the argo.sync ev leaves in the same hub-lock section as its world:deposit, so a
-// client registering between them cannot get the deposit without its ev. While the deposit waits on
-// the app lock, no frame of the sync may be out yet.
-func TestSyncDepositAtomic(t *testing.T) {
-	a, c := testApp(t)
-	f := &fixture{prom: []map[string][]fixtureSeries{
-		{"sync": {{M: map[string]string{"name": "wird", "phase": "Succeeded"}, V: 1}}},
-		{"sync": {{M: map[string]string{"name": "wird", "phase": "Succeeded"}, V: 2}}},
-	}}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	u, err := serveFixture(ctx, f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a.Opts.PromURL = u
-	p, out := newProm(a), &Out{app: a, name: "prom"}
-	if err := p.poll(ctx, out, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-	drain(c)
-	f.step.Store(1)
-	a.mu.Lock()
-	done := make(chan error)
-	go func() { done <- p.poll(ctx, out, time.Now()) }()
-	time.Sleep(100 * time.Millisecond)
-	early := drain(c)
-	a.mu.Unlock()
-	if err := <-done; err != nil {
-		t.Fatal(err)
-	}
-	if len(early) != 0 {
-		t.Fatalf("frames out before the deposit's critical section: %v", early)
-	}
-	got := drain(c)
-	if len(got) < 3 || got[0]["kind"] != "argo.sync" || got[1]["kind"] != "deposit" || got[0]["id"] != got[1]["id"] {
-		t.Fatalf("want ev then its deposit: %v", got)
-	}
 }
 
 func TestCounterPrune(t *testing.T) {

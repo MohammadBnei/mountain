@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/MohammadBnei/mountain/relay/town"
-	"github.com/MohammadBnei/mountain/relay/worldcore"
 )
 
 var hosts = map[string]bool{"h1": true, "h2": true, "h3": true}
@@ -95,35 +94,28 @@ func (c *Config) hostQuiet(node string) string {
 
 // Field types of the closed spec.
 const (
-	fApp     = iota // allowlisted app key
-	fHost           // h1..h3
-	fHosts          // []string of h1..h3
-	fBool           //
-	fNat            // int >= 0
-	fBucket         // int 0..8
-	fHealth         // ArgoCD health enum
-	fNum            // float64
-	fGroup          // platform|user|service
-	fULID           //
-	fB64            // base64 grid
-	fFP             // 16 hex (salted alert fingerprint hash)
-	fSev            // info|warning|critical
-	fLayer          // bedrock|k8s|apps
-	fPos            // int >= 1
-	fDay            // YYYY-MM-DD
-	fTitle          // string <= 120 matching a config.yaml titles pattern (anchored)
-	fVec3           // []float64 of 3
-	fTongues        // []worldcore.Tongue of allowlisted apps
-	fDays           // []string of YYYY-MM-DD
-	fBuild          // queued|running|success|failure
-	fToy            // a registered toy name (validators.go RegisterToy)
-	fPose           // a toy's sanitised pose: ≤ 16 keys [a-z][A-Za-z0-9]{0,15} -> finite number | bool | ≤ 16 finite numbers (no text)
-	fHandle         // a moderated handle (handle(), validators.go) or "a visitor"
-	fHandles        // ≤ 16 of fHandle
-	fCloud          // drift|rain|gone
-	fPos3           // []float64 of 3, finite (a pose from a toy's simulation)
-	fHexC           // int in [-town.Radius, town.Radius]: a local hex coordinate
-	fKind           // a town building kind (town.Kinds)
+	fApp    = iota // allowlisted app key
+	fHost          // h1..h3
+	fHosts         // []string of h1..h3
+	fBool          //
+	fNat           // int >= 0
+	fBucket        // int 0..8
+	fHealth        // ArgoCD health enum
+	fNum           // float64
+	fGroup         // platform|user|service
+	fULID          //
+	fFP            // 16 hex (salted alert fingerprint hash)
+	fSev           // info|warning|critical
+	fLayer         // bedrock|k8s|apps
+	fPos           // int >= 1
+	fDay           // YYYY-MM-DD
+	fTitle         // string <= 120 matching a config.yaml titles pattern (anchored)
+	fBuild         // queued|running|success|failure
+	fToy           // a registered toy name (validators.go RegisterToy)
+	fPose          // a toy's sanitised pose: ≤ 16 keys [a-z][A-Za-z0-9]{0,15} -> finite number | bool | ≤ 16 finite numbers (no text)
+	fHandle        // a moderated handle (handle(), validators.go) or "a visitor"
+	fHexC          // int in [-town.Radius, town.Radius]: a local hex coordinate
+	fKind          // a town building kind (town.Kinds)
 )
 
 // spec: frame kind -> field -> type. Every field is required, except a "name?" field, which is left out when
@@ -138,26 +130,18 @@ var spec = map[string]map[string]int{
 	"ev:app.gone":      {"app": fApp},
 	"ev:alert.fire":    {"fp": fFP, "sev": fSev, "layer": fLayer, "startsAt": fNat, "host?": fHost, "app?": fApp},
 	"ev:alert.resolve": {"fp": fFP, "sev": fSev, "layer": fLayer, "durS": fNat, "host?": fHost, "app?": fApp},
-	"world:deposit":    {"id": fULID, "x0": fNat, "z0": fNat, "w": fNat, "h": fNat, "cells": fB64},
-	"world:site":       {"app": fApp, "x": fNum, "z": fNum, "y": fNum, "tier": fNat, "group": fGroup},
-	// W3b seam: worldcore's derived frames (derive.go) and the src_github events (W3c) they derive from
+	// the src_github events (W3c)
 	"ev:build":         {"app": fApp, "state": fBuild},
 	"ev:gitops.commit": {"n": fPos},
 	"ev:adr.merge":     {"day": fDay, "title?": fTitle},
-	"world:vein":       {"fp": fFP, "a": fVec3, "b": fVec3, "thick": fNum, "layer": fLayer, "ref": fBool},
-	"world:glacier":    {"mass": fNum, "tongues": fTongues, "ash": fDays},
-	"world:ash":        {"day": fDay, "title?": fTitle},
 	// W4 seam: the visitor layer (validators.go, toy_<name>.go). by = the opt-in handle; gone = removed (cap, admin)
-	"world:mark":  {"id": fULID, "mark": fToy, "pose": fPose, "weight": fNum, "by?": fHandle, "gone?": fBool},
-	"world:cloud": {"id": fULID, "pos": fPos3, "state": fCloud, "credits": fHandles},
-	"world:rain":  {"x": fNum, "z": fNum, "r": fNum},
+	"world:mark": {"id": fULID, "mark": fToy, "pose": fPose, "weight": fNum, "by?": fHandle, "gone?": fBool},
 	// R7: town plots (plots.go). ruinAt = app.gone time (unix ms), gone = the plot is freed
 	"world:plot": {"app": fApp, "host": fHost, "q": fHexC, "r": fHexC, "role": fKind, "ruinAt?": fNat, "gone?": fBool},
 }
 
 var (
 	ulidRE   = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Z]{26}$`)
-	b64RE    = regexp.MustCompile(`^[A-Za-z0-9+/]*=*$`)
 	fpRE     = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	healthOK = map[string]bool{"Healthy": true, "Progressing": true, "Degraded": true, "Suspended": true, "Missing": true, "Unknown": true}
 )
@@ -209,6 +193,9 @@ func (c *Config) valid(typ int, v any) bool {
 		s, ok := v.(string)
 		return ok && healthOK[s]
 	case fNum:
+		if _, ok := v.(int); ok { // a whole number from a decoded fixture (natural): still a number
+			return true
+		}
 		f, ok := v.(float64)
 		return ok && finite(f)
 	case fGroup:
@@ -216,9 +203,6 @@ func (c *Config) valid(typ int, v any) bool {
 	case fULID:
 		s, ok := v.(string)
 		return ok && ulidRE.MatchString(s)
-	case fB64:
-		s, ok := v.(string)
-		return ok && b64RE.MatchString(s)
 	case fFP:
 		s, ok := v.(string)
 		return ok && fpRE.MatchString(s)
@@ -235,21 +219,6 @@ func (c *Config) valid(typ int, v any) bool {
 	case fTitle:
 		s, ok := v.(string)
 		return ok && len(s) <= 120 && slices.ContainsFunc(c.titles, func(re *regexp.Regexp) bool { return re.MatchString(s) })
-	case fVec3:
-		l, ok := v.([]float64)
-		return ok && len(l) == 3
-	case fTongues:
-		l, ok := v.([]worldcore.Tongue)
-		for _, t := range l {
-			ok = ok && c.valid(fApp, t.App)
-		}
-		return ok
-	case fDays:
-		l, ok := v.([]string)
-		for _, s := range l {
-			ok = ok && dayRE.MatchString(s)
-		}
-		return ok
 	case fBuild:
 		return v == "queued" || v == "running" || v == "success" || v == "failure"
 	case fToy:
@@ -270,17 +239,6 @@ func (c *Config) valid(typ int, v any) bool {
 	case fHandle:
 		s, ok := v.(string)
 		return ok && (s == anonHandle || handle(s) == s)
-	case fHandles:
-		l, ok := v.([]string)
-		for _, s := range l {
-			ok = ok && c.valid(fHandle, s)
-		}
-		return ok && len(l) <= 16
-	case fCloud:
-		return v == "drift" || v == "rain" || v == "gone"
-	case fPos3:
-		l, ok := v.([]float64)
-		return ok && len(l) == 3 && finite(l...)
 	case fHexC:
 		n, ok := v.(int)
 		return ok && n >= -town.Radius && n <= town.Radius

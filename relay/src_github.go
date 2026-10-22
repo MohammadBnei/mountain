@@ -30,16 +30,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/MohammadBnei/mountain/relay/worldcore"
 )
 
 const ghInfra = "MohammadBnei/infra-bootstrap" // gitops commits, ADRs and the runbook notes (02)
 
 var (
-	ghEvery     = time.Minute    // runs + commits; the fixture hook shortens both to its step
-	ghScanEvery = 24 * time.Hour // vein ref contents scan
-	buildWindow = 2 * time.Hour  // a run created earlier is not in flight: a stuck queued run never pins the heat
+	ghEvery     = time.Minute   // runs + commits; the fixture hook shortens both to its step
+	buildWindow = 2 * time.Hour // a run created earlier is not in flight: a stuck queued run never pins the heat
 	alertWordRE = regexp.MustCompile(`[A-Z][A-Za-z0-9]{3,}`)
 	errNoAccess = errors.New("not found (no access)")
 )
@@ -47,7 +44,7 @@ var (
 func init() {
 	Register("github", func(a *App) (Source, error) {
 		if a.Opts.GHToken == "" {
-			log.Printf("github: MOUNTAIN_GITHUB_TOKEN unset: builds, gitops snow, ADR ash lines and vein refs are off (no stale alarm)")
+			log.Printf("github: MOUNTAIN_GITHUB_TOKEN unset: builds, gitops commits and ADR merges are off (no stale alarm)")
 			return nil, nil
 		}
 		return newGitHub(a), nil
@@ -62,8 +59,7 @@ type ghSource struct {
 	body       map[string][]byte          // request -> last 200 body (a 304 replays it)
 	builds     map[string]string          // app -> queued|running: in flight (seeded from hello.state.builds)
 	seen       map[string]map[string]bool // commit path -> SHAs of its last answer (nil = no baseline yet)
-	scanAt     time.Time
-	pauseUntil time.Time // rate limit: no request before this
+	pauseUntil time.Time                  // rate limit: no request before this
 	lastErr    string
 	logged     map[string]bool // repos already logged as unreachable
 }
@@ -91,16 +87,11 @@ func (s *ghSource) Run(ctx context.Context, out *Out) error {
 	}
 }
 
-// poll is one cycle: builds, commits, and the contents scan when it is due. Liveness only when all of it answered.
+// poll is one cycle: builds and commits. Liveness only when both answered.
 func (s *ghSource) poll(ctx context.Context, out *Out, now time.Time) {
 	err := s.runs(ctx, out, now)
 	if err == nil {
 		err = s.commits(ctx, out)
-	}
-	if err == nil && now.Sub(s.scanAt) >= ghScanEvery {
-		if err = s.scan(ctx, out); err == nil {
-			s.scanAt = now
-		}
 	}
 	if err != nil {
 		if msg := err.Error(); msg != s.lastErr {
@@ -288,52 +279,6 @@ func (s *ghSource) commits(ctx context.Context, out *Out) error {
 		if n > 0 {
 			out.Ev("gitops.commit", map[string]any{"n": n})
 		}
-	}
-	return nil
-}
-
-// scan reads infra-bootstrap docs/bootstrap-test-notes.md and .claude/skills/** (02 vein ref; no hq data) and keeps
-// the alert-name-like words; a vein whose alert name is among them gets ref (live veins now, new ones at placement).
-func (s *ghSource) scan(ctx context.Context, out *Out) error {
-	b, err := s.get(ctx, "/repos/"+ghInfra+"/git/trees/main", url.Values{"recursive": {"1"}}, false)
-	if err != nil {
-		return err
-	}
-	var tr struct {
-		Tree []struct{ Path, Type string }
-	}
-	if err := json.Unmarshal(b, &tr); err != nil {
-		return fmt.Errorf("tree: %w", err)
-	}
-	refs := map[string]bool{}
-	files := 0
-	for _, e := range tr.Tree {
-		if e.Type != "blob" || (e.Path != "docs/bootstrap-test-notes.md" && !strings.HasPrefix(e.Path, ".claude/skills/")) {
-			continue
-		}
-		if files++; files > 200 { // ponytail: a bound, not a budget; the skills tree is a few dozen files
-			break
-		}
-		b, err := s.get(ctx, "/repos/"+ghInfra+"/contents/"+(&url.URL{Path: e.Path}).EscapedPath(), url.Values{"ref": {"main"}}, true)
-		if err != nil {
-			return err
-		}
-		for _, w := range alertWordRE.FindAllString(string(b), -1) {
-			refs[w] = true
-		}
-	}
-	s.a.mu.Lock()
-	s.a.refs = refs
-	var up []worldcore.Vein
-	for _, v := range s.a.State.Veins {
-		if !v.Ref && refs[s.a.names[v.FP]] {
-			v.Ref = true
-			up = append(up, v)
-		}
-	}
-	s.a.mu.Unlock()
-	for _, v := range up { // outside a.mu: lock order h.mu → a.mu
-		out.World("vein", map[string]any{"fp": v.FP, "a": v.A[:], "b": v.B[:], "thick": v.Thick, "layer": v.Layer, "ref": true})
 	}
 	return nil
 }

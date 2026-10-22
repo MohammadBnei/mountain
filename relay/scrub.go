@@ -1,8 +1,8 @@
 package main
 
 // Scrub (06 WS protocol): a client's {t:"scrub", day:"YYYY-MM-DD"} gets, on its connection only,
-// {t:"replay", day, snapshot, state, frames, metrics}: the land and state at the start of that UTC day
-// (the latest snapshot before it plus the frames between, or the bare base when there is none), the
+// {t:"replay", day, snapshot, state, frames, metrics}: the state at the start of that UTC day (the latest
+// snapshot before it plus the frames between, or an empty town when there is none), the
 // day's ev + world frames in broadcast order, and its metrics_5m frames.
 // A request that cannot be served gets {t:"replay", [day], error} (bad-day | rate | unavailable), so a
 // paused client always hears back. Memory-only answers "unavailable", because the history lives in the DB.
@@ -10,13 +10,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"regexp"
 	"slices"
 	"sync"
 	"time"
-
-	"github.com/MohammadBnei/mountain/relay/worldcore"
 )
 
 const (
@@ -139,18 +138,21 @@ func (a *App) replay(day string, now time.Time) []byte {
 }
 
 func (a *App) buildReplay(ctx context.Context, day string) ([]byte, error) {
-	r, err := a.store.load(ctx, a.World.Seed, &day)
+	if first, err := a.store.started(ctx); err != nil || day < first {
+		return nil, fmt.Errorf("before the town (started %s): %v", first, err) // R7: the mountain's days are archived
+	}
+	r, err := a.store.load(ctx, &day)
 	if err != nil {
 		return nil, err
 	}
-	land, st := make([]int16, worldcore.Grid*worldcore.Grid), newState()
+	st := newState()
 	if r != nil {
-		land, st = r.land, r.state
-		fold(land, &st, r.frames)
+		st = r.state
+		fold(&st, r.frames)
 	}
 	frames, metrics, err := a.store.day(ctx, day)
 	if err != nil {
 		return nil, err
 	}
-	return mustJSON(map[string]any{"t": "replay", "day": day, "snapshot": a.snap(day, land), "state": st, "frames": frames, "metrics": metrics}), nil
+	return mustJSON(map[string]any{"t": "replay", "day": day, "snapshot": a.snap(day), "state": st, "frames": frames, "metrics": metrics}), nil
 }

@@ -1,15 +1,13 @@
 package main
 
-// Lane A plug-ins to the seam hub/mux: the client-IP rule for the per-IP /ws limit and /api/topology.
+// Lane A plug-ins to the seam hub/mux: the client-IP rule for the per-IP /ws limit.
 // Client -> server frames: scrub.go sets onClientMsg (scrub, W2); subscribe and mark arrive later.
 
 import (
-	"encoding/json"
 	"net"
 	"net/http"
 	"net/netip"
 	"strings"
-	"time"
 )
 
 // cloudflare: https://www.cloudflare.com/ips-v4 and ips-v6.
@@ -59,31 +57,4 @@ func cfClientIP(r *http.Request) string {
 
 func init() {
 	clientIP = cfClientIP
-	Public.HandleFunc("GET /api/topology", topology)
-}
-
-// topologyWait caps how long /api/topology waits for the first poll (Prometheus down: answer anyway).
-var topologyWait = 10 * time.Second
-
-// topology: the public site list (allowlisted apps only) and the host buckets. Never cached: the
-// client replaces world.sites with it on every resync, so a stale answer would undo newer world:site.
-func topology(w http.ResponseWriter, r *http.Request) {
-	select {
-	case <-polled:
-	case <-time.After(topologyWait):
-	case <-r.Context().Done():
-		return
-	}
-	app.mu.Lock()
-	s := app.sites()
-	app.mu.Unlock()
-	sites := make([]map[string]any, 0, len(s))
-	for _, x := range s {
-		if m, ok := app.Cfg.clean("world:site", siteMap(x)); ok {
-			sites = append(sites, m)
-		}
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	json.NewEncoder(w).Encode(map[string]any{"sites": sites, "hosts": []string{"h1", "h2", "h3"}})
 }

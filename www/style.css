@@ -1,62 +1,118 @@
-html, body { margin: 0; height: 100%; overflow: hidden; background: #120b0a; color: #ece6dc; font: 15px/1.4 Georgia, serif; }
-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
-canvas:active { cursor: grabbing; }
-#fallback { position: absolute; inset: auto 16px 16px; }
-#stale { position: absolute; top: 68px; left: 16px; margin: 0; font-size: 13px; opacity: .7; letter-spacing: .02em; }
-/* one dock at the bottom (user, mobile first): ONE sheet slot (the story panel, or the card, or the legend: an open card
-   or legend replaces the panel) directly above ONE action bar (toys, story nav, legend, sign-in). ≥ 44 px targets */
-[hidden] { display: none !important; } /* the display: flex rules below must not override the hidden attribute */
-#dock { position: absolute; left: 16px; right: 16px; bottom: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
-#dock > * { pointer-events: auto; width: min(420px, 100%); box-sizing: border-box; }
-#legend:not([hidden]) ~ #panel, #card:not([hidden]) ~ #panel, #dock:has(#signin[open]) #panel { display: none; }
-#panel { pointer-events: none; padding: 8px 12px; border-radius: 8px; background: rgb(18 11 10 / .55); } /* legible on the day sky */
-#panel p { margin: 0; }
-#panel #facts { margin-top: 6px; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; opacity: .75; }
-#toolhint:not([hidden]) + #line { display: none; } /* a selected tool's hint stands in for the story line */
-#toystatus { margin: 0; padding: 6px 12px; border-radius: 8px; background: rgb(18 11 10 / .75); font-size: 13px; } /* outside the slot: a legend never hides it */
-#dock > #bar { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; width: auto; max-width: 100%; }
-#story, #toys { display: flex; gap: 8px; }
-#bar button, #signin summary { min-width: 48px; min-height: 48px; border: 1px solid rgb(236 230 220 / .35); border-radius: 24px; background: rgb(18 11 10 / .78); color: inherit; font: 20px/1 Georgia, serif; cursor: pointer; }
-#bar button:hover:not(:disabled), #signin summary:hover { background: rgb(18 11 10 / .8); }
-#bar button:focus-visible, #signin summary:focus-visible, #signin a:focus-visible { outline: 2px solid #ece6dc; outline-offset: 2px; }
-#bar button:disabled { opacity: .3; cursor: default; }
-#prev { padding: 0 14px; } /* at Live it reads "Story ↺" */
-#legendbtn { font-size: 18px; }
-#legendbtn[aria-expanded="true"], #toys button[aria-pressed="true"], #signin[open] summary { border-color: #ece6dc; background: rgb(18 11 10 / .85); }
-/* sign-in (08): one entry; it opens upward on the two ways in (an account → back to this section, or the enrolment) */
-#signin { position: relative; }
-#signin summary { display: inline-flex; align-items: center; padding: 0 16px; font-size: 14px; list-style: none; }
-#signin summary::-webkit-details-marker { display: none; }
-#signin p { position: absolute; right: 0; bottom: calc(100% + 8px); margin: 0; display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 12px; background: rgb(18 11 10 / .94); white-space: nowrap; }
-#signin a { display: flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 22px; color: inherit; font-size: 14px; text-decoration: none; }
-#signin a:hover { background: rgb(236 230 220 / .1); }
-/* W5: legend and card (the dock slot), cut label; one shared look */
-#legend, #card { padding: 10px 14px; border-radius: 8px; background: rgb(18 11 10 / .94); font-size: 13px; overflow-y: auto; max-height: 55vh; }
-#legend h2, #card h2 { margin: 0 0 6px; font-size: 15px; font-weight: normal; }
-#legend dl { margin: 0; }
-#legend dd { margin: 0 0 6px; }
-#card { padding: 14px 18px 16px; border: 1px solid rgb(236 230 220 / .18); border-top: 2px solid #ddb153; border-radius: 12px; box-shadow: 0 12px 32px rgb(0 0 0 / .45); }
-#card .kicker { margin: 0 0 2px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .75; }
-#card h2 { font-size: 22px; line-height: 1.2; }
-#card .desc { margin: 0; font-size: 14px; line-height: 1.45; }
-#card .go { display: inline-flex; align-items: center; min-height: 44px; margin-top: 10px; padding: 0 16px; border: 1px solid rgb(221 177 83 / .6); border-radius: 22px; color: #ddb153; font-size: 14px; text-decoration: none; }
-#card .go:hover { background: rgb(221 177 83 / .14); }
-#card .go:focus-visible { outline: 2px solid #ddb153; outline-offset: 2px; }
-#card .try { margin-top: 12px; }
-#card .rec { min-height: 44px; padding: 0 16px; border: 1px solid rgb(236 230 220 / .35); border-radius: 22px; background: rgb(236 230 220 / .06); color: inherit; font: 14px Georgia, serif; cursor: pointer; }
-#card .rec:hover { background: rgb(236 230 220 / .14); }
-#card .rec:focus-visible { outline: 2px solid #ece6dc; outline-offset: 2px; }
-#card .said { margin: 8px 0 0; font-size: 14px; line-height: 1.45; font-style: italic; }
-#card .said:empty { display: none; }
-#card .means { margin: 12px 0 0; font-size: 12px; opacity: .6; }
-#card .means:empty { display: none; }
-#cardclose { float: right; width: 44px; height: 44px; margin: -10px -14px 0 0; border: 0; background: none; color: inherit; font-size: 20px; cursor: pointer; }
-#cardclose:focus-visible { outline: 2px solid #ece6dc; outline-offset: 2px; }
-#cutlabel { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 12px; border: 1px solid rgb(236 230 220 / .5); border-radius: 16px; background: rgb(18 11 10 / .55); font-size: 13px; white-space: nowrap; }
-canvas.aiming { cursor: crosshair; }
-#toys button .name { margin-left: 8px; font-size: 13px; }
-#toys button:has(.name) { padding: 0 14px; border-radius: 24px; text-align: left; }
-@media (max-width: 900px) {
-  #toys { flex-basis: 100%; justify-content: center; } /* phones: the tools are the bar's first row, the story nav etc. the second */
-  #toys button .name { display: none; } #toys button:has(.name) { padding: 0; text-align: center; }
+/* The live town (R7) in the Ukubi design system (claude.ai artifact "Ukubi", the organization's default): Office by
+   day (sunlit sand and clay), Underground · Glow at night (warm dark earth, the cables lit: "for 3D views and night
+   work"). Stone, not pebbles: crisp corners, the 45° stone cut on two blocks at most (the card, the primary
+   action), borders before shadows. Status always comes with a word. Mobile first: one dock at the bottom. */
+@font-face { font-family: "Readex Pro"; font-style: normal; font-display: swap; font-weight: 160 700; src: url(fonts/readex-pro-latin-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Readex Pro"; font-style: normal; font-display: swap; font-weight: 160 700; src: url(fonts/readex-pro-latin-ext-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+1EF2-1EFF, U+20A0-20AB, U+20AD-20C0, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-display: swap; font-weight: 100 800; src: url(fonts/jetbrains-mono-latin-wght-normal.woff2) format("woff2-variations"); }
+
+:root {
+  /* Ukubi tokens, Office */
+  --surface: #f5eee2; --surface-raised: #fbf8f2; --surface-sunken: #ebe1d0; --line: #dccdb6; --line-strong: #8f7c63;
+  --ink: #2c2219; --ink-muted: #64533f; --ink-subtle: #7d6a54;
+  --ochre-100: #f0dfbf; --ochre-400: #c4904a; --ochre-700: #84561c; --on-ochre: #2c2219;
+  --palm-400: #6f8a55; --palm-700: #45602f;
+  --led-core: #fff6ea; --led-glow: #e8781f; --on-led: #2c2219;
+  --danger: #a5402a; --warning: #84561c; --success: #2f6b6b; --focus: #2c5f8a;
+  --wire-agent: #a8643c; --wire-data: #3f7f7a; --wire-app: #9a7a28; --wire-network: #4f6a8c; --wire-storage: #7e5670; --wire-compute: #6a7a3a;
+  --shadow-float: 0 1px 2px rgba(60,40,20,.08), 0 8px 24px rgba(60,40,20,.10);
+  --shadow-led: 0 0 0 2px rgba(232,120,31,.35), 0 0 12px rgba(232,120,31,.45);
+  --radius-xs: 2px; --radius-sm: 3px; --radius-md: 4px; --radius-lg: 6px; --chamfer-sm: 6px; --chamfer-md: 12px;
+  --font-sans: "Readex Pro", "Noto Sans Arabic", system-ui, sans-serif; --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
+body.glow {
+  /* Ukubi tokens, Underground · Glow */
+  --surface: #1c1814; --surface-raised: #25201b; --surface-sunken: #14110e; --line: #3a3129; --line-strong: #7a6a57;
+  --ink: #f2e9dc; --ink-muted: #b9a990; --ink-subtle: #988870;
+  --ochre-100: #3a2c18; --ochre-400: #d4a45e; --ochre-700: #e3bb7c; --on-ochre: #1c1814;
+  --palm-400: #8ea874; --palm-700: #a9c48d;
+  --led-core: #ffffff; --led-glow: #ff8a1f; --on-led: #1c1814;
+  --danger: #ec8a72; --warning: #e3bb7c; --success: #7cc4bf; --focus: #8ec0ef;
+  --wire-agent: #ff7a2e; --wire-data: #1ff2dc; --wire-app: #ffd83a; --wire-network: #3fa2ff; --wire-storage: #ff5cc8; --wire-compute: #b4ff3c;
+  --shadow-float: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.45);
+  --shadow-led: 0 0 0 2px rgba(255,138,31,.5), 0 0 24px rgba(255,138,31,.7);
+}
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { background: var(--surface); color: var(--ink); font: 400 15px/24px var(--font-sans); transition: background-color 400ms ease-out; }
+canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+canvas:active { cursor: grabbing; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* building names: chips (radius-xs), borders before shadows */
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.label { position: absolute; left: 0; top: 0; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border: 1px solid var(--line);
+  border-radius: var(--radius-xs); background: var(--surface-raised); color: var(--ink); font: 500 13px/20px var(--font-sans); letter-spacing: .01em;
+  white-space: nowrap; will-change: transform; }
+.label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--wire); } /* the system's wire colour */
+.label.service { color: var(--ink-muted); }
+.label.down { color: var(--ink-subtle); }
+.label.gone { color: var(--ink-subtle); text-decoration: line-through; }
+
+#stale { position: absolute; top: 16px; left: 16px; margin: 0; padding: 4px 12px; border: 1px solid var(--line); border-radius: var(--radius-md);
+  background: var(--surface-raised); color: var(--warning); font: 500 13px/20px var(--font-sans); }
+#loader { position: absolute; top: 50%; left: 0; right: 0; margin: 0; text-align: center; color: var(--ink-muted); }
+#fallback { position: absolute; inset: auto 24px 24px; }
+
+/* the dock: the card or the panel, then the bar */
+#dock { position: absolute; left: 24px; right: 24px; bottom: 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+@media (min-width: 900px) { #dock { left: 32px; right: 32px; bottom: 32px; } }
+#dock > * { pointer-events: auto; width: min(440px, 100%); box-sizing: border-box; }
+#card:not([hidden]) ~ #panel { display: none; }
+#panel { padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); }
+#panel p { margin: 0; }
+#line { font: 400 15px/24px var(--font-sans); }
+#facts { margin-top: 4px !important; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--ink-muted); font: 500 13px/16px var(--font-mono); }
+#facts:empty { display: none; }
+#facts .ok { color: var(--success); } #facts .bad { color: var(--danger); }
+#facts button { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 8px; border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); background: none; color: var(--ink); font: 500 13px/16px var(--font-sans); cursor: pointer; }
+/* the LED: one per screen, lit only while there is something to look at (firing alerts); it pulses 2.4 s */
+.led { width: 10px; height: 10px; border-radius: 50%; background: var(--led-glow); animation: led 2.4s ease-in-out infinite; }
+@keyframes led { 0%, 100% { background: var(--led-core); box-shadow: none; } 50% { background: var(--led-glow); box-shadow: var(--shadow-led); } }
+@media (prefers-reduced-motion: reduce) { .led { animation: none; background: var(--led-glow); } }
+
+#dock > #bar { display: flex; gap: 8px; justify-content: center; width: auto; }
+#bar button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 48px; min-height: 48px; padding: 0 12px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--ink-muted);
+  font: 500 13px/16px var(--font-sans); cursor: pointer; transition: background-color 160ms ease-out; }
+#bar button:hover { background: var(--surface-sunken); }
+#bar svg, #card svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; }
+
+/* the card: a hero panel with the stone cut (chamfer-md), it floats over the town */
+#card { position: relative; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised);
+  box-shadow: var(--shadow-float); max-height: 55vh; overflow-y: auto;
+  clip-path: polygon(0 0, calc(100% - var(--chamfer-md)) 0, 100% var(--chamfer-md), 100% 100%, 0 100%); }
+#card .kicker { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: var(--ink-muted); font: 600 11px/16px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; }
+#card .kicker::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--wire); }
+#card h2 { margin: 0 0 8px; font: 600 22px/28px var(--font-sans); }
+#card .desc { margin: 0; font: 400 15px/24px var(--font-sans); }
+#card .state { margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font: 500 13px/16px var(--font-sans); }
+#card .state:empty { display: none; }
+#card .state span { display: inline-flex; align-items: center; gap: 4px; }
+#card .state .ok { color: var(--success); } #card .state .warn { color: var(--warning); } #card .state .bad { color: var(--danger); } #card .state .info { color: var(--ink-muted); }
+#card .state .ok::before, #card .state .warn::before, #card .state .bad::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+/* the primary action: ochre, stone cut (chamfer-sm) */
+#card .go { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 16px; padding: 0 16px; border-radius: var(--radius-sm);
+  background: var(--ochre-400); color: var(--on-ochre); font: 500 13px/16px var(--font-sans); letter-spacing: .01em; text-decoration: none;
+  clip-path: polygon(0 0, calc(100% - var(--chamfer-sm)) 0, 100% var(--chamfer-sm), 100% 100%, 0 100%); transition: filter 160ms ease-out; }
+#card .go:hover { filter: brightness(1.06); }
+#cardclose { position: absolute; top: 8px; right: 16px; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-muted); cursor: pointer; }
+
+/* the toolbar: plant / remove (pressed = active mode), sign-in opening upward */
+#bar button[aria-pressed="true"] { border-color: var(--ochre-700); background: var(--ochre-100); color: var(--ochre-700); }
+#bar button:disabled { opacity: .5; cursor: default; }
+#signin { position: relative; }
+#signin summary { display: inline-flex; align-items: center; min-height: 48px; padding: 0 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--surface-raised); color: var(--ink); font: 500 13px/16px var(--font-sans); list-style: none; cursor: pointer; }
+#signin summary::-webkit-details-marker { display: none; }
+#signin p { position: absolute; right: 0; bottom: calc(100% + 8px); margin: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px;
+  border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-float); white-space: nowrap; }
+#signin a { display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: var(--radius-sm); color: var(--ochre-700); font: 500 13px/16px var(--font-sans); text-decoration: none; }
+#signin a:hover { background: var(--ochre-100); }
+#toystatus { margin: 0; padding: 4px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); font: 500 13px/20px var(--font-sans); text-align: center; }
+canvas.aiming { cursor: crosshair; }
+@media (max-width: 600px) { #bar button span { display: none; } #bar button[aria-pressed="true"] span, #plant span { display: inline; } }

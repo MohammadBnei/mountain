@@ -65,7 +65,7 @@ try {
       if (method === 'Network.loadingFailed' && !params.canceled) bad.push(`${name}: request failed ${params.errorText}`);
     });
     await page.s('Runtime.enable'); await page.s('Network.enable'); await page.s('Page.enable');
-    await page.s('Page.navigate', { url: `${stat.origin}/dev/town/index.html?ws=ws://127.0.0.1:${port}/ws${qs}` });
+    await page.s('Page.navigate', { url: `${stat.origin}/index.html?ws=ws://127.0.0.1:${port}/ws${qs}` });
     const ready = await waitFor(page, `globalThis.__town?.ready && (__town.error || __town.info().plots > 0) && true`, 60000);
     if (!ready) { bad.push(`${name}: never ready`); await page.close(); continue; }
     const err = await page.evalJSON('__town.error || null');

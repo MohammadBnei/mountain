@@ -1,177 +1,113 @@
 {
- "_": "Events played through the real relay by `relay dump-hello --events` (sanitize + State.apply + worldcore derive) to build fixtures/hello.json; never hand-write the hello. Veins: a critical k8s (15 min, then re-fired 40 min: same seam, thicker), a warning bedrock (1 h) and a warning apps (2 h) become veins; an info (1 h) and a 5 min warning do not. Glacier: tongues from successful syncs (wird 3, mountain 2, editable-blog 1; vos-monolith-dev calved by app.gone; a failed sync adds nothing), 25 commits of snow. Ash: three ADR days; the title is not on config.yaml's title allowlist, so the lines are date only. Health, replicas, a build in flight (wird running; mountain queued then success). No alert is left firing (cauldron's test assumes none).",
  "events": [
   {
-   "kind": "alert.fire",
-   "fp": "0123456789abcdef",
-   "sev": "critical",
-   "layer": "k8s",
-   "startsAt": 1760400000000
-  },
-  {
-   "kind": "alert.resolve",
-   "fp": "0123456789abcdef",
-   "sev": "critical",
-   "layer": "k8s",
-   "durS": 900
-  },
-  {
-   "kind": "alert.fire",
-   "fp": "1111222233334444",
-   "sev": "warning",
-   "layer": "bedrock",
-   "startsAt": 1760400000000
-  },
-  {
-   "kind": "alert.resolve",
-   "fp": "1111222233334444",
-   "sev": "warning",
-   "layer": "bedrock",
-   "durS": 3600
-  },
-  {
-   "kind": "alert.fire",
-   "fp": "aaaabbbbccccdddd",
-   "sev": "warning",
-   "layer": "apps",
-   "startsAt": 1760400000000
-  },
-  {
-   "kind": "alert.resolve",
-   "fp": "aaaabbbbccccdddd",
-   "sev": "warning",
-   "layer": "apps",
-   "durS": 7200
-  },
-  {
-   "kind": "alert.fire",
-   "fp": "5555666677778888",
-   "sev": "info",
-   "layer": "apps",
-   "startsAt": 1760400000000
-  },
-  {
-   "kind": "alert.resolve",
-   "fp": "5555666677778888",
-   "sev": "info",
-   "layer": "apps",
-   "durS": 3600
-  },
-  {
-   "kind": "alert.fire",
-   "fp": "9999aaaabbbbcccc",
-   "sev": "warning",
-   "layer": "k8s",
-   "startsAt": 1760400000000
-  },
-  {
-   "kind": "alert.resolve",
-   "fp": "9999aaaabbbbcccc",
-   "sev": "warning",
-   "layer": "k8s",
-   "durS": 300
-  },
-  {
-   "kind": "alert.fire",
-   "fp": "0123456789abcdef",
-   "sev": "critical",
-   "layer": "k8s",
-   "startsAt": 1760400000000
-  },
-  {
-   "kind": "alert.resolve",
-   "fp": "0123456789abcdef",
-   "sev": "critical",
-   "layer": "k8s",
-   "durS": 2400
-  },
-  {
-   "kind": "argo.sync",
+   "t": "world",
+   "kind": "plot",
    "app": "wird",
-   "ok": true
+   "host": "h1",
+   "q": -2,
+   "r": 1,
+   "role": "house"
   },
   {
-   "kind": "argo.sync",
-   "app": "wird",
-   "ok": true
-  },
-  {
-   "kind": "argo.sync",
-   "app": "wird",
-   "ok": true
-  },
-  {
-   "kind": "argo.sync",
+   "t": "world",
+   "kind": "plot",
    "app": "mountain",
-   "ok": true
+   "host": "h1",
+   "q": 1,
+   "r": -1,
+   "role": "castle"
   },
   {
-   "kind": "argo.sync",
-   "app": "mountain",
-   "ok": true
+   "t": "world",
+   "kind": "plot",
+   "app": "gate",
+   "host": "h2",
+   "q": 0,
+   "r": -1,
+   "role": "gate"
   },
   {
-   "kind": "argo.sync",
-   "app": "editable-blog",
-   "ok": true
+   "t": "world",
+   "kind": "plot",
+   "app": "vos-monolith",
+   "host": "h2",
+   "q": 2,
+   "r": -1,
+   "role": "market"
   },
   {
-   "kind": "argo.sync",
-   "app": "vos-monolith-dev",
-   "ok": true
-  },
-  {
-   "kind": "argo.sync",
+   "t": "world",
+   "kind": "plot",
    "app": "dream-analyst",
-   "ok": false
+   "host": "h2",
+   "q": 1,
+   "r": 1,
+   "role": "tavern"
   },
   {
-   "kind": "app.gone",
-   "app": "vos-monolith-dev"
+   "t": "world",
+   "kind": "plot",
+   "app": "wedding-2026",
+   "host": "h3",
+   "q": -1,
+   "r": 2,
+   "role": "church"
   },
   {
-   "kind": "gitops.commit",
-   "n": 25
+   "t": "world",
+   "kind": "plot",
+   "app": "editable-blog",
+   "host": "h3",
+   "q": 2,
+   "r": 0,
+   "role": "house",
+   "ruinAt": 1792000000000
   },
   {
-   "kind": "adr.merge",
-   "day": "2026-09-01",
-   "title": "ADR-0056 public telemetry, PromQL only"
+   "t": "world",
+   "kind": "mark",
+   "id": "01M5HPCD7G3VF3J95X39Y7BVKA",
+   "mark": "plant",
+   "pose": {
+    "h": 1,
+    "q": -3,
+    "r": 4,
+    "item": 0
+   },
+   "weight": 1,
+   "by": "ana_k"
   },
   {
-   "kind": "adr.merge",
-   "day": "2026-10-01",
-   "title": "ADR-0056 public telemetry, PromQL only"
+   "kind": "alert.fire",
+   "fp": "0123456789abcdef",
+   "sev": "critical",
+   "layer": "k8s",
+   "startsAt": 1760400000000,
+   "host": "h2"
   },
   {
-   "kind": "adr.merge",
-   "day": "2026-10-14",
-   "title": "ADR-0056 public telemetry, PromQL only"
+   "kind": "alert.fire",
+   "fp": "fedcba9876543210",
+   "sev": "warning",
+   "layer": "apps",
+   "startsAt": 1760400100000,
+   "app": "wird"
   },
   {
    "kind": "argo.health",
    "app": "wird",
-   "status": "Degraded"
-  },
-  {
-   "kind": "argo.health",
-   "app": "mountain",
    "status": "Healthy"
   },
   {
+   "kind": "argo.health",
+   "app": "dream-analyst",
+   "status": "Degraded"
+  },
+  {
    "kind": "replicas",
-   "app": "wird",
+   "app": "vos-monolith",
    "bucket": 2
-  },
-  {
-   "kind": "replicas",
-   "app": "mountain",
-   "bucket": 1
-  },
-  {
-   "kind": "replicas",
-   "app": "editable-blog",
-   "bucket": 3
   },
   {
    "kind": "build",
@@ -179,14 +115,9 @@
    "state": "running"
   },
   {
-   "kind": "build",
-   "app": "mountain",
-   "state": "queued"
-  },
-  {
-   "kind": "build",
-   "app": "mountain",
-   "state": "success"
+   "kind": "argo.sync",
+   "app": "wird",
+   "ok": true
   }
  ]
 }

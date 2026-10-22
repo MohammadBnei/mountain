@@ -1,7 +1,0 @@
-{
-  "_": "cauldron behaviour fixture: alerts test.js fires (startsAt = now − age, set by the test): a critical already 30 min old minus 10 s, a warning, a critical on another fp, and a Watchdog-style unknown severity.",
-  "old": { "fp": "00000000000000b0", "sev": "critical", "layer": "proxmox" },
-  "warning": { "fp": "00000000000000a1", "sev": "warning", "layer": "k8s" },
-  "critical": { "fp": "00000000000000c1", "sev": "critical", "layer": "k8s" },
-  "watchdog": { "fp": "00000000000000d0", "sev": "none", "layer": "k8s" }
-}

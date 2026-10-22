@@ -47,27 +47,20 @@ func runGitHub(t *testing.T, a *App, c *Client, f *fixture) (*ghSource, [][]map[
 			t.Fatalf("step %d: %s", i, s.lastErr)
 		}
 		steps = append(steps, drain(c))
-		now = now.Add(ghScanEvery) // every poll also rescans
+		now = now.Add(ghEvery)
 	}
 	return s, steps, &notModified
 }
 
 // TestGitHubTimeline replays the "gh" part of www/dev/fixtures/relay-hostile.json: builds by repo + time window,
 // gitops commits counted after a baseline, an ADR merge with its day only (title off the allowlist), the token expiry
-// metric, the vein ref scan; nothing hostile (SHAs, emails, private repos, branch names, IPs) leaves; frames validate.
+// metric; nothing hostile (SHAs, emails, private repos, branch names, IPs) leaves; frames validate.
 func TestGitHubTimeline(t *testing.T) {
 	a, c := testApp(t)
 	f, err := loadFixture("../www/dev/fixtures/relay-hostile.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// a resolved warning (20 min) whose alert name is in the runbook notes: the first scan flags its vein
-	a.names["00000000000000a1"] = "KubePodCrashLooping"
-	(&Out{app: a, name: "alerts"}).Resolve(Alert{FP: "00000000000000a1", Sev: "warning", Layer: "k8s"}, 1200)
-	if len(a.State.Veins) != 1 || a.State.Veins[0].Ref {
-		t.Fatalf("vein before the scan: %+v", a.State.Veins)
-	}
-	drain(c)
 	_, steps, nm := runGitHub(t, a, c, f)
 
 	got := func(step int) (out []string) {
@@ -79,8 +72,6 @@ func TestGitHubTimeline(t *testing.T) {
 				out = append(out, fmt.Sprintf("gitops %v", x["n"]))
 			case x["t"] == "ev" && x["kind"] == "adr.merge":
 				out = append(out, fmt.Sprintf("adr %v title=%v", x["day"], x["title"]))
-			case x["t"] == "world" && x["kind"] == "vein":
-				out = append(out, fmt.Sprintf("vein ref=%v", x["ref"]))
 			case x["t"] == "metrics":
 				out = append(out, fmt.Sprintf("inflight %v", x["buildsInFlight"]))
 			}
@@ -88,7 +79,7 @@ func TestGitHubTimeline(t *testing.T) {
 		return
 	}
 	for i, want := range []string{
-		"[build wird running inflight 1 vein ref=true]", // + the ash (adr baseline) and gitops baselines: nothing
+		"[build wird running inflight 1]", // + the adr and gitops baselines: nothing
 		"[build mountain queued build wird success gitops 2]",
 		"[build mountain running adr 2026-10-15 title=<nil>]",
 		"[build mountain failure inflight 0]",
@@ -98,7 +89,7 @@ func TestGitHubTimeline(t *testing.T) {
 			t.Errorf("step %d: %s, want %s", i, g, want)
 		}
 	}
-	if !a.State.Veins[0].Ref || len(a.State.Builds) != 0 || len(a.State.Ash) != 1 || a.State.Glacier.Mass <= 0.5 {
+	if len(a.State.Builds) != 0 {
 		t.Errorf("state: %+v", a.State)
 	}
 	if nm.Load() < 10 {
@@ -110,16 +101,6 @@ func TestGitHubTimeline(t *testing.T) {
 	if want := time.Until(time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)).Hours() / 24; d < want-1 || d > want+1 {
 		t.Errorf("mountain_github_token_days_left = %v, want ≈ %v", d, want)
 	}
-	if !a.refs["TargetDown"] || !a.refs["KubePodCrashLooping"] {
-		t.Errorf("refs from the notes and the skills: %v", a.refs)
-	}
-	// a new vein whose alert is in the notes is placed with ref
-	a.names["00000000000000b2"] = "TargetDown"
-	(&Out{app: a, name: "alerts"}).Resolve(Alert{FP: "00000000000000b2", Sev: "critical", Layer: "apps"}, 900)
-	if v := a.State.Veins[len(a.State.Veins)-1]; v.FP != "00000000000000b2" || !v.Ref {
-		t.Errorf("new vein of a noted alert: %+v", v)
-	}
-	steps = append(steps, drain(c))
 
 	validate(t, steps)
 	sha := regexp.MustCompile(`[0-9a-f]{40}`)

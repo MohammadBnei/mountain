@@ -10,13 +10,12 @@ package main
 // MountainSourceStale covers a dead DB. In memory-only mode it is seeded once and ages (the alarm for a
 // missing secret). The page is not marked stale, because the live view does not depend on the DB.
 //
-// hello = the latest snapshot (snapLand) + the world frames since it (since) + state + metrics. A snapshot
-// folds since into snapLand. Boot: load the latest snapshot and re-apply every frame after it.
+// hello = the latest snapshot's state + the world frames since it (since) + state + metrics. Boot: load the
+// latest town snapshot (townEpoch) and re-apply every frame after it.
 
 import (
 	"context"
 	"embed"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,7 +25,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/MohammadBnei/mountain/relay/worldcore"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -35,9 +33,13 @@ import (
 var migrations embed.FS
 
 const (
-	dbQueue      = 1024
-	dbPingEvery  = 30 * time.Second
-	snapEvery    = 10         // minutes
+	dbQueue     = 1024
+	dbPingEvery = 30 * time.Second
+	snapEvery   = 10 // minutes
+	// townEpoch is the snapshots.seed of the town (R7). The mountain wrote its terrain seed (1) there; the town
+	// stores no terrain, so the column now names the world's generation and load() reads this one only: a
+	// mountain row (or one archived by migration 004) is never folded into the town.
+	townEpoch    = 2
 	metricsEvery = 5          // minutes
 	migrateLock  = 0x6d6f756e // "moun"
 )
@@ -203,14 +205,13 @@ func (s *Store) detail(id string, b []byte) {
 	})
 }
 
-func (s *Store) snapshot(day string, ts time.Time, seed uint32, land []int16, state, metrics []byte) {
-	lb := landBytes(land) // now: the caller may change land after we return
+func (s *Store) snapshot(day string, ts time.Time, state, metrics []byte) {
 	s.save(func(ctx context.Context) error {
 		_, err := s.pool.Exec(ctx, `INSERT INTO snapshots (day, seq, ts, seed, land, state, metrics)
-			VALUES ($1, nextval('frame_seq'), $2, $3, $4, $5, $6)
+			VALUES ($1, nextval('frame_seq'), $2, $3, ''::bytea, $4, $5)
 			ON CONFLICT (day) DO UPDATE SET seq = excluded.seq, ts = excluded.ts, seed = excluded.seed,
 				land = excluded.land, state = excluded.state, metrics = excluded.metrics`,
-			day, ts, int64(seed), lb, json.RawMessage(state), json.RawMessage(metrics))
+			day, ts, townEpoch, json.RawMessage(state), json.RawMessage(metrics))
 		if err == nil { // detail retention (02) rides the 10 min snapshot: no job of its own, runs with no alert firing
 			_, err = s.pool.Exec(ctx, "UPDATE events SET detail = NULL WHERE detail IS NOT NULL AND day < current_date - 30")
 		}
@@ -257,25 +258,18 @@ func (s *Store) metrics(ts time.Time, b []byte) {
 	})
 }
 
-func landBytes(land []int16) []byte {
-	b, _ := binary.Append(nil, binary.LittleEndian, land)
-	return b
-}
-
 // dbSnap is a stored snapshot plus every ev/world frame after it, in order.
 type dbSnap struct {
-	land    []int16
 	state   State
 	metrics Metrics
 	frames  []json.RawMessage
 }
 
-// load returns the latest snapshot of seed (before day `before`, if not nil) and the frames after it
-// (also before that day). nil, nil = no snapshot.
-func (s *Store) load(ctx context.Context, seed uint32, before *string) (*dbSnap, error) {
+// load returns the latest town snapshot (before day `before`, if not nil) and the frames after it (also before
+// that day). nil, nil = no snapshot.
+func (s *Store) load(ctx context.Context, before *string) (*dbSnap, error) {
 	var (
 		seq       int64
-		land      []byte
 		st, mt    []byte
 		r         = dbSnap{state: newState()} // a snapshot from before a State field keeps that field's default
 		beforeArg any
@@ -283,19 +277,14 @@ func (s *Store) load(ctx context.Context, seed uint32, before *string) (*dbSnap,
 	if before != nil {
 		beforeArg = *before
 	}
-	err := s.pool.QueryRow(ctx, `SELECT seq, land, state, metrics FROM snapshots
-		WHERE seed = $1 AND ($2::date IS NULL OR day < $2::date) ORDER BY seq DESC LIMIT 1`, int64(seed), beforeArg).Scan(&seq, &land, &st, &mt)
+	err := s.pool.QueryRow(ctx, `SELECT seq, state, metrics FROM snapshots
+		WHERE seed = $1 AND ($2::date IS NULL OR day < $2::date) ORDER BY seq DESC LIMIT 1`, townEpoch, beforeArg).Scan(&seq, &st, &mt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	r.land = make([]int16, worldcore.Grid*worldcore.Grid)
-	if len(land) != 2*len(r.land) {
-		return nil, fmt.Errorf("snapshot seq %d: land is %d bytes", seq, len(land))
-	}
-	binary.Decode(land, binary.LittleEndian, r.land)
 	if err := json.Unmarshal(st, &r.state); err != nil {
 		return nil, fmt.Errorf("snapshot seq %d state: %w", seq, err)
 	}
@@ -307,6 +296,13 @@ func (s *Store) load(ctx context.Context, seed uint32, before *string) (*dbSnap,
 			UNION ALL SELECT seq, frame FROM world_deltas WHERE seq > $1 AND ($2::date IS NULL OR day < $2::date)
 		) f ORDER BY seq`, seq, beforeArg)
 	return &r, err
+}
+
+// started is the town's first day (migration 004 town_epoch): days before it hold no town (scrub: unavailable).
+func (s *Store) started(ctx context.Context) (string, error) {
+	var d time.Time
+	err := s.pool.QueryRow(ctx, "SELECT started FROM town_epoch").Scan(&d)
+	return d.Format(time.DateOnly), err
 }
 
 // day returns one UTC day's ev + world frames (broadcast order) and its metrics_5m frames.
@@ -332,32 +328,21 @@ func (s *Store) rows(ctx context.Context, sql string, args ...any) ([]json.RawMe
 	return res, err
 }
 
-// fold re-applies stored frames: deposits add into land, every frame updates st (State.apply).
-// Returns the world frames (hello deltas after a restore).
-func fold(land []int16, st *State, frames []json.RawMessage) []json.RawMessage {
+// mountainToys are the mountain's visitor toys (R7 dropped them): their marks never come back into the town.
+var mountainToys = map[string]bool{"cairns": true, "toss": true, "footprints": true, "toy-clouds": true}
+
+// fold re-applies stored frames to st (State.apply). Returns the world frames (hello deltas after a restore).
+func fold(st *State, frames []json.RawMessage) []json.RawMessage {
 	since := []json.RawMessage{}
 	for _, b := range frames {
-		var f struct {
-			frameF
-			Cells        string
-			X0, Z0, W, H int
-		}
+		var f frameF
 		if err := json.Unmarshal(b, &f); err != nil {
-			log.Printf("db: fold: stored frame skipped: %v", err) // the restored land/state miss it
+			log.Printf("db: fold: stored frame skipped: %v", err) // the restored state misses it
 			continue
 		}
-		st.apply(f.frameF, b)
-		if f.T != "world" {
-			continue
-		}
-		since = append(since, b)
-		if f.Kind == "deposit" {
-			cells, err := worldcore.DecodeI16(f.Cells)
-			if err != nil {
-				log.Printf("db: fold: stored deposit skipped: %v", err)
-				continue
-			}
-			worldcore.Deposit{X0: f.X0, Z0: f.Z0, W: f.W, H: f.H, Cells: cells}.AddTo(land)
+		st.apply(f, b)
+		if f.T == "world" {
+			since = append(since, b)
 		}
 	}
 	return since
@@ -385,10 +370,10 @@ func (a *App) attach(ctx context.Context, dsn string, ro bool) {
 	}
 }
 
-// restore loads the latest snapshot and re-applies the frames after it. No snapshot yet (first boot on
-// this seed): write one now (unless ro), so every later frame has a base.
+// restore loads the latest town snapshot and re-applies the frames after it. No snapshot yet (the town's first
+// boot): write one now (unless ro), so every later frame has a base.
 func (a *App) restore(ctx context.Context, ro bool) error {
-	r, err := a.store.load(ctx, a.World.Seed, nil)
+	r, err := a.store.load(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -398,8 +383,9 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 		}
 		return nil
 	}
-	land, st := slices.Clone(r.land), r.state
-	since := fold(land, &st, r.frames)
+	st := r.state
+	since := fold(&st, r.frames)
+	st.Marks = slices.DeleteFunc(st.Marks, func(m Mark) bool { return mountainToys[m.Mark] }) // R7: their toys are gone
 	ids := make([]string, len(st.Marks))
 	for i, m := range st.Marks {
 		ids[i] = m.ID
@@ -409,21 +395,19 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 		return err
 	}
 	r.metrics.T, r.metrics.Stale = "metrics", map[string]int64{} // sources re-mark what is still down
-	r.metrics.Snowline = worldcore.Snowline(a.World.HMax, st.Glacier.Mass)
 	visits.Lock()
 	visits.at = recent
 	visits.Unlock()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	r.metrics.Visitors = a.Metrics.Visitors // the kill switch is the flag's, never the snapshot's
-	a.Land, a.snapLand, a.since, a.State, a.Metrics, a.MarkSubs = land, r.land, since, st, r.metrics, subs
-	log.Printf("db: restored snapshot + %d frames, %d firing alerts, %d veins, %d ash lines, %d marks", len(r.frames), len(st.Alerts), len(st.Veins), len(st.Ash), len(st.Marks))
+	a.since, a.State, a.Metrics, a.MarkSubs = since, st, r.metrics, subs
+	log.Printf("db: restored snapshot + %d frames, %d firing alerts, %d plots, %d marks", len(r.frames), len(st.Alerts), len(st.Plots), len(st.Marks))
 	return nil
 }
 
-// record is the hub tap (under h.mu): every broadcast ev and world frame updates the state and is persisted,
-// world frames join the hello deltas until the next snapshot, and an ev returns the world frames it derives
-// (App.derive), which the hub broadcasts right after it.
+// record is the hub tap (under h.mu): every broadcast ev and world frame updates the state and is persisted;
+// world frames join the hello deltas until the next snapshot. The town derives no frames from events (nil).
 func (a *App) record(b []byte) [][]byte {
 	var f frameF
 	if json.Unmarshal(b, &f) != nil || (f.T != "ev" && f.T != "world") {
@@ -438,16 +422,9 @@ func (a *App) record(b []byte) [][]byte {
 	if f.T == "world" {
 		a.since = append(a.since, b)
 	}
-	if f.Kind == "glacier" {
-		a.Metrics.Snowline = worldcore.Snowline(a.World.HMax, a.State.Glacier.Mass) // rides the next metrics frame
-	}
-	var more [][]byte
-	if f.T == "ev" {
-		more = a.derive(f)
-	}
 	a.mu.Unlock()
 	a.store.frame(f.T, f.Kind, f.ID, ts, b)
-	return more
+	return nil
 }
 
 // snapshot folds the hello deltas into the hello base, advances App.Day and upserts the day's row.
@@ -457,10 +434,10 @@ func (a *App) snapshot(now time.Time) {
 	defer a.Hub.mu.Unlock()
 	a.mu.Lock()
 	day := utcDay(now)
-	a.Day, a.snapLand, a.since = day, slices.Clone(a.Land), []json.RawMessage{}
-	land, st, m := a.snapLand, mustJSON(a.State), mustJSON(a.Metrics)
+	a.Day, a.since = day, []json.RawMessage{}
+	st, m := mustJSON(a.State), mustJSON(a.Metrics)
 	a.mu.Unlock()
-	a.store.snapshot(day, now, a.World.Seed, land, st, m)
+	a.store.snapshot(day, now, st, m)
 }
 
 // persist runs every minute: a metrics_5m row every 5 min, a snapshot every 10 min and at UTC rollover.
@@ -478,9 +455,6 @@ func (a *App) persist(ctx context.Context) {
 			a.mu.Unlock()
 			if n%metricsEvery == 0 {
 				a.store.metrics(now, m)
-			}
-			if utcDay(now) != day {
-				a.melt() // ponytail: a day the relay was down at midnight melts nothing
 			}
 			if n%snapEvery == 0 || utcDay(now) != day {
 				a.snapshot(now)

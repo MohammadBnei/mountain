@@ -1,5 +1,5 @@
-three@0.186.1 (r186, npm). build/ copied from pi-lab compose/www/vendor (esbuild 0.25.10 minified). examples/jsm/ unmodified from jsdelivr three@0.186.1.
-cannon-es@0.20.0 (npm, dist/cannon-es.js ESM, unmodified). MIT, see LICENSE and cannon-es/LICENSE.
-Importmap: { "three": "./vendor/build/three.module.js", "three/addons/": "./vendor/examples/jsm/", "cannon-es": "./vendor/cannon-es/cannon-es.js" }
+three@0.186.1 (r186, npm). build/ copied from pi-lab compose/www/vendor (esbuild 0.25.10 minified).
+examples/jsm/: controls/OrbitControls.js and utils/BufferGeometryUtils.js unmodified from jsdelivr three@0.186.1;
+loaders/GLTFLoader.js and utils/SkeletonUtils.js copied minified from pi-lab compose/www/vendor (same three@0.186.1). MIT, see LICENSE.
+Importmap: { "three": "./vendor/build/three.module.js", "three/addons/": "./vendor/examples/jsm/" }
 manifest.json: path -> { bytes, sha256, source }; regenerate when re-vendoring.
-R7 town: examples/jsm/loaders/GLTFLoader.js + utils/SkeletonUtils.js copied minified from pi-lab compose/www/vendor (same three@0.186.1; jsdelivr unreachable from the build session).

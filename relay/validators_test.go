@@ -12,18 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MohammadBnei/mountain/relay/worldcore"
 	"github.com/coder/websocket"
 )
 
-// refToy is the seam's reference validator (what every toy does at least): pos → quantised, y recomputed, above the snowline.
-var refToy = Toy{Validate: func(p *Place) (map[string]any, float64, string) {
-	pos, why := p.Spot("pos")
-	if why != "" {
-		return nil, 0, why
-	}
-	return map[string]any{"pos": pos}, 1, ""
-}}
+// refToy is a test toy that takes any pose: the seam's rules (auth, rate, cap, kill switch, sanitize) are what's tested.
+var refToy = Toy{Validate: func(p *Place) (map[string]any, float64, string) { return map[string]any{"n": 1}, 1, "" }}
 
 // withToys registers refToy under each name no lane has registered yet, for the test's duration, and resets the limits.
 func withToys(t *testing.T, a *App, names ...string) {
@@ -61,11 +54,11 @@ func marksOf(frames []map[string]any) (out []map[string]any) {
 	return out
 }
 
-// TestHostileMarks plays the hostile fixture's marks (relay-hostile.json; refToy stands in for unlanded toys): every
-// hostile one is rejected or neutralised, the honest ones land with y recomputed and only sanitised fields public.
+// TestHostileMarks plays the hostile fixture's marks (relay-hostile.json, plant poses): every hostile one is
+// rejected or neutralised, the honest ones land with only the relay's own fields public (h, q, r, item).
 func TestHostileMarks(t *testing.T) {
 	a, c := testApp(t)
-	withToys(t, a, "cairns", "toss", "footprints", "toy-clouds")
+	withToys(t, a)
 	f, err := loadFixture("../www/dev/fixtures/relay-hostile.json")
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +70,7 @@ func TestHostileMarks(t *testing.T) {
 	}
 	f.step.Store(2)
 	acks = append(acks, f.playMarks()...)
-	want := map[string]string{"c1": "", "t1": "", "f1": "", "k1": "", "forge": "", "low": "snowline", "far": "reach", "toy": "toy",
+	want := map[string]string{"c1": "", "t1": "", "f1": "", "k1": "", "forge": "", "low": "road", "far": "reach", "toy": "toy",
 		"text": "", "anon": "auth", "view": "auth", "name": "", "spam1": "rate", "spam2": "rate"}
 	got := map[string]string{}
 	none := 0
@@ -105,13 +98,11 @@ func TestHostileMarks(t *testing.T) {
 	if len(ms) != 7 || len(a.State.Marks) != 7 {
 		t.Fatalf("%d world:mark frames, %d in state; want 7", len(ms), len(a.State.Marks))
 	}
-	solid := worldcore.Solid(a.World.Base, a.Land)
+	item := float64(plantItem(sunNow()))
 	for _, m := range ms {
-		pos := m["pose"].(map[string]any)["pos"].([]any)
-		x, y, z := pos[0].(float64), pos[1].(float64), pos[2].(float64)
-		i, j := gridCell(x), gridCell(z)
-		if cx, cz := worldcore.CellXZ(i, j); cx != x || cz != z || y != float64(solid[j*worldcore.Grid+i])*worldcore.HeightQ || y <= a.Metrics.Snowline {
-			t.Errorf("mark %v: not quantised, y not heightSolid, or under the snowline %v", m, a.Metrics.Snowline)
+		pose := m["pose"].(map[string]any)
+		if len(pose) != 4 || pose["item"] != item {
+			t.Errorf("mark %v: the public pose is h, q, r and the relay's item %v only", m, item)
 		}
 		if s := string(mustJSON(m)); strings.Contains(s, "script") || strings.Contains(s, "10.233") || strings.Contains(s, "u-") {
 			t.Errorf("leak in %s", s)

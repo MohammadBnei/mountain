@@ -1,7 +1,7 @@
 // Command relay serves mountain.bnei.dev: the embedded www/, /ws, and :9090 metrics (06-relay).
 //
-//	relay [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--dev] [--source live|fixture:<file>] [--seed N] [--config file]
-//	relay dump-hello [--seed N] [--day YYYY-MM-DD] [--events file.json] [--out www/dev/fixtures/hello.json|-]
+//	relay [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--dev] [--source live|fixture:<file>] [--config file]
+//	relay dump-hello [--day YYYY-MM-DD] [--events file.json] [--out www/dev/fixtures/hello.json|-]
 //
 // Env: MOUNTAIN_FP_SALT (alert fp salt), DATABASE_URL (Postgres; empty = memory-only, store.go),
 // MOUNTAIN_GITHUB_TOKEN (fine-grained read-only PAT; empty = src_github off, src_github.go),
@@ -38,7 +38,6 @@ import (
 
 	"github.com/MohammadBnei/mountain"
 	"github.com/MohammadBnei/mountain/relay/town"
-	"github.com/MohammadBnei/mountain/relay/worldcore"
 	"gopkg.in/yaml.v3"
 )
 
@@ -99,7 +98,6 @@ type AppCfg struct{ Group, Display, Building string }
 type Opts struct {
 	Listen, Metrics, PromURL, AMURL, GHURL, Source, Config string
 	Dev                                                    bool
-	Seed                                                   uint
 	FPSalt, GHToken                                        string
 }
 
@@ -117,7 +115,6 @@ func parseServe(args []string) (Opts, error) {
 	f.BoolVar(&o.Dev, "dev", false, "allow http://127.0.0.1:* origins, ws://127.0.0.1:* in CSP, serve /dev/")
 	f.StringVar(&o.Source, "source", "live", "live | fixture:<file>")
 	f.StringVar(&o.Config, "config", "", "config.yaml path (default: embedded)")
-	f.UintVar(&o.Seed, "seed", 1, "terrain seed")
 	err := f.Parse(args)
 	// env, not a flag: a flag value shows in ps and the pod spec
 	if o.FPSalt = os.Getenv("MOUNTAIN_FP_SALT"); o.FPSalt == "" && strings.HasPrefix(o.Source, "fixture:") {
@@ -134,50 +131,33 @@ type App struct {
 	Hub  *Hub
 
 	mu      sync.Mutex
-	World   *worldcore.World
-	Land    []int16 // h.land, HeightQ steps (lane A writes deposits here)
 	Metrics Metrics
 	State   State  // hello.state: Out.Fire / Out.Resolve only (persisted, store.go)
 	Day     string // UTC day of the latest snapshot; advanced at rollover (store.go)
 
-	// Vein ref (02): alert names never leave the relay; only the bool does. ponytail: memory only, so a vein
-	// restored after a restart can no longer be flagged (its name is gone); a re-fire of it can.
-	names map[string]string // salted fp -> alertname (src_alerts)
-	refs  map[string]bool   // alert names found in the runbook notes (src_github daily scan)
+	MarkSubs map[string]string // W4: active mark id -> account (OIDC sub), never public
 
-	MarkSubs map[string]string // W4: active mark id -> account (OIDC sub), never public (toy-clouds: 3 distinct accounts)
-
-	snapLand []int16           // hello.snapshot.land: h.land at the latest snapshot (store.go)
-	since    []json.RawMessage // hello.deltas: the world frames broadcast since that snapshot
-	store    *Store            // nil = memory-only; set before serving, never after
-
-	base, bench string // hello's base64 h.base and bench: immutable, encoded once in newApp
+	since []json.RawMessage // hello.deltas: the world frames broadcast since the latest snapshot
+	store *Store            // nil = memory-only; set before serving, never after
 }
 
 var app *App // set by serve before routes run
 
-// Public is the :8080 mux. Lane files add routes from init() (e.g. /api/topology).
+// Public is the :8080 mux. Lane files add routes from init() (e.g. /auth/*).
 var Public = http.NewServeMux()
 
 func newApp(cfg *Config, o Opts, day string) *App {
-	w := worldcore.Base(uint32(o.Seed))
-	a := &App{Cfg: cfg, Opts: o, World: w, Land: make([]int16, len(w.Base)), State: newState(), Day: day,
-		Metrics: emptyMetrics(worldcore.Snowline(w.HMax, worldcore.NewGlacier().Mass)), base: worldcore.EncodeI16(w.Base), bench: base64.StdEncoding.EncodeToString(w.Bench),
-		snapLand: make([]int16, len(w.Base)), since: []json.RawMessage{}, names: map[string]string{}, refs: map[string]bool{}, MarkSubs: map[string]string{}}
+	a := &App{Cfg: cfg, Opts: o, State: newState(), Day: day, Metrics: emptyMetrics(), since: []json.RawMessage{}, MarkSubs: map[string]string{}}
 	a.Hub = NewHub(o.Dev, a.Hello)
 	a.Hub.tap = a.record
 	return a
 }
 
-// Snapshot is hello.snapshot (www/dev/schema/hello.json).
+// Snapshot is hello.snapshot (www/dev/schema/hello.json): which day's snapshot the state and deltas start from,
+// and the world's generation (store.go townEpoch).
 type Snapshot struct {
-	Day   string           `json:"day"`
-	Seed  uint32           `json:"seed"`
-	Grid  int              `json:"grid"`
-	Base  string           `json:"base"`
-	Land  string           `json:"land"`
-	Bench string           `json:"bench"`
-	Caves []worldcore.Cave `json:"caves"`
+	Day   string `json:"day"`
+	Epoch int    `json:"epoch"`
 }
 
 // Hello returns the hello frame sent on connect: the latest snapshot + the world frames since it (02).
@@ -186,7 +166,7 @@ func (a *App) Hello() []byte {
 	defer a.mu.Unlock()
 	b, _ := json.Marshal(map[string]any{
 		"t":        "hello",
-		"snapshot": a.snap(a.Day, a.snapLand),
+		"snapshot": a.snap(a.Day),
 		"deltas":   a.since,
 		"state":    a.State,
 		"metrics":  a.Metrics,
@@ -195,10 +175,8 @@ func (a *App) Hello() []byte {
 	return b
 }
 
-// snap is hello.snapshot (and replay.snapshot) for land on this seed's base.
-func (a *App) snap(day string, land []int16) Snapshot {
-	return Snapshot{Day: day, Seed: a.World.Seed, Grid: worldcore.Grid, Base: a.base, Land: worldcore.EncodeI16(land), Bench: a.bench, Caves: a.World.Caves}
-}
+// snap is hello.snapshot (and replay.snapshot).
+func (a *App) snap(day string) Snapshot { return Snapshot{Day: day, Epoch: townEpoch} }
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
@@ -219,10 +197,9 @@ func main() {
 
 func dumpHello(args []string) error {
 	f := flag.NewFlagSet("dump-hello", flag.ContinueOnError)
-	seed := f.Uint("seed", 1, "terrain seed")
 	day := f.String("day", time.Now().UTC().Format(time.DateOnly), "snapshot day")
 	out := f.String("out", "www/dev/fixtures/hello.json", "output file, - for stdout")
-	events := f.String("events", "", "an {events: [{kind, ...fields}]} file played through the real sanitize + worldcore first (fixtures/hello-events.json)")
+	events := f.String("events", "", "an {events: [{kind, ...fields}]} file played through the real sanitize first (fixtures/hello-events.json)")
 	if err := f.Parse(args); err != nil {
 		return err
 	}
@@ -230,7 +207,7 @@ func dumpHello(args []string) error {
 	if err != nil {
 		return err
 	}
-	a := newApp(cfg, Opts{Seed: *seed}, *day)
+	a := newApp(cfg, Opts{}, *day)
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" { // a hello built from a restored snapshot (W2 pose gate)
 		a.attach(context.Background(), dsn, true)
 		defer a.store.Close(5 * time.Second)
@@ -248,8 +225,8 @@ func dumpHello(args []string) error {
 	return os.WriteFile(*out, append(b, '\n'), 0o644)
 }
 
-// playEvents broadcasts each event of file as a source would (Out.Ev): sanitised, then the hub tap folds it into
-// the state and derives its world frames, so the hello fixture's veins, glacier and ash come from real worldcore.
+// playEvents broadcasts each entry of file as a source would: {kind, ...fields} as an ev (Out.Ev), {t: "world",
+// kind, ...} as a world frame (Out.World: plots, marks), sanitised, then folded into the state by the hub tap.
 func playEvents(a *App, file string) error {
 	b, err := os.ReadFile(file)
 	if err != nil {
@@ -264,8 +241,18 @@ func playEvents(a *App, file string) error {
 	out := &Out{app: a, name: "fixture"}
 	for i, e := range f.Events {
 		kind, _ := e["kind"].(string)
+		t, _ := e["t"].(string)
 		delete(e, "kind")
-		if out.Ev(kind, natural(e).(map[string]any)) == "" {
+		delete(e, "t")
+		fields := natural(e).(map[string]any)
+		if t == "world" {
+			if out.worldFrame(kind, fields) == nil {
+				return fmt.Errorf("%s: frame %d (world %s) dropped by sanitize", file, i, kind)
+			}
+			out.World(kind, fields)
+			continue
+		}
+		if out.Ev(kind, fields) == "" {
 			return fmt.Errorf("%s: event %d (%s) dropped by sanitize", file, i, kind)
 		}
 	}
@@ -317,7 +304,6 @@ func serve(o Opts) error {
 	app.attach(ctx, os.Getenv("DATABASE_URL"), false) // before the sources: src_alerts seeds from the restored state
 	go app.persist(ctx)
 	go app.watchVisitors(ctx)
-	go app.tickToys(ctx)
 	if err := startSources(ctx, app); err != nil {
 		return err
 	}
@@ -390,7 +376,7 @@ func buildID(www fs.FS) string {
 // /v/<build>/ (immutable: a new deploy is a new URL); / itself is no-cache and Cloudflare serves it DYNAMIC.
 // Relative imports inside modules resolve under the same prefix. Unversioned paths still work (no-cache +
 // content ETags) for pages loaded before the deploy; another build's /v/<id>/ is a no-store 404, which
-// boot.js answers with one reload onto the current index.
+// main.js answers with one reload onto the current index.
 func static(www fs.FS, dev bool) http.Handler {
 	files := http.FileServerFS(www)
 	etags := map[string]string{}

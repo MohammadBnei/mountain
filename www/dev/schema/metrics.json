@@ -10,10 +10,7 @@
   "storage",
   "cpu",
   "mem",
-  "heat",
   "buildsInFlight",
-  "wind",
-  "snowline",
   "rx",
   "river",
   "hosts",
@@ -124,31 +121,9 @@
   "mem": {
    "type": "number"
   },
-  "heat": {
-   "type": "number"
-  },
   "buildsInFlight": {
    "type": "integer",
    "minimum": 0
-  },
-  "wind": {
-   "type": "object",
-   "additionalProperties": false,
-   "required": [
-    "x",
-    "z"
-   ],
-   "properties": {
-    "x": {
-     "type": "number"
-    },
-    "z": {
-     "type": "number"
-    }
-   }
-  },
-  "snowline": {
-   "type": "number"
   },
   "rx": {
    "type": "number"
