@@ -2,7 +2,8 @@
 // (relay/sources.go State.apply), so a reload, a resync and a replay show the same town.
 //
 //   createWorld() → world
-//   world.town       hello.town: {radius, islands:[{host, q, r, tiles}], bridges:[{a, b, aq, ar, bq, br}]}
+//   world.town       hello.town: {islands:[{host, q, r, radius, tiles}], bridges:[{a, b, aq, ar, bq, br}]} (R8: a radius per island)
+//   world.build      hello.build: the relay's www build id (R8; main.js reloads a page from another build)
 //   world.state      {alerts, health, replicas, builds, marks, plots}: hello.state, then every frame, BEFORE its emit
 //   world.metrics    the last metrics frame;  world.stale  null | unix ms (oldest stale source, or the socket drop)
 //   world.ready      host → bool (ev node.ready, metrics.hosts; absent = not measured yet: draw it up)
@@ -21,13 +22,14 @@ export function createWorld() {
   let refN = 0, resolveReady, play = null; // play: {day, queue, gap, t, timer, done: [resolve, reject]}
   const emptyState = () => ({ alerts: [], health: {}, replicas: {}, builds: {}, marks: [], plots: [] });
   const w = {
-    town: null, state: emptyState(), metrics: null, stale: null, ready: {}, quorum: null, quota: null, named: false, replay: null,
+    town: null, build: null, state: emptyState(), metrics: null, stale: null, ready: {}, quorum: null, quota: null, named: false, replay: null,
     loaded: new Promise((r) => (resolveReady = r)),
     on(type, fn) { if (!subs.has(type)) subs.set(type, new Set()); subs.get(type).add(fn); return () => subs.get(type).delete(fn); },
     emit(type, payload) { for (const fn of subs.get(type) || []) fn(payload, type); },
 
     applyHello(h) {
       if (h.town) w.town = h.town;
+      w.build = h.build ?? null;
       w.state = { ...emptyState(), ...h.state };
       for (const k of Object.keys(emptyState())) if (w.state[k] == null) w.state[k] = emptyState()[k];
       w.quorum = h.state?.quorum ?? null; // R7.1: rides the hello (null = not known yet)

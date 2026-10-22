@@ -263,6 +263,7 @@ type dbSnap struct {
 	state   State
 	metrics Metrics
 	frames  []json.RawMessage
+	r7      bool // the snapshot was written before R8 (migration 005 town_r8): its plots are re-placed by family
 }
 
 // load returns the latest town snapshot (before day `before`, if not nil) and the frames after it (also before
@@ -277,8 +278,8 @@ func (s *Store) load(ctx context.Context, before *string) (*dbSnap, error) {
 	if before != nil {
 		beforeArg = *before
 	}
-	err := s.pool.QueryRow(ctx, `SELECT seq, state, metrics FROM snapshots
-		WHERE seed = $1 AND ($2::date IS NULL OR day < $2::date) ORDER BY seq DESC LIMIT 1`, townEpoch, beforeArg).Scan(&seq, &st, &mt)
+	err := s.pool.QueryRow(ctx, `SELECT seq, state, metrics, COALESCE(ts < (SELECT started FROM town_r8), false) FROM snapshots
+		WHERE seed = $1 AND ($2::date IS NULL OR day < $2::date) ORDER BY seq DESC LIMIT 1`, townEpoch, beforeArg).Scan(&seq, &st, &mt, &r.r7)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -394,11 +395,13 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 	st := r.state
 	since := fold(&st, r.frames)
 	st.Marks = slices.DeleteFunc(st.Marks, func(m Mark) bool { return mountainToys[m.Mark] }) // R7: their toys are gone
-	// an app dropped from config.yaml: its plot could never be freed (its frames fail sanitize). R8: a plot whose
+	// an app dropped from config.yaml: its plot could never be freed (its frames fail sanitize). A plot whose
 	// building kind changed in config.yaml goes too, and the first poll places the new kind where its family belongs.
+	// R8's first boot (a snapshot from before town_r8): every plot goes, so every building moves to its family's ring
+	// on the bigger islands. Ruins go with them: their apps are absent, so nothing re-places them.
 	st.Plots = slices.DeleteFunc(st.Plots, func(p Plot) bool {
 		_, ok := a.Cfg.Apps[p.App]
-		return !ok || p.Role != a.Cfg.roleOf(p.App)
+		return r.r7 || !ok || p.Role != a.Cfg.roleOf(p.App)
 	})
 	ids := make([]string, len(st.Marks))
 	for i, m := range st.Marks {

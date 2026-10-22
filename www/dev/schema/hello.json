@@ -8,6 +8,7 @@
   "additionalProperties": false,
   "properties": {
     "t": { "const": "hello" },
+    "build": { "description": "R8: the relay's www build id (the /v/<build>/ prefix). A page whose own build differs reloads once (main.js). Absent from dev dumps.", "type": "string", "pattern": "^[0-9a-f]{12}$" },
     "snapshot": {
       "type": "object", "required": ["day", "epoch"], "additionalProperties": false,
       "properties": {

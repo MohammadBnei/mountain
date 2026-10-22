@@ -58,6 +58,12 @@ async function start() {
       : 'Can’t reach the town yet, retrying… (too many tabs open on this network?)';
   }, 8000);
   await world.loaded;
+  // R8 build guard: a hello from another build means a deploy happened while this page was open (a reconnect after
+  // the relay restarted). Its town may not be the one this code draws: reload once onto the current index.
+  const mine = import.meta.url.match(/\/v\/([0-9a-f]{12})\//)?.[1];
+  const guard = (h) => { if (mine && h.build && h.build !== mine) failed(new Error(`build ${mine} → ${h.build}`)); };
+  guard({ build: world.build });
+  world.on('hello', guard);
   clearTimeout(slow);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
