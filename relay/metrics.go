@@ -1,6 +1,6 @@
 package main
 
-// Self-observability on :9090 (06). Stdlib text exposition: six series do not need client_golang.
+// Self-observability on :9090 (06). Stdlib text exposition: eight series do not need client_golang.
 
 import (
 	"fmt"
@@ -30,10 +30,12 @@ var (
 	WSConnections     = newVec("mountain_ws_connections", "gauge", "", "Open /ws connections.")
 	DBDropped         = newVec("mountain_db_dropped_total", "counter", "reason", "Persistence writes lost (full = queue full, error = write failed).")
 	ScrubDropped      = newVec("mountain_scrub_dropped_total", "counter", "", "Scrub replies lost to a full client send buffer (the connection is dropped).")
-	allVecs           = []*vec{SourceLastSuccess, Unmapped, TokenDaysLeft, WSConnections, DBDropped, ScrubDropped}
+	Plots             = newVec("mountain_plots", "gauge", "", "Standing town buildings (plots that are not ruins): 0 for long = an empty town.")
+	QueryFailed       = newVec("mountain_query_failed_total", "counter", "query", "Failed answers of the optional PromQL queries (they never mark the poll stale).")
+	allVecs           = []*vec{SourceLastSuccess, Unmapped, TokenDaysLeft, WSConnections, DBDropped, ScrubDropped, Plots, QueryFailed}
 )
 
-func init() { WSConnections.Set("", 0) }
+func init() { WSConnections.Set("", 0); Plots.Set("", 0); QueryFailed.Add("pods", 0) }
 
 func serveMetrics(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4")

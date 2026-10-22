@@ -27,11 +27,12 @@ export default async function build({ THREE, kit, world }) {
     root,
     update(night) {
       if (night !== lastNight) { lampMat.emissiveIntensity = 0.15 + 2.2 * night; lastNight = night; }
+      root.visible = world.metrics?.visitors !== false; // the kill switch (VISITORS_ENABLED=false) hides every plant
       if (!dirty) return false;
       dirty = false;
       for (const m of all) m.count = 0;
       for (const mk of world.state.marks) {
-        if (mk.mark !== 'plant') continue;
+        if (mk.mark !== 'plant' || tree.count >= N || post.count >= N || flagPole.count >= N) continue;
         const { h, q, r, item } = mk.pose, host = `h${h}`;
         if (!world.town.islands.some((i) => i.host === host)) continue;
         const [x, z] = plotXZ(world.town, host, q, r), seed = hash(mk.id);

@@ -17,7 +17,7 @@
     },
     "deltas": { "type": "array", "items": { "type": "object", "required": ["t"], "properties": { "t": { "enum": ["ev", "world"] } } } },
     "state": {
-      "description": "Live state a reload must not lose, persisted with the snapshot: firing alerts, health, replicas, builds in flight, visitor marks, the town's plots. It changes only through frames (relay State.apply, mirrored by world.js).",
+      "description": "Live state a reload must not lose, persisted with the snapshot: firing alerts, health, replicas, builds in flight, visitor marks, the town's plots, quorum. It changes only through frames (relay State.apply, mirrored by world.js).",
       "type": "object", "required": ["alerts", "health", "replicas", "builds", "marks", "plots"], "additionalProperties": false,
       "properties": {
         "alerts": {
@@ -54,6 +54,10 @@
         "plots": {
           "description": "R7: the town buildings, world:plot payloads, one per app (a frame replaces it; gone removes it), ≤ 64.",
           "type": "array", "maxItems": 64, "items": { "$ref": "world.json#/$defs/plot" }
+        },
+        "quorum": {
+          "description": "R7.1: the hosts whose Proxmox node is in quorum (ev quorum up[]); null or absent = not known yet (a snapshot from before R7.1).",
+          "oneOf": [{ "type": "null" }, { "type": "array", "maxItems": 3, "items": { "$ref": "world.json#/$defs/host" } }]
         }
       }
     },

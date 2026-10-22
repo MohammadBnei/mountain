@@ -9,6 +9,9 @@ package main
 //
 // Rejects: bad (not whole numbers) | reach (no such island or hex) | road (the square, a road or a bridge head)
 // | plot (a building stands there) | taken (another plant is there).
+//
+// Room (R7.1): plants wilt after a week (plots.go wilt). When an island has no free hex left, its oldest plant gives
+// way: planting on that plant's hex replaces it (Place.Evict); every other planted hex is still taken.
 
 import (
 	"math"
@@ -49,8 +52,38 @@ func validatePlant(p *Place) (map[string]any, float64, string) {
 			return nil, 0, "plot"
 		}
 	}
-	if _, ok := plantAt(p.Marks)[host][x]; ok {
-		return nil, 0, "taken"
+	plants := plantAt(p.Marks)[host]
+	if m, ok := plants[x]; ok {
+		if !islandFull(host, p.Plots, plants) || oldestPlant(p.Marks, h) != m.ID {
+			return nil, 0, "taken"
+		}
+		p.Evict = m.ID
 	}
 	return map[string]any{"h": h, "q": q, "r": r, "item": plantItem(sunNow())}, 1, ""
+}
+
+// islandFull: no plantable hex of host's island is free of plots and plants.
+func islandFull(host string, plots []Plot, plants map[town.Hex]Mark) bool {
+	built := map[town.Hex]bool{}
+	for _, pl := range plots {
+		if pl.Host == host {
+			built[pl.hex()] = true
+		}
+	}
+	for _, x := range town.Hexes {
+		if _, planted := plants[x]; town.Plantable(host, x) && !built[x] && !planted {
+			return false
+		}
+	}
+	return true
+}
+
+// oldestPlant is the id of the oldest active plant on island h (marks are oldest first).
+func oldestPlant(marks []Mark, h int) string {
+	for _, m := range marks {
+		if m.Mark == "plant" && poseInt(m.Pose["h"]) == h {
+			return m.ID
+		}
+	}
+	return ""
 }

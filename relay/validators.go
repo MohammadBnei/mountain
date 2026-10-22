@@ -60,6 +60,7 @@ type Place struct {
 	Marks  []Mark         // the active marks, oldest first (a copy)
 	Plots  []Plot         // R7: the town plots (a copy): a plant never goes on a building
 	Now    time.Time
+	Evict  string // set by Validate: the id of an active mark that gives way to this one (R7.1: a full island)
 }
 
 // Mark is a world:mark payload (hello.state.marks).
@@ -244,6 +245,20 @@ func (a *App) place(c *Client, ref, toy string, pose map[string]any, named bool,
 	if b == nil { // the toy built a pose sanitize refuses (logged there)
 		return markAck(ref, "", "bad")
 	}
+	if p.Evict != "" { // the island is full: its oldest plant gives way (removed for everyone, then the new one lands)
+		a.mu.Lock()
+		i := slices.IndexFunc(a.State.Marks, func(m Mark) bool { return m.ID == p.Evict })
+		var old Mark
+		if i >= 0 {
+			old = a.State.Marks[i]
+			delete(a.MarkSubs, old.ID)
+		}
+		a.mu.Unlock()
+		if i >= 0 {
+			a.Hub.Broadcast((&Out{app: a, name: "marks"}).worldFrame("mark", goneMark(old)))
+			a.store.unmark(old.ID, now)
+		}
+	}
 	visits.at[c.Sub] = append(visits.at[c.Sub], now)
 	a.mu.Lock()
 	if len(a.MarkSubs) > 2*marksMax { // ponytail: marks that fell off the cap leave their sub behind; rebuild now and then
@@ -289,7 +304,7 @@ func (a *App) unmark(c *Client, ref, id string, now time.Time) []byte {
 	if i < 0 {
 		return markAck(ref, "", "unknown")
 	}
-	a.Hub.Broadcast((&Out{app: a, name: "marks"}).worldFrame("mark", map[string]any{"id": id, "mark": m.Mark, "pose": map[string]any{}, "weight": 0.0, "gone": true}))
+	a.Hub.Broadcast((&Out{app: a, name: "marks"}).worldFrame("mark", goneMark(m)))
 	a.store.unmark(id, now)
 	log.Printf("marks: %s (%s) deleted by an admin", id, m.Mark)
 	return markAck(ref, id, "")

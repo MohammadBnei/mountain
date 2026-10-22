@@ -148,8 +148,8 @@ extraManifests:
               annotations:
                 summary: "mountain: a relay source has not polled successfully for 5 min"
                 description: >-
-                  prom/alerts: the live page shows "stale since" and the sky dims; the relay
-                  keeps serving the last world. db: the page stays live, but frames and
+                  prom/alerts: the live page shows "stale since"; the relay keeps serving
+                  the last town. db: the page stays live, but frames and
                   snapshots are not stored (restart survival, scrub); unset DATABASE_URL
                   (memory-only) looks the same. Check the relay logs for the source label.
             - alert: MountainTokenExpiring
@@ -159,7 +159,7 @@ extraManifests:
                 severity: notice
               annotations:
                 summary: "mountain: the GitHub token expires in under 14 days"
-                description: Rotate the token in Infisical (mountain-8c-cz) before builds and commits go dark.
+                description: Rotate the token in Infisical (mountain-8c-cz) before the builds (scaffolds) go dark.
             - alert: MountainUnmapped
               expr: max by (kind) (mountain_unmapped_total{namespace="{{ .Release.Namespace }}"}) > 0
               for: 30m
@@ -169,4 +169,15 @@ extraManifests:
                 summary: "mountain: series dropped for lack of a relay/config.yaml map entry"
                 description: >-
                   A new app, node, repo or namespace is not in relay/config.yaml, so it is
-                  missing from the mountain. Add it to the static maps (02 rot guard).
+                  missing from the town. Add it to the static maps (02 rot guard).
+            # R7.1: an empty town alerts nowhere else (the pods query is optional: it never marks prom stale)
+            - alert: MountainTownEmpty
+              expr: max(mountain_plots{namespace="{{ .Release.Namespace }}"}) == 0
+              for: 15m
+              labels:
+                severity: notice
+              annotations:
+                summary: "mountain: the town has no building"
+                description: >-
+                  mountain_plots has been 0 for 15 min: the page shows empty islands. Check the relay log for
+                  "optional query pods failed" and mountain_query_failed_total{query="pods"}.

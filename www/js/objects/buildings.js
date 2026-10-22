@@ -18,9 +18,19 @@ export default async function build({ THREE, kit, world, apps }) {
 
   // ---- geometry per kind: body (clay atlas, roof cells cut out, props merged in) + roof (white, tinted per instance
   // in its Ukubi wire colour; at night the roofs light up in the Glow theme's wire colours)
-  const kinds = {}, roofMat = kit.glowing();
+  const kinds = {}, roofMat = kit.glowing(), CAP = 16; // instances per kind (≤ 64 plots, never 16 of one kind)
   async function kindOf(role) {
     if (kinds[role]) return kinds[role];
+    try { return await loadKind(role); } catch (e) {
+      // a model that failed to load (a network blip; a 404 = this page's build was retired) stands in as a home,
+      // so one GLB never freezes the town; the 404 also asks main.js for the one reload onto the current build
+      if (/\b404\b/.test(String(e))) globalThis.dispatchEvent?.(new Event('town:retired'));
+      if (role === 'home') throw e;
+      console.warn(`buildings: ${role} failed to load, drawn as a home`, e);
+      return (kinds[role] = await kindOf('home'));
+    }
+  }
+  async function loadKind(role) {
     const spec = BUILDINGS[role] || BUILDINGS.home;
     const src = mergeGeometries(await kit.geometry(spec.glb));
     const [body, roof] = kit.splitByUV(src, kit.inRoof);
@@ -33,8 +43,8 @@ export default async function build({ THREE, kit, world, apps }) {
     const bg = mergeGeometries(bodies);
     bg.computeBoundingBox();
     const k = {
-      body: kit.instanced(bg, kit.shared, 16),
-      roof: kit.instanced(roof.scale(spec.s, spec.s, spec.s), roofMat, 16),
+      body: kit.instanced(bg, kit.shared, CAP),
+      roof: kit.instanced(roof.scale(spec.s, spec.s, spec.s), roofMat, CAP),
       height: bg.boundingBox.max.y, width: Math.max(bg.boundingBox.max.x - bg.boundingBox.min.x, bg.boundingBox.max.z - bg.boundingBox.min.z),
       apps: [],
     };
@@ -70,6 +80,8 @@ export default async function build({ THREE, kit, world, apps }) {
   const N = 64;
   const scaffold = kit.instanced(scaffoldGeo, kit.palette.wood, N);
   const rubble = kit.instanced(rubbleGeo, kit.shared, N);
+  const ruins = { apps: [] }; // ruins are tappable too: their card says the app left the cluster
+  rubble.userData.pick = { kind: 'building', of: ruins };
   const smoke = kit.instanced(new THREE.IcosahedronGeometry(0.3, 1), kit.palette.smoke, N * 4, false);
   // a beacon: a stone post with a fire basket on top, tall enough to read from the overview
   const brazier = kit.instanced(mergeGeometries([new THREE.CylinderGeometry(0.1, 0.16, 1.5, 6).translate(0, 0.75, 0), new THREE.CylinderGeometry(0.34, 0.2, 0.22, 6).translate(0, 1.6, 0)]), kit.palette.stone, N);
@@ -87,7 +99,7 @@ export default async function build({ THREE, kit, world, apps }) {
   for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, ...Object.values(flames)]) { m.frustumCulled = false; root.add(m); }
 
   // ---- state → layout
-  let plots = [], beacons = [], dirty = true, relaying = null;
+  let plots = [], beacons = [], dirty = true, relaying = null, retryAt = 0;
   const acts = new Map(); // app → {type, t0, until?}
   world.on('state', () => { dirty = true; });
   world.on('metrics', () => { dirty = true; }); // hosts' Ready rides the metrics frame
@@ -123,8 +135,9 @@ export default async function build({ THREE, kit, world, apps }) {
       else { x = tower.x + Math.cos(tower.yaw) * 0.95; z = tower.z - Math.sin(tower.yaw) * 0.95; }
       const key = `${x.toFixed(2)},${z.toFixed(2)}`, n = at.get(key) || 0;
       at.set(key, n + 1);
-      return { sev: al.sev, x: x + n * 0.42, y, z: z + n * 0.18, seed: parseInt(al.fp.slice(0, 4), 16) };
-    });
+      const r = 0.45 * Math.sqrt(n), th = n * 2.39996; // several on one spot spread on a sunflower spiral, not a line
+      return { sev: al.sev, x: x + r * Math.cos(th), y, z: z + r * Math.sin(th), seed: parseInt(al.fp.slice(0, 4), 16) };
+    }).slice(0, N); // ≤ N fires drawn (the LED counts every alert)
   }
 
   function pose(p, t) {
@@ -154,12 +167,17 @@ export default async function build({ THREE, kit, world, apps }) {
       roofMat.emissiveIntensity = 0.75 * night;
       lampMat.emissiveIntensity = 0.1 + 2.4 * night;
       const wires = kit.ukubi.wires[night > 0.5 ? 'glow' : 'office'];
-      if (dirty && !relaying) relaying = relayout().finally(() => { relaying = null; }); // a new kind's GLB loads async
-      for (const k of Object.values(kinds)) { k.body.count = k.roof.count = 0; k.apps = []; }
+      if (dirty && !relaying && t >= retryAt) relaying = relayout() // a new kind's GLB loads async
+        .catch((e) => { console.error('buildings:', e); dirty = true; retryAt = t + 5; }) // keep the last town, retry
+        .finally(() => { relaying = null; });
+      for (const k of new Set(Object.values(kinds))) { k.body.count = k.roof.count = 0; k.apps = []; }
+      ruins.apps = [];
       let nS = 0, nR = 0, nSm = 0, nL = 0, nF = 0, busy = false;
       const counts = { info: 0, warning: 0, critical: 0 };
       for (const p of plots) {
         if (p.ruinAt) {
+          if (nR >= N) continue;
+          ruins.apps[nR] = p.app;
           M.compose(P.set(p.x, p.down ? -SINK : 0, p.z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1));
           rubble.setMatrixAt(nR, M);
           rubble.setColorAt(nR++, p.down ? grey : C.set(0xd8d2c8));
@@ -167,9 +185,10 @@ export default async function build({ THREE, kit, world, apps }) {
         }
         const [dy, sq, spin] = pose(p, t);
         busy ||= acts.has(p.app);
-        const k = p.k, i = k.body.count++;
+        const k = p.k;
+        if (k.body.count >= CAP) continue; // more than CAP of one kind: never with the allowlist (≤ 64 plots)
+        const i = k.body.count++;
         k.roof.count++;
-        if (i >= k.body.instanceMatrix.count) continue; // more than 16 of one kind: never with the allowlist (≤ 64 plots)
         M.compose(P.set(p.x, dy - (p.down ? SINK : 0), p.z), Q.setFromEuler(E.set(0, p.yaw + spin, 0)), S.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq)));
         k.body.setMatrixAt(i, M);
         k.roof.setMatrixAt(i, M);
@@ -177,9 +196,9 @@ export default async function build({ THREE, kit, world, apps }) {
         k.roof.setColorAt(i, p.down ? grey : C.set(wires[p.wire]).multiplyScalar(p.faded ? 0.6 : 1));
         k.apps[i] = p.app;
         const fx = (lx, lz) => [p.x + Math.cos(p.yaw) * lx + Math.sin(p.yaw) * lz, p.z - Math.sin(p.yaw) * lx + Math.cos(p.yaw) * lz];
-        { const [x, z] = fx(0.5 * k.width, 0.5 * k.width); M.compose(P.set(x, p.down ? -SINK : 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); lampPost.setMatrixAt(nL, M); lamp.setMatrixAt(nL++, M); }
-        if ((failed.get(p.app) ?? -1) > t) { const [x, z] = fx(-0.5 * k.width, 0.45 * k.width); M.compose(P.set(x, 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); failPole.setMatrixAt(nF, M); failCloth.setMatrixAt(nF++, M); }
-        if (p.building) {
+        if (nL < N) { const [x, z] = fx(0.5 * k.width, 0.5 * k.width); M.compose(P.set(x, p.down ? -SINK : 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); lampPost.setMatrixAt(nL, M); lamp.setMatrixAt(nL++, M); }
+        if ((failed.get(p.app) ?? -1) > t && nF < N) { const [x, z] = fx(-0.5 * k.width, 0.45 * k.width); M.compose(P.set(x, 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); failPole.setMatrixAt(nF, M); failCloth.setMatrixAt(nF++, M); }
+        if (p.building && nS < N) {
           M.compose(P.set(p.x, 0, p.z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(k.width / 1.6, Math.max(0.8, k.height / 1.5), k.width / 1.6));
           scaffold.setMatrixAt(nS++, M);
         }
@@ -206,7 +225,11 @@ export default async function build({ THREE, kit, world, apps }) {
       scaffold.count = nS; rubble.count = nR; smoke.count = nSm;
       lampPost.count = lamp.count = night > 0.05 ? nL : 0; failPole.count = failCloth.count = nF;
       for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, ...Object.values(flames)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-      for (const k of Object.values(kinds)) for (const m of [k.body, k.roof]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+      for (const k of new Set(Object.values(kinds))) for (const m of [k.body, k.roof]) {
+        m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+        m.boundingSphere = null; // three computes an InstancedMesh's sphere once, on the first raycast: moved plots must stay tappable
+      }
+      rubble.boundingSphere = null;
       return busy;
     },
     /** Building under a raycast hit → its plot (cards, fly-to). */
@@ -216,6 +239,6 @@ export default async function build({ THREE, kit, world, apps }) {
       return app ? plots.find((p) => p.app === app) : null;
     },
     plots: () => plots,
-    pickables: () => Object.values(kinds).flatMap((k) => [k.body, k.roof]),
+    pickables: () => [...new Set(Object.values(kinds))].flatMap((k) => [k.body, k.roof]).concat(rubble),
   };
 }

@@ -66,7 +66,8 @@ func TestPlotPlacement(t *testing.T) {
 	}
 	for _, f := range frames {
 		b := string(mustJSON(f))
-		for _, leak := range []string{"traefik", "searxng", "prometheus", "monitoring", "k8s-", "10.0.3", "wird-7f9c", "adminweb"} {
+		for _, leak := range []string{"traefik", "authentik", "argocd", "longhorn", "infisical", "garage", "zot", "pigsty", "grafana",
+			"searxng", "prometheus", "monitoring", "k8s-", "10.0.3", "wird-7f9c", "adminweb"} {
 			if strings.Contains(b, leak) {
 				t.Errorf("%q leaked: %s", leak, b)
 			}

@@ -16,7 +16,8 @@ package main
 //	GET  /auth/login?return=/#view  → authentik
 //	GET  /auth/callback             → session cookie, 303 to the return view
 //	POST /auth/logout               (same Origin only: CSRF) → cookie cleared, 303 to /
-//	GET  /auth/me                   → {"enabled": bool, "role": "admin"|"visitor"|"view", "handle"?: moderated username}
+//	GET  /auth/me                   → {"enabled": bool, "role": "admin"|"visitor"|"view", "handle"?: moderated username,
+//	                                   "signedIn"?: true (a session without a planting group), "next"?, "left"? (plant quota)}
 
 import (
 	"cmp"
@@ -241,6 +242,14 @@ func me(w http.ResponseWriter, r *http.Request) {
 	m := map[string]any{"enabled": auth != nil, "role": cmp.Or(s.Role, "view")}
 	if h := handle(s.Name); s.Role != "" && h != "" { // what "sign my marks" would show (the toolbar)
 		m["handle"] = h
+	}
+	if s.Sub != "" && s.Role == "" { // signed in, but not in a group that may plant: the toolbar says so
+		m["signedIn"] = true
+	}
+	if s.Role != "" && s.Sub != "" { // R7.1: the plant quota before the first mark of this page (a reload forgets it)
+		visits.Lock()
+		m["next"], m["left"] = quota(s.Sub, time.Now())
+		visits.Unlock()
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")

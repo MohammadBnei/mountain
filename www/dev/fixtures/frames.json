@@ -126,7 +126,7 @@
      {
       "id": "wird-pg",
       "app": "wird",
-      "class": "longhorn",
+      "class": "replicated",
       "capB": 3,
       "usedB": 1
      },
@@ -138,9 +138,7 @@
       "capB": 5,
       "usedB": null
      }
-    ],
-    "garage": null,
-    "pigsty": null
+    ]
    },
    "cpu": 0.3,
    "mem": 0.5,
@@ -292,9 +290,7 @@
    "t": "metrics",
    "apps": {},
    "storage": {
-    "pools": [],
-    "garage": null,
-    "pigsty": null
+    "pools": []
    },
    "cpu": 0,
    "mem": 0,

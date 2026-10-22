@@ -112,7 +112,7 @@ func TestAlertsTimeline(t *testing.T) {
 			if ipRE.MatchString(s) || versionRE.MatchString(s) || strings.Contains(s, "a1b2c3d4e5f60718") {
 				t.Errorf("leak: %s", s)
 			}
-			for _, h := range append(hostile, "journal", "Kube", "Node", "Wird", "Watchdog", "summary", "longhorn") {
+			for _, h := range append(hostile, "journal", "Kube", "Node", "Wird", "Watchdog", "summary") {
 				if strings.Contains(s, h) {
 					t.Errorf("leak %q: %.200s", h, s)
 				}

@@ -35,7 +35,7 @@ Probes ran with `KUBECONFIG=~/.kube/ukubi-admin.conf`.
 | replicas | `kube_deployment_status_replicas`, bucketed |
 | **pods (R7)** | `max by (namespace, pod, node) (kube_pod_info{node!=""}) * on (namespace, pod) group_left() max by (namespace, pod) (kube_pod_status_phase{phase="Running"} == 1) unless on (namespace, pod) kube_pod_deletion_timestamp` (promtool-tested, `relay/testdata/pods.test.yaml`). **Optional**: a failure is logged once and never marks the poll stale. Feeds placement only |
 | node Ready / capacity | `kube_node_status_condition`, `kube_node_status_allocatable` |
-| PVE quorum | `probe_success{target=~"pve-.*"}` (verified label) |
+| PVE quorum | `probe_success{target=~"pve-.*"}` (verified label). The first answer is a baseline (`hello.state.quorum`, R7.1); after that, a change is `ev quorum` |
 | req/s, 5xx, bytes out | `traefik_service_requests_total{code}`, `traefik_service_responses_bytes_total`. Service label mapped server-side |
 | storage | One pool per PVC (ns→app map; non-allowlisted PVCs merge into one `other` pool per class). Size = `kube_persistentvolumeclaim_resource_requests_storage_bytes`, bucketed. **longhorn** level = `kubelet_volume_stats_used_bytes` ⋈ `kube_persistentvolumeclaim_info{storageclass}` (real). **local-path** level = unmeasured (no kubelet stats for hostPath; optional W3 textfile `du`, 07). No NFS (00). **Garage and Pigsty: unmeasured** (Pigsty metrics live in its own VictoriaMetrics) |
 | cpu, mem, net rx | node-exporter. `rx` is in the metrics frame (no object draws it yet) |
@@ -59,6 +59,9 @@ Probes ran with `KUBECONFIG=~/.kube/ukubi-admin.conf`.
   - hexes with a visitor plant are skipped. When the island is full, the plant on the chosen hex gives way
     (`world:mark gone`).
 - `app.gone` sets `ruinAt`. A ruin older than 24 h frees its plot (`gone`).
+  - It is not rebuilt from its pods until the app is back in ArgoCD (R7.1).
+  - A pending move restarts whenever an answer lacks the app, or there is no answer.
+  - At restore, a plot whose app left `config.yaml` is dropped.
 - Plot placement and planting share one lock (`placeMu`), so a plant never lands on a hex a plot is taking.
   The lock order is visits → placeMu → h.mu → a.mu.
 - The cap is 64 plots. Pod names, node names, IPs and pod counts never leave the relay: only the host bucket does.
@@ -100,11 +103,17 @@ Rot guard:
 
 ## Metrics frame (every 15 s; equals `world.metrics`; FROZEN v2)
 ```
-{ apps:{[app]:{rpsB, errB, spike, bytesB}}, storage:{pools:[{id, app|'other', class:'longhorn'|'local', host?, capB, usedB|null}], garage:null, pigsty:null},
-  cpu, mem, buildsInFlight, rx, river, hosts:{h1..h3:{alloc, ready, load}}, stale:{[source]:ts}, visitors }
+{ apps:{[app]:{rpsB, errB, spike, bytesB}}, storage:{pools:[{id, app|'other', class:'replicated'|'local', host?, capB, usedB|null}]},
+  cpu, mem, buildsInFlight, rx, river, hosts:{h1..h3:{alloc, ready: bool|null, load}}, stale:{[source]:ts}, visitors }
 ```
 - `spike` means the relay sees more than 3× the 30-minute baseline.
 - v2 dropped `heat`, `wind` and `snowline` (the mountain's).
+- v3 (R7.1) changed three things:
+  - pool `class` is `replicated` for the longhorn storage class, so no product name;
+  - the always-null `garage`/`pigsty` keys are gone;
+  - `ready: null` means not measured yet, which the page draws as up.
+- An empty `ready` or `quorum` answer is no answer: every host keeps its last state, with no `node.ready` and no
+  `quorum` event.
 - The walkers read `rpsB`, `errB` and `spike` (03).
 
 ## Wire encoding
@@ -139,7 +148,7 @@ Rot guard:
 - `snapshots(day PK, seq, ts, seed, land bytea, state jsonb, metrics jsonb)`:
   - upserted every 10 min, at UTC rollover and on SIGTERM;
   - **R7:** `seed` holds the epoch (`townEpoch = 2`) and `land` is an empty bytea;
-  - `state` = `hello.state` (`alerts`, `health`, `replicas`, `builds`, `marks`, `plots`).
+  - `state` = `hello.state` (`alerts`, `health`, `replicas`, `builds`, `marks`, `plots`, `quorum`).
 - `metrics_5m(ts, day, frame jsonb)`: the metrics frame every 5 min (scrub).
 - `marks` (migration `003_marks.sql`): `id, sub, handle, toy, ts, day, pose jsonb, weight, deleted_at`.
   - It is the private record of each accepted mark.

@@ -160,6 +160,12 @@ func TestDBTownEpoch(t *testing.T) {
 	if n != 0 || archived != 3 || hidden != 1 || len(a.State.Plots) != 0 || len(a.State.Marks) != 0 {
 		t.Fatalf("after 004: %d events, %d archived rows, %d hidden marks, state %+v", n, archived, hidden, a.State)
 	}
+	visits.Lock()
+	seeded := len(visits.at["s1"])
+	visits.Unlock()
+	if seeded != 1 {
+		t.Errorf("the town's first boot must still seed the rate limits from marks (s1: %d, want 1)", seeded)
+	}
 	if first, err := a.store.started(ctx); err != nil || first != utcDay(time.Now()) {
 		t.Fatalf("town_epoch: %q %v", first, err)
 	}
@@ -181,6 +187,19 @@ func TestDBTownEpoch(t *testing.T) {
 	c.QueryRow(ctx, "SELECT count(*) FROM marks WHERE deleted_at IS NOT NULL").Scan(&hidden)
 	if n != 2 || hidden != 0 {
 		t.Fatalf("after the rollback: %d mountain frames back, %d marks still hidden", n, hidden)
+	}
+	// forward again, then back again: the rollback runs twice (town_archive_* already exists)
+	m, _ := migrations.ReadFile("migrations/004_town.sql")
+	if _, err := c.Exec(ctx, string(m)); err != nil {
+		t.Fatalf("004 again: %v", err)
+	}
+	c.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ('004_town.sql')")
+	if _, err := c.Exec(ctx, string(b)); err != nil {
+		t.Fatalf("second rollback: %v", err)
+	}
+	c.QueryRow(ctx, "SELECT count(*) FROM events").Scan(&n)
+	if n != 1 {
+		t.Fatalf("after the second rollback: %d mountain events, want 1", n)
 	}
 }
 

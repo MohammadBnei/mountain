@@ -1,0 +1,7 @@
+The building, tile and prop models in this folder (*.glb) are from the KayKit Medieval Hexagon Pack by
+Kay Lousberg (https://kaylousberg.com, https://kaylousberg.itch.io/kaykit-medieval-hexagon), released under
+Creative Commons Zero v1.0 Universal (CC0 1.0): https://creativecommons.org/publicdomain/zero/1.0/
+
+They came through pi-lab (compose/www/models), where they were repainted onto one shared clay atlas
+(clay.png, 8×4 cells, a derivative of the pack's own texture, also CC0). No attribution is required;
+it is given anyway (page panel: "Models: KayKit …").

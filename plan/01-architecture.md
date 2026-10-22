@@ -17,7 +17,7 @@ mountain/
   www/
     index.html style.css apps.json fonts/ models/ (KayKit GLBs + clay.png, CC0) vendor/ (three r186.1, OrbitControls,
                         GLTFLoader, BufferGeometryUtils, SkeletonUtils; manifest.json)
-    js/main.js          renderer, lights, sun → sky, camera (overview + fly-in), cards, legend, stale, quality ladder
+    js/main.js          renderer, lights, sun → sky, camera (overview + fly-in), cards, panel + alert LED, stale, credit
     js/world.js layout.js kit.js   FROZEN: the state fold + bus, hex math + building kinds, the clay kit
     js/socket.js sun.js labels.js toys.js
     js/objects/{islands,bridges,buildings,people,marks}.js
@@ -34,8 +34,8 @@ the same town.
 | `world.town` | world.js | `hello.town` (static geometry from `relay/town`) |
 | `world.state` | world.js | `hello.state` (`alerts`, `health`, `replicas`, `builds`, `marks`, `plots`), then every frame, **before** its emit |
 | `world.metrics` | world.js | the last metrics frame (02) |
-| `world.ready` | world.js | host → bool (`ev:node.ready`, `metrics.hosts`) |
-| `world.quorum` | world.js | `[hosts]` or null (`ev:quorum`) |
+| `world.ready` | world.js | host → bool (`ev:node.ready`, `metrics.hosts`). Absent means not measured yet and is drawn up (R7.1) |
+| `world.quorum` | world.js | `[hosts]` or null: `hello.state.quorum` (R7.1), then `ev:quorum` |
 | `world.stale` | world.js | null or unix ms (the oldest stale source, or the socket drop) |
 | `world.replay` | world.js | null or `{day, left}` while a scrub replay is held (06) |
 

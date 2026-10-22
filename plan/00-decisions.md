@@ -23,6 +23,9 @@
 | Email **(R3)** | **Shared SMTP2GO sender. Keep Wird's email-verification stage.** The accepted risk is recorded in ADR-B, with a quota watch |
 | Deploy **(R4)** | hq/wedding style. The helm values live in this repo (`helm/values.yaml`); CI pins the `:sha` tag in-repo; the ArgoCD app points at this repo's `helm/` |
 | Push **(R4)** | Pushing to main deploys, so it is outward-facing: **merge only after the user confirms**. For R7 the owner asked for deploys after phase 1 and phase 4 |
+| Plant room **(R7.1)** | The owner chose both: **plants wilt after 7 days**, and **on a full island the oldest plant gives way** (planting on its hex replaces it; every other planted hex stays taken). Otherwise the ~140 plantable hexes fill within days and every plant is refused forever |
+| Names **(R7.1)** | The owner chose to **scrub the data and keep the plumbing**. Storage pools say `replicated`/`local`, never the product, and the null `garage`/`pigsty` keys are gone (metrics v3). The `argo.*` event kinds and the authentik sign-up link stay public; they name the mechanism, and the amendment says so |
+| Unknown ≠ down **(R7.1)** | A host with no Ready answer yet is `ready: null`, drawn up. An empty Ready, quorum or pods answer is no answer and changes nothing. An empty town raises `MountainTownEmpty` |
 | Open **(R7)** | Host rename (`mountain` is still the hostname, CSP, OIDC redirect, `mountain_*` metrics). Drop the `mountain_archive_*` tables once the town has held for a while |
 
 **Attribution, per repo** (agents must follow it):
@@ -75,3 +78,11 @@ What they changed:
   - one InstancedMesh per kind;
   - a worst-case fixture gated on both tiers.
 - **Process:** an archive, not a delete, because no dump could be taken.
+
+**R7.1 doubt cycle (2026-10-22, after Deploy 2).** Three read-only reviews of the merged code (relay + migration,
+front end, scope + deploy) found no blockers and about 30 findings. They are fixed in R7.1 (README status), apart
+from these:
+- A restored plot whose app never comes back to ArgoCD is not ruined after a restart. Services may have no Argo
+  Application at all, so seeding the gone clock from plots would ruin them.
+- The R7 commits' author field is `Claude <noreply@anthropic.com>`. It is left as is unless the owner asks, since
+  rewriting main's history is out of scope.
