@@ -89,8 +89,10 @@ export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
       world.unmark(m.id).then(() => say(L() === 'fr' ? 'Retiré.' : 'Removed.'), (err) => say(WHY[L()][err.message] || WHY[L()].bad));
       return true;
     }
+    // the relay's sun decides (it can differ from the preview near ±6°); its world:mark lands before the ack
     const item = itemOf(sun().elev);
-    world.place('plant', { h: hx.h, q: hx.q, r: hx.r }).then(() => say(DONE[L()][item]), (err) => say(WHY[L()][err.message] || WHY[L()].bad));
+    world.place('plant', { h: hx.h, q: hx.q, r: hx.r }).then((id) => say(DONE[L()][world.state.marks.find((m) => m.id === id)?.pose.item ?? item]),
+      (err) => say(WHY[L()][err.message] || WHY[L()].bad));
     return true;
   }
 

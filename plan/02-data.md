@@ -33,31 +33,52 @@ Probes ran with `KUBECONFIG=~/.kube/ukubi-admin.conf`.
 | app gone | absent from `argocd_app_info` **for 10 min while `up{job=~".*application-controller.*"} == 1`** |
 | restarts / OOM / CrashLoop | restart counter diff. OOM only when restarts went up **and** `…_last_terminated_reason{reason="OOMKilled"} == 1`. CrashLoop from `…_waiting_reason{reason="CrashLoopBackOff"}` going 0 → 1 |
 | replicas | `kube_deployment_status_replicas`, bucketed |
+| **pods (R7)** | `max by (namespace, pod, node) (kube_pod_info{node!=""}) * on (namespace, pod) group_left() max by (namespace, pod) (kube_pod_status_phase{phase="Running"} == 1) unless on (namespace, pod) kube_pod_deletion_timestamp` (promtool-tested, `relay/testdata/pods.test.yaml`). **Optional**: a failure is logged once and never marks the poll stale. Feeds placement only |
 | node Ready / capacity | `kube_node_status_condition`, `kube_node_status_allocatable` |
 | PVE quorum | `probe_success{target=~"pve-.*"}` (verified label) |
 | req/s, 5xx, bytes out | `traefik_service_requests_total{code}`, `traefik_service_responses_bytes_total`. Service label mapped server-side |
 | storage | One pool per PVC (ns→app map; non-allowlisted PVCs merge into one `other` pool per class). Size = `kube_persistentvolumeclaim_resource_requests_storage_bytes`, bucketed. **longhorn** level = `kubelet_volume_stats_used_bytes` ⋈ `kube_persistentvolumeclaim_info{storageclass}` (real). **local-path** level = unmeasured (no kubelet stats for hostPath; optional W3 textfile `du`, 07). No NFS (00). **Garage and Pigsty: unmeasured** (Pigsty metrics live in its own VictoriaMetrics) |
-| cpu, mem, net rx | node-exporter. `net rx` feeds wind + the cloud floor. Copy says "inbound traffic"; it includes inter-node traffic |
-| river | Σ Traefik bytes out over allowlisted apps |
-| alerts | `/api/v2/alerts?active=true&silenced=false&inhibited=false`, dropping `Watchdog` and `InfoInhibitor`. Uses Alertmanager `fingerprint` and `startsAt` (gives `durS`). **A vein needs severity ≥ warning and a duration ≥ 10 min** (W3b: derived on `alert.resolve`, `relay/derive.go` + `worldcore/veins.go`) |
-| builds | GitHub Actions runs (W3c `src_github`), mapped by **workflow repo + time window** (2 h); builds in flight raise `heat`, so the next `argo.sync` of the app deposits bigger. Not SHA |
-| gitops commits, ADR merges | GitHub commits on infra-bootstrap main touching `gitops/` and `docs/adr/`. A title is public **only if it is on the relay's title allowlist**; otherwise date only |
-| vein `ref` flag | daily GitHub contents scan of infra-bootstrap `docs/bootstrap-test-notes.md` and `.claude/skills/**` for the alert name. **No hq data** |
+| cpu, mem, net rx | node-exporter. `rx` is in the metrics frame (no object draws it yet) |
+| river | Σ Traefik bytes out over allowlisted apps (metrics frame; a later wave draws it on the bridges) |
+| alerts | `/api/v2/alerts?active=true&silenced=false&inhibited=false`, dropping `Watchdog` and `InfoInhibitor`. Uses Alertmanager `fingerprint` and `startsAt` (gives `durS`). **R7:** optional `host` (the `node` label through the node → host map) and `app` (the `namespace` label through the ns → app map), so a beacon has a place |
+| builds | GitHub Actions runs (`src_github`), mapped by **workflow repo + time window** (2 h). Not SHA |
+| gitops commits, ADR merges | GitHub commits on infra-bootstrap main touching `gitops/` and `docs/adr/`. A title is public **only if it is on the relay's title allowlist**; otherwise date only. No town object draws them yet |
+
+## Placement (R7, `relay/plots.go`, run from each prom poll)
+- Every allowlisted app and service with Running pods gets one plot: `world:plot {app, host, q, r, role, ruinAt?, gone?}`.
+- **Host:**
+  - the majority host of its Running pods wins;
+  - a tie keeps the current host, then goes to sorted host order (DaemonSets tie);
+  - a move needs the new majority for **≥ 5 min**;
+  - a building **never moves off a NotReady host**: it stays there, dark;
+  - an empty or failed `pods` answer, or an app scaled to 0, **keeps every plot**.
+- **Hex:**
+  - `town.Slot(app, host, …)` picks a free grass hex in rings 2, 3, 1 (rings 1, 2, 3 for services and platform apps, which sit nearer the square);
+  - the start inside each ring is the FNV of the app, and apps are placed in sorted order, so the choice is
+    deterministic;
+  - hexes with a visitor plant are skipped. When the island is full, the plant on the chosen hex gives way
+    (`world:mark gone`).
+- `app.gone` sets `ruinAt`. A ruin older than 24 h frees its plot (`gone`).
+- Plot placement and planting share one lock (`placeMu`), so a plant never lands on a hex a plot is taking.
+  The lock order is visits → placeMu → h.mu → a.mu.
+- The cap is 64 plots. Pod names, node names, IPs and pod counts never leave the relay: only the host bucket does.
 
 **Static relay config** (`relay/config.yaml`):
-- `namespace(+deployment) → app` (e.g. ns `vos` → `vos-monolith`; agent-fleet previews excluded)
-- `node → host (h1..h3)`
-- `alert label → layer`
-- `repo → app`
-- **public app allowlist**
-- title allowlist
-- display names
+- `apps`: the **public allowlist**, each with `group` (`user` | `platform` | `service`), `display`, `building` (kind).
+  Services use role keys (gate, guardhouse, craneyard, watchtower, warehouse, vault, granary, depot), never product
+  names (ADR-0056 amendment).
+- `namespace(+deployment) → app` (e.g. ns `vos` → `vos-monolith`, ns `traefik` → `gate`; agent-fleet previews
+  excluded).
+- `node → host (h1..h3)`.
+- `alert label → layer`.
+- `repo → app`.
+- The title allowlist.
 
 Rot guard:
 - `mountain_unmapped_total{kind=node|app|repo|ns}` plus a rule.
 - A CI check diffs the app allowlist and the ns map against `infra-bootstrap/gitops/apps/registry.yaml`.
 
-## Event enum (FROZEN W2)
+## Event enum (FROZEN)
 `Ev{id (ULID), ts, kind, …}`:
 
 | Kind | Fields |
@@ -67,39 +88,40 @@ Rot guard:
 | `pod.churn` | `app`, `restarts`, `oom`, `crashloop`, over the **15 s** window |
 | `node.ready` | `host`, `ready` |
 | `quorum` | `up[]` |
-| `alert.fire` | `fp`, `sev`, `layer`, `startsAt` (unix ms, Alertmanager's: a re-fire after a relay restart keeps it) |
-| `alert.resolve` | `fp`, `sev`, `layer`, `durS` |
+| `alert.fire` | `fp`, `sev`, `layer`, `startsAt` (unix ms, Alertmanager's: a re-fire after a relay restart keeps it), `host?`, `app?` (R7) |
+| `alert.resolve` | `fp`, `sev`, `layer`, `durS`, `host?`, `app?` (R7) |
 | `build` | `app`, `state` |
 | `gitops.commit` | `n` |
 | `adr.merge` | `day`, `title?` |
 | `replicas` | `app`, `bucket` |
 | `app.gone` | `app` |
 
-`fp` = salted hash. **The salt is never rotated** (veins link to it).
+`fp` = a salted hash. **The salt is never rotated**: restored alerts and history link to it.
 
-## Metrics frame (every 15 s; equals `world.metrics`; FROZEN W2)
+## Metrics frame (every 15 s; equals `world.metrics`; FROZEN v2)
 ```
 { apps:{[app]:{rpsB, errB, spike, bytesB}}, storage:{pools:[{id, app|'other', class:'longhorn'|'local', host?, capB, usedB|null}], garage:null, pigsty:null},
-  cpu, mem, heat, buildsInFlight, wind:{x,z}, snowline, rx, river,
-  hosts:{h1..h3:{alloc, ready, load}}, stale:{[source]:ts} }
+  cpu, mem, buildsInFlight, rx, river, hosts:{h1..h3:{alloc, ready, load}}, stale:{[source]:ts}, visitors }
 ```
-- `spike` = the relay sees more than 3× the 30-minute baseline.
-- `heat` = f(builds in flight, syncs in flight). It is the same value Go uses for deposit size.
+- `spike` means the relay sees more than 3× the 30-minute baseline.
+- v2 dropped `heat`, `wind` and `snowline` (the mountain's).
+- The walkers read `rpsB`, `errB` and `spike` (03).
 
-## Wire encoding (R4)
-- Schema: `www/dev/schema/{hello,ev,metrics,world,replay,scrub}.json` (JSON Schema, FROZEN W2). The relay and the www tests both validate frames against it.
-- int16 grids (`h.base`, `h.land`, deposit `cells`): **base64 of little-endian int16, row-major, z outer, x inner**.
-- Cell 0 sits at world **(−100, −100)**. Cell size = 200 / N.
-- Heights are int16 steps of `units.json` `HEIGHT_Q` = 0.01: world units = **value × 0.01** (cm; W1a seam: int16 mm cannot hold the −67…+68 m massif).
+## Wire encoding
+- Schema: `www/dev/schema/{hello,ev,metrics,world,replay,scrub,mark}.json` (JSON Schema v2, FROZEN). The relay and
+  the www tests both validate frames against it.
+- `hello.town` carries the geometry as one tile letter per hex in canonical order (r ascending, then q), not as a
+  raster (06).
 
-## Public allowlist (built by allowlist, never by deletion; also used for `/api/topology` and replays)
-- Apps from the allowlist only; others go into an "other" aggregate with no site. Hosts appear as `h1..h3`. Group = `platform|user`.
-- **Bucketed values only** (the 85 % seep threshold sits on a bucket edge; it applies per measured pool).
+## Public allowlist (built by allowlist, never by deletion; also used for replays)
+- Apps and services from the allowlist only; others are dropped (or merged into an "other" pool). Hosts appear as
+  `h1..h3`. Group = `user | platform | service`.
+- **Bucketed values only.** The plot's host is a bucket too.
 - Alerts: hashed `fp`, severity, layer.
 - No versions. Story versions are static i18n copy.
 - Visitors: an opt-in handle passed through the moderation filter (08), otherwise "a visitor".
 
-## Persistence (W2, done: `relay/store.go`; Pigsty side live)
+## Persistence (`relay/store.go`; Pigsty side live)
 **Already done (2026-10-14):** role `dbuser_mountain` + database **`mountaindb`** on cluster `pg-proxmox`, in hq's shape: committed SCRAM verifier, `pgbouncer: false`, `revokeconn`, **connlimit 10**. The password is `DBUSER_MOUNTAIN_PASSWORD` in the infra-bootstrap Infisical project.
 - DSN: `postgres://dbuser_mountain:<pw>@postgres.bnei.lan:5432/mountaindb`. It reaches the pod through an infra-bootstrap `gitops/bootstrap/mountain-secret.yaml` modelled on `hq-secret.yaml` (W2 PR).
 - pgx: set `MaxConns` ≤ 8 explicitly. The default `max(4, NumCPU)` can exceed connlimit 10.
@@ -110,14 +132,37 @@ Rot guard:
 - **Writes never block the hub:** every write is a closure on a buffered queue (1024) drained by one writer goroutine, so the DB sees frames and snapshots in broadcast order. A full queue drops the write (log + `mountain_db_dropped_total{reason=full}`); a failed write counts `reason=error`.
 - **Health:** `mountain_source_last_success{source="db"}` on every good write and a 30 s ping → `MountainSourceStale` covers a dead DB. Memory-only seeds it once and lets it age (the alarm for a missing Secret). The page is **not** marked stale for the DB: the live view does not depend on it.
 
-**Tables (migration `001_init.sql`):** one sequence `frame_seq` orders every frame and snapshot.
-- `events(seq, id, ts, day, kind, public jsonb)`: every broadcast `ev` frame as sent (sanitised). `detail` (kept 30 days) arrives with detail mode (08).
-- `world_deltas(seq, ts, day, kind, frame jsonb)`: every broadcast `world` frame as sent.
-- `snapshots(day PK, seq, ts, seed, land bytea, state jsonb, metrics jsonb)`: upserted every 10 min, at UTC rollover and on SIGTERM. `land` = h.land, little-endian int16; h.base is regenerated from `seed`, never stored. **W3b:** veins, glacier and ash ride in `state` (hello.state: `veins`, `glacier`, `ash`, `health`, `replicas`, `builds`), so no new columns or migration; a pre-W3b row restores their defaults. `clouds` arrives with toy-clouds (W4).
+**Tables (migration `001_init.sql`):** one sequence, `frame_seq`, orders every frame and snapshot.
+- `events(seq, id, ts, day, kind, public jsonb)`: every broadcast `ev` frame as sent (sanitised). `detail` (002,
+  kept 30 days) carries the detail-mode payload (08).
+- `world_deltas(seq, ts, day, kind, frame jsonb)`: every broadcast `world` frame as sent (`plot`, `mark`).
+- `snapshots(day PK, seq, ts, seed, land bytea, state jsonb, metrics jsonb)`:
+  - upserted every 10 min, at UTC rollover and on SIGTERM;
+  - **R7:** `seed` holds the epoch (`townEpoch = 2`) and `land` is an empty bytea;
+  - `state` = `hello.state` (`alerts`, `health`, `replicas`, `builds`, `marks`, `plots`).
 - `metrics_5m(ts, day, frame jsonb)`: the metrics frame every 5 min (scrub).
-- `marks` (migration `003_marks.sql`, W4 seam): `id, sub, handle, toy, ts, day, pose jsonb, weight, deleted_at`: the private record of each accepted mark. The public side is the `world:mark` frame (world_deltas, `hello.state.marks`). No `limits` table: the per-account rate limits are seeded from `marks` at boot (ponytail).
+- `marks` (migration `003_marks.sql`): `id, sub, handle, toy, ts, day, pose jsonb, weight, deleted_at`.
+  - It is the private record of each accepted mark.
+  - The public side is the `world:mark` frame.
+  - The per-account rate limits are seeded from it at boot.
+- **R7, migration `004_town.sql`:**
+  - It moves every row of `events`, `world_deltas`, `snapshots` and `metrics_5m` into
+    `mountain_archive_{events,world_deltas,snapshots,metrics_5m}`.
+  - It soft-deletes the old-toy marks; their ids are kept in `mountain_archive_marks_hidden`.
+  - It records `town_epoch(started)`.
+  - It is reversed by hand with `relay/rollback/004_town_down.sql`, for a revert to the mountain image.
 
-**Boot:** load the latest snapshot of the seed, re-apply every frame after it (deposits add into h.land with `AddQ`; every frame updates `state` through `State.apply`, the same rules as live and world.js), restore `metrics` (stale map cleared: sources re-mark what is down). No snapshot yet: write one at once, so later frames have a base. Restored alerts seed `src_alerts`: still active → no second `alert.fire` (startsAt kept); gone from Alertmanager → resolved on the first good poll.
+**Boot:**
+1. Load the latest snapshot of the town epoch. A pre-town row is ignored.
+2. Re-apply every frame after it through `State.apply`, the same rules as live and world.js.
+3. Restore `metrics`, with the stale map cleared: sources re-mark what is down.
 
-**`hello`** = latest snapshot (`snapshot.land` = h.land at that snapshot) + the `world` frames since it (`deltas`) + `state` + the current metrics. `snapshot.day` = the UTC day of the latest snapshot; it advances at rollover.
+Edge cases:
+- No snapshot yet: write one at once.
+- Restored alerts seed `src_alerts`:
+  - still active → no second `alert.fire` (`startsAt` is kept);
+  - gone from Alertmanager → resolved on the first good poll.
+- Restored marks of a removed toy are filtered out.
+
+**`hello`** = `snapshot{day, epoch}` + the `world` and `ev` frames since it (`deltas`) + `state` + the current metrics + `town`. `snapshot.day` is the UTC day of the latest snapshot and advances at rollover.
 

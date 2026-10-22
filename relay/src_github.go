@@ -1,6 +1,6 @@
 package main
 
-// src_github (02 builds, gitops commits + ADR merges, vein ref; 06 mountain_github_token_days_left): polls the
+// src_github (02 builds, gitops commits + ADR merges; 06 mountain_github_token_days_left): polls the
 // GitHub REST API with MOUNTAIN_GITHUB_TOKEN, a fine-grained read-only PAT (Actions + Contents + Metadata: read, on
 // the config.yaml repos and infra-bootstrap).
 //
@@ -10,10 +10,9 @@ package main
 // gauge ages into MountainSourceStale instead, and the error is logged once per change, not per poll.
 //
 // Nothing GitHub returns reaches the wire as is: app comes from config.yaml repos, state from a closed enum, day from a
-// parsed date, a title only through the config.yaml titles allowlist (sanitize). SHAs stay in memory (commit dedup);
-// alert names never leave (the vein ref is a bool). Rate limits: conditional requests (a 304 does not count against
-// the limit), one poll a minute (8 calls, mostly 304), the contents scan daily, and a pause until the reset when
-// fewer than 100 requests are left.
+// parsed date, a title only through the config.yaml titles allowlist (sanitize). SHAs stay in memory (commit dedup).
+// Rate limits: conditional requests (a 304 does not count against the limit), one poll a minute (mostly 304s), and a
+// pause until the reset when fewer than 100 requests are left.
 
 import (
 	"context"
