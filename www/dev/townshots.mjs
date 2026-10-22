@@ -37,6 +37,18 @@ const bad = [];
 // here, editable-blog in ruins (app.gone needs 10 min of absence, too long for a fixture).
 const STATES = `__town.inject({ t: 'world', kind: 'plot', ...__town.world.state.plots.find((p) => p.app === 'editable-blog'), ruinAt: 1792000000000 })`;
 const SF = join(ROOT, 'dev/fixtures/relay-town-states.json');
+// R8 typology board: h1 cleared, then every current kind on it, one family per row (Industry at the back, Houses at
+// the front), the label = the kind. Rows avoid the spokes (r = 0 for q > 0, q = 0 for r > 0).
+const KINDS = `(() => {
+  const w = __town.world;
+  for (const p of w.state.plots.filter((p) => p.host === 'h1')) __town.inject({ t: 'world', kind: 'plot', ...p, gone: true });
+  const rows = [[-5, [-1, 1, 3, 5], ['hall', 'forge', 'witness', 'mill']],
+    [-3, [-3, -1, 1, 3, 5], ['keep', 'gate', 'guardhouse', 'watchtower', 'vault']],
+    [-1, [-5, -3, -1, 1, 3, 5], ['craneyard', 'depot', 'warehouse', 'granary', 'archive', 'cellar']],
+    [1, [-5, -3, -1, 1, 3, 5], ['church', 'tavern', 'inn', 'alehouse', 'bookshop', 'playhouse']],
+    [3, [-5, -3], ['home', 'house']]];
+  for (const [r, qs, kinds] of rows) kinds.forEach((k, i) => __town.inject({ t: 'world', kind: 'plot', app: k, host: 'h1', q: qs[i], r, role: k }));
+})()`;
 const views = [
   // [name, width, height, setup (in the page), wait seconds]
   ['overview-noon', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('home')`, 2],
@@ -48,6 +60,8 @@ const views = [
   ['walkers-h2', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('vos-monolith')`, 3],
   ['plant-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); document.getElementById('plant').click(); __town.fly('h2')`, 3, undefined, '&role=admin'],
   ['card-wird-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('wird')`, 2],
+  ['kinds-h1', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${KINDS}; __town.fly('h1')`, 3],
+  ['kinds-h1-dusk', 1280, 800, `__town.sunAt('2026-10-22T16:20:00Z'); ${KINDS}; __town.fly('h1')`, 3],
   // the styleboard: every state at once (injected frames on top of the fixture's live ones)
   ['states-overview', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${STATES}; __town.fly('home')`, 3, SF],
   ['states-h2', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${STATES}; __town.fly('h2')`, 3, SF],
