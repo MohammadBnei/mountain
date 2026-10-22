@@ -76,7 +76,15 @@ export default async function build({ THREE, kit, world, apps }) {
   const flameMat = { info: kit.variant('fire', { color: new THREE.Color(0xffe08a), emissive: new THREE.Color(0xffd060) }), warning: kit.variant('fire'), critical: kit.variant('fire', { color: new THREE.Color(0xff4a2a), emissive: new THREE.Color(0xff2a10), emissiveIntensity: 2.2 }) };
   const flameGeo = new THREE.ConeGeometry(0.3, 1.0, 7).translate(0, 0.5, 0); // scaled at its base, lifted onto the basket
   const flames = Object.fromEntries(Object.entries(flameMat).map(([sev, m]) => [sev, kit.instanced(flameGeo, m, N, false)]));
-  for (const m of [scaffold, rubble, smoke, brazier, ...Object.values(flames)]) { m.frustumCulled = false; root.add(m); }
+  // a door lamp per building, lit at night (the town's windows); a red flag after a failed sync (10 min)
+  const lampMat = kit.variant('window');
+  const lampPost = kit.instanced(mergeGeometries([new THREE.BoxGeometry(0.07, 0.75, 0.07).translate(0, 0.375, 0), new THREE.BoxGeometry(0.26, 0.05, 0.05).translate(0.1, 0.72, 0)]), kit.palette.wood, N);
+  const lamp = kit.instanced(new THREE.BoxGeometry(0.16, 0.2, 0.16).translate(0.2, 0.58, 0), lampMat, N, false);
+  const [fpole, fcloth] = kit.splitByUV(mergeGeometries(await kit.geometry('flag_blue')), kit.inRoof);
+  const failPole = kit.instanced(fpole.scale(3, 3, 3), kit.shared, N);
+  const failCloth = kit.instanced(fcloth.scale(3, 3, 3), kit.variant('raspberry', { color: new THREE.Color(0xa5402a) }), N); // Ukubi danger
+  const failed = new Map(); // app → until (t, s)
+  for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, ...Object.values(flames)]) { m.frustumCulled = false; root.add(m); }
 
   // ---- state → layout
   let plots = [], beacons = [], dirty = true, relaying = null;
@@ -84,7 +92,9 @@ export default async function build({ THREE, kit, world, apps }) {
   world.on('state', () => { dirty = true; });
   world.on('metrics', () => { dirty = true; }); // hosts' Ready rides the metrics frame
   world.on('world:plot', (p) => { if (!p.gone && !p.ruinAt) acts.set(p.app, { type: 'drop', t0: now }); });
-  world.on('ev:argo.sync', (f) => { if (f.ok) acts.set(f.app, { type: 'drop', t0: now }); });
+  world.on('ev:argo.sync', (f) => {
+    if (f.ok) { acts.set(f.app, { type: 'drop', t0: now }); failed.delete(f.app); } else failed.set(f.app, now + 600);
+  });
   world.on('ev:pod.churn', (f) => acts.set(f.app, { type: 'hop', t0: now, loop: f.crashloop }));
   world.on('ev:argo.health', (f) => { if (f.status === 'Healthy' && acts.get(f.app)?.loop) acts.delete(f.app); });
   let now = 0;
@@ -141,11 +151,12 @@ export default async function build({ THREE, kit, world, apps }) {
     /** → true while something moves (the host keeps rendering). */
     update(dt, t, night = 0) {
       now = t;
-      roofMat.emissiveIntensity = 0.9 * night;
+      roofMat.emissiveIntensity = 0.75 * night;
+      lampMat.emissiveIntensity = 0.1 + 2.4 * night;
       const wires = kit.ukubi.wires[night > 0.5 ? 'glow' : 'office'];
       if (dirty && !relaying) relaying = relayout().finally(() => { relaying = null; }); // a new kind's GLB loads async
       for (const k of Object.values(kinds)) { k.body.count = k.roof.count = 0; k.apps = []; }
-      let nS = 0, nR = 0, nSm = 0, busy = false;
+      let nS = 0, nR = 0, nSm = 0, nL = 0, nF = 0, busy = false;
       const counts = { info: 0, warning: 0, critical: 0 };
       for (const p of plots) {
         if (p.ruinAt) {
@@ -165,6 +176,9 @@ export default async function build({ THREE, kit, world, apps }) {
         k.body.setColorAt(i, p.down ? grey : C.setScalar(p.faded ? 0.72 : 1));
         k.roof.setColorAt(i, p.down ? grey : C.set(wires[p.wire]).multiplyScalar(p.faded ? 0.6 : 1));
         k.apps[i] = p.app;
+        const fx = (lx, lz) => [p.x + Math.cos(p.yaw) * lx + Math.sin(p.yaw) * lz, p.z - Math.sin(p.yaw) * lx + Math.cos(p.yaw) * lz];
+        { const [x, z] = fx(0.5 * k.width, 0.5 * k.width); M.compose(P.set(x, p.down ? -SINK : 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); lampPost.setMatrixAt(nL, M); lamp.setMatrixAt(nL++, M); }
+        if ((failed.get(p.app) ?? -1) > t) { const [x, z] = fx(-0.5 * k.width, 0.45 * k.width); M.compose(P.set(x, 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); failPole.setMatrixAt(nF, M); failCloth.setMatrixAt(nF++, M); }
         if (p.building) {
           M.compose(P.set(p.x, 0, p.z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(k.width / 1.6, Math.max(0.8, k.height / 1.5), k.width / 1.6));
           scaffold.setMatrixAt(nS++, M);
@@ -190,7 +204,8 @@ export default async function build({ THREE, kit, world, apps }) {
       brazier.count = nb;
       for (const [sev, m] of Object.entries(flames)) m.count = counts[sev];
       scaffold.count = nS; rubble.count = nR; smoke.count = nSm;
-      for (const m of [scaffold, rubble, smoke, brazier, ...Object.values(flames)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+      lampPost.count = lamp.count = night > 0.05 ? nL : 0; failPole.count = failCloth.count = nF;
+      for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, ...Object.values(flames)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
       for (const k of Object.values(kinds)) for (const m of [k.body, k.roof]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
       return busy;
     },

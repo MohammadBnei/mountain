@@ -44,6 +44,9 @@ const views = [
   ['overview-dusk', 1280, 800, `__town.sunAt('2026-10-22T16:20:00Z'); __town.fly('home')`, 2],
   ['overview-night', 1280, 800, `__town.sunAt('2026-10-22T21:00:00Z'); __town.fly('home')`, 2],
   ['island-h3', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('h3')`, 2],
+  ['night-h1-lamps', 1280, 800, `__town.sunAt('2026-10-22T21:00:00Z'); __town.fly('h1')`, 3],
+  ['walkers-h2', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('vos-monolith')`, 3],
+  ['plant-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); document.getElementById('plant').click(); __town.fly('h2')`, 3, undefined, '&role=admin'],
   ['card-wird-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('wird')`, 2],
   // the styleboard: every state at once (injected frames on top of the fixture's live ones)
   ['states-overview', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${STATES}; __town.fly('home')`, 3, SF],
@@ -52,7 +55,7 @@ const views = [
   ['states-phone', 390, 844, `__town.sunAt('2026-10-22T16:20:00Z'); ${STATES}; __town.fly('h2')`, 3, SF],
 ];
 try {
-  for (const [name, w, h, setup, wait, fixture = FIXTURE] of views) {
+  for (const [name, w, h, setup, wait, fixture = FIXTURE, qs = ''] of views) {
     if (ONLY.length && !ONLY.includes(name)) continue;
     const port = await relayFor(fixture);
     const page = await launch({ w, h, mobile: w < 600 });
@@ -62,7 +65,7 @@ try {
       if (method === 'Network.loadingFailed' && !params.canceled) bad.push(`${name}: request failed ${params.errorText}`);
     });
     await page.s('Runtime.enable'); await page.s('Network.enable'); await page.s('Page.enable');
-    await page.s('Page.navigate', { url: `${stat.origin}/dev/town/index.html?ws=ws://127.0.0.1:${port}/ws` });
+    await page.s('Page.navigate', { url: `${stat.origin}/dev/town/index.html?ws=ws://127.0.0.1:${port}/ws${qs}` });
     const ready = await waitFor(page, `globalThis.__town?.ready && (__town.error || __town.info().plots > 0) && true`, 60000);
     if (!ready) { bad.push(`${name}: never ready`); await page.close(); continue; }
     const err = await page.evalJSON('__town.error || null');

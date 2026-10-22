@@ -77,6 +77,9 @@ export function variant(name, extra = {}) {
   return tag(m);
 }
 
+/** A line material (the aiming ring), kit-tagged. */
+export const lineMat = (color) => tag(new THREE.LineBasicMaterial({ color }));
+
 export function mesh(geometry, material, shadows = !LOW) {
   const m = new THREE.Mesh(geometry, material);
   m.castShadow = m.receiveShadow = shadows;

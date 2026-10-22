@@ -1440,6 +1440,1896 @@
      }
     ]
    }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 5400
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 72
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1800
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 720
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1200
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 240
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 6300
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 84
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2100
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 840
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1400
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 280
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 7200
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 96
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2400
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 960
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1600
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 320
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 8100
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 108
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2700
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1080
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1800
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 360
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 9000
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 120
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3000
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1200
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2000
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 400
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 9900
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 132
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3300
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1320
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2200
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 440
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 10800
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 144
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3600
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1440
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2400
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 480
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 11700
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 156
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3900
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1560
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2600
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 520
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 12600
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 168
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4200
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1680
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2800
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 560
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 13500
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 180
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4500
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1800
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3000
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 600
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 14400
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 192
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4800
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1920
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3200
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 640
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 15300
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 204
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 5100
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2040
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3400
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 680
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 16200
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 216
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 5400
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2160
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3600
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 720
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 17100
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 228
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 5700
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2280
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3800
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 760
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 18000
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 240
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 6000
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2400
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4000
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 800
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 18900
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 252
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 6300
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2520
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4200
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 840
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 19800
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 264
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 6600
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2640
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4400
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 880
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 20700
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 276
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 6900
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2760
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4600
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 920
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 21600
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 288
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 7200
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2880
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4800
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 960
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 22500
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 300
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 7500
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3000
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 5000
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1000
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 23400
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 312
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 7800
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3120
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 5200
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1040
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 24300
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 324
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 8100
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3240
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 5400
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1080
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 25200
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 336
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 8400
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3360
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 5600
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1120
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 26100
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 348
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 8700
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3480
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 5800
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1160
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 27000
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 360
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 9000
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3600
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 6000
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1200
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 27900
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 372
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 9300
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3720
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 6200
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1240
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 28800
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 384
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 9600
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3840
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 6400
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1280
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 29700
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 396
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 9900
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3960
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 6600
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1320
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 30600
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 408
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 10200
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4080
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 6800
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1360
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 31500
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 420
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 10500
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4200
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 7000
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1400
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 32400
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 432
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 10800
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4320
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 7200
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1440
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 33300
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 444
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 11100
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4440
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 7400
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1480
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 34200
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 456
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 11400
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4560
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 7600
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1520
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 35100
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 468
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 11700
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4680
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 7800
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1560
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 36000
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 480
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 12000
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4800
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 8000
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1600
+     }
+    ]
+   }
   }
  ]
 }

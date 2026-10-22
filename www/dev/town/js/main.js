@@ -8,6 +8,7 @@ import { createWorld } from './world.js';
 import { connect } from './socket.js';
 import { sun as sunAt, now as clock } from './sun.js';
 import { createLabels } from './labels.js';
+import { createToys } from './toys.js';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
@@ -58,9 +59,9 @@ async function start() {
 
   // ---- the town
   const ctx = { THREE, kit, world, apps };
-  const [islands, bridges, buildings, marks] = await Promise.all(['islands', 'bridges', 'buildings', 'marks']
+  const [islands, bridges, buildings, marks, people] = await Promise.all(['islands', 'bridges', 'buildings', 'marks', 'people']
     .map(async (n) => (await import(`./objects/${n}.js`)).default(ctx)));
-  for (const o of [islands, bridges, buildings, marks]) scene.add(o.root);
+  for (const o of [islands, bridges, buildings, marks, people]) scene.add(o.root);
   const labels = createLabels({ THREE, layer: document.getElementById('labels'), apps, lang });
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -92,6 +93,7 @@ async function start() {
   canvas.addEventListener('pointerup', (e) => {
     if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
     down = null;
+    if (toys.tap(e)) return; // plant / remove mode takes the tap
     const r = canvas.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
@@ -170,6 +172,8 @@ async function start() {
     flyTo(view(new THREE.Vector3(c[0], 0, c[1]), 2 * world.town.radius + 1.5));
   }
   world.on('state', fillPanel); world.on('metrics', fillPanel); world.on('hello', fillPanel);
+  const toys = createToys({ THREE, kit, world, canvas, camera, lang });
+  scene.add(toys.aim);
   fillPanel();
 
   // ---- sky: the real sun over Paris → day, dusk, night
@@ -225,6 +229,8 @@ async function start() {
     { const d = camera.position.distanceTo(controls.target); scene.fog.near = d + 25 + 200 * night; scene.fog.far = d + 110 + 400 * night; }
     islands.update(); bridges.update(dt, night); marks.update(night);
     buildings.update(dt, t, night);
+    people.update(t);
+    toys.tick();
     labels.update(buildings.plots(), camera, w, h);
     renderer.render(scene, camera);
   });
