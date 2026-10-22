@@ -69,8 +69,32 @@ Probes ran with `KUBECONFIG=~/.kube/ukubi-admin.conf`.
   The lock order is visits → placeMu → h.mu → a.mu.
 - The cap is 64 plots. Pod names, node names, IPs and pod counts never leave the relay: only the host bucket does.
 
+## Machines (R8 deploy B, `relay/machines.go`, infra-bootstrap ADR-0064)
+- **What:** 12 apps with `group: machine`: keeps (k8s control plane, `node:`), halls (workers, `node:`) and seven
+  probed guests (`probe: guest-<role>`): two archives (Postgres), witness (etcd), granary (Garage, formerly a
+  service), cellar (NFS), forge (build runner), mill (agent box). The break-glass box is never listed.
+- **Presence:** a guest while the optional `guests` query (`max by (target)(probe_success{target=~"guest-.*"})`) has
+  its series (0 = not answering, still present); a VM while its node is in the `ready` answer. An empty or failed
+  answer is blind: nothing changes and every clock restarts.
+- **Placement:** inside `place()`, before the pods early return; always on the machine's configured `host`, never
+  moved (a restored machine plot on another host is dropped and placed again). Absent 10 min while its source
+  answers → `app.gone` and ruins; present again → rebuilt, or placed anew if its ruin was freed.
+- **State:** `ev machine {app, state: up|down}` (probed guests only), shown only after the state has held **10 min**,
+  both ways, and never early: a restart keeps the restored state and starts the clock on any difference; a guest with
+  no state yet is "checking". `State.Machines` rides the hello and the snapshot; `app.gone` clears the entry. VMs have
+  no state of their own: they grey with their island (owner, 2026-10-22).
+- **Out of the app paths:** machines are skipped by `appOfArgo` and `appOfWork` (ArgoCD presence, syncs, health,
+  churn, replicas, pods); granary keeps the `garage` namespace for its S3 traffic, pools and alerts, which are live
+  (ADR-0064 records that a machine's outage can show there before the debounce).
+- **Hygiene:** `mountain_plots` counts apps and services only; `metrics.apps` covers apps a namespace maps to; an
+  unknown `guest-*` target counts once as `unmapped{kind="probe"}` (a `k9s` one is dropped silently), and so does a
+  configured probe once it is ruined; never while blind. `mountain_slot_failed_total` counts apps with no free hex.
+- **Real names:** `config.yaml name:`, sent only in an admin's `/auth/me` (06). Never on the socket, in a replay or in
+  a public table; the admin-only detail channel keeps its alert labels (owner carve-out, ADR-0064).
+
 **Static relay config** (`relay/config.yaml`):
-- `apps`: the **public allowlist**, each with `group` (`user` | `platform` | `service`), `display`, `building` (kind).
+- `apps`: the **public allowlist**, each with `group` (`user` | `platform` | `service` | `machine`), `display`,
+  `building` (kind); a machine also has `host`, `name` (admin-only) and one of `probe` or `node`.
   Services use role keys (gate, guardhouse, craneyard, watchtower, warehouse, vault, granary, depot), never product
   names (ADR-0056 amendment).
 - `namespace(+deployment) → app` (e.g. ns `vos` → `vos-monolith`, ns `traefik` → `gate`; agent-fleet previews
@@ -81,7 +105,7 @@ Probes ran with `KUBECONFIG=~/.kube/ukubi-admin.conf`.
 - The title allowlist.
 
 Rot guard:
-- `mountain_unmapped_total{kind=node|app|repo|ns}` plus a rule.
+- `mountain_unmapped_total{kind=node|app|repo|ns|probe}` plus a rule.
 - A CI check diffs the app allowlist and the ns map against `infra-bootstrap/gitops/apps/registry.yaml`.
 
 ## Event enum (FROZEN)

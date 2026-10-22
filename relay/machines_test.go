@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -312,6 +314,39 @@ func TestDBMachineNames(t *testing.T) {
 	for _, w := range machineNameWords(t) {
 		if strings.Contains(all, w) {
 			t.Errorf("%q reached the DB or the hello", w)
+		}
+	}
+}
+
+// TestBundleNoMachineNames: the public bundle (apps.json, the page's JS and HTML) never names a machine's real host,
+// probe or node, nor the machine words the wire never carries.
+func TestBundleNoMachineNames(t *testing.T) {
+	files, _ := filepath.Glob("../www/js/*.js")
+	more, _ := filepath.Glob("../www/js/objects/*.js")
+	files = append(append(files, more...), "../www/index.html", "../www/apps.json")
+	words := append(machineNameWords(t), "guest-", "k9s", "patroni", "etcd", "blackbox", "probe_success", "hermes", "pg0", "192.168", "bnei.lan")
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := strings.ToLower(string(b))
+		for _, w := range words {
+			if strings.Contains(s, w) {
+				t.Errorf("%s contains %q", f, w)
+			}
+		}
+	}
+	var apps map[string]map[string]any
+	b, _ := os.ReadFile("../www/apps.json")
+	if err := json.Unmarshal(b, &apps); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := loadConfig(configYAML)
+	for k, a := range cfg.Apps {
+		e := apps[k]
+		if e == nil || e["group"] != a.Group || (a.Group == "machine" && (e["url"] != nil || (e["probed"] == true) != (a.Probe != ""))) {
+			t.Errorf("apps.json %s: %v (config group %s)", k, e, a.Group)
 		}
 	}
 }

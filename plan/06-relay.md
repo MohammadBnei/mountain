@@ -96,7 +96,8 @@ frames (02).
     - Client side: `world.scrub(day)` holds live frames off until `world.release()`, which resyncs through a fresh
       hello.
   - `mark{mark, pose, named?}`, for a session in `mountain-visitors` or `platform-admins`. `/auth/me` also returns
-    the quota `{next, left}` and `signedIn` (a session without a planting group), since R7.1. The sender alone hears back
+    the quota `{next, left}` and `signedIn` (a session without a planting group), since R7.1. R8: for role
+    `admin` only, `names {machine key: real hostname}`; the reply is `private, no-store`, `Vary: Cookie`, no CORS. The sender alone hears back
     `{t:"mark", ref?, id}` or `{…, error}`. The broadcast `world:mark` is queued before the ack on the same
     connection, so the sender's state already holds the mark when the ack lands.
   - `mark.delete{id}`, admins only (08).

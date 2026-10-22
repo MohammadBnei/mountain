@@ -67,8 +67,8 @@ building (it is an LXC). The owner's answers, one question at a time, are the R8
 | Step | Content | State |
 |---|---|---|
 | Phase 1 | infra-bootstrap PR #366: ADR-0064 (amends ADR-0056 Decisions 2–3) and seven `guest-<role>` blackbox probes | Open, the owner checks the Patroni and etcd probes by hand, then merges |
-| Deploy A | Islands 7/5/4, families and ring order, eleven more KayKit models, ground caps, streets, bridge-head walls, fitted camera, island chips, label shapes, build guard, migration 005 + rollback | **Styleboard → owner sign-off**, then PR → CI → the owner confirms the merge |
-| Deploy B | The machines: keeps, halls, guests from `guest-*` probes, debounced state, admin names via `/auth/me` | About 24 h after phase 1 is live |
+| Deploy A | Islands 7/5/4, families and ring order, eleven more KayKit models, ground caps, streets, bridge-head walls, fitted camera, island chips, label shapes, build guard, migration 005 + rollback | **Live** (PR #23, `aa59d30`, 2026-10-22) |
+| Deploy B | The machines: keeps, halls, guests from `guest-*` probes, debounced state, admin names via `/auth/me` | Built on the branch; **styleboard → owner sign-off**, then PR once #366 has been live about 24 h |
 | Deploy C | Annexes for minority pods | After B |
 
 **Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads
@@ -120,6 +120,10 @@ every later deploy reloads such tabs by itself.
 - The relay log shows migration 004 and the epoch start.
 
 - `MountainTownEmpty` is inactive and `mountain_query_failed_total{query="pods"}` stays flat (R7.1).
+
+**Rollback of R8 deploy B** (to the deploy A image): revert the merge; no migration. The deploy A relay drops the
+machine plots at restore (they are not in its config), except granary, which it keeps as a service building. Replays
+of deploy B days still show the machines.
 
 **Rollback of R8 deploy A** (to the R7.1 image): the same steps as below, but step 3 runs
 `relay/rollback/005_r8_down.sql` and step 4 reverts the R8 merge. To go back to the mountain, run 005's script first,
