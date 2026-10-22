@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -252,4 +255,41 @@ func TestNoMassGone(t *testing.T) {
 	if got := strings.Join(gone, ","); got != "5:editable-blog" {
 		t.Fatalf("app.gone: got %q, want only the real absence in step 5", got)
 	}
+}
+
+// TestAlertWhere (R7): an alert carries its host (node label) and app (namespace label) when it has them, so the
+// town can put its beacon there; unknown nodes and private namespaces stay off the wire.
+func TestAlertWhere(t *testing.T) {
+	a, c := testApp(t)
+	a.Opts.FPSalt = devFPSalt
+	file := filepath.Join(t.TempDir(), "relay-where.json")
+	os.WriteFile(file, []byte(`{"step_s": 1, "steps": [{"am": [
+		{"fingerprint": "aaa", "startsAt": "2026-10-22T10:00:00Z", "labels": {"alertname": "KubePodCrashLooping", "severity": "warning", "namespace": "wird", "pod": "wird-1", "node": "k8s-cp-02"}},
+		{"fingerprint": "bbb", "startsAt": "2026-10-22T10:00:00Z", "labels": {"alertname": "NodeDiskPressure", "severity": "critical", "node": "k8s-worker-9.lan", "namespace": "searxng"}}]}]}`), 0o644)
+	f, err := loadFixture(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, steps := runAlerts(t, a, c, f)
+	fires := evs(steps[0], "alert.fire")
+	if len(fires) != 2 {
+		t.Fatalf("fires: %v", fires)
+	}
+	byApp := map[any]map[string]any{}
+	for _, x := range fires {
+		byApp[x["app"]] = x
+	}
+	if w := byApp["wird"]; w == nil || w["host"] != "h2" {
+		t.Errorf("wird alert: %v", fires)
+	}
+	if o := byApp[nil]; o == nil || o["host"] != nil {
+		t.Errorf("an unmapped node and a private namespace must leave host and app out: %v", fires)
+	}
+	a.mu.Lock()
+	hosts := []string{a.State.Alerts[0].Host, a.State.Alerts[1].Host}
+	a.mu.Unlock()
+	if !slices.Contains(hosts, "h2") {
+		t.Errorf("hello.state.alerts keeps the host: %v", hosts)
+	}
+	validate(t, steps)
 }

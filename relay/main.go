@@ -30,12 +30,14 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/MohammadBnei/mountain"
+	"github.com/MohammadBnei/mountain/relay/town"
 	"github.com/MohammadBnei/mountain/relay/worldcore"
 	"gopkg.in/yaml.v3"
 )
@@ -45,12 +47,12 @@ var configYAML []byte
 
 // Config is relay/config.yaml.
 type Config struct {
-	Apps        map[string]struct{ Group, Display string } `yaml:"apps"`
-	Namespaces  map[string]string                          `yaml:"namespaces"`
-	Nodes       map[string]string                          `yaml:"nodes"`
-	AlertLayers []struct{ Match, Layer string }            `yaml:"alertLayers"`
-	Repos       map[string]string                          `yaml:"repos"`
-	Titles      []string                                   `yaml:"titles"`
+	Apps        map[string]AppCfg               `yaml:"apps"`
+	Namespaces  map[string]string               `yaml:"namespaces"`
+	Nodes       map[string]string               `yaml:"nodes"`
+	AlertLayers []struct{ Match, Layer string } `yaml:"alertLayers"`
+	Repos       map[string]string               `yaml:"repos"`
+	Titles      []string                        `yaml:"titles"`
 
 	titles []*regexp.Regexp // Titles, anchored
 }
@@ -72,6 +74,14 @@ func loadConfig(b []byte) (*Config, error) {
 			return nil, fmt.Errorf("config: namespace %q maps to %q, not on the allowlist", k, app)
 		}
 	}
+	for name, a := range c.Apps {
+		if a.Group != "platform" && a.Group != "user" && a.Group != "service" {
+			return nil, fmt.Errorf("config: app %q: group %q is not platform|user|service", name, a.Group)
+		}
+		if a.Building != "" && !slices.Contains(town.Kinds, a.Building) {
+			return nil, fmt.Errorf("config: app %q: building %q is not a town kind", name, a.Building)
+		}
+	}
 	for repo, app := range c.Repos {
 		if _, ok := c.Apps[app]; !ok {
 			return nil, fmt.Errorf("config: repo %q maps to %q, not on the allowlist", repo, app)
@@ -79,6 +89,10 @@ func loadConfig(b []byte) (*Config, error) {
 	}
 	return &c, nil
 }
+
+// AppCfg is one allowlist entry. Group: platform | user | service (R7: platform services shown under a generic role
+// key, never their product name). Building: the town building kind (town.Kinds); empty = picked by group.
+type AppCfg struct{ Group, Display, Building string }
 
 // Opts are the command-line flags, plus FPSalt from env MOUNTAIN_FP_SALT (Infisical mountain-8c-cz; never rotated, 02)
 // and GHToken from env MOUNTAIN_GITHUB_TOKEN (same project).
@@ -176,6 +190,7 @@ func (a *App) Hello() []byte {
 		"deltas":   a.since,
 		"state":    a.State,
 		"metrics":  a.Metrics,
+		"town":     town.Get(), // R7: static geometry, so the page renders exactly what plots.go validates
 	})
 	return b
 }

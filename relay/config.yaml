@@ -5,19 +5,31 @@
 # Built by allowlist, never by deletion: anything not listed here reaches the
 # public wire only as the "other" aggregate, with no site and no name.
 
-# Public app allowlist (registry.yaml, 2026-10-14). group: platform|user.
+# Public app allowlist (registry.yaml, 2026-10-14). group: platform|user|service; building: a town kind
+# (relay/town Kinds), the building the app's plot carries.
 # Deliberately absent: agent-fleet-core (fleet, excluded by plan), has-journal
 # (forwardAuth-gated, internal data), wird-adminweb (platform-admins only),
 # hq (private dashboard).
 apps:
-  mountain:        { group: platform, display: mountain }
-  editable-blog:   { group: user, display: blog }
-  dream-analyst:   { group: user, display: dreamer }
-  vos-monolith:    { group: user, display: vos }
-  vos-monolith-dev: { group: user, display: vos dev }
-  wedding-2026:    { group: user, display: wedding }
-  ukubi-stt:       { group: platform, display: stt }
-  wird:            { group: user, display: wird }
+  mountain:        { group: platform, display: mountain, building: castle }
+  editable-blog:   { group: user, display: blog, building: house }
+  dream-analyst:   { group: user, display: dreamer, building: tavern }
+  vos-monolith:    { group: user, display: vos, building: market }
+  vos-monolith-dev: { group: user, display: vos dev, building: home }
+  wedding-2026:    { group: user, display: wedding, building: church }
+  ukubi-stt:       { group: platform, display: stt, building: tower }
+  wird:            { group: user, display: wird, building: house }
+  # Platform services (R7, user decision "full services"): public under a generic ROLE key only, never the
+  # product name (a sanitize test greps every frame for the names). They flow like apps: syncs, health, churn,
+  # Traefik traffic, pools, and a building on the host their pods run on. Amends ADR-0056 (plan/adr-0056-amendment.md).
+  gate:            { group: service, display: gate, building: gate }             # traefik
+  guardhouse:      { group: service, display: guardhouse, building: guardhouse } # authentik
+  craneyard:       { group: service, display: crane yard, building: craneyard }  # argocd
+  watchtower:      { group: service, display: watchtower, building: watchtower } # monitoring
+  warehouse:       { group: service, display: warehouse, building: warehouse }   # longhorn
+  vault:           { group: service, display: vault, building: vault }           # infisical
+  granary:         { group: service, display: granary, building: granary }       # garage
+  depot:           { group: service, display: depot, building: depot }           # zot
 
 # namespace (or namespace/deployment, which wins) -> app. "" = known but not
 # public: dropped into "other" without counting as unmapped.
@@ -35,25 +47,26 @@ namespaces:
   hq: ""
   agent-fleet: ""
   # Platform and third-party namespaces (argocd_app_info dest_namespace and Traefik
-  # routers, live 2026-10-14): known, never public, not rot.
+  # routers, live 2026-10-14): known, not rot. The ones mapped to a role key are public services (R7);
+  # "" stays private.
   actions-runner: ""
-  argocd: ""
-  authentik: ""
+  argocd: craneyard
+  authentik: guardhouse
   default: ""
   ente: ""
-  garage: ""
-  infisical: ""
+  garage: granary
+  infisical: vault
   kube-system: ""
   local-path-storage: ""
-  longhorn-system: ""
-  monitoring: ""
+  longhorn-system: warehouse
+  monitoring: watchtower
   netbird: ""
   pgweb: ""
   proxmox: ""
   searxng: ""
   thot: ""
-  traefik: ""
-  zot: ""
+  traefik: gate
+  zot: depot
 
 # Kubernetes node -> Proxmox host bucket (terraform.tfvars k8s_nodes node_name).
 # h1 = the .165 PVE node (default pve_node_name), h2 = server1, h3 = ex-laptop.

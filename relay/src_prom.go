@@ -71,6 +71,9 @@ var promQ = map[string]string{
 	"cpu":      `1 - avg(rate(node_cpu_seconds_total{mode="idle"}[2m]))`,
 	"mem":      `1 - sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)`,
 	"rx":       `sum(rate(node_network_receive_bytes_total{device!~"lo|veth.*|cali.*|lxc.*|cilium.*|flannel.*"}[2m]))`,
+	// R7 town plots: running pods per (namespace, pod, node), minus pods being deleted (a NotReady node's pods keep
+	// phase Running for minutes). max by() first, so a second KSM replica or a uid churn cannot make the join fail.
+	"pods": `max by (namespace, pod, node) (kube_pod_info{node!=""}) * on (namespace, pod) group_left() max by (namespace, pod) (kube_pod_status_phase{phase="Running"} == 1) unless on (namespace, pod) kube_pod_deletion_timestamp`,
 }
 
 func init() {
@@ -100,6 +103,7 @@ type promSource struct {
 	quorum string
 	base   map[string]float64 // app -> rps baseline (30 min EWMA); keyed by allowlist, bounded
 	syncs  []time.Time        // syncs in the heat window
+	plots  *placer            // R7 town plots (plots.go)
 }
 
 type counter struct {
@@ -110,7 +114,7 @@ type counter struct {
 func newProm(a *App) *promSource {
 	return &promSource{a: a, url: strings.TrimRight(a.Opts.PromURL, "/"), hc: &http.Client{Timeout: 10 * time.Second},
 		ctr: map[string]counter{}, health: map[string]string{}, seen: map[string]bool{}, gone: map[string]time.Time{},
-		crash: map[string]bool{}, repl: map[string]int{}, ready: map[string]bool{}, base: map[string]float64{}}
+		crash: map[string]bool{}, repl: map[string]int{}, ready: map[string]bool{}, base: map[string]float64{}, plots: newPlacer()}
 }
 
 func (p *promSource) Name() string { return "prom" }
@@ -341,6 +345,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		}
 		p.health[app], p.seen[app] = st, true
 		delete(p.gone, app)
+		p.plots.ruin(p.a, o, app, false, now) // back in ArgoCD: its ruins (if any) are rebuilt
 	}
 	ctrlUp := len(r["ctrl"]) > 0 && r["ctrl"][0].V == 1
 	for app := range p.seen {
@@ -352,6 +357,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 			p.gone[app] = now
 		case now.Sub(p.gone[app]) >= goneAfter:
 			o.Ev("app.gone", map[string]any{"app": app})
+			p.plots.ruin(p.a, o, app, true, now)
 			delete(p.seen, app)
 			delete(p.gone, app)
 			delete(p.health, app)
@@ -460,6 +466,9 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		}
 		p.ready[h] = rd
 	}
+
+	// town plots: where the pods run (plots.go); after the hosts' Ready, which a move depends on.
+	p.plots.place(p.a, o, r["pods"], p.ready, now)
 
 	// quorum: PVE probes up, as hosts.
 	up := []string{}

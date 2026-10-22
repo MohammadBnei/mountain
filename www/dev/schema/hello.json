@@ -47,7 +47,9 @@
               "fp": { "$ref": "ev.json#/$defs/fp" },
               "sev": { "$ref": "ev.json#/$defs/sev" },
               "layer": { "$ref": "ev.json#/$defs/layer" },
-              "startsAt": { "type": "integer", "minimum": 0 }
+              "startsAt": { "type": "integer", "minimum": 0 },
+              "host": { "$ref": "ev.json#/$defs/host" },
+              "app": { "$ref": "ev.json#/$defs/app" }
             }
           }
         },
@@ -109,10 +111,43 @@
               "credits": { "type": "array", "maxItems": 16, "items": { "$ref": "world.json#/$defs/handle" } }
             }
           }
+        },
+        "plots": {
+          "description": "R7: the town buildings, world:plot payloads, one per app (a frame replaces it; gone removes it), ≤ 64.",
+          "type": "array", "maxItems": 64, "items": { "$ref": "world.json#/$defs/plot" }
         }
       }
     },
-    "metrics": { "$ref": "metrics.json" }
+    "metrics": { "$ref": "metrics.json" },
+    "town": {
+      "description": "R7: the static town geometry (relay/town): islands h1..h3 (global axial centre q, r; tiles = one kind per local hex in canonical order: r ascending, then q; s square, g grass, r road, b bridge head, m meadow) and the bridges between their heads.",
+      "type": "object", "required": ["radius", "islands", "bridges"], "additionalProperties": false,
+      "properties": {
+        "radius": { "const": 4 },
+        "islands": {
+          "type": "array", "minItems": 3, "maxItems": 3,
+          "items": {
+            "type": "object", "required": ["host", "q", "r", "tiles"], "additionalProperties": false,
+            "properties": {
+              "host": { "$ref": "world.json#/$defs/host" },
+              "q": { "type": "integer" }, "r": { "type": "integer" },
+              "tiles": { "type": "string", "pattern": "^[sgrbm]{61}$" }
+            }
+          }
+        },
+        "bridges": {
+          "type": "array", "maxItems": 3,
+          "items": {
+            "type": "object", "required": ["a", "b", "aq", "ar", "bq", "br"], "additionalProperties": false,
+            "properties": {
+              "a": { "$ref": "world.json#/$defs/host" }, "b": { "$ref": "world.json#/$defs/host" },
+              "aq": { "$ref": "world.json#/$defs/hexc" }, "ar": { "$ref": "world.json#/$defs/hexc" },
+              "bq": { "$ref": "world.json#/$defs/hexc" }, "br": { "$ref": "world.json#/$defs/hexc" }
+            }
+          }
+        }
+      }
+    }
   },
   "$defs": {
     "pose": { "type": "object", "maxProperties": 16, "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]{0,15}$" }, "additionalProperties": { "oneOf": [{ "type": "number" }, { "type": "boolean" }, { "type": "array", "items": { "type": "number" }, "maxItems": 16 }] } },

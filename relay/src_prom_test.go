@@ -239,7 +239,7 @@ func TestFixtureTimeline(t *testing.T) {
 	for _, p := range m["storage"].(map[string]any)["pools"].([]any) {
 		pools[p.(map[string]any)["id"].(string)] = p.(map[string]any)
 	}
-	for id, want := range map[string]string{"wird-1": "longhorn/18", "ukubi-stt-1": "local/<nil>", "other-longhorn": "longhorn/4", "other-local-h1": "local/<nil>", "other-local-h2": "local/<nil>"} {
+	for id, want := range map[string]string{"wird-1": "longhorn/18", "ukubi-stt-1": "local/<nil>", "other-longhorn": "longhorn/4", "watchtower-1": "local/<nil>", "other-local-h2": "local/<nil>"} {
 		if p := pools[id]; p == nil || fmt.Sprintf("%v/%v", p["class"], p["usedB"]) != want {
 			t.Errorf("pool %s: got %v, want %s", id, p, want)
 		}
@@ -403,7 +403,7 @@ func TestPoolsOrder(t *testing.T) {
 		return sample{L: map[string]string{"namespace": ns, "persistentvolumeclaim": name, "storageclass": class}, V: 1}
 	}
 	r := map[string][]sample{"pvcnode": {{L: map[string]string{"namespace": "kube-system", "persistentvolumeclaim": "x", "node": "k8s-cp-01"}}}}
-	r["pvc"] = []sample{pvc("kube-system", "x", "local-path"), pvc("monitoring", "y", "longhorn")}
+	r["pvc"] = []sample{pvc("kube-system", "x", "local-path"), pvc("searxng", "y", "longhorn")}
 	for i := range 15 {
 		r["pvc"] = append(r["pvc"], pvc("wird", fmt.Sprint("d", i), "longhorn"))
 	}

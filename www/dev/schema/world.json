@@ -201,7 +201,8 @@
     "group": {
      "enum": [
       "platform",
-      "user"
+      "user",
+      "service"
      ]
     }
    },
@@ -328,6 +329,48 @@
     "r"
    ],
    "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "world"
+    },
+    "kind": {
+     "const": "plot"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "host": {
+     "$ref": "#/$defs/host"
+    },
+    "q": {
+     "$ref": "#/$defs/hexc"
+    },
+    "r": {
+     "$ref": "#/$defs/hexc"
+    },
+    "role": {
+     "$ref": "#/$defs/role"
+    },
+    "ruinAt": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "gone": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "t",
+    "kind",
+    "app",
+    "host",
+    "q",
+    "r",
+    "role"
+   ],
+   "additionalProperties": false
   }
  ],
  "$defs": {
@@ -368,6 +411,64 @@
    "description": "a moderated handle or 'a visitor'",
    "type": "string",
    "pattern": "^([a-z0-9_-]{3,20}|a visitor)$"
+  },
+  "hexc": {
+   "type": "integer",
+   "minimum": -4,
+   "maximum": 4
+  },
+  "role": {
+   "description": "town building kind (relay/town Kinds)",
+   "enum": [
+    "home",
+    "house",
+    "market",
+    "tavern",
+    "tower",
+    "church",
+    "castle",
+    "gate",
+    "guardhouse",
+    "craneyard",
+    "watchtower",
+    "warehouse",
+    "vault",
+    "granary",
+    "depot"
+   ]
+  },
+  "plot": {
+   "description": "R7 town plot: an app's building on the island of the host its pods run on (relay plots.go). ruinAt: app.gone time (unix ms), the building is ruins.",
+   "type": "object",
+   "required": [
+    "app",
+    "host",
+    "q",
+    "r",
+    "role"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "host": {
+     "$ref": "#/$defs/host"
+    },
+    "q": {
+     "$ref": "#/$defs/hexc"
+    },
+    "r": {
+     "$ref": "#/$defs/hexc"
+    },
+    "role": {
+     "$ref": "#/$defs/role"
+    },
+    "ruinAt": {
+     "type": "integer",
+     "minimum": 0
+    }
+   }
   }
  }
 }
