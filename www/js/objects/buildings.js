@@ -6,8 +6,40 @@
 // Transient acts (from live frames, never replayed state): a new or moved plot and a successful sync drop the
 // building in (crane drop + squash, pi-lab office.js); pod.churn makes it hop (pi-lab main.js hopPose), and a
 // crashloop keeps it hopping until the next healthy sync.
+// R8 typology: the family of a building's kind (layout.js FAMILY) sets its ground: a flat hex cap of stone (Defense),
+// paving (Public) or packed earth (Industry); Shops and Houses stand on the grass. Streets: from each door that does
+// not already open on a road, the shortest walk over free grass to a spoke or the square (a BFS, recomputed with the
+// plots), drawn as tan caps. They reserve nothing: a plot or a plant may take a street hex, and the street reroutes.
+// Industry and Houses cast no shadow (the low, busy kinds; it keeps the shadow pass small).
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BUILDINGS, plotXZ, wireOf } from '../layout.js';
+import { BUILDINGS, familyOf, islandsOf, plotXZ, wireOf } from '../layout.js';
+
+const GROUND = { defense: 0xaaa69f, public: 0xece2cf, industry: 0xb49272 }, STREET = 0xdcc8a2;
+const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+
+/** The streets of an island: local hexes from each door to the road (see above). plots: [{q, r}] on that island. */
+export function streets(is, plots) {
+  const key = (q, r) => `${q},${r}`, taken = new Set(plots.map((p) => key(p.q, p.r))), out = new Map();
+  const free = (q, r) => is.tileAt(q, r)?.kind === 'g' && !taken.has(key(q, r));
+  const onRoad = (q, r) => DIRS.some(([dq, dr]) => 'rsb'.includes(is.tileAt(q + dq, r + dr)?.kind || 'x'));
+  for (const p of [...plots].sort((a, b) => a.q - b.q || a.r - b.r)) {
+    if (onRoad(p.q, p.r)) continue;
+    const from = new Map([[key(p.q, p.r), null]]), queue = [[p.q, p.r]];
+    let end = null;
+    while (queue.length && !end) {
+      const [q, r] = queue.shift();
+      for (const [dq, dr] of DIRS) {
+        const n = [q + dq, r + dr], k = key(...n);
+        if (from.has(k) || !free(...n)) continue;
+        from.set(k, [q, r]);
+        if (onRoad(...n)) { end = n; break; }
+        queue.push(n);
+      }
+    }
+    for (let h = end; h && from.get(key(...h)); h = from.get(key(...h))) out.set(key(...h), h);
+  }
+  return [...out.values()];
+}
 
 const DROP = 0.9, HOP = 0.75;
 
@@ -45,10 +77,14 @@ export default async function build({ THREE, kit, world, apps }) {
     const k = {
       body: kit.instanced(bg, kit.shared, CAP),
       roof: kit.instanced(roof.scale(spec.s, spec.s, spec.s), roofMat, CAP),
+      family: familyOf(role),
       height: bg.boundingBox.max.y, width: Math.max(bg.boundingBox.max.x - bg.boundingBox.min.x, bg.boundingBox.max.z - bg.boundingBox.min.z),
       apps: [],
     };
-    for (const m of [k.body, k.roof]) { m.userData.pick = { kind: 'building', of: k }; m.frustumCulled = false; root.add(m); }
+    for (const m of [k.body, k.roof]) {
+      m.userData.pick = { kind: 'building', of: k }; m.frustumCulled = false; root.add(m);
+      if (k.family === 'industry' || k.family === 'houses') m.castShadow = false;
+    }
     kinds[role] = k;
     return k;
   }
@@ -96,7 +132,12 @@ export default async function build({ THREE, kit, world, apps }) {
   const failPole = kit.instanced(fpole.scale(3, 3, 3), kit.shared, N);
   const failCloth = kit.instanced(fcloth.scale(3, 3, 3), kit.variant('raspberry', { color: new THREE.Color(0xa5402a) }), N); // Ukubi danger
   const failed = new Map(); // app → until (t, s)
-  for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, ...Object.values(flames)]) { m.frustumCulled = false; root.add(m); }
+  // ground caps and streets: one instanced flat hex (pointy-top like the tiles), tinted per instance
+  const cap = kit.instanced(new THREE.CylinderGeometry(0.98, 0.98, 0.05, 6).translate(0, 0.025, 0), kit.palette.white, 256);
+  cap.castShadow = false;
+  const isles = islandsOf(world.town);
+  let ground = [];
+  for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, cap, ...Object.values(flames)]) { m.frustumCulled = false; root.add(m); }
 
   // ---- state → layout
   let plots = [], beacons = [], dirty = true, relaying = null, retryAt = 0;
@@ -124,6 +165,12 @@ export default async function build({ THREE, kit, world, apps }) {
         building: !!s.builds[p.app] || health === 'Progressing', smoke: health === 'Degraded', faded: health === 'Missing' || health === 'Suspended' });
     }
     plots = list;
+    ground = [];
+    for (const is of isles) {
+      const here = list.filter((p) => p.host === is.host);
+      for (const p of here) if (!p.ruinAt && GROUND[p.k.family]) ground.push({ host: p.host, q: p.q, r: p.r, color: GROUND[p.k.family] });
+      for (const [q, r] of streets(is, here)) ground.push({ host: is.host, q, r, color: STREET });
+    }
     // beacons: at the alert's app, else its host's square, else the watchtower, else h1's square
     const byApp = new Map(list.map((p) => [p.app, p])), tower = list.find((p) => p.role === 'watchtower');
     const at = new Map();
@@ -218,13 +265,21 @@ export default async function build({ THREE, kit, world, apps }) {
         M.compose(P.set(b.x, 1.68, b.z), Q.setFromEuler(E.set(0, t * 2 + b.seed, 0)), S.set(big, big * fl, big));
         flames[b.sev].setMatrixAt(n, M);
       }
+      let nc = 0;
+      for (const g of ground.slice(0, cap.instanceMatrix.count)) {
+        const [x, z] = plotXZ(world.town, g.host, g.q, g.r), down = world.ready[g.host] === false;
+        M.compose(P.set(x, down ? -SINK : 0, z), Q.identity(), S.set(1, 1, 1));
+        cap.setMatrixAt(nc, M);
+        cap.setColorAt(nc++, down ? grey : C.set(g.color));
+      }
+      cap.count = nc;
       let nb = 0;
       for (const b of beacons) { M.compose(P.set(b.x, 0, b.z), Q.identity(), S.set(1, 1, 1)); brazier.setMatrixAt(nb++, M); }
       brazier.count = nb;
       for (const [sev, m] of Object.entries(flames)) m.count = counts[sev];
       scaffold.count = nS; rubble.count = nR; smoke.count = nSm;
       lampPost.count = lamp.count = night > 0.05 ? nL : 0; failPole.count = failCloth.count = nF;
-      for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, ...Object.values(flames)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+      for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, cap, ...Object.values(flames)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
       for (const k of new Set(Object.values(kinds))) for (const m of [k.body, k.roof]) {
         m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
         m.boundingSphere = null; // three computes an InstancedMesh's sphere once, on the first raycast: moved plots must stay tappable

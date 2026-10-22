@@ -54,14 +54,14 @@ export const BUILDINGS = {
   gate: { glb: 'wall_straight_gate', s: 1.28, props: [['wall_straight', 1.3, 0, 0, 1.28], ['wall_straight', -1.3, 0, 0, 1.28]] },
   guardhouse: { glb: 'building_tower_catapult_blue', s: 1.7 },
   watchtower: { glb: 'building_tower_A_blue', s: 2.16 },
-  vault: { glb: 'building_mine_blue', s: 1.8, props: [['fence_stone_straight', 0, 0.95, 0, 1.6]] },
+  vault: { glb: 'building_mine_blue', s: 1.3, props: [['fence_stone_straight', 0, 0.95, 0, 1.4]] },
   castle: { glb: 'building_castle_blue', s: 1.1 }, // R7 kinds, kept for replays of older days
   tower: { glb: 'building_tower_A_blue', s: 1.82 },
   // Public: the shared platform
   craneyard: { glb: 'building_tower_B_blue', s: 1.75 },
   depot: { glb: 'building_market_blue', s: 1.28 },
   warehouse: { glb: 'building_home_B_blue', s: 1.89, props: [['barrel', 0.7, 0.4, 0, 1.8], ['barrel', 0.75, 0.0, 0.5, 1.8], ['sack', -0.7, 0.45, 0.4, 2.2]] },
-  granary: { glb: 'building_grain', s: 2.2, props: [['sack', 0.65, 0.5, 0.4, 2.2], ['sack', -0.6, 0.55, -0.3, 2.2], ['flag_blue', 0.7, -0.5, 0, 2.4]] },
+  granary: { glb: 'building_grain', s: 1.0, props: [['sack', 1.0, 0.9, 0.4, 2.2], ['sack', -0.9, 0.95, -0.3, 2.2], ['flag_blue', 1.2, -0.8, 0, 2.4]] }, // a field the size of its hex
   archive: { glb: 'building_tower_base_blue', s: 1.75, props: [['crate_long_A', 0.75, 0.55, 0.2, 1.6]] },
   cellar: { glb: 'building_watermill_blue', s: 1.6 },
   market: { glb: 'building_market_blue', s: 1.28 }, // R7

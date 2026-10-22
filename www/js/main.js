@@ -98,6 +98,10 @@ async function start() {
   const centres = islands.islands.map((i) => i.centre);
   const mid = centres.reduce((a, c) => [a[0] + c[0] / 3, a[1] + c[1] / 3], [0, 0]);
   const span = 0.85 * Math.max(...islands.islands.map((i) => Math.hypot(i.centre[0] - mid[0], i.centre[1] - mid[1]) + 2 * i.radius));
+  // R8: the shadow camera fits the town (the islands' rims around mid, plus a margin for the tallest buildings)
+  const townR = Math.max(...islands.islands.map((i) => Math.hypot(i.centre[0] - mid[0], i.centre[1] - mid[1]) + 2 * i.radius + 2));
+  Object.assign(sun.shadow.camera, { left: -townR, right: townR, top: townR, bottom: -townR, far: 60 + 2 * townR });
+  sun.shadow.camera.updateProjectionMatrix();
   let fly = null;
   function view(target, radius) {
     // distance so a sphere of `radius` fits the narrower screen axis, seen from the front-high angle

@@ -1,5 +1,7 @@
 // Islands (R7): one floating hex island per host bucket, from hello.town (relay/town). KayKit hex tiles merged per
 // island into one mesh (clay atlas), a lumpy earth cone underneath (pi-lab island.js), a well on the square.
+// R8: a short stone wall either side of each bridge head, along the rim: the town's gate is where the bridge lands.
+// The tiles receive shadows but cast none (they only shade each other's edges, and it halves the shadow pass).
 // A host whose nodes are not Ready greys its island (and update() reports it for the buildings on it).
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { islandsOf, ring } from '../layout.js';
@@ -15,6 +17,8 @@ export default async function build({ THREE, kit, world }) {
   const square = recell(await one('hex_grass'), CELL.olive, (ny) => (ny > 0.5 ? [5, 2] : CELL.tan));
   const road = recell(await one('hex_road_A'), CELL.olive, (ny) => (ny > 0.5 ? CELL.sage : CELL.tan)); // its strip runs along +x
   const well = await one('building_well_blue');
+  const wall = await one('wall_straight');
+  const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]]; // axial, 60° apart (relay/town onSpoke)
   // rotation.y that turns +x onto the axial direction (q, r): always a multiple of 60°, so tiles stay on the grid
   const dirAngle = (q, r) => Math.atan2(-Math.sqrt(3) * r, 2 * (q + r / 2));
 
@@ -29,6 +33,14 @@ export default async function build({ THREE, kit, world }) {
     }
     const [cx, cz] = is.centre;
     parts.push(well.clone().applyMatrix4(xf(cx, 0, cz, 0, 1.6)));
+    for (const b of world.town.bridges) for (const [host, hq, hr] of [[b.a, b.aq, b.ar], [b.b, b.bq, b.br]]) {
+      if (host !== is.host) continue;
+      const i = DIRS.findIndex(([q, r]) => q * is.radius === hq && r * is.radius === hr); // the head is dir·radius
+      for (const j of [i + 2, i + 4]) { // the two rim hexes beside the head (±120° from its spoke)
+        const [dq, dr] = DIRS[j % 6], t = is.tileAt(hq + dq, hr + dr);
+        parts.push(wall.clone().applyMatrix4(xf(t.x, 0, t.z, dirAngle(dq, dr), 0.7)));
+      }
+    }
     // earth cone under the tiles, lumpy and faceted, darker toward the tip (pi-lab island.js at radius 4; R8: an island's
     // radius follows its host's power, and the cone's depth follows the radius)
     const top = -0.9, R = 2 * is.radius - 0.2, k = is.radius / 4; // inside the tiles' outline, so no rim pokes out
@@ -47,6 +59,7 @@ export default async function build({ THREE, kit, world }) {
     parts.push(cone);
     const mat = kit.variant('shared');
     const m = kit.mesh(mergeGeometries(parts), mat);
+    m.castShadow = false;
     m.userData = { pick: { kind: 'island', host: is.host } };
     meshes[is.host] = m;
     root.add(m);
