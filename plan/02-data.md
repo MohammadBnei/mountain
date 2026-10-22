@@ -53,7 +53,10 @@ Probes ran with `KUBECONFIG=~/.kube/ukubi-admin.conf`.
   - a building **never moves off a NotReady host**: it stays there, dark;
   - an empty or failed `pods` answer, or an app scaled to 0, **keeps every plot**.
 - **Hex:**
-  - `town.Slot(app, host, …)` picks a free grass hex in rings 2, 3, 1 (rings 1, 2, 3 for services and platform apps, which sit nearer the square);
+  - `town.Slot(app, host, kind, …)` picks a free grass hex in the ring order of the kind's family (R8, 03 Building
+    kinds): Public around the square, Defense at the town's edge, Industry in the outskirts, Shops on the street
+    front, Houses in between;
+  - a restored plot whose kind changed in `config.yaml` is dropped at boot and placed again by its new family;
   - the start inside each ring is the FNV of the app, and apps are placed in sorted order, so the choice is
     deterministic;
   - hexes with a visitor plant are skipped. When the island is full, the plant on the chosen hex gives way
@@ -160,6 +163,13 @@ Rot guard:
   - It soft-deletes the old-toy marks; their ids are kept in `mountain_archive_marks_hidden`.
   - It records `town_epoch(started)`.
   - It is reversed by hand with `relay/rollback/004_town_down.sql`, for a revert to the mountain image.
+- **R8, migration `005_r8.sql`:** the town keeps its epoch and history (an R7 plot's local hex is still on its island).
+  - It records `town_r8(started)`. A boot whose latest snapshot predates it drops every plot, so the first poll
+    places each building on its family's ring once.
+  - It copies the deploy day's snapshot row to `r7_archive_day_snapshot`, since R8's snapshot overwrites that day.
+  - `relay/rollback/005_r8_down.sql` reverses it by hand: R8's world frames and snapshots move to `r8_archive_*`, the
+    R7.1 day row comes back, and plants planted since R8 are hidden (they may sit on rings an R7.1 island lacks).
+    Events and metrics stay. Run it before `004_town_down.sql` to go further back.
 
 **Boot:**
 1. Load the latest snapshot of the town epoch. A pre-town row is ignored.

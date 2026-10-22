@@ -16,16 +16,22 @@
 
 **`relay/town` is the only implementation of the town geometry (R7):**
 - **Hexes** are pointy-top axial, as in pi-lab `kit.hex`: x = 2(q + r/2), z = √3·r.
-- **Islands** have radius 4, so 61 hexes each. The centres are h1 (−4, −4), h2 (8, −4) and h3 (−4, 8).
+- **Islands** (R8) are sized by their host's hardware: score = 0.45·threads + 0.4·RAM + 0.15·disk, each normalised to
+  the strongest host, radius = 4 + round(3·(s − s_min)/(1 − s_min)). h1 (12 threads, 32 GB, 2 TB) → 7 (169 hexes);
+  h2 (6, 32 GB, 476 GB) → 5 (91); h3 (4, 15 GB, 238 GB) → 4 (61). `town.Radii` is hard-coded (it builds before the
+  config loads); `TestRadii` recomputes it from the specs.
+- The islands stay an equilateral triangle of side max(rᵢ + rⱼ) + 3 = 15. Centres: h1 (−5, −5), h2 (10, −5),
+  h3 (−5, 10). A bridge head is dir·r on its island, so the widest strait (h1–h2) is 3 hexes.
 - **Tiles**, per local hex:
   - `s`: the square, at the centre;
   - `r`: roads, the spokes from the square to each bridge head;
   - `b`: the bridge heads, which face h1–h2 (1, 0), h1–h3 (0, 1) and h2–h3 (−1, 1);
-  - `g`: grass, rings 1–3, the building ring;
-  - `m`: meadow, ring 4, for marks only.
-- **`town.Get()`** is sent as `hello.town {radius, islands[{host, q, r, tiles}], bridges[{a, b, aq, ar, bq, br}]}`.
+  - `g`: grass, rings 1..r−1: the town (1..r−2) and the outskirts (r−1);
+  - `m`: meadow, ring r, for marks only.
+- **`town.Get()`** is sent as `hello.town {islands[{host, q, r, radius, tiles}], bridges[{a, b, aq, ar, bq, br}]}`.
   `tiles` is one letter per hex in canonical order: r ascending, then q.
-- **`town.Slot`** places plots (02 Placement) and **`town.Plantable`** says where a plant may go.
+- **`town.Slot`** places plots by the kind's family (02 Placement, 03 Building kinds) and **`town.Plantable`** says
+  where a plant may go.
 - `town_test.go` pins the vectors that `core.test.mjs` checks on the JS side.
 
 **`plots.go`** runs from each prom poll, after the nodes section. It turns the `pods` answer into `world:plot`
@@ -70,7 +76,8 @@ frames (02).
 
 **WS protocol:**
 - Server → client:
-  - `hello{snapshot{day, epoch}, deltas, state, metrics, town}`
+  - `hello{snapshot{day, epoch}, deltas, state, metrics, town, build?}`. `build` (R8) is the served www build id; a
+    page whose own `/v/<build>/` differs reloads once.
   - `ev`
   - `metrics`
   - `world{plot|mark}`

@@ -4,6 +4,8 @@
 > **Revision 7, 2026-10-22.** The Aretē mountain is retired: its metaphor did not carry over to 3D. The mountain's last
 > state is the local tag `mountain-final` (`f1a53b2`), which holds its plan files (03-model-*, 05-story, 09-style,
 > style/) and code.
+> **Revision 8, 2026-10-22.** The town grows up: islands sized by their hosts, a building typology, then the machines
+> and the annexes (00 R8 rows).
 
 ## Context
 mountain.bnei.dev draws the ukubi cluster live. Since R7 it is a **town** built from pi-lab's clay kit
@@ -58,6 +60,21 @@ The binding rule is unchanged: **every image is true and tied to something real.
   - Remove `STT_TOKEN_MOUNTAIN` from Infisical.
   - The W4 items in 07/08 still apply: enrollment, the binding gate and Grafana strict.
 
+## R8 (2026-10-22)
+The live check of R7.1 found h3 empty (no app runs most of its pods on `k8s-cp-03`) and Garage with traffic but no
+building (it is an LXC). The owner's answers, one question at a time, are the R8 rows of 00.
+
+| Step | Content | State |
+|---|---|---|
+| Phase 1 | infra-bootstrap PR #366: ADR-0064 (amends ADR-0056 Decisions 2–3) and seven `guest-<role>` blackbox probes | Open, the owner checks the Patroni and etcd probes by hand, then merges |
+| Deploy A | Islands 7/5/4, families and ring order, eleven more KayKit models, ground caps, streets, bridge-head walls, fitted camera, island chips, label shapes, build guard, migration 005 + rollback | **Styleboard → owner sign-off**, then PR → CI → the owner confirms the merge |
+| Deploy B | The machines: keeps, halls, guests from `guest-*` probes, debounced state, admin names via `/auth/me` | About 24 h after phase 1 is live |
+| Deploy C | Annexes for minority pods | After B |
+
+**Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads
+the bigger islands with its old code and draws buildings off its old tiles until it is reloaded. Cosmetic, no data;
+every later deploy reloads such tabs by itself.
+
 ## Section index
 | File | Content |
 |---|---|
@@ -69,7 +86,7 @@ The binding rule is unchanged: **every image is true and tied to something real.
 | `06-relay.md` | Go relay: endpoints, town geometry, WS protocol, security, self-observability |
 | `07-infra.md` | infra-bootstrap PRs and ADRs, each with its owner |
 | `08-auth.md` | Detail mode, visitor enrollment hardening, moderation |
-| `adr-0056-amendment.md` | Draft for infra-bootstrap: platform services become public under role names |
+| `adr-0056-amendment.md` | The R7 draft for infra-bootstrap, landed as ADR-0064 (R8) |
 
 ## R7 phases
 | Phase | Content | Exit |
@@ -103,6 +120,10 @@ The binding rule is unchanged: **every image is true and tied to something real.
 - The relay log shows migration 004 and the epoch start.
 
 - `MountainTownEmpty` is inactive and `mountain_query_failed_total{query="pods"}` stays flat (R7.1).
+
+**Rollback of R8 deploy A** (to the R7.1 image): the same steps as below, but step 3 runs
+`relay/rollback/005_r8_down.sql` and step 4 reverts the R8 merge. To go back to the mountain, run 005's script first,
+then 004's.
 
 **Rollback** (the order matters: a mountain image that starts before step 3 writes a fresh mountain snapshot over
 the history):
