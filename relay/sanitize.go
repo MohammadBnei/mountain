@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/MohammadBnei/mountain/relay/town"
 	"github.com/MohammadBnei/mountain/relay/worldcore"
 )
 
@@ -84,6 +85,14 @@ func (c *Config) host(node string) string {
 	return ""
 }
 
+// hostQuiet is host for an alert's node label: unmapped values are not counted (most alerts have no node).
+func (c *Config) hostQuiet(node string) string {
+	if h := c.Nodes[node]; hosts[h] {
+		return h
+	}
+	return ""
+}
+
 // Field types of the closed spec.
 const (
 	fApp     = iota // allowlisted app key
@@ -94,7 +103,7 @@ const (
 	fBucket         // int 0..8
 	fHealth         // ArgoCD health enum
 	fNum            // float64
-	fGroup          // platform|user
+	fGroup          // platform|user|service
 	fULID           //
 	fB64            // base64 grid
 	fFP             // 16 hex (salted alert fingerprint hash)
@@ -113,6 +122,8 @@ const (
 	fHandles        // ≤ 16 of fHandle
 	fCloud          // drift|rain|gone
 	fPos3           // []float64 of 3, finite (a pose from a toy's simulation)
+	fHexC           // int in [-town.Radius, town.Radius]: a local hex coordinate
+	fKind           // a town building kind (town.Kinds)
 )
 
 // spec: frame kind -> field -> type. Every field is required, except a "name?" field, which is left out when
@@ -125,8 +136,8 @@ var spec = map[string]map[string]int{
 	"ev:quorum":        {"up": fHosts},
 	"ev:replicas":      {"app": fApp, "bucket": fBucket},
 	"ev:app.gone":      {"app": fApp},
-	"ev:alert.fire":    {"fp": fFP, "sev": fSev, "layer": fLayer, "startsAt": fNat},
-	"ev:alert.resolve": {"fp": fFP, "sev": fSev, "layer": fLayer, "durS": fNat},
+	"ev:alert.fire":    {"fp": fFP, "sev": fSev, "layer": fLayer, "startsAt": fNat, "host?": fHost, "app?": fApp},
+	"ev:alert.resolve": {"fp": fFP, "sev": fSev, "layer": fLayer, "durS": fNat, "host?": fHost, "app?": fApp},
 	"world:deposit":    {"id": fULID, "x0": fNat, "z0": fNat, "w": fNat, "h": fNat, "cells": fB64},
 	"world:site":       {"app": fApp, "x": fNum, "z": fNum, "y": fNum, "tier": fNat, "group": fGroup},
 	// W3b seam: worldcore's derived frames (derive.go) and the src_github events (W3c) they derive from
@@ -140,6 +151,8 @@ var spec = map[string]map[string]int{
 	"world:mark":  {"id": fULID, "mark": fToy, "pose": fPose, "weight": fNum, "by?": fHandle, "gone?": fBool},
 	"world:cloud": {"id": fULID, "pos": fPos3, "state": fCloud, "credits": fHandles},
 	"world:rain":  {"x": fNum, "z": fNum, "r": fNum},
+	// R7: town plots (plots.go). ruinAt = app.gone time (unix ms), gone = the plot is freed
+	"world:plot": {"app": fApp, "host": fHost, "q": fHexC, "r": fHexC, "role": fKind, "ruinAt?": fNat, "gone?": fBool},
 }
 
 var (
@@ -199,7 +212,7 @@ func (c *Config) valid(typ int, v any) bool {
 		f, ok := v.(float64)
 		return ok && finite(f)
 	case fGroup:
-		return v == "platform" || v == "user"
+		return v == "platform" || v == "user" || v == "service"
 	case fULID:
 		s, ok := v.(string)
 		return ok && ulidRE.MatchString(s)
@@ -268,6 +281,12 @@ func (c *Config) valid(typ int, v any) bool {
 	case fPos3:
 		l, ok := v.([]float64)
 		return ok && len(l) == 3 && finite(l...)
+	case fHexC:
+		n, ok := v.(int)
+		return ok && n >= -town.Radius && n <= town.Radius
+	case fKind:
+		s, ok := v.(string)
+		return ok && slices.Contains(town.Kinds, s)
 	}
 	return false
 }

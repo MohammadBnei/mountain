@@ -73,6 +73,7 @@ type Place struct {
 	Snowline float64        // world units (metrics.snowline)
 	Wind     XZ
 	Marks    []Mark // the active marks, oldest first (a copy)
+	Plots    []Plot // R7: the town plots (a copy): a plant never goes on a building
 	Now      time.Time
 }
 
@@ -281,6 +282,8 @@ func (a *App) place(c *Client, ref, toy string, pose map[string]any, named bool,
 	}
 	visits.Lock()
 	defer visits.Unlock()
+	placeMu.Lock() // R7: a plant and a new plot never take the same hex (plots.go); lock order visits → placeMu → h.mu → a.mu
+	defer placeMu.Unlock()
 	if !allowVisit(c.Sub, now) {
 		n, l := quota(c.Sub, now)
 		return markAck(ref, "", "rate", [2]int{n, l})
@@ -291,7 +294,7 @@ func (a *App) place(c *Client, ref, toy string, pose map[string]any, named bool,
 	}
 	a.mu.Lock()
 	p := &Place{Pose: pose, Sub: c.Sub, Handle: h, Solid: worldcore.Solid(a.World.Base, a.Land), Snowline: a.Metrics.Snowline,
-		Wind: a.Metrics.Wind, Marks: slices.Clone(a.State.Marks), Now: now}
+		Wind: a.Metrics.Wind, Marks: slices.Clone(a.State.Marks), Plots: slices.Clone(a.State.Plots), Now: now}
 	a.mu.Unlock()
 	out, w, why := runValidate(toy, t, p)
 	if why != "" {

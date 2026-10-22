@@ -108,7 +108,7 @@ func (o *Out) Detail(id string, detail map[string]any) {
 	o.app.store.detail(id, b)
 }
 
-// World sanitises and broadcasts {t:"world", kind, ...payload} (kind = deposit|vein|glacier|ash|site|mark|cloud|rain).
+// World sanitises and broadcasts {t:"world", kind, ...payload} (kind = deposit|vein|glacier|ash|site|mark|cloud|rain|plot).
 func (o *Out) World(kind string, payload map[string]any) {
 	o.app.Hub.Broadcast(o.worldFrame(kind, payload))
 }
@@ -153,11 +153,13 @@ func (a *App) FP(amFingerprint string) string {
 
 // Alert is one firing alert in hello.state.alerts (02 alerts row; persisted through the alert.fire/resolve events and snapshots).
 type Alert struct {
-	FP       string `json:"fp"`       // salted hash, 16 hex (never the raw fingerprint)
-	Sev      string `json:"sev"`      // info | warning | critical
-	Layer    string `json:"layer"`    // bedrock | k8s | apps (config.yaml alertLayers)
-	StartsAt int64  `json:"startsAt"` // unix ms, Alertmanager startsAt
-	Name     string `json:"-"`        // alertname: memory only (vein ref), never on the wire nor in the DB
+	FP       string `json:"fp"`             // salted hash, 16 hex (never the raw fingerprint)
+	Sev      string `json:"sev"`            // info | warning | critical
+	Layer    string `json:"layer"`          // bedrock | k8s | apps (config.yaml alertLayers)
+	StartsAt int64  `json:"startsAt"`       // unix ms, Alertmanager startsAt
+	Host     string `json:"host,omitempty"` // R7: h1..h3 from the alert's node label, when it has one (the beacon's island)
+	App      string `json:"app,omitempty"`  // R7: allowlisted app from its namespace label, when it has one (the beacon's building)
+	Name     string `json:"-"`              // alertname: memory only (vein ref), never on the wire nor in the DB
 }
 
 // State is hello.state (www/dev/schema/hello.json): what a reload must not lose. It changes only through the frames
@@ -174,11 +176,12 @@ type State struct {
 	Builds   map[string]string `json:"builds"`   // app -> queued|running: builds in flight (ev build, W3c)
 	Marks    []Mark            `json:"marks"`    // W4: active visitor marks (world:mark), oldest first, ≤ marksMax; gone removes
 	Clouds   []Cloud           `json:"clouds"`   // W4: live toy clouds (world:cloud), one per id, ≤ cloudsMax; state gone removes
+	Plots    []Plot            `json:"plots"`    // R7: town buildings (world:plot), one per app, ≤ plotsMax; gone removes
 }
 
 func newState() State {
 	return State{Alerts: []Alert{}, Veins: []worldcore.Vein{}, Glacier: worldcore.NewGlacier(), Ash: []worldcore.Ash{},
-		Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}, Marks: []Mark{}, Clouds: []Cloud{}}
+		Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}, Marks: []Mark{}, Clouds: []Cloud{}, Plots: []Plot{}}
 }
 
 // Fire broadcasts ev alert.fire{fp, sev, layer, startsAt}; the hub tap adds it to hello.state.alerts (replacing the
@@ -186,29 +189,40 @@ func newState() State {
 // startsAt rides the event so a live client and a reloaded one agree (cauldron breakMin), even after a relay restart re-fires.
 // Returns the ev id ("" if sanitize dropped it; state is then unchanged).
 func (o *Out) Fire(a Alert) string {
-	return o.Ev("alert.fire", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "startsAt": int(a.StartsAt)})
+	return o.Ev("alert.fire", a.where(map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "startsAt": int(a.StartsAt)}))
+}
+
+// where adds the alert's optional host / app (R7 beacons) to an alert ev's fields.
+func (a Alert) where(f map[string]any) map[string]any {
+	if a.Host != "" {
+		f["host"] = a.Host
+	}
+	if a.App != "" {
+		f["app"] = a.App
+	}
+	return f
 }
 
 // Resolve broadcasts ev alert.resolve{fp, sev, layer, durS}; the tap drops it from hello.state.alerts, and an alert
 // of severity ≥ warning that lasted ≥ 10 min becomes a world:vein (App.derive).
 func (o *Out) Resolve(a Alert, durS int) string {
-	return o.Ev("alert.resolve", map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "durS": durS})
+	return o.Ev("alert.resolve", a.where(map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "durS": durS}))
 }
 
 // frameF is every field State.apply, fold and derive read from a broadcast frame.
 type frameF struct {
-	T, Kind, ID, FP, Sev, Layer, App, Status, State, Day, Title string
-	StartsAt, TS                                                int64
-	DurS, Bucket, N                                             int
-	OK, Gone                                                    bool
-	worldcore.Glacier                                           // mass, tongues, ash
+	T, Kind, ID, FP, Sev, Layer, App, Host, Status, State, Day, Title string
+	StartsAt, TS                                                      int64
+	DurS, Bucket, N                                                   int
+	OK, Gone                                                          bool
+	worldcore.Glacier                                                 // mass, tongues, ash
 }
 
 // apply updates the state for one broadcast ev or world frame (as sent: sanitised).
 func (s *State) apply(f frameF, raw []byte) {
 	switch f.T + ":" + f.Kind {
 	case "ev:alert.fire":
-		s.Alerts = append(slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == f.FP }), Alert{FP: f.FP, Sev: f.Sev, Layer: f.Layer, StartsAt: f.StartsAt})
+		s.Alerts = append(slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == f.FP }), Alert{FP: f.FP, Sev: f.Sev, Layer: f.Layer, StartsAt: f.StartsAt, Host: f.Host, App: f.App})
 	case "ev:alert.resolve":
 		s.Alerts = slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == f.FP })
 	case "ev:argo.health":
@@ -241,6 +255,15 @@ func (s *State) apply(f frameF, raw []byte) {
 			if !f.Gone {
 				s.Marks = append(s.Marks, m)
 				s.Marks = s.Marks[max(0, len(s.Marks)-marksMax):]
+			}
+		}
+	case "world:plot": // R7 (plots.go): replaces the app's plot, gone removes it
+		var p Plot
+		if json.Unmarshal(raw, &p) == nil {
+			s.Plots = slices.DeleteFunc(s.Plots, func(x Plot) bool { return x.App == p.App })
+			if !f.Gone {
+				s.Plots = append(s.Plots, p)
+				s.Plots = s.Plots[max(0, len(s.Plots)-plotsMax):]
 			}
 		}
 	case "world:cloud": // W4: replaces its id in place (a new id appends, oldest beyond cloudsMax drop), state gone removes

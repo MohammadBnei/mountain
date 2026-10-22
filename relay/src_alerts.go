@@ -138,7 +138,8 @@ func (s *alertsSource) fetch(ctx context.Context) (map[string]Alert, error) {
 			(sev != "info" && sev != "warning" && sev != "critical") {
 			continue
 		}
-		out[fp] = Alert{FP: fp, Sev: sev, Layer: s.layer(name), StartsAt: x.StartsAt.UnixMilli(), Name: name}
+		out[fp] = Alert{FP: fp, Sev: sev, Layer: s.layer(name), StartsAt: x.StartsAt.UnixMilli(), Name: name,
+			Host: s.a.Cfg.hostQuiet(x.Labels["node"]), App: s.a.Cfg.appOfNS(x.Labels["namespace"], x.Labels["pod"])}
 		s.labels[fp] = x.Labels
 	}
 	return out, nil

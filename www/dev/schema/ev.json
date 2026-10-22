@@ -219,6 +219,12 @@
     "startsAt": {
      "type": "integer",
      "minimum": 0
+    },
+    "host": {
+     "$ref": "#/$defs/host"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
     }
    },
    "required": [
@@ -261,6 +267,12 @@
     "durS": {
      "type": "integer",
      "minimum": 0
+    },
+    "host": {
+     "$ref": "#/$defs/host"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
     }
    },
    "required": [

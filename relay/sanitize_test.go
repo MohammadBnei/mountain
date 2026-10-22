@@ -39,7 +39,8 @@ func TestSanitizeCorpus(t *testing.T) {
 		"vos-vos-monolith-dd4e33317329b43f479b@kubernetescrd":        "vos-monolith",
 		"vos-dev-vos-monolith-dev-1@kubernetescrd":                   "vos-monolith-dev",
 		"has-journal-has-journal-7844a73ed8cf7d178ddd@kubernetescrd": "",
-		"monitoring-grafana-7dae99210d857670c8cc@kubernetescrd":      "",
+		"monitoring-grafana-7dae99210d857670c8cc@kubernetescrd":      "watchtower", // R7: a service, by role key
+		"searxng-searxng-7dae99210d857670c8cc@kubernetescrd":         "",
 		"wird@kubernetescrd":                                         "",
 		"10.0.3.17:8080":                                             "",
 	} {
