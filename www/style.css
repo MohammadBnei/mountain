@@ -48,6 +48,10 @@ canvas:active { cursor: grabbing; }
   white-space: nowrap; will-change: transform; }
 .label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--wire); } /* the system's wire colour */
 .label.service { color: var(--ink-muted); }
+.label.service::before { border-radius: 0; transform: rotate(45deg) scale(0.9); } /* a platform service: a diamond */
+.label.machine::before { border-radius: 1px; } /* a machine: a square */
+.label.chip { font-weight: 600; }
+.label.chip::before { display: none; }
 .label.down { color: var(--ink-subtle); }
 .label.gone { color: var(--ink-subtle); text-decoration: line-through; }
 
