@@ -49,6 +49,9 @@ var (
 	polledOnce sync.Once
 )
 
+// optionalQ: queries whose failure is no answer (logged once per outage) instead of a failed poll.
+var optionalQ = map[string]bool{"pods": true}
+
 // promQ: name -> PromQL. The fixture server keys its timeline by these names.
 var promQ = map[string]string{
 	"sync":     `argocd_app_sync_total`,
@@ -93,17 +96,18 @@ type promSource struct {
 	last  time.Time // previous successful poll
 	polls int
 
-	ctr    map[string]counter   // raw counter per series
-	health map[string]string    // app -> ArgoCD health
-	seen   map[string]bool      // apps seen in argocd_app_info
-	gone   map[string]time.Time // app -> absent since (controller up)
-	crash  map[string]bool      // container series -> CrashLoopBackOff
-	repl   map[string]int       // app -> replicas bucket
-	ready  map[string]bool      // host -> Ready
-	quorum string
-	base   map[string]float64 // app -> rps baseline (30 min EWMA); keyed by allowlist, bounded
-	syncs  []time.Time        // syncs in the heat window
-	plots  *placer            // R7 town plots (plots.go)
+	ctr       map[string]counter   // raw counter per series
+	health    map[string]string    // app -> ArgoCD health
+	seen      map[string]bool      // apps seen in argocd_app_info
+	gone      map[string]time.Time // app -> absent since (controller up)
+	crash     map[string]bool      // container series -> CrashLoopBackOff
+	repl      map[string]int       // app -> replicas bucket
+	ready     map[string]bool      // host -> Ready
+	quorum    string
+	base      map[string]float64 // app -> rps baseline (30 min EWMA); keyed by allowlist, bounded
+	syncs     []time.Time        // syncs in the heat window
+	plots     *placer            // R7 town plots (plots.go)
+	optWarned map[string]bool    // optionalQ already logged as failing
 }
 
 type counter struct {
@@ -114,7 +118,7 @@ type counter struct {
 func newProm(a *App) *promSource {
 	return &promSource{a: a, url: strings.TrimRight(a.Opts.PromURL, "/"), hc: &http.Client{Timeout: 10 * time.Second},
 		ctr: map[string]counter{}, health: map[string]string{}, seen: map[string]bool{}, gone: map[string]time.Time{},
-		crash: map[string]bool{}, repl: map[string]int{}, ready: map[string]bool{}, base: map[string]float64{}, plots: newPlacer()}
+		crash: map[string]bool{}, repl: map[string]int{}, ready: map[string]bool{}, base: map[string]float64{}, plots: newPlacer(), optWarned: map[string]bool{}}
 }
 
 func (p *promSource) Name() string { return "prom" }
@@ -289,9 +293,17 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	r := map[string][]sample{}
 	for name, q := range promQ {
 		s, err := p.query(ctx, q)
+		if err != nil && optionalQ[name] { // R7: a town query must never make every live signal stale
+			if !p.optWarned[name] {
+				log.Printf("prom: optional query %s failed (no answer, plots kept): %v", name, err)
+				p.optWarned[name] = true
+			}
+			continue
+		}
 		if err != nil {
 			return err
 		}
+		delete(p.optWarned, name)
 		r[name] = s
 	}
 	cfg := p.a.Cfg

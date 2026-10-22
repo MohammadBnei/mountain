@@ -1,13 +1,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/MohammadBnei/mountain/relay/town"
+	"gopkg.in/yaml.v3"
 )
 
 func pod(ns, name, node string) sample {
@@ -195,4 +202,49 @@ func TestPlant(t *testing.T) {
 		t.Fatalf("eviction: marks %v plots %v", ms, ps)
 	}
 	validate(t, [][]map[string]any{frames})
+}
+
+// TestPodsQuery runs promQ "pods" through promtool (relay/testdata/pods.test.yaml): duplicate KSM series, a pod
+// being deleted, a Pending one and an unscheduled one. Skipped without promtool, fatal in CI (like TestRules).
+func TestPodsQuery(t *testing.T) {
+	if _, err := exec.LookPath("promtool"); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("promtool not on PATH in CI")
+		}
+		t.Skip("promtool not on PATH")
+	}
+	dir := t.TempDir()
+	rules, _ := yaml.Marshal(map[string]any{"groups": []any{map[string]any{"name": "town", "rules": []any{
+		map[string]any{"record": "town:pods", "expr": promQ["pods"]}}}}})
+	os.WriteFile(filepath.Join(dir, "rules.yaml"), rules, 0o644)
+	tb, err := os.ReadFile("testdata/pods.test.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(dir, "pods.test.yaml"), tb, 0o644)
+	cmd := exec.Command("promtool", "test", "rules", "pods.test.yaml")
+	cmd.Dir = dir
+	if o, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("promtool: %v\n%s", err, o)
+	}
+}
+
+// TestPodsQueryOptional: Prometheus refusing the pods query must not fail the poll (every other signal would go stale).
+func TestPodsQueryOptional(t *testing.T) {
+	a, _ := testApp(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Query().Get("query"), "kube_pod_deletion_timestamp") {
+			http.Error(w, `{"status":"error","error":"bad_data"}`, http.StatusBadRequest)
+			return
+		}
+		w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[]}}`))
+	}))
+	defer srv.Close()
+	a.Opts.PromURL = srv.URL
+	p := newProm(a)
+	for i := range 2 {
+		if err := p.poll(context.Background(), &Out{app: a, name: "prom"}, time.Unix(1_800_000_000+int64(15*i), 0)); err != nil {
+			t.Fatalf("poll %d: %v", i, err)
+		}
+	}
 }
