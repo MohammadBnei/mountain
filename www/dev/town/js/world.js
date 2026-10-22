@@ -1,0 +1,99 @@
+// The town's world (R7): the relay's state mirrored, and a bus. Folds frames with the relay's rules
+// (relay/sources.go State.apply), so a reload, a resync and a replay show the same town.
+//
+//   createWorld() → world
+//   world.town       hello.town: {radius, islands:[{host, q, r, tiles}], bridges:[{a, b, aq, ar, bq, br}]}
+//   world.state      {alerts, health, replicas, builds, marks, plots}: hello.state, then every frame, BEFORE its emit
+//   world.metrics    the last metrics frame;  world.stale  null | unix ms (oldest stale source, or the socket drop)
+//   world.ready      host → bool (ev node.ready, metrics.hosts);  world.quorum  [hosts] | null (ev quorum)
+//   world.on(type, fn) → off   types: 'hello', 'metrics', 'ev:<kind>', 'world:<kind>', 'state' (after any change)
+//   world.applyHello(h) / world.applyFrame(f)   (socket.js)
+//   world.place(mark, pose) → Promise<id>  /  world.unmark(id) → Promise<id>   (visitor marks; rejects with the reason)
+//   world.send / world.resync   wired by socket.connect
+export function createWorld() {
+  const subs = new Map(), acks = new Map();
+  let refN = 0, resolveReady;
+  const emptyState = () => ({ alerts: [], health: {}, replicas: {}, builds: {}, marks: [], plots: [] });
+  const w = {
+    town: null, state: emptyState(), metrics: null, stale: null, ready: {}, quorum: null, quota: null, named: false,
+    loaded: new Promise((r) => (resolveReady = r)),
+    on(type, fn) { if (!subs.has(type)) subs.set(type, new Set()); subs.get(type).add(fn); return () => subs.get(type).delete(fn); },
+    emit(type, payload) { for (const fn of subs.get(type) || []) fn(payload, type); },
+
+    applyHello(h) {
+      if (h.town) w.town = h.town;
+      w.state = { ...emptyState(), ...h.state };
+      for (const k of Object.keys(emptyState())) if (w.state[k] == null) w.state[k] = emptyState()[k];
+      if (h.metrics) metrics(h.metrics);
+      w.emit('hello', h);
+      w.emit('state', w.state);
+      resolveReady(w);
+    },
+    applyFrame(f) {
+      if (f.t === 'hello') return w.applyHello(f);
+      if (f.t === 'mark') return answer(f);
+      if (f.t === 'metrics') { metrics(f); return w.emit('metrics', f); }
+      if (f.t === 'ev') { fold(f); w.emit(`ev:${f.kind}`, f); return w.emit('state', w.state); }
+      if (f.t === 'world') {
+        const { t, kind, ...p } = f;
+        fold(f, p);
+        w.emit(`world:${kind}`, p);
+        return w.emit('state', w.state);
+      }
+    },
+    place(mark, pose) { return ask({ t: 'mark', mark, pose, named: w.named }); },
+    unmark(id) { return ask({ t: 'mark.delete', id }); },
+  };
+
+  function metrics(f) {
+    w.metrics = f;
+    for (const [h, x] of Object.entries(f.hosts || {})) w.ready[h] = !!x.ready;
+    const st = Object.values(f.stale || {});
+    w.stale = st.length ? Math.min(...st) : null;
+  }
+
+  // The relay's State.apply, mirrored.
+  function fold(f, p) {
+    const s = w.state;
+    if (f.t === 'ev') {
+      switch (f.kind) {
+        case 'alert.fire':
+          s.alerts = s.alerts.filter((a) => a.fp !== f.fp);
+          s.alerts.push({ fp: f.fp, sev: f.sev, layer: f.layer, startsAt: f.startsAt, ...(f.host && { host: f.host }), ...(f.app && { app: f.app }) });
+          break;
+        case 'alert.resolve': s.alerts = s.alerts.filter((a) => a.fp !== f.fp); break;
+        case 'argo.health': s.health[f.app] = f.status; break;
+        case 'replicas': s.replicas[f.app] = f.bucket; break;
+        case 'build': if (f.state === 'queued' || f.state === 'running') s.builds[f.app] = f.state; else delete s.builds[f.app]; break;
+        case 'app.gone': for (const k of ['health', 'replicas', 'builds']) delete s[k][f.app]; break;
+        case 'node.ready': w.ready[f.host] = f.ready; break;
+        case 'quorum': w.quorum = f.up; break;
+      }
+      return;
+    }
+    if (f.kind === 'mark') {
+      s.marks = s.marks.filter((m) => m.id !== p.id);
+      if (!p.gone) s.marks = s.marks.concat(p).slice(-2000);
+    }
+    if (f.kind === 'plot') {
+      s.plots = s.plots.filter((x) => x.app !== p.app);
+      if (!p.gone) { const { gone, ...plot } = p; s.plots = s.plots.concat(plot).slice(-64); }
+    }
+  }
+
+  function ask(f) {
+    const ref = `r${(++refN).toString(36)}`;
+    return new Promise((resolve, reject) => {
+      if (!w.send?.({ ...f, ref })) return reject(new Error('offline'));
+      acks.set(ref, [resolve, reject, setTimeout(() => { acks.delete(ref); reject(new Error('timeout')); }, 10000)]);
+    });
+  }
+  function answer(f) {
+    const a = acks.get(f.ref);
+    if (!a) return;
+    acks.delete(f.ref); clearTimeout(a[2]);
+    if (f.next != null) w.quota = { next: f.next, left: f.left, at: Date.now() };
+    if (f.error) a[1](new Error(f.error)); else a[0](f.id);
+  }
+  return w;
+}

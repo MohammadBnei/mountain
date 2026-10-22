@@ -1,0 +1,1345 @@
+{
+ "step_s": 2,
+ "steps": [
+  {
+   "prom": {
+    "pods": [
+     {
+      "m": {
+       "namespace": "mountain",
+       "pod": "mountain-7c9f00-x0",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "uid": "umountain0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "pod": "wird-7c9f00-x0",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "uid": "uwird0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "pod": "wird-7c9f01-x1",
+       "node": "k8s-worker-01",
+       "host_ip": "10.0.3.17",
+       "uid": "uwird1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "pod": "wird-7c9f02-x0",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "uwird2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "traefik",
+       "pod": "traefik-7c9f00-x0",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "utraefik0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "traefik",
+       "pod": "traefik-7c9f01-x1",
+       "node": "k8s-worker-02",
+       "host_ip": "10.0.3.17",
+       "uid": "utraefik1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "authentik",
+       "pod": "authentik-7c9f00-x0",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "uid": "uauthentik0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "authentik",
+       "pod": "authentik-7c9f01-x1",
+       "node": "k8s-worker-01",
+       "host_ip": "10.0.3.17",
+       "uid": "uauthentik1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "monitoring",
+       "pod": "monitoring-7c9f00-x0",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "uid": "umonitoring0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "monitoring",
+       "pod": "monitoring-7c9f01-x1",
+       "node": "k8s-worker-01",
+       "host_ip": "10.0.3.17",
+       "uid": "umonitoring1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "monitoring",
+       "pod": "monitoring-7c9f02-x2",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "uid": "umonitoring2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "monitoring",
+       "pod": "monitoring-7c9f03-x3",
+       "node": "k8s-worker-01",
+       "host_ip": "10.0.3.17",
+       "uid": "umonitoring3"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "monitoring",
+       "pod": "monitoring-7c9f04-x0",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "umonitoring4"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "monitoring",
+       "pod": "monitoring-7c9f05-x0",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "umonitoring5"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "editable-blog",
+       "pod": "editable-blog-7c9f00-x0",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "ueditable-blog0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "dream-analyst",
+       "pod": "dream-analyst-7c9f00-x0",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "udream-analyst0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "vos",
+       "pod": "vos-7c9f00-x0",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "uvos0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "vos",
+       "pod": "vos-7c9f01-x1",
+       "node": "k8s-worker-02",
+       "host_ip": "10.0.3.17",
+       "uid": "uvos1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "argocd",
+       "pod": "argocd-7c9f00-x0",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "uargocd0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "argocd",
+       "pod": "argocd-7c9f01-x1",
+       "node": "k8s-worker-02",
+       "host_ip": "10.0.3.17",
+       "uid": "uargocd1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "argocd",
+       "pod": "argocd-7c9f02-x2",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "uargocd2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "longhorn-system",
+       "pod": "longhorn-system-7c9f00-x0",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "uid": "ulonghorn-system0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "longhorn-system",
+       "pod": "longhorn-system-7c9f01-x1",
+       "node": "k8s-worker-01",
+       "host_ip": "10.0.3.17",
+       "uid": "ulonghorn-system1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "longhorn-system",
+       "pod": "longhorn-system-7c9f02-x2",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "uid": "ulonghorn-system2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "longhorn-system",
+       "pod": "longhorn-system-7c9f03-x0",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "ulonghorn-system3"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "longhorn-system",
+       "pod": "longhorn-system-7c9f04-x1",
+       "node": "k8s-worker-02",
+       "host_ip": "10.0.3.17",
+       "uid": "ulonghorn-system4"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "longhorn-system",
+       "pod": "longhorn-system-7c9f05-x2",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "ulonghorn-system5"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "longhorn-system",
+       "pod": "longhorn-system-7c9f06-x0",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "ulonghorn-system6"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "longhorn-system",
+       "pod": "longhorn-system-7c9f07-x1",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "ulonghorn-system7"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "longhorn-system",
+       "pod": "longhorn-system-7c9f08-x2",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "ulonghorn-system8"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "longhorn-system",
+       "pod": "longhorn-system-7c9f09-x3",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "ulonghorn-system9"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "vos-dev",
+       "pod": "vos-dev-7c9f00-x0",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "uvos-dev0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wedding-2026",
+       "pod": "wedding-2026-7c9f00-x0",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "uwedding-20260"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "ukubi-stt",
+       "pod": "ukubi-stt-7c9f00-x0",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "uukubi-stt0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "infisical",
+       "pod": "infisical-7c9f00-x0",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "uinfisical0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "garage",
+       "pod": "garage-7c9f00-x0",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "ugarage0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "garage",
+       "pod": "garage-7c9f01-x1",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "ugarage1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "zot",
+       "pod": "zot-7c9f00-x0",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "uzot0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "searxng",
+       "pod": "searxng-7c9f00-x0",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "uid": "usearxng0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "agent-fleet",
+       "pod": "agent-fleet-7c9f00-x0",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "uagent-fleet0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "agent-fleet",
+       "pod": "agent-fleet-7c9f01-x1",
+       "node": "k8s-worker-02",
+       "host_ip": "10.0.3.17",
+       "uid": "uagent-fleet1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "kube-system-7c9f00-x0",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "uid": "ukube-system0"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "kube-system-7c9f01-x1",
+       "node": "k8s-worker-01",
+       "host_ip": "10.0.3.17",
+       "uid": "ukube-system1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "kube-system-7c9f02-x2",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "uid": "ukube-system2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "kube-system-7c9f03-x0",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "ukube-system3"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "kube-system-7c9f04-x1",
+       "node": "k8s-worker-02",
+       "host_ip": "10.0.3.17",
+       "uid": "ukube-system4"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "kube-system-7c9f05-x2",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.17",
+       "uid": "ukube-system5"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "kube-system-7c9f06-x0",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "ukube-system6"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "kube-system",
+       "pod": "kube-system-7c9f07-x1",
+       "node": "k8s-cp-03",
+       "host_ip": "10.0.3.17",
+       "uid": "ukube-system7"
+      },
+      "v": 1
+     }
+    ],
+    "info": [
+     {
+      "m": {
+       "name": "mountain",
+       "dest_namespace": "mountain",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "wird",
+       "dest_namespace": "wird",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "editable-blog",
+       "dest_namespace": "editable-blog",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "dream-analyst",
+       "dest_namespace": "dream-analyst",
+       "health_status": "Degraded",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "vos-monolith",
+       "dest_namespace": "vos",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "vos-monolith-dev",
+       "dest_namespace": "vos-dev",
+       "health_status": "Progressing",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "wedding-2026",
+       "dest_namespace": "wedding-2026",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "ukubi-stt",
+       "dest_namespace": "ukubi-stt",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "traefik",
+       "dest_namespace": "traefik",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "authentik",
+       "dest_namespace": "authentik",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "argocd",
+       "dest_namespace": "argocd",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "infisical",
+       "dest_namespace": "infisical",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "garage",
+       "dest_namespace": "garage",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "name": "zot",
+       "dest_namespace": "zot",
+       "health_status": "Healthy",
+       "sync_status": "Synced",
+       "namespace": "argocd"
+      },
+      "v": 1
+     }
+    ],
+    "ctrl": [
+     {
+      "m": {},
+      "v": 1
+     }
+    ],
+    "sync": [
+     {
+      "m": {
+       "name": "mountain",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "wird",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "editable-blog",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "dream-analyst",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "vos-monolith",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "vos-monolith-dev",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "wedding-2026",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "ukubi-stt",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "traefik",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "authentik",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "argocd",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "infisical",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "garage",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "zot",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     }
+    ],
+    "ready": [
+     {
+      "m": {
+       "node": "k8s-cp-01",
+       "condition": "Ready",
+       "status": "true"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-worker-01",
+       "condition": "Ready",
+       "status": "true"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-cp-02",
+       "condition": "Ready",
+       "status": "true"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-worker-02",
+       "condition": "Ready",
+       "status": "true"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "node": "k8s-cp-03",
+       "condition": "Ready",
+       "status": "true"
+      },
+      "v": 1
+     }
+    ],
+    "quorum": [
+     {
+      "m": {
+       "target": "pve-bnei"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "pve-server1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "pve-ex-laptop"
+      },
+      "v": 1
+     }
+    ],
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 900
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 12
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 300
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 120
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 200
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 40
+     }
+    ],
+    "restarts": [
+     {
+      "m": {
+       "namespace": "editable-blog",
+       "pod": "editable-blog-7c9f00-x0",
+       "container": "app"
+      },
+      "v": 0
+     }
+    ],
+    "alloc": [
+     {
+      "m": {
+       "node": "k8s-cp-01"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "node": "k8s-worker-01"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "node": "k8s-cp-02"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "node": "k8s-worker-02"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "node": "k8s-cp-03"
+      },
+      "v": 4
+     }
+    ],
+    "cpu": [
+     {
+      "m": {},
+      "v": 0.31
+     }
+    ],
+    "mem": [
+     {
+      "m": {},
+      "v": 0.58
+     }
+    ]
+   },
+   "am": []
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1800
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 24
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 600
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 240
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 400
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 80
+     }
+    ]
+   },
+   "am": [
+    {
+     "fingerprint": "f1",
+     "startsAt": "2026-10-22T09:00:00Z",
+     "labels": {
+      "alertname": "KubePodCrashLooping",
+      "severity": "warning",
+      "namespace": "wird",
+      "pod": "wird-1",
+      "node": "k8s-cp-01"
+     }
+    }
+   ]
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 2700
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 36
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 900
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 360
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 600
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 120
+     }
+    ],
+    "sync": [
+     {
+      "m": {
+       "name": "mountain",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "wird",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 4
+     },
+     {
+      "m": {
+       "name": "editable-blog",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "dream-analyst",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "vos-monolith",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "vos-monolith-dev",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "wedding-2026",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "ukubi-stt",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "traefik",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "authentik",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "argocd",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "infisical",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "garage",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     },
+     {
+      "m": {
+       "name": "zot",
+       "phase": "Succeeded",
+       "namespace": "argocd"
+      },
+      "v": 3
+     }
+    ]
+   },
+   "am": [
+    {
+     "fingerprint": "f1",
+     "startsAt": "2026-10-22T09:00:00Z",
+     "labels": {
+      "alertname": "KubePodCrashLooping",
+      "severity": "warning",
+      "namespace": "wird",
+      "pod": "wird-1",
+      "node": "k8s-cp-01"
+     }
+    },
+    {
+     "fingerprint": "f2",
+     "startsAt": "2026-10-22T09:30:00Z",
+     "labels": {
+      "alertname": "NodeFilesystemAlmostFull",
+      "severity": "critical",
+      "node": "k8s-cp-03",
+      "instance": "192.168.1.203:9100"
+     }
+    }
+   ],
+   "marks": [
+    {
+     "sub": "v1",
+     "name": "ana",
+     "role": "visitor",
+     "ref": "p1",
+     "mark": "plant",
+     "pose": {
+      "h": 1,
+      "q": -3,
+      "r": 4
+     },
+     "named": true
+    },
+    {
+     "sub": "v2",
+     "name": "bo",
+     "role": "visitor",
+     "ref": "p2",
+     "mark": "plant",
+     "pose": {
+      "h": 2,
+      "q": 4,
+      "r": -1
+     }
+    },
+    {
+     "sub": "v3",
+     "name": "cy",
+     "role": "visitor",
+     "ref": "p3",
+     "mark": "plant",
+     "pose": {
+      "h": 3,
+      "q": 0,
+      "r": -4
+     }
+    }
+   ]
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 3600
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 48
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1200
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 480
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 800
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 160
+     }
+    ],
+    "restarts": [
+     {
+      "m": {
+       "namespace": "editable-blog",
+       "pod": "editable-blog-7c9f00-x0",
+       "container": "app"
+      },
+      "v": 2
+     }
+    ]
+   }
+  },
+  {
+   "prom": {
+    "req": [
+     {
+      "m": {
+       "exported_service": "wird-wird-0000@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 4500
+     },
+     {
+      "m": {
+       "exported_service": "wird-wird-0001@kubernetescrd",
+       "code": "500",
+       "pod": "traefik-1"
+      },
+      "v": 60
+     },
+     {
+      "m": {
+       "exported_service": "vos-vos-0002@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1500
+     },
+     {
+      "m": {
+       "exported_service": "editable-blog-editable-blog-0003@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 600
+     },
+     {
+      "m": {
+       "exported_service": "authentik-authentik-0004@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 1000
+     },
+     {
+      "m": {
+       "exported_service": "wedding-2026-wedding-2026-0005@kubernetescrd",
+       "code": "200",
+       "pod": "traefik-1"
+      },
+      "v": 200
+     }
+    ]
+   }
+  }
+ ]
+}

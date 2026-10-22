@@ -5,8 +5,8 @@
   "source": "pi-lab compose/www/vendor/LICENSE"
  },
  "VERSION": {
-  "bytes": 481,
-  "sha256": "7e172b4358a6d522c47ea7b2415da7c2db3f970937461e42f4c18a516e862c61",
+  "bytes": 664,
+  "sha256": "5d2ced9db3bf5a7e6f374180145550f75a736155947916a84d9943706636eb7d",
   "source": "pi-lab compose/www/vendor/VERSION"
  },
  "build/three.core.js": {
@@ -38,6 +38,11 @@
   "bytes": 6470,
   "sha256": "c5feab96123858ed8823c889b238dc8734adab7e760e3cfd21e7f3f2f3e348e3",
   "source": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/geometries/RoundedBoxGeometry.js"
+ },
+ "examples/jsm/loaders/GLTFLoader.js": {
+  "bytes": 45448,
+  "sha256": "893102597e1e6705bcb1026f2da1094d759be4fe8977f7c18623d2d55846ae2e",
+  "source": "pi-lab compose/www/vendor/examples/jsm/loaders/GLTFLoader.js (three@0.186.1, esbuild-minified; R7 town)"
  },
  "examples/jsm/math/SimplexNoise.js": {
   "bytes": 15148,
@@ -98,5 +103,10 @@
   "bytes": 37712,
   "sha256": "9fb63427ce6641fa14fd0baff9cc4d1b5f9c3d85fd084bf2e90e803c44ec1797",
   "source": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/utils/BufferGeometryUtils.js"
+ },
+ "examples/jsm/utils/SkeletonUtils.js": {
+  "bytes": 4123,
+  "sha256": "6c660e1682721267f673ecf4cf2cac4ac4972dc49e43474ea8b269fc98fca55f",
+  "source": "pi-lab compose/www/vendor/examples/jsm/utils/SkeletonUtils.js (three@0.186.1, esbuild-minified; R7 town)"
  }
 }
