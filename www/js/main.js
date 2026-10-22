@@ -24,19 +24,26 @@ if (!document.createElement('canvas').getContext('webgl2')) {
   document.getElementById('fallback').hidden = false;
   document.getElementById('loader').hidden = true;
   canvas.remove();
-} else start().then(() => store((s) => s.removeItem(RETRY)), (e) => {
+} else {
+  start().then(() => store((s) => s.removeItem(RETRY)), failed);
+  // a model fetched after the start 404s (buildings.js): a deploy retired this page's /v/<build>/ while it was open
+  globalThis.addEventListener('town:retired', () => { if (!dev) failed(new Error('this build was retired')); }, { once: true });
+}
+
+function failed(e) {
   console.error(e);
   if (dev) globalThis.__town = { ready: true, error: String(e?.stack || e) };
   // A failed load (a deploy retired this page's /v/<build>/ modules, a flaky fetch) reloads once onto the current
   // index; the sessionStorage flag stops a loop and is cleared once a load succeeds.
   const loader = document.getElementById('loader');
+  loader.hidden = false;
   if (dev || store((s) => s.getItem(RETRY)) || store((s) => (s.setItem(RETRY, '1'), true)) !== true) {
     loader.textContent = 'The town could not be built. Reload to try again.';
     return;
   }
   loader.textContent = 'Could not load, retrying…';
   setTimeout(() => location.reload(), 1000);
-});
+}
 
 async function start() {
   const kit = await import('./kit.js');
@@ -45,7 +52,13 @@ async function start() {
   const world = createWorld();
   if (q.has('hello')) fetch(q.get('hello')).then((r) => r.json()).then(world.applyHello); // dev: a hello file, no relay
   else connect({ world, ...(dev && q.get('ws') ? { url: q.get('ws') } : {}) }); // dev: a relay on another port
+  const slow = setTimeout(() => { // no hello yet: say so in words (the socket keeps retrying)
+    document.getElementById('loader').textContent = lang() === 'fr'
+      ? 'Impossible de joindre la ville pour l’instant, nouvel essai… (trop d’onglets ouverts sur ce réseau ?)'
+      : 'Can’t reach the town yet, retrying… (too many tabs open on this network?)';
+  }, 8000);
   await world.loaded;
+  clearTimeout(slow);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio, low ? 1.25 : 2));
@@ -98,11 +111,19 @@ async function start() {
 
   // ---- picking: a tap (not a drag) picks a building, else an island, else flies home
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-  let down = null;
-  canvas.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+  // a tap = one pointer that went down and up in place; a gesture that ever had two (a pinch) is never a tap
+  const pointers = new Map();
+  let multi = false;
+  canvas.addEventListener('pointerdown', (e) => {
+    pointers.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pointers.size > 1) multi = true;
+  });
+  const lift = (e) => { pointers.delete(e.pointerId); if (!pointers.size) setTimeout(() => { if (!pointers.size) multi = false; }); };
+  canvas.addEventListener('pointercancel', lift);
   canvas.addEventListener('pointerup', (e) => {
-    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
-    down = null;
+    const down = pointers.get(e.pointerId), wasMulti = multi;
+    lift(e);
+    if (!down || wasMulti || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
     if (toys.tap(e)) return; // plant / remove mode takes the tap
     const r = canvas.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -157,17 +178,17 @@ async function start() {
     if (a.url) { go.href = a.url; go.textContent = `${F ? 'Ouvrir' : 'Open'} ${a.name}`; }
   }
   const line = document.getElementById('line'), facts = document.getElementById('facts'), staleEl = document.getElementById('stale');
+  const led = Object.assign(document.createElement('button'), { type: 'button' }), ledText = document.createElement('span');
+  led.append(Object.assign(document.createElement('span'), { className: 'led' }), ledText);
+  led.onclick = () => world.state.alerts[0] && goAlert(world.state.alerts[0]);
   function fillPanel() {
     const F = fr(), s = world.state, n = s.plots.filter((p) => !p.ruinAt).length;
     line.textContent = F ? `Le cluster ukubi en direct : ${n} bâtiments sur 3 îles, une par hôte.` : `The ukubi cluster, live: ${n} buildings on 3 islands, one per host.`;
     const parts = world.town.islands.map((i) => world.ready[i.host] === false ? word('bad', `${i.host} ${F ? 'hors ligne' : 'down'}`) : word('ok', `${i.host} ${F ? 'en ligne' : 'up'}`));
     const al = s.alerts.length;
-    if (al) { // the LED: lit only while something fires; it takes you there
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.append(Object.assign(document.createElement('span'), { className: 'led' }), F ? `${al} alerte${al > 1 ? 's' : ''}` : `${al} alert${al > 1 ? 's' : ''}`);
-      b.onclick = () => goAlert(s.alerts[0]);
-      parts.push(b);
+    if (al) { // the LED: lit only while something fires; it takes you there (one button, updated in place: taps land)
+      ledText.textContent = F ? `${al} alerte${al > 1 ? 's' : ''}` : `${al} alert${al > 1 ? 's' : ''}`;
+      parts.push(led);
     }
     facts.replaceChildren(...parts);
     staleEl.hidden = world.stale == null;

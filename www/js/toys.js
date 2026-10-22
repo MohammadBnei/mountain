@@ -11,9 +11,9 @@ const ITEM = { en: ['Plant a tree', 'Plant a flag', 'Light a lantern'], fr: ['Pl
 const DONE = { en: ['Tree planted.', 'Flag planted.', 'Lantern lit.'], fr: ['Arbre planté.', 'Drapeau planté.', 'Lanterne allumée.'] };
 const WHY = {
   en: { road: 'Not on a road, a bridge or the square.', plot: 'A building stands there.', taken: 'Someone planted there already.', reach: 'Plant on an island.',
-    auth: 'Sign in to plant.', off: 'Planting is paused for now.', rate: 'One at a time: wait a little.', offline: 'Not connected. Try again in a moment.', timeout: 'No answer. Try again.', bad: 'That did not work. Try another tile.', unknown: 'Already removed.' },
+    auth: 'Sign in to plant.', norole: 'Signed in, but this account can’t plant yet.', off: 'Planting is paused for now.', rate: 'One at a time: wait a little.', offline: 'Not connected. Try again in a moment.', timeout: 'No answer. Try again.', bad: 'That did not work. Try another tile.', unknown: 'Already removed.' },
   fr: { road: 'Pas sur une route, un pont ou la place.', plot: 'Un bâtiment est déjà là.', taken: 'Quelqu’un a déjà planté ici.', reach: 'Plantez sur une île.',
-    auth: 'Connectez-vous pour planter.', off: 'Les plantations sont en pause.', rate: 'Une à la fois : patientez un peu.', offline: 'Hors ligne. Réessayez dans un instant.', timeout: 'Pas de réponse. Réessayez.', bad: 'Cela n’a pas marché. Essayez une autre case.', unknown: 'Déjà retiré.' },
+    auth: 'Connectez-vous pour planter.', norole: 'Connecté, mais ce compte ne peut pas encore planter.', off: 'Les plantations sont en pause.', rate: 'Une à la fois : patientez un peu.', offline: 'Hors ligne. Réessayez dans un instant.', timeout: 'Pas de réponse. Réessayez.', bad: 'Cela n’a pas marché. Essayez une autre case.', unknown: 'Déjà retiré.' },
 };
 
 export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
@@ -23,16 +23,25 @@ export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
   const L = () => lang();
 
   const split = new URLSearchParams(location.search).has('ws'); // dev: page and relay on two ports, no /auth here
-  (split ? Promise.resolve(null) : fetch('/auth/me').then((r) => (r.ok ? r.json() : null))).then((a) => {
-    role = a?.role || 'view';
-    const pin = location.hostname === '127.0.0.1' && new URLSearchParams(location.search).get('role'); // dev: preview the toolbar
-    if (pin) role = pin;
-    signin.hidden = !(a?.enabled && role === 'view');
-    world.named = !!a?.handle;
-    sync();
-  }, () => {});
+  let known = false, noted = false; // known: the quota (from /auth/me or an ack), until then Plant waits
+  function me() { // the session, re-read when the page comes back (it lapses after 1 h) and on an "auth" refusal
+    (split ? Promise.resolve(null) : fetch('/auth/me').then((r) => (r.ok ? r.json() : null))).then((a) => {
+      role = a?.role || 'view';
+      const pin = location.hostname === '127.0.0.1' && new URLSearchParams(location.search).get('role'); // dev: preview the toolbar
+      if (pin) role = pin;
+      signin.hidden = !(a?.enabled && role === 'view' && !a?.signedIn);
+      world.named = !!a?.handle;
+      if (a?.next != null) world.quota = { next: a.next, left: a.left, at: Date.now() };
+      known = true;
+      if (a?.signedIn && role === 'view' && !noted) { noted = true; say(WHY[L()].norole); } // no loop back to "Sign in"
+      lastKey = '';
+      sync();
+    }, () => { known = true; sync(); });
+  }
+  me();
+  addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') me(); });
   $('login').href = `/auth/login?return=${encodeURIComponent('/')}`;
-  Object.assign($('enroll'), { href: ENROLL });
+  Object.assign($('enroll'), { href: `${ENROLL}?next=${encodeURIComponent(`${location.origin}/auth/login?return=%2F`)}` }); // back to the town, signed in
   addEventListener('keydown', (e) => { if (e.key === 'Escape') { signin.open = false; setMode(null); } });
   addEventListener('pointerdown', (e) => { if (!signin.contains(e.target)) signin.open = false; });
 
@@ -54,13 +63,23 @@ export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
     const is = world.town.islands[i];
     return { h: i + 1, host: is.host, q: Q - is.q, r: R - is.r, x: p.x, z: p.z };
   }
-  function free(hx) { // toy_plant.go mirrored: grass or meadow, no building, no plant
-    const is = world.town.islands[hx.h - 1], R = world.town.radius;
-    let idx = 0, kind = null;
-    for (let r = -R; r <= R && kind == null; r++) for (let q = Math.max(-R, -r - R); q <= Math.min(R, -r + R); q++, idx++) if (q === hx.q && r === hx.r) { kind = is.tiles[idx]; break; }
-    if (kind !== 'g' && kind !== 'm') return false;
-    if (world.state.plots.some((p) => p.host === hx.host && p.q === hx.q && p.r === hx.r)) return false;
-    return !world.state.marks.some((m) => m.mark === 'plant' && m.pose.h === hx.h && m.pose.q === hx.q && m.pose.r === hx.r);
+  function hexes(h) { // the island's local hexes with their tile letter, in the relay's canonical order
+    const is = world.town.islands[h - 1], R = world.town.radius, out = [];
+    let idx = 0;
+    for (let r = -R; r <= R; r++) for (let q = Math.max(-R, -r - R); q <= Math.min(R, -r + R); q++) out.push({ q, r, kind: is.tiles[idx++] });
+    return out;
+  }
+  function free(hx) { // toy_plant.go mirrored: grass or meadow, no building, no plant, or a full island's oldest plant
+    const all = hexes(hx.h), host = world.town.islands[hx.h - 1].host;
+    const open = (x) => x.kind === 'g' || x.kind === 'm';
+    const built = (x) => world.state.plots.some((p) => p.host === host && p.q === x.q && p.r === x.r);
+    const plants = world.state.marks.filter((m) => m.mark === 'plant' && m.pose.h === hx.h); // oldest first
+    const planted = (x) => plants.some((m) => m.pose.q === x.q && m.pose.r === x.r);
+    const me = all.find((x) => x.q === hx.q && x.r === hx.r);
+    if (!me || !open(me) || built(me)) return false;
+    if (!planted(me)) return true;
+    const full = !all.some((x) => open(x) && !built(x) && !planted(x));
+    return full && plants[0].pose.q === hx.q && plants[0].pose.r === hx.r;
   }
   function plantNear(hx) {
     return world.state.marks.find((m) => m.mark === 'plant' && m.pose.h === hx.h && m.pose.q === hx.q && m.pose.r === hx.r);
@@ -92,7 +111,7 @@ export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
     // the relay's sun decides (it can differ from the preview near ±6°); its world:mark lands before the ack
     const item = itemOf(sun().elev);
     world.place('plant', { h: hx.h, q: hx.q, r: hx.r }).then((id) => say(DONE[L()][world.state.marks.find((m) => m.id === id)?.pose.item ?? item]),
-      (err) => say(WHY[L()][err.message] || WHY[L()].bad));
+      (err) => { say(WHY[L()][err.message] || WHY[L()].bad); if (err.message === 'auth') me(); }); // a lapsed session: re-read it
     return true;
   }
 
@@ -116,12 +135,13 @@ export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
     if (plantBtn.hidden && mode === 'plant') setMode(null);
     const q = world.quota, wait = q ? Math.max(0, Math.ceil(q.at / 1000 + q.next - Date.now() / 1000)) : 0;
     const item = itemOf(sun().elev);
-    const label = wait > 0 ? `${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, '0')}` : ITEM[L()][item];
-    const key = `${label}|${q?.left}`;
+    const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    const label = wait >= 3600 ? `${Math.floor(wait / 3600)} h ${String(Math.floor(wait / 60) % 60).padStart(2, '0')}` : wait > 0 ? mmss(wait) : ITEM[L()][item];
+    const key = `${label}|${q?.left}|${known}`;
     if (key !== lastKey) {
       lastKey = key;
       plantBtn.querySelector('span').textContent = label;
-      plantBtn.disabled = wait > 0 || q?.left === 0;
+      plantBtn.disabled = !known || wait > 0 || q?.left === 0;
       plantBtn.title = q ? (L() === 'fr' ? `encore ${q.left} aujourd’hui` : `${q.left} left today`) : '';
     }
     if (sayUntil && Date.now() > sayUntil) { status.hidden = true; sayUntil = 0; }

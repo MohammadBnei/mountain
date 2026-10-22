@@ -237,6 +237,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	for name, q := range promQ {
 		s, err := p.query(ctx, q)
 		if err != nil && optionalQ[name] { // R7: a town query must never make every live signal stale
+			QueryFailed.Add(name, 1)
 			if !p.optWarned[name] {
 				log.Printf("prom: optional query %s failed (no answer, plots kept): %v", name, err)
 				p.optWarned[name] = true
@@ -401,6 +402,9 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		}
 	}
 	for _, h := range []string{"h1", "h2", "h3"} {
+		if len(r["ready"]) == 0 { // an empty answer is no answer (kube-state-metrics restarting): keep every host as it was
+			break
+		}
 		rd := hs[h].nodes > 0 && hs[h].ready == hs[h].nodes
 		if old, ok := p.ready[h]; ok && old != rd {
 			o.Ev("node.ready", map[string]any{"host": h, "ready": rd})
@@ -410,6 +414,16 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 
 	// town plots: where the pods run (plots.go); after the hosts' Ready, which a move depends on.
 	p.plots.place(p.a, o, r["pods"], p.ready, now)
+	p.a.wilt(o, now)
+	p.a.mu.Lock()
+	standing := 0
+	for _, pl := range p.a.State.Plots {
+		if pl.RuinAt == 0 {
+			standing++
+		}
+	}
+	p.a.mu.Unlock()
+	Plots.Set("", float64(standing))
 
 	// quorum: PVE probes up, as hosts.
 	up := []string{}
@@ -419,9 +433,13 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		}
 	}
 	slices.Sort(up)
-	if q := strings.Join(up, ","); q != p.quorum {
+	if q := strings.Join(up, ","); q != p.quorum && len(r["quorum"]) > 0 { // an empty answer is no answer
 		if p.warm {
-			o.Ev("quorum", map[string]any{"up": up})
+			o.Ev("quorum", map[string]any{"up": up}) // the tap folds it into hello.state.quorum
+		} else { // the first answer is a baseline, not an event: still the state a hello carries
+			p.a.mu.Lock()
+			p.a.State.Quorum = up
+			p.a.mu.Unlock()
 		}
 		p.quorum = q
 	}
@@ -492,7 +510,10 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		m.Rx, m.River = rx, norm(river, 10e6)
 		for _, h := range []string{"h1", "h2", "h3"} {
 			a := hs[h]
-			hm := Host{Ready: p.ready[h]}
+			hm := Host{}
+			if rd, ok := p.ready[h]; ok {
+				hm.Ready = &rd
+			}
 			if total > 0 {
 				hm.Alloc = math.Round(a.cpu/total*100) / 100
 			}
@@ -533,7 +554,7 @@ func (p *promSource) pools(r map[string][]sample) []Pool {
 	slices.SortFunc(pvcs, func(a, b sample) int { return strings.Compare(pk(a.L), pk(b.L)) })
 	byID, n := map[string]*agg{}, map[string]int{}
 	for _, s := range pvcs {
-		class := map[string]string{"longhorn": "longhorn", "local-path": "local"}[s.L["storageclass"]]
+		class := map[string]string{"longhorn": "replicated", "local-path": "local"}[s.L["storageclass"]]
 		if class == "" {
 			continue
 		}
@@ -558,7 +579,7 @@ func (p *promSource) pools(r map[string][]sample) []Pool {
 			byID[id] = g
 		}
 		g.cap += capOf[k]
-		if u, ok := usedOf[k]; ok && class == "longhorn" {
+		if u, ok := usedOf[k]; ok && class == "replicated" {
 			g.used += u
 			g.measured = true
 		}

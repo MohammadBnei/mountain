@@ -171,6 +171,7 @@ type State struct {
 	Builds   map[string]string `json:"builds"`   // app -> queued|running: builds in flight (ev build, W3c)
 	Marks    []Mark            `json:"marks"`    // W4: active visitor marks (world:mark), oldest first, ≤ marksMax; gone removes
 	Plots    []Plot            `json:"plots"`    // R7: town buildings (world:plot), one per app, ≤ plotsMax; gone removes
+	Quorum   []string          `json:"quorum"`   // R7.1: hosts whose PVE node is in quorum (ev quorum); null = not known yet
 }
 
 func newState() State {
@@ -207,6 +208,7 @@ type frameF struct {
 	StartsAt, TS                                          int64
 	Bucket                                                int
 	Gone                                                  bool
+	Up                                                    []string
 }
 
 // apply updates the state for one broadcast ev or world frame (as sent: sanitised).
@@ -216,6 +218,8 @@ func (s *State) apply(f frameF, raw []byte) {
 		s.Alerts = append(slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == f.FP }), Alert{FP: f.FP, Sev: f.Sev, Layer: f.Layer, StartsAt: f.StartsAt, Host: f.Host, App: f.App})
 	case "ev:alert.resolve":
 		s.Alerts = slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == f.FP })
+	case "ev:quorum":
+		s.Quorum = append([]string{}, f.Up...)
 	case "ev:argo.health":
 		s.Health[f.App] = f.Status
 	case "ev:replicas":
@@ -305,15 +309,13 @@ type AppMetrics struct {
 }
 
 type Storage struct {
-	Pools  []Pool `json:"pools"`
-	Garage any    `json:"garage"` // always null: unmeasured
-	Pigsty any    `json:"pigsty"` // always null: unmeasured
+	Pools []Pool `json:"pools"`
 }
 
 type Pool struct {
 	ID    string `json:"id"`
 	App   string `json:"app"`   // allowlisted app or "other"
-	Class string `json:"class"` // longhorn | local
+	Class string `json:"class"` // replicated (the replicated block store) | local (node-local paths): never the product
 	Host  string `json:"host,omitempty"`
 	CapB  int    `json:"capB"`
 	UsedB *int   `json:"usedB"` // null = unmeasured
@@ -321,7 +323,7 @@ type Pool struct {
 
 type Host struct {
 	Alloc float64 `json:"alloc"`
-	Ready bool    `json:"ready"`
+	Ready *bool   `json:"ready"` // null = not measured yet (no ready answer since start): unknown, not down
 	Load  float64 `json:"load"`
 }
 

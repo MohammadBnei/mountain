@@ -111,7 +111,7 @@ export async function geometry(name) {
       parts.push(g.applyMatrix4(o.matrixWorld));
     });
     return parts;
-  }));
+  }, (e) => { cache.delete(name); throw e; })); // a failed load is retried by the next call, never cached
   const parts = await cache.get(name);
   return parts.map((g) => g.clone());
 }

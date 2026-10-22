@@ -5,6 +5,7 @@ const SINK = 0.5; // islands.js: a down island sinks this far
 
 export function createLabels({ THREE, layer, apps, lang }) {
   const els = new Map(), v = new THREE.Vector3(), placed = [];
+  document.fonts?.ready.then(() => { for (const el of els.values()) el._w = 0; }); // widths measured before the web font swap in
   return {
     update(plots, camera, w, h) {
       const seen = new Set(), cand = [];
@@ -28,7 +29,8 @@ export function createLabels({ THREE, layer, apps, lang }) {
       cand.sort((a, b) => a.svc - b.svc || a.d - b.d);
       placed.length = 0;
       for (const c of cand) {
-        const cw = (c.el._w ||= c.el.offsetWidth || 80) + 4, ch = 22;
+        if (!c.el._w) { c.el.hidden = false; c.el._w = c.el.offsetWidth; } // a hidden label measures 0: show it to measure
+        const cw = (c.el._w || 80) + 4, ch = 22;
         const r = [c.x - cw / 2, c.y - ch, c.x + cw / 2, c.y];
         const hit = placed.some((o) => r[0] < o[2] && r[2] > o[0] && r[1] < o[3] && r[3] > o[1]);
         c.el.hidden = hit;

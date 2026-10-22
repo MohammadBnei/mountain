@@ -79,8 +79,8 @@ func (h *Hub) Broadcast(b []byte) {
 	h.broadcastLocked(b)
 }
 
-// broadcastLocked queues each non-nil frame to every client, in order, then the frames the tap derives from them
-// (an ev's world frames follow the batch it came in: argo.sync, deposit, site, then glacier). Caller holds h.mu.
+// broadcastLocked queues each non-nil frame to every client, in order, then any frames the tap derives from them
+// (they follow the batch they came from; the town's tap derives none). Caller holds h.mu.
 func (h *Hub) broadcastLocked(bs ...[]byte) {
 	var more [][]byte
 	for _, b := range bs {

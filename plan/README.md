@@ -26,13 +26,31 @@ GitHub feed sanitised `/ws` frames, with Postgres history, scrub, OIDC detail mo
 The binding rule is unchanged: **every image is true and tied to something real.**
 
 ## Status (2026-10-22)
-- **R7 phase 1 is live** (PR #20). The relay is additive: `relay/town`, the `pods` placement, services, `world:plot`,
-  alerts with `host`/`app`, `sun.go` and the plant toy.
-- **Phases 2–4 are on `claude/modest-mayer-zbwumy`.**
+- **R7 is live:**
+  - Phase 1 (relay, additive) shipped in PR #20.
+  - Phases 2–5 shipped in PR #21 (image `2573bce34991`).
   - The owner approved the styleboard and the mapping.
   - The town replaced `www/`. The mountain code, STT and `/api/topology` are deleted.
-  - Wire schemas are v2. Migration 004 archives the mountain history.
-- **Deploy 2** happens when that branch merges.
+  - Migration 004 archived the mountain history.
+- **R7.1** is a hardening wave from a post-deploy doubt cycle: three read-only reviews of the merged code.
+  - **Plants:** they wilt after 7 days, and a full island's oldest plant gives way.
+  - **Data:** the storage class says `replicated`, not the product. An empty Ready or quorum answer changes nothing.
+    A host is unknown, not down, until its first answer.
+  - **Plots:** a freed ruin waits for ArgoCD before it is rebuilt. A pending move restarts after a gap in the answers.
+  - **Ops:**
+    - a first boot still seeds the rate limits;
+    - the `MountainTownEmpty` alarm;
+    - the rollback can run twice;
+    - quorum rides the hello.
+  - **Front end:**
+    - moved buildings stay tappable, and so do ruins;
+    - a failed model no longer freezes the town;
+    - no instance overflow during a storm of alerts;
+    - a pinch is never a tap;
+    - a "can't reach" message;
+    - the session is re-read when the page returns, and the quota is known before Plant enables;
+    - the kill switch hides the plants;
+    - label widths are right after the fonts load.
 - **Live checks are not done from the agent container.** Its proxy denies `mountain.bnei.dev`, so the owner runs them
   until the host is added to the environment's allowed domains.
 - **Human-gated:**
@@ -84,7 +102,15 @@ The binding rule is unchanged: **every image is true and tied to something real.
 - `/metrics` is still unreachable publicly.
 - The relay log shows migration 004 and the epoch start.
 
-**Rollback:**
-1. Revert the merge on main. CI pins the previous image.
-2. Run `relay/rollback/004_town_down.sql` by hand. It moves the mountain rows back and parks the town's rows in
-   `town_archive_*`.
+- `MountainTownEmpty` is inactive and `mountain_query_failed_total{query="pods"}` stays flat (R7.1).
+
+**Rollback** (the order matters: a mountain image that starts before step 3 writes a fresh mountain snapshot over
+the history):
+1. Turn ArgoCD auto-sync and self-heal off for the `mountain` app, so it does not undo step 2 or roll an image early.
+2. Scale the relay to 0. For example, run `kubectl -n mountain scale deploy/mountain --replicas=0`, after checking the names
+   with `kubectl -n mountain get deploy`.
+3. Run `relay/rollback/004_town_down.sql` (`psql -1 -f …`). It moves the mountain rows back and keeps the town's in
+   `town_archive_*`. It can run twice, so going forward and back again works.
+4. Revert the R7 merges on main. CI builds a new image of the reverted code and pins it in `helm/values.yaml`. That
+   is a new tag, not the old one.
+5. Turn auto-sync back on. ArgoCD rolls the reverted image at 1 replica.

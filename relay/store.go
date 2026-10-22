@@ -378,6 +378,14 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 		return err
 	}
 	if r == nil {
+		// the town's first boot: still seed the rate limits, so the marks of the last 24 h (the mountain's too) count
+		_, recent, err := a.store.marksBoot(ctx, nil, time.Now())
+		if err != nil {
+			return err
+		}
+		visits.Lock()
+		visits.at = recent
+		visits.Unlock()
 		if !ro {
 			a.snapshot(time.Now())
 		}
@@ -386,6 +394,11 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 	st := r.state
 	since := fold(&st, r.frames)
 	st.Marks = slices.DeleteFunc(st.Marks, func(m Mark) bool { return mountainToys[m.Mark] }) // R7: their toys are gone
+	// an app dropped from config.yaml: its plot could never be freed (its frames fail sanitize)
+	st.Plots = slices.DeleteFunc(st.Plots, func(p Plot) bool {
+		_, ok := a.Cfg.Apps[p.App]
+		return !ok
+	})
 	ids := make([]string, len(st.Marks))
 	for i, m := range st.Marks {
 		ids[i] = m.ID

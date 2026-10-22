@@ -15,6 +15,7 @@
 | W4 | **ADR-B**: visitor enrollment, shared SMTP2GO accepted risk + quota watch, Turnstile, moderation, kill switch | agent PR, M BN merges | ⏳ |
 | R7 | **ADR-0056 amendment**: platform services public under role names; the plot's host bucket public; alerts with `host`/`app` (draft: `plan/adr-0056-amendment.md`) | M BN lands it in infra-bootstrap | ⏳ |
 | R7 | Remove `STT_TOKEN_MOUNTAIN` from Infisical `mountain-8c-cz` (the STT card is gone) | M BN | ⏳ |
+| R7.1 (optional) | Chrome on the build runner, so `gate.mjs page`/`selftest` run in CI. Either add `chromium` to `build-runner-configure.yml`, or run the gate in a podman container on the runner (04) | agent PR, M BN merges | ⏳ ask |
 
 - No ServiceAccount, RBAC, chart change or NetworkPolicy.
 - No Garage scrape job unless M BN asks: the unexposed port 3903 is deliberate.

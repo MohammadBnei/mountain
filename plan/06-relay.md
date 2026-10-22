@@ -43,6 +43,12 @@ frames (02).
   - `taken`: on another active mark.
 - The public pose is `{h, q, r, item}`. `item` is 0 (a tree) above +6°, 1 (a flag) from −6° to +6°, and 2 (a lantern)
   below −6°.
+- **Room (R7.1):**
+  - **Wilting:** the prom poll removes plants older than 7 days (`world:mark gone`, row `deleted_at`). The ULID id is
+    the planting time.
+  - **Full island:** when an island has no free hex, its oldest plant's hex accepts a new plant, which replaces it.
+    The old plant's `gone` is sent before the new mark.
+  - The toolbar's aiming ring mirrors both rules.
 
 **src_github (`relay/src_github.go`):**
 - **Token:** env `MOUNTAIN_GITHUB_TOKEN`, a fine-grained read-only PAT (Actions + Contents + Metadata on the
@@ -82,7 +88,8 @@ frames (02).
       A paused client therefore always hears back.
     - Client side: `world.scrub(day)` holds live frames off until `world.release()`, which resyncs through a fresh
       hello.
-  - `mark{mark, pose, named?}`, for a session in `mountain-visitors` or `platform-admins`. The sender alone hears back
+  - `mark{mark, pose, named?}`, for a session in `mountain-visitors` or `platform-admins`. `/auth/me` also returns
+    the quota `{next, left}` and `signedIn` (a session without a planting group), since R7.1. The sender alone hears back
     `{t:"mark", ref?, id}` or `{…, error}`. The broadcast `world:mark` is queued before the ack on the same
     connection, so the sender's state already holds the mark when the ack lands.
   - `mark.delete{id}`, admins only (08).
@@ -140,8 +147,9 @@ Limits:
 - `mountain_ws_connections`
 - `mountain_db_dropped_total{reason=full|error}`
 - `mountain_scrub_dropped_total`: scrub replies lost to a full send buffer (the connection is dropped)
-
-The optional `pods` query failing is logged once and never marks prom stale.
+- `mountain_plots` (R7.1): the standing buildings
+- `mountain_query_failed_total{query}` (R7.1): failed answers of the optional `pods` query, which is logged once and
+  never marks prom stale
 
 The ServiceMonitor and PrometheusRule live in **the mountain app's `extraManifests`**, since common-app-chart has no
 template for them.
@@ -150,6 +158,8 @@ Rules (all `severity: notice` → Discord):
 - `MountainSourceStale`
 - `MountainTokenExpiring` (< 14 d)
 - `MountainUnmapped`
+- `MountainTownEmpty` (R7.1): `mountain_plots == 0` for 15 min, the alarm a broken `pods` query would otherwise never
+  raise
 
 Why `notice`:
 - **Not `warning`**, which would wake thot.

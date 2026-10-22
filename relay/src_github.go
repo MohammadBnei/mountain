@@ -238,8 +238,9 @@ func (s *ghSource) runs(ctx context.Context, out *Out, now time.Time) error {
 	return nil
 }
 
-// commits: new infra-bootstrap main commits under gitops/ → one ev gitops.commit{n} (glacier snow); under docs/adr/
-// → one ev adr.merge{day, title} each (ash line; sanitize keeps the title only when allowlisted). The first answer
+// commits: new infra-bootstrap main commits under gitops/ → one ev gitops.commit{n}; under docs/adr/ → one ev
+// adr.merge{day, title} each (sanitize keeps the title only when allowlisted). The town draws neither yet (03 "Not
+// in v1": gitops carts, ADR notices); they are stored, so a later wave can. The first answer
 // per path is the baseline (no events): a restart neither replays history nor counts it twice.
 // ponytail: commits landing while the relay is down are not counted; > 30 between two polls are capped at 30.
 func (s *ghSource) commits(ctx context.Context, out *Out) error {

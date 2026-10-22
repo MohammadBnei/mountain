@@ -58,9 +58,7 @@
    "type": "object",
    "additionalProperties": false,
    "required": [
-    "pools",
-    "garage",
-    "pigsty"
+    "pools"
    ],
    "properties": {
     "pools": {
@@ -85,8 +83,9 @@
         "$ref": "#/$defs/app"
        },
        "class": {
+        "description": "R7.1: the kind of storage, never the product: replicated (the replicated block store) | local (node-local paths)",
         "enum": [
-         "longhorn",
+         "replicated",
          "local"
         ]
        },
@@ -106,12 +105,6 @@
        }
       }
      }
-    },
-    "garage": {
-     "type": "null"
-    },
-    "pigsty": {
-     "type": "null"
     }
    }
   },
@@ -149,7 +142,11 @@
       "type": "number"
      },
      "ready": {
-      "type": "boolean"
+      "description": "R7.1: null = not measured yet (no Ready answer since the relay started): unknown, not down",
+      "type": [
+       "boolean",
+       "null"
+      ]
      },
      "load": {
       "type": "number"

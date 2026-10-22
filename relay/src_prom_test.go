@@ -151,7 +151,9 @@ var (
 	ipRE      = regexp.MustCompile(`\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`)
 	versionRE = regexp.MustCompile(`v\d+\.\d+|\d+\.\d+\.\d+-`)
 	hostile   = []string{"k8s-", "bnei.lan", "evil", "pve-", "kube-system", "monitoring", "agent-fleet", "has-journal", `"hq"`, "adminweb",
-		"coredns", "argocd", "6443", "ghcr", "uid", "garage-", "nfs", "prometheus", "grafana", "wird-pg", "default", "namespace", `"pod"`, "kubernetescrd"}
+		"coredns", "6443", "ghcr", "uid", "nfs", "wird-pg", "default", "namespace", `"pod"`, "kubernetescrd",
+		// R7.1: no product name of a platform service, anywhere (they are role keys: gate, guardhouse, …)
+		"traefik", "authentik", "argocd", "longhorn", "infisical", "garage", "zot", "pigsty", "prometheus", "grafana"}
 )
 
 // TestFixtureTimeline replays www/dev/fixtures/relay-hostile.json: the W1a events come out,
@@ -222,7 +224,7 @@ func TestFixtureTimeline(t *testing.T) {
 	for _, p := range m["storage"].(map[string]any)["pools"].([]any) {
 		pools[p.(map[string]any)["id"].(string)] = p.(map[string]any)
 	}
-	for id, want := range map[string]string{"wird-1": "longhorn/18", "ukubi-stt-1": "local/<nil>", "other-longhorn": "longhorn/4", "watchtower-1": "local/<nil>", "other-local-h2": "local/<nil>"} {
+	for id, want := range map[string]string{"wird-1": "replicated/18", "ukubi-stt-1": "local/<nil>", "other-replicated": "replicated/4", "watchtower-1": "local/<nil>", "other-local-h2": "local/<nil>"} {
 		if p := pools[id]; p == nil || fmt.Sprintf("%v/%v", p["class"], p["usedB"]) != want {
 			t.Errorf("pool %s: got %v, want %s", id, p, want)
 		}

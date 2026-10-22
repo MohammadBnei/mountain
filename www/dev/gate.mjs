@@ -13,6 +13,9 @@
 //     budget (≤ 220 draw calls, ≤ 200k triangles, shadow pass included);
 //   - resync: the relay restarts on the same port, the page says "stale since" while it is down and resyncs through
 //     the next hello (stale cleared).
+//   - R7.1, desktop: 70 firing alerts stay within budget with no GL error; a building moved after a first tap is
+//     still tappable at its new place (its card opens); a model that fails to load leaves the town drawn.
+//   - selftest: every /ws frame of a fixture run (not only the hello) is scanned for leaks.
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -57,9 +60,10 @@ try {
   if (!prefix || /"\.\//.test(html)) fail('index: every asset must be under /v/<build>/');
 
   // ---- the page, desktop then phone low tier
-  for (const [name, w, h, qs] of [['desktop', 1280, 800, ''], ['phone-low', 390, 844, '?q=low']]) {
+  const BLOCK = '*building_tavern_blue.glb'; // the GLB-failure run: the tavern's model never loads
+  for (const [name, w, h, qs] of [['desktop', 1280, 800, ''], ['phone-low', 390, 844, '?q=low'], ...(mode === 'page' ? [['glb-blocked', 1280, 800, '']] : [])]) {
     const page = await launch({ w, h, mobile: w < 600 });
-    const urls = {};
+    const urls = {}, blocked = name === 'glb-blocked';
     page.on(({ method, params }) => {
       if (method === 'Network.requestWillBeSent') {
         urls[params.requestId] = params.request.url;
@@ -68,10 +72,11 @@ try {
       }
       if (method === 'Runtime.consoleAPICalled' && (params.type === 'error' || params.type === 'assert')) fail(`${name}: console.${params.type} ${params.args.map((a) => a.value ?? a.description).join(' ').slice(0, 300)}`);
       if (method === 'Runtime.exceptionThrown') fail(`${name}: ${(params.exceptionDetails.exception?.description || params.exceptionDetails.text).slice(0, 300)}`);
-      if (method === 'Network.loadingFailed' && !params.canceled && params.errorText !== 'net::ERR_ABORTED') fail(`${name}: request failed ${params.errorText} ${urls[params.requestId]}`);
+      if (method === 'Network.loadingFailed' && !params.canceled && params.errorText !== 'net::ERR_ABORTED' && !(blocked && params.blockedReason)) fail(`${name}: request failed ${params.errorText} ${urls[params.requestId]}`);
       if (method === 'Network.responseReceived' && params.response.status >= 400 && !/\/auth\/me$/.test(params.response.url)) fail(`${name}: HTTP ${params.response.status} ${params.response.url}`);
     });
     for (const m of ['Runtime.enable', 'Network.enable', 'Page.enable']) await page.s(m);
+    if (blocked) await page.s('Network.setBlockedURLs', { urls: [BLOCK] });
     await page.s('Page.navigate', { url: `${origin}/${qs}` });
     const ready = await waitFor(page, 'globalThis.__town?.ready && (globalThis.__town.error || globalThis.__town.info().plots > 0) && true', 60000);
     const err = ready && (await page.evalJSON('globalThis.__town.error || null'));
@@ -82,8 +87,48 @@ try {
     if (info.draws > 220 || info.tris > 200000) fail(`${name}: over the page budget (${info.draws} draws / 220, ${info.tris} tris / 200k)`);
     if (!info.labels) fail(`${name}: no building label shown`);
     if (qs && info.quality !== 'low') fail(`${name}: ?q=low did not select the low tier`);
+    if (blocked) { // the tavern still stands (drawn as a home), every other building too
+      const n = await page.evalJSON(`__town.world.state.plots.filter((p) => !p.ruinAt).length`);
+      if (info.plots !== n || !n) fail(`glb-blocked: ${info.plots} of ${n} buildings drawn`);
+      await page.close();
+      continue;
+    }
     await writeFile(join(OUT, `${name}.png`), Buffer.from((await page.s('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
 
+    if (name === 'desktop') { // R7.1: a moved building stays tappable; 70 alerts stay within budget
+      const tapAt = async (app) => { // the building's screen point, then a real click there
+        const pt = await page.evalJSON(`(() => { const p = __town.buildings.plots().find((x) => x.app === ${JSON.stringify(app)}); if (!p) return null;
+          const v = new (__town.camera.position.constructor)(p.x, p.k.height * 0.5, p.z).project(__town.camera), r = __town.renderer.domElement.getBoundingClientRect();
+          return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; })()`);
+        if (!pt) return null;
+        for (const type of ['mousePressed', 'mouseReleased']) await page.s('Input.dispatchMouseEvent', { type, x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
+        return waitFor(page, `!document.getElementById('card').hidden && document.querySelector('#card h2').textContent`, 3000);
+      };
+      const mover = await page.evalJSON(`(() => { const ps = __town.world.state.plots.filter((p) => !p.ruinAt && p.host !== 'h3'); return ps[0]?.app; })()`);
+      const name0 = mover && await tapAt(mover);
+      if (!name0) fail(`tap: the card of ${mover} did not open`);
+      await page.evalJSON(`(() => { // move it to a free grass hex on h3, as a world:plot from the relay would
+        const w = __town.world, is = w.town.islands.find((i) => i.host === 'h3'), R = w.town.radius, p = w.state.plots.find((x) => x.app === ${JSON.stringify(mover)});
+        let idx = 0, hex = null;
+        for (let r = -R; r <= R; r++) for (let q = Math.max(-R, -r - R); q <= Math.min(R, -r + R); q++, idx++)
+          if (!hex && is.tiles[idx] === 'g' && !w.state.plots.some((x) => x.host === 'h3' && x.q === q && x.r === r) && !w.state.marks.some((m) => m.pose.h === 3 && m.pose.q === q && m.pose.r === r)) hex = { q, r };
+        __town.inject({ t: 'world', kind: 'plot', ...p, host: 'h3', q: hex.q, r: hex.r });
+        __town.fly(''); return true; })()`);
+      await sleep(2500); // the drop + the fly back to the overview
+      const name1 = await tapAt(mover);
+      note(`tap: ${mover} → "${name0}", moved to h3 → ${name1 ? `"${name1}"` : 'NO CARD'}`);
+      if (!name1) fail(`tap: ${mover} moved to h3 can no longer be tapped`);
+      await page.evalJSON(`(__town.fly(''), Array.from({ length: 70 }, (_, i) => __town.inject({ t: 'ev', kind: 'alert.fire', id: 'gate' + i, ts: Date.now(),
+        fp: (0x1000000000000000n + BigInt(i)).toString(16), sev: ['info', 'warning', 'critical'][i % 3], layer: 'apps', startsAt: Date.now() })).length)`);
+      await sleep(1500);
+      const storm = await page.evalJSON('__town.info()');
+      const glErr = await page.evalJSON(`(() => { const gl = __town.renderer.getContext(); return gl.getError(); })()`);
+      note(`alerts ×70: ${JSON.stringify(storm)} gl ${glErr}`);
+      if (storm.draws > 220 || storm.tris > 200000) fail(`alerts ×70: over the page budget (${storm.draws} draws, ${storm.tris} tris)`);
+      if (glErr) fail(`alerts ×70: WebGL error ${glErr}`);
+      const led = await page.evalJSON(`[__town.world.state.alerts.length, document.getElementById('facts').textContent]`);
+      if (led[0] < 70 || !led[1].includes(`${led[0]} alerts`)) fail(`alerts ×70: the LED says "${led[1]}" for ${led[0]} alerts`);
+    }
     if (name === 'desktop') { // resync through a relay restart
       await stopRelay();
       const down = await waitFor(page, `!document.getElementById('stale').hidden && document.getElementById('stale').textContent`, 10000);
@@ -97,16 +142,21 @@ try {
   }
 
   // ---- selftest: nothing hostile reaches /ws (the hostile fixture's IPs, nodes, namespaces, product names)
-  if (mode === 'selftest') {
-    const hello = await new Promise((r, j) => {
-      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, { headers: { origin } });
-      ws.onmessage = (e) => { ws.close(); r(String(e.data)); };
+  if (mode === 'selftest') { // every frame for 20 s of the fixture run (its steps are 2 s apart), from a fresh relay
+    await stopRelay(); await startRelay();
+    const frames = await new Promise((r, j) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, { headers: { origin } }), got = [];
+      ws.onmessage = (e) => got.push(String(e.data));
       ws.onerror = () => j(new Error('ws error'));
-    }).catch((e) => { fail(`selftest: /ws ${e.message}`); return ''; });
-    // (a storage pool's class, longhorn | local, is public since ADR-0056: not a leak)
-    for (const leak of ['10.0.3', '10.233', 'k8s-', 'bnei.lan', 'traefik', 'authentik', 'argocd', 'grafana', 'prometheus', 'infisical', 'has-journal', 'adminweb', '<script>'])
-      if (hello.includes(leak)) fail(`selftest: "${leak}" in the hello`);
-    note(`selftest: hello ${hello.length} bytes scanned`);
+      setTimeout(() => { ws.close(); r(got); }, 20000);
+    }).catch((e) => { fail(`selftest: /ws ${e.message}`); return []; });
+    const all = frames.join('\n');
+    // R7.1: no product name of a platform service either (the wire carries role keys: gate, guardhouse, warehouse, …)
+    for (const leak of ['10.0.3', '10.233', 'k8s-', 'bnei.lan', 'traefik', 'authentik', 'argocd', 'grafana', 'prometheus', 'infisical',
+      'longhorn', 'garage', 'zot', 'pigsty', 'has-journal', 'adminweb', '<script>'])
+      if (all.includes(leak)) fail(`selftest: "${leak}" on /ws: ${all.slice(Math.max(0, all.indexOf(leak) - 120), all.indexOf(leak) + 40)}`);
+    if (frames.length < 5 || !frames.some((f) => f.includes('"t":"metrics"'))) fail(`selftest: only ${frames.length} frames in 20 s`);
+    note(`selftest: ${frames.length} frames, ${all.length} bytes scanned`);
   }
 } finally {
   relay?.kill();

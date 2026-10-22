@@ -5,7 +5,8 @@
 //   world.town       hello.town: {radius, islands:[{host, q, r, tiles}], bridges:[{a, b, aq, ar, bq, br}]}
 //   world.state      {alerts, health, replicas, builds, marks, plots}: hello.state, then every frame, BEFORE its emit
 //   world.metrics    the last metrics frame;  world.stale  null | unix ms (oldest stale source, or the socket drop)
-//   world.ready      host → bool (ev node.ready, metrics.hosts);  world.quorum  [hosts] | null (ev quorum)
+//   world.ready      host → bool (ev node.ready, metrics.hosts; absent = not measured yet: draw it up)
+//   world.quorum     [hosts] | null (hello.state.quorum, then ev quorum; null = not known yet)
 //   world.on(type, fn) → off   types: 'hello', 'metrics', 'ev:<kind>', 'world:<kind>', 'state' (after any change)
 //   world.applyHello(h) / world.applyFrame(f)   (socket.js)
 //   world.place(mark, pose) → Promise<id>  /  world.unmark(id) → Promise<id>   (visitor marks; rejects with the reason)
@@ -29,6 +30,7 @@ export function createWorld() {
       if (h.town) w.town = h.town;
       w.state = { ...emptyState(), ...h.state };
       for (const k of Object.keys(emptyState())) if (w.state[k] == null) w.state[k] = emptyState()[k];
+      w.quorum = h.state?.quorum ?? null; // R7.1: rides the hello (null = not known yet)
       if (h.metrics) metrics(h.metrics);
       w.emit('hello', h);
       w.emit('state', w.state);
@@ -72,7 +74,7 @@ export function createWorld() {
 
   function metrics(f) {
     w.metrics = f;
-    for (const [h, x] of Object.entries(f.hosts || {})) w.ready[h] = !!x.ready;
+    for (const [h, x] of Object.entries(f.hosts || {})) if (x.ready != null) w.ready[h] = !!x.ready; // null = not measured yet: unknown, not down
     const st = Object.values(f.stale || {});
     w.stale = st.length ? Math.min(...st) : null;
   }
@@ -92,7 +94,7 @@ export function createWorld() {
         case 'build': if (f.state === 'queued' || f.state === 'running') s.builds[f.app] = f.state; else delete s.builds[f.app]; break;
         case 'app.gone': for (const k of ['health', 'replicas', 'builds']) delete s[k][f.app]; break;
         case 'node.ready': w.ready[f.host] = f.ready; break;
-        case 'quorum': w.quorum = f.up; break;
+        case 'quorum': w.quorum = s.quorum = f.up; break;
       }
       return;
     }
@@ -113,6 +115,7 @@ export function createWorld() {
     clearTimeout(play.timer);
     if (f.error) { play = null; w.replay = null; w.resync?.(); return no(new Error(f.error)); }
     w.state = { ...emptyState(), ...f.state };
+    w.quorum = f.state?.quorum ?? null;
     play.queue = f.frames.slice(); play.gap = Math.min(0.25, 20 / Math.max(1, f.frames.length));
     w.replay = { day: f.day, left: f.frames.length };
     w.emit('state', w.state);

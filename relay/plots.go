@@ -13,6 +13,8 @@ package main
 //   - app.gone turns the building into ruins (ruinAt); ruins older than ruinFor free the plot (gone).
 //   - a new plot takes a free building-ring hex, never another plot's; a visitor plant only when nothing else is
 //     free, and that plant is removed first (world:mark gone).
+//   - a ruin freed after ruinFor is not rebuilt while its app is still out of ArgoCD (retired), even if pods run.
+//   - visitor plants wilt after wiltAfter (R7.1): the town keeps room for new ones.
 // placeMu serialises plot placement with visitor plants (toy_plant.go), so both never take the same hex.
 
 import (
@@ -28,6 +30,7 @@ const (
 	moveAfter = 5 * time.Minute
 	ruinFor   = 24 * time.Hour
 	plotsMax  = 64
+	wiltAfter = 7 * 24 * time.Hour
 )
 
 var placeMu sync.Mutex
@@ -104,13 +107,21 @@ func poseInt(v any) int {
 	return -1 << 30
 }
 
-// placer is the prom source's placement memory: the pending move per app.
+// placer is the prom source's placement memory: the pending move per app, and the apps whose ruins were freed.
 type placer struct {
-	cand  map[string]string    // app -> host leading since `since`
-	since map[string]time.Time //
+	cand    map[string]string    // app -> host leading since `since` (observed in every poll since then)
+	since   map[string]time.Time //
+	retired map[string]bool      // ruins freed: no new plot until the app is back in ArgoCD (ruin(…, false))
 }
 
-func newPlacer() *placer { return &placer{cand: map[string]string{}, since: map[string]time.Time{}} }
+func newPlacer() *placer {
+	return &placer{cand: map[string]string{}, since: map[string]time.Time{}, retired: map[string]bool{}}
+}
+
+// goneMark is the world:mark frame that removes m.
+func goneMark(m Mark) map[string]any {
+	return map[string]any{"id": m.ID, "mark": m.Mark, "pose": map[string]any{}, "weight": 0.0, "gone": true}
+}
 
 // place runs once per successful poll with the pods answer (namespace, pod, node series) and the hosts' Ready.
 func (pl *placer) place(a *App, o *Out, pods []sample, ready map[string]bool, now time.Time) {
@@ -161,7 +172,8 @@ func (pl *placer) place(a *App, o *Out, pods []sample, ready map[string]bool, no
 		}
 		x, ok := town.Slot(app, host, a.Cfg.inner(app), taken, avoid)
 		if m, planted := plants[host][x]; ok && planted { // the island is full: the plant on the chosen hex gives way
-			o.World("mark", map[string]any{"id": m.ID, "mark": m.Mark, "pose": map[string]any{}, "weight": 0.0, "gone": true})
+			o.World("mark", goneMark(m))
+			a.store.unmark(m.ID, now)
 			delete(plants[host], x)
 		}
 		return x, ok
@@ -171,12 +183,22 @@ func (pl *placer) place(a *App, o *Out, pods []sample, ready map[string]bool, no
 	for _, app := range slices.Sorted(maps.Keys(plots)) {
 		if p := plots[app]; p.RuinAt > 0 && now.Sub(time.UnixMilli(p.RuinAt)) >= ruinFor {
 			emit(p, true)
+			pl.retired[app] = true
+		}
+	}
+	// a move needs its majority in every poll for moveAfter: no answer, or the app missing from it, starts over
+	for app := range pl.cand {
+		if counts[app] == nil {
+			delete(pl.cand, app)
 		}
 	}
 	if len(pods) == 0 { // an empty answer is no answer (KSM restarting, or on the host that went down)
 		return
 	}
 	for _, app := range slices.Sorted(maps.Keys(counts)) {
+		if pl.retired[app] {
+			continue
+		}
 		c := counts[app]
 		cur, has := plots[app]
 		best, n := "", -1
@@ -211,6 +233,9 @@ func (pl *placer) place(a *App, o *Out, pods []sample, ready map[string]bool, no
 func (pl *placer) ruin(a *App, o *Out, app string, ruins bool, now time.Time) {
 	placeMu.Lock()
 	defer placeMu.Unlock()
+	if !ruins {
+		delete(pl.retired, app) // back in ArgoCD: it may have a plot again
+	}
 	a.mu.Lock()
 	i := slices.IndexFunc(a.State.Plots, func(p Plot) bool { return p.App == app })
 	var p Plot
@@ -226,4 +251,24 @@ func (pl *placer) ruin(a *App, o *Out, app string, ruins bool, now time.Time) {
 		p.RuinAt = now.UnixMilli()
 	}
 	o.World("plot", p.frame(false))
+}
+
+// wilt removes the visitor plants older than wiltAfter (world:mark gone; their rows get deleted_at). Run from the prom
+// poll; the mark id (a ULID) is the planting time.
+func (a *App) wilt(o *Out, now time.Time) {
+	placeMu.Lock()
+	defer placeMu.Unlock()
+	a.mu.Lock()
+	var old []Mark
+	for _, m := range a.State.Marks {
+		if t := ulidTime(m.ID); m.Mark == "plant" && !t.IsZero() && now.Sub(t) >= wiltAfter {
+			old = append(old, m)
+			delete(a.MarkSubs, m.ID)
+		}
+	}
+	a.mu.Unlock()
+	for _, m := range old {
+		o.World("mark", goneMark(m))
+		a.store.unmark(m.ID, now)
+	}
 }
