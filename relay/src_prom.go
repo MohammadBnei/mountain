@@ -35,7 +35,7 @@ const (
 var afterPoll = func() {}
 
 // optionalQ: queries whose failure is no answer (logged once per outage) instead of a failed poll.
-var optionalQ = map[string]bool{"pods": true}
+var optionalQ = map[string]bool{"pods": true, "guests": true}
 
 // promQ: name -> PromQL. The fixture server keys its timeline by these names.
 var promQ = map[string]string{
@@ -62,6 +62,8 @@ var promQ = map[string]string{
 	// R7 town plots: running pods per (namespace, pod, node), minus pods being deleted (a NotReady node's pods keep
 	// phase Running for minutes). max by() first, so a second KSM replica or a uid churn cannot make the join fail.
 	"pods": `max by (namespace, pod, node) (kube_pod_info{node!=""}) * on (namespace, pod) group_left() max by (namespace, pod) (kube_pod_status_phase{phase="Running"} == 1) unless on (namespace, pod) kube_pod_deletion_timestamp`,
+	// R8 machines: the infra guests blackbox-exporter probes (infra-bootstrap ADR-0064), by target only (never instance)
+	"guests": `max by (target) (probe_success{target=~"guest-.*"})`,
 }
 
 func init() {
@@ -91,6 +93,7 @@ type promSource struct {
 	quorum    string
 	base      map[string]float64 // app -> rps baseline (30 min EWMA); keyed by allowlist, bounded
 	plots     *placer            // R7 town plots (plots.go)
+	machines  *machineWatch      // R8 machines (machines.go)
 	optWarned map[string]bool    // optionalQ already logged as failing
 }
 
@@ -102,7 +105,7 @@ type counter struct {
 func newProm(a *App) *promSource {
 	return &promSource{a: a, url: strings.TrimRight(a.Opts.PromURL, "/"), hc: &http.Client{Timeout: 10 * time.Second},
 		ctr: map[string]counter{}, health: map[string]string{}, seen: map[string]bool{}, gone: map[string]time.Time{},
-		crash: map[string]bool{}, repl: map[string]int{}, ready: map[string]bool{}, base: map[string]float64{}, plots: newPlacer(), optWarned: map[string]bool{}}
+		crash: map[string]bool{}, repl: map[string]int{}, ready: map[string]bool{}, base: map[string]float64{}, plots: newPlacer(), machines: newMachineWatch(), optWarned: map[string]bool{}}
 }
 
 func (p *promSource) Name() string { return "prom" }
@@ -319,7 +322,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	}
 	ch := map[string]*churn{}
 	get := func(l map[string]string) *churn {
-		app := cfg.appOfNS(l["namespace"], l["pod"])
+		app := cfg.appOfWork(l["namespace"], l["pod"])
 		if app == "" {
 			return nil
 		}
@@ -355,7 +358,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	// replicas: sum per app, bucketed, on change.
 	reps := map[string]int{}
 	for _, s := range r["replicas"] {
-		if app := cfg.appOfNS(s.L["namespace"], s.L["deployment"]); app != "" {
+		if app := cfg.appOfWork(s.L["namespace"], s.L["deployment"]); app != "" {
 			reps[app] += int(s.V)
 		}
 	}
@@ -412,13 +415,16 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 		p.ready[h] = rd
 	}
 
-	// town plots: where the pods run (plots.go); after the hosts' Ready, which a move depends on.
-	p.plots.place(p.a, o, r["pods"], p.ready, now)
+	// town plots: where the pods run (plots.go); after the hosts' Ready, which a move depends on. R8: the machines
+	// first (machines.go): present ones without a plot are placed by place() on their own host.
+	_, guestsOK := r["guests"]
+	here := p.machines.watch(p.a, o, p.plots, r["guests"], guestsOK, r["ready"], now)
+	p.plots.place(p.a, o, r["pods"], here, p.ready, now)
 	p.a.wilt(o, now)
 	p.a.mu.Lock()
 	standing := 0
 	for _, pl := range p.a.State.Plots {
-		if pl.RuinAt == 0 {
+		if pl.RuinAt == 0 && !cfg.machine(pl.App) { // MountainTownEmpty means "no app", whatever the machines do
 			standing++
 		}
 	}
@@ -476,7 +482,14 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	}
 	apps := map[string]AppMetrics{}
 	river := 0.0
+	traffic := map[string]bool{} // R8: only apps a namespace maps to can carry traffic (not the machines, but granary)
+	for _, app := range cfg.Namespaces {
+		traffic[app] = app != ""
+	}
 	for name := range cfg.Apps { // built by allowlist
+		if !traffic[name] {
+			continue
+		}
 		t := tr[name]
 		if t == nil {
 			t = &traf{}

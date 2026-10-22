@@ -60,9 +60,9 @@ func TestDBRestartSurvival(t *testing.T) {
 	a := storedApp(t, dsn)
 	withToys(t, a)
 	pl, prom, out := newPlacer(), &Out{app: a, name: "prom"}, &Out{app: a, name: "alerts"}
-	pl.place(a, prom, []sample{pod("wird", "wird-1", "k8s-cp-01")}, allReady, time.Now())
+	pl.place(a, prom, []sample{pod("wird", "wird-1", "k8s-cp-01")}, nil, allReady, time.Now())
 	a.snapshot(time.Now())
-	pl.place(a, prom, []sample{pod("wird", "wird-1", "k8s-cp-01"), pod("traefik", "traefik-1", "k8s-cp-02")}, allReady, time.Now())
+	pl.place(a, prom, []sample{pod("wird", "wird-1", "k8s-cp-01"), pod("traefik", "traefik-1", "k8s-cp-02")}, nil, allReady, time.Now())
 	al := Alert{FP: a.FP("abc"), Sev: "critical", Layer: "k8s", StartsAt: 1760450000000, Host: "h2"}
 	if out.Fire(al) == "" || out.Fire(Alert{FP: a.FP("gone"), Sev: "warning", Layer: "apps", StartsAt: 1}) == "" {
 		t.Fatal("fire dropped")
@@ -210,7 +210,7 @@ func TestDBR8(t *testing.T) {
 	ctx := context.Background()
 	a := storedApp(t, dsn)
 	pl, prom := newPlacer(), &Out{app: a, name: "prom"}
-	pl.place(a, prom, []sample{pod("wird", "wird-1", "k8s-cp-01")}, allReady, time.Now())
+	pl.place(a, prom, []sample{pod("wird", "wird-1", "k8s-cp-01")}, nil, allReady, time.Now())
 	a.snapshot(time.Now())
 	a.store.Close(5 * time.Second)
 	c, err := pgx.Connect(ctx, dsn)
@@ -229,7 +229,7 @@ func TestDBR8(t *testing.T) {
 		t.Fatalf("R8's first boot keeps R7 plots: %+v", b.State.Plots)
 	}
 	pl, prom = newPlacer(), &Out{app: b, name: "prom"}
-	pl.place(b, prom, []sample{pod("wird", "wird-1", "k8s-cp-01")}, allReady, time.Now())
+	pl.place(b, prom, []sample{pod("wird", "wird-1", "k8s-cp-01")}, nil, allReady, time.Now())
 	withToys(t, b)
 	if _, why := ackOf(t, b.place(visitor("s1", "ana"), "r", "plant", map[string]any{"h": 1.0, "q": 6.0, "r": -1.0}, false, time.Now())); why != "" {
 		t.Fatalf("plant on ring 6: %s", why)
@@ -415,7 +415,7 @@ func TestAlertsRestored(t *testing.T) {
 // advances and hello.snapshot.day follows.
 func TestSnapshotRollover(t *testing.T) {
 	a, _ := testApp(t)
-	newPlacer().place(a, &Out{app: a, name: "prom"}, []sample{pod("wird", "wird-1", "k8s-cp-01")}, allReady, time.Now())
+	newPlacer().place(a, &Out{app: a, name: "prom"}, []sample{pod("wird", "wird-1", "k8s-cp-01")}, nil, allReady, time.Now())
 	var h struct {
 		Snapshot Snapshot
 		Deltas   []json.RawMessage

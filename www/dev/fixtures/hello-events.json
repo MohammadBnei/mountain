@@ -66,6 +66,33 @@
   },
   {
    "t": "world",
+   "kind": "plot",
+   "app": "witness",
+   "host": "h3",
+   "q": 3,
+   "r": 0,
+   "role": "witness"
+  },
+  {
+   "t": "world",
+   "kind": "plot",
+   "app": "keep-h3",
+   "host": "h3",
+   "q": 0,
+   "r": 2,
+   "role": "keep"
+  },
+  {
+   "t": "world",
+   "kind": "plot",
+   "app": "mill",
+   "host": "h3",
+   "q": -2,
+   "r": 0,
+   "role": "mill"
+  },
+  {
+   "t": "world",
    "kind": "mark",
    "id": "01M5HPCD7G3VF3J95X39Y7BVKA",
    "mark": "plant",
@@ -118,6 +145,21 @@
    "kind": "argo.sync",
    "app": "wird",
    "ok": true
+  },
+  {
+   "kind": "machine",
+   "app": "witness",
+   "state": "down"
+  },
+  {
+   "kind": "machine",
+   "app": "mill",
+   "state": "up"
+  },
+  {
+   "kind": "machine",
+   "app": "mill",
+   "state": "down"
   }
  ]
 }

@@ -53,8 +53,13 @@ type Config struct {
 	Repos       map[string]string               `yaml:"repos"`
 	Titles      []string                        `yaml:"titles"`
 
-	titles []*regexp.Regexp // Titles, anchored
+	titles []*regexp.Regexp  // Titles, anchored
+	probes map[string]string // R8: probe target (guest-<role>) -> machine
+	byNode map[string]string // R8: k8s node -> machine (keep, hall)
 }
+
+// probeRE: a machine's blackbox probe target (infra-bootstrap ADR-0064 names them by public role key).
+var probeRE = regexp.MustCompile(`^guest-[a-z0-9-]+$`)
 
 func loadConfig(b []byte) (*Config, error) {
 	var c Config
@@ -73,12 +78,38 @@ func loadConfig(b []byte) (*Config, error) {
 			return nil, fmt.Errorf("config: namespace %q maps to %q, not on the allowlist", k, app)
 		}
 	}
+	c.probes, c.byNode = map[string]string{}, map[string]string{}
 	for name, a := range c.Apps {
-		if a.Group != "platform" && a.Group != "user" && a.Group != "service" {
-			return nil, fmt.Errorf("config: app %q: group %q is not platform|user|service", name, a.Group)
+		if a.Group != "platform" && a.Group != "user" && a.Group != "service" && a.Group != "machine" {
+			return nil, fmt.Errorf("config: app %q: group %q is not platform|user|service|machine", name, a.Group)
 		}
 		if a.Building != "" && !slices.Contains(town.Kinds, a.Building) {
 			return nil, fmt.Errorf("config: app %q: building %q is not a town kind", name, a.Building)
+		}
+		// errors name the key only: a machine's name and probe are its real identity (logs reach Loki)
+		if strings.Contains(strings.ToLower(name+a.Name+a.Probe+a.Node), "k9s") { // ADR-0064: never drawn or named
+			return nil, fmt.Errorf("config: app %q: the break-glass box is never drawn", name)
+		}
+		if a.Group != "machine" {
+			if a.Host+a.Probe+a.Node+a.Name != "" {
+				return nil, fmt.Errorf("config: app %q: host/probe/node/name are for machines only", name)
+			}
+			continue
+		}
+		if !hosts[a.Host] || a.Building == "" || a.Name == "" || (a.Probe == "") == (a.Node == "") {
+			return nil, fmt.Errorf("config: machine %q: needs host, building, name and exactly one of probe or node", name)
+		}
+		if a.Probe != "" {
+			if !probeRE.MatchString(a.Probe) || c.probes[a.Probe] != "" {
+				return nil, fmt.Errorf("config: machine %q: bad or duplicate probe", name)
+			}
+			c.probes[a.Probe] = name
+		}
+		if a.Node != "" {
+			if c.Nodes[a.Node] != a.Host || c.byNode[a.Node] != "" { // read Nodes directly: host() counts unmapped
+				return nil, fmt.Errorf("config: machine %q: its node is not on its host, or taken", name)
+			}
+			c.byNode[a.Node] = name
 		}
 	}
 	for repo, app := range c.Repos {
@@ -90,8 +121,13 @@ func loadConfig(b []byte) (*Config, error) {
 }
 
 // AppCfg is one allowlist entry. Group: platform | user | service (R7: platform services shown under a generic role
-// key, never their product name). Building: the town building kind (town.Kinds); empty = picked by group.
-type AppCfg struct{ Group, Display, Building string }
+// key, never their product name) | machine (R8: a VM or guest from the Terraform topology). Building: the town
+// building kind (town.Kinds); empty = picked by group. A machine also has its Host (fixed: a VM never moves), its
+// real Name (admin-only: /auth/me) and one source: Probe (a blackbox target, guest-<role>) or Node (a k8s node).
+type AppCfg struct{ Group, Display, Building, Host, Probe, Node, Name string }
+
+// machine: app is an R8 machine.
+func (c *Config) machine(app string) bool { return c.Apps[app].Group == "machine" }
 
 // Opts are the command-line flags, plus FPSalt from env MOUNTAIN_FP_SALT (Infisical mountain-8c-cz; never rotated, 02)
 // and GHToken from env MOUNTAIN_GITHUB_TOKEN (same project).

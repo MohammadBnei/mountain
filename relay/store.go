@@ -399,10 +399,19 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 	// building kind changed in config.yaml goes too, and the first poll places the new kind where its family belongs.
 	// R8's first boot (a snapshot from before town_r8): every plot goes, so every building moves to its family's ring
 	// on the bigger islands. Ruins go with them: their apps are absent, so nothing re-places them.
+	// R8 deploy B: a machine's plot off its configured host goes too (a machine never moves; it is placed again).
 	st.Plots = slices.DeleteFunc(st.Plots, func(p Plot) bool {
-		_, ok := a.Cfg.Apps[p.App]
-		return r.r7 || !ok || p.Role != a.Cfg.roleOf(p.App)
+		c, ok := a.Cfg.Apps[p.App]
+		return r.r7 || !ok || p.Role != a.Cfg.roleOf(p.App) || (c.Group == "machine" && p.Host != c.Host)
 	})
+	// R8: only configured probed machines keep a state (a snapshot from before deploy B has none)
+	machines := map[string]string{}
+	for k, v := range st.Machines {
+		if a.Cfg.machine(k) && a.Cfg.Apps[k].Probe != "" && (v == "up" || v == "down") {
+			machines[k] = v
+		}
+	}
+	st.Machines = machines
 	ids := make([]string, len(st.Marks))
 	for i, m := range st.Marks {
 		ids[i] = m.ID

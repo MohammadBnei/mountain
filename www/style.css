@@ -93,6 +93,7 @@ canvas:active { cursor: grabbing; }
 #card .kicker { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: var(--ink-muted); font: 600 11px/16px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; }
 #card .kicker::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--wire); }
 #card h2 { margin: 0 0 8px; font: 600 22px/28px var(--font-sans); }
+#card .realname { margin: -6px 0 8px; color: var(--ink-muted); font: 13px/18px var(--font-mono); } /* R8: an admin sees the machine's real name */
 #card .desc { margin: 0; font: 400 15px/24px var(--font-sans); }
 #card .state { margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font: 500 13px/16px var(--font-sans); }
 #card .state:empty { display: none; }

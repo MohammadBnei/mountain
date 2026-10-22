@@ -107,8 +107,9 @@
   "name": "Granary",
   "en": "File storage for the apps: pictures, uploads, backups.",
   "fr": "Le stockage de fichiers des applications : images, envois, sauvegardes.",
-  "group": "service",
-  "wire": "storage"
+  "group": "machine",
+  "wire": "storage",
+  "probed": true
  },
  "depot": {
   "name": "Depot",
@@ -116,5 +117,88 @@
   "fr": "Garde les images d’applications construites ici avant leur déploiement.",
   "group": "service",
   "wire": "storage"
+ },
+ "keep-h1": {
+  "name": "Keep",
+  "en": "A control-plane machine: it holds the cluster's state and decides where everything runs.",
+  "fr": "Une machine du plan de contrôle : elle garde l’état du cluster et décide où tout tourne.",
+  "group": "machine",
+  "wire": "compute"
+ },
+ "keep-h2": {
+  "name": "Keep",
+  "en": "A control-plane machine: it holds the cluster's state and decides where everything runs.",
+  "fr": "Une machine du plan de contrôle : elle garde l’état du cluster et décide où tout tourne.",
+  "group": "machine",
+  "wire": "compute"
+ },
+ "keep-h3": {
+  "name": "Keep",
+  "en": "A control-plane machine: it holds the cluster's state and decides where everything runs.",
+  "fr": "Une machine du plan de contrôle : elle garde l’état du cluster et décide où tout tourne.",
+  "group": "machine",
+  "wire": "compute"
+ },
+ "hall-h1": {
+  "name": "Hall",
+  "en": "A worker machine: the apps' containers run here.",
+  "fr": "Une machine de travail : les conteneurs des applications tournent ici.",
+  "group": "machine",
+  "wire": "compute"
+ },
+ "hall-h2": {
+  "name": "Hall",
+  "en": "A worker machine: the apps' containers run here.",
+  "fr": "Une machine de travail : les conteneurs des applications tournent ici.",
+  "group": "machine",
+  "wire": "compute"
+ },
+ "archive-h1": {
+  "name": "Archive",
+  "en": "One of the two database machines. They hold every app's data, each ready to take over from the other.",
+  "fr": "L’une des deux machines de base de données. Elles gardent les données des applications, chacune prête à prendre le relais.",
+  "group": "machine",
+  "wire": "data",
+  "probed": true
+ },
+ "archive-h2": {
+  "name": "Archive",
+  "en": "One of the two database machines. They hold every app's data, each ready to take over from the other.",
+  "fr": "L’une des deux machines de base de données. Elles gardent les données des applications, chacune prête à prendre le relais.",
+  "group": "machine",
+  "wire": "data",
+  "probed": true
+ },
+ "witness": {
+  "name": "Witness",
+  "en": "The tie-breaker: a small machine that lets the two databases agree on which one leads.",
+  "fr": "L’arbitre : une petite machine qui permet aux deux bases de s’accorder sur celle qui mène.",
+  "group": "machine",
+  "wire": "data",
+  "probed": true
+ },
+ "cellar": {
+  "name": "Cellar",
+  "en": "Shared bulk storage for files any app can rebuild.",
+  "fr": "Un stockage partagé pour les gros fichiers que les applications peuvent refaire.",
+  "group": "machine",
+  "wire": "storage",
+  "probed": true
+ },
+ "forge": {
+  "name": "Forge",
+  "en": "Where the apps' images are built before they ship.",
+  "fr": "Là où les images des applications sont construites avant de partir.",
+  "group": "machine",
+  "wire": "compute",
+  "probed": true
+ },
+ "mill": {
+  "name": "Mill",
+  "en": "A machine where an assistant works through its tasks.",
+  "fr": "Une machine où un assistant traite ses tâches.",
+  "group": "machine",
+  "wire": "agent",
+  "probed": true
  }
 }

@@ -55,7 +55,7 @@ export default async function build({ THREE, kit, world }) {
     const list = [];
     for (const p of s.plots) {
       const m = apps[p.app];
-      if (!m || p.ruinAt || !m.rpsB || world.ready[p.host] === false) continue;
+      if (!m || p.ruinAt || !m.rpsB || world.ready[p.host] === false || s.machines?.[p.app] === 'down') continue;
       list.push({ p, n: Math.min(6, m.rpsB) * (m.spike ? 2 : 1), bad: m.errB ? Math.max(1, Math.round(Math.min(6, m.rpsB) * m.errB / Math.max(1, m.rpsB))) : 0 });
     }
     const total = list.reduce((a, x) => a + x.n, 0), k = total > MAX ? MAX / total : 1;

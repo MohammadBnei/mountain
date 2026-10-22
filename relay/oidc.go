@@ -251,10 +251,35 @@ func me(w http.ResponseWriter, r *http.Request) {
 		m["next"], m["left"] = quota(s.Sub, time.Now())
 		visits.Unlock()
 	}
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "application/json")
+	if s.Role == "admin" { // R8 (ADR-0064): the machines' real names, for a signed-in platform admin only
+		m["names"] = machineNames()
+	}
+	h := w.Header()
+	h.Set("Cache-Control", "private, no-store") // per session: never a shared cache
+	h.Set("Vary", "Cookie")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Content-Type", "application/json")
 	w.Write(mustJSON(m))
 }
+
+// machineNames is role key -> real hostname for every R8 machine (config.yaml name). It leaves the relay only in an
+// admin's /auth/me: never on the socket, in a replay or in the DB.
+func machineNames() map[string]string {
+	cfg := embeddedCfg()
+	if app != nil {
+		cfg = app.Cfg
+	}
+	out := map[string]string{}
+	for k, a := range cfg.Apps {
+		if a.Group == "machine" {
+			out[k] = a.Name
+		}
+	}
+	return out
+}
+
+// embeddedCfg is the embedded config.yaml, for /auth/me before serve sets app (tests).
+var embeddedCfg = sync.OnceValue(func() *Config { c, _ := loadConfig(configYAML); return c })
 
 func init() {
 	on := func(h func(*Auth, http.ResponseWriter, *http.Request)) http.HandlerFunc {

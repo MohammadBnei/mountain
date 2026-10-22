@@ -59,6 +59,12 @@
         "quorum": {
           "description": "R7.1: the hosts whose Proxmox node is in quorum (ev quorum up[]); null or absent = not known yet (a snapshot from before R7.1).",
           "oneOf": [{ "type": "null" }, { "type": "array", "maxItems": 3, "items": { "$ref": "world.json#/$defs/host" } }]
+        },
+        "machines": {
+          "description": "R8: probed machine -> up|down (ev machine, shown only after holding 10 min); a machine absent here is not known yet. Absent = a snapshot from before R8 deploy B.",
+          "type": "object", "maxProperties": 64,
+          "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]{0,40}$" },
+          "additionalProperties": { "enum": ["up", "down"] }
         }
       }
     },

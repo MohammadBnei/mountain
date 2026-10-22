@@ -18,6 +18,7 @@ One meaning per channel, readable by day. Every object follows the contract in 0
 | health Degraded | chimney smoke | `buildings.js` |
 | health Missing / Suspended | the building fades | `buildings.js` |
 | `app.gone` | ruins (rubble and a broken wall). The plot frees after 24 h | `buildings.js` |
+| a machine (R8) | its building on its own host, from the probe or the node (02 Machines). A probed guest not answering (10 min held) is greyed with its lamp off, not sunk; the card says `up` / `not answering` / `checking`, and an admin also reads its real name | `buildings.js`, `main.js` |
 | `pod.churn` | a hop. `crashloop` keeps hopping until the next healthy sync | `buildings.js` |
 | `rpsB` / `errB` / `spike` | walkers cross a bridge, take the road to the square, then the roads and streets to the door (across the grass only where no street reaches it) / some turn red and walk away / twice the crowd | `people.js` |
 | `alert.fire` / `alert.resolve` | a beacon fire at the alert's app, else its host's square, else the watchtower. Several on one spot spread on a spiral, and at most 64 are drawn. The flame's size and colour follow `sev`. One LED in the panel, lit while alerts fire, counts them all | `buildings.js`, `main.js` |
@@ -65,7 +66,7 @@ Only the role key reaches the wire.
 ## Budgets and tiers
 - Each object instances per kind: building bodies and roofs, scaffolds, smoke, rubble, braziers, flames, lamps,
   flags, walkers and marks.
-- The page gate's fixture (`relay-town.json`: all 16 apps and services placed, builds, firing alerts, visitor
+- The page gate's fixture (`relay-town.json`: all 27 apps, services and machines placed, builds, firing alerts, visitor
   marks, traffic) stays within 220 draws and 200k tris on desktop and on phone-low (`gate.mjs page`).
 - `relay-town-states.json` drives the styleboard (`townshots.mjs`): every building state side by side.
 - Phone-low caps walkers at 24 (72 on desktop) and has no shadow pass.

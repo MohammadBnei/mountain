@@ -86,34 +86,34 @@ func TestWilt(t *testing.T) {
 func TestPlotLifecycle(t *testing.T) {
 	a, c := testApp(t)
 	pl, o, t0 := newPlacer(), &Out{app: a, name: "prom"}, time.Unix(1_800_000_000, 0)
-	pl.place(a, o, []sample{pod("wird", "wird-a", "k8s-cp-01")}, allReady, t0)
+	pl.place(a, o, []sample{pod("wird", "wird-a", "k8s-cp-01")}, nil, allReady, t0)
 	on := func(node string) []sample {
 		return []sample{pod("wird", "wird-a", node), pod("editable-blog", "b", "k8s-cp-01")}
 	}
-	pl.place(a, o, on("k8s-cp-02"), allReady, t0.Add(time.Minute))   // h2 leads from 1m
-	pl.place(a, o, on("k8s-cp-02"), allReady, t0.Add(3*time.Minute)) //
-	pl.place(a, o, nil, allReady, t0.Add(4*time.Minute))             // no answer: the count starts over
-	pl.place(a, o, on("k8s-cp-02"), allReady, t0.Add(5*time.Minute)) // h2 leads again from 5m
-	pl.place(a, o, on("k8s-cp-02"), allReady, t0.Add(7*time.Minute)) // 6 min after 1m, but 2 since 5m
+	pl.place(a, o, on("k8s-cp-02"), nil, allReady, t0.Add(time.Minute))   // h2 leads from 1m
+	pl.place(a, o, on("k8s-cp-02"), nil, allReady, t0.Add(3*time.Minute)) //
+	pl.place(a, o, nil, nil, allReady, t0.Add(4*time.Minute))             // no answer: the count starts over
+	pl.place(a, o, on("k8s-cp-02"), nil, allReady, t0.Add(5*time.Minute)) // h2 leads again from 5m
+	pl.place(a, o, on("k8s-cp-02"), nil, allReady, t0.Add(7*time.Minute)) // 6 min after 1m, but 2 since 5m
 	if p, _ := plotOf(a, "wird"); p.Host != "h1" {
 		t.Fatalf("moved after a gap in the answers: %+v", p)
 	}
-	pl.place(a, o, on("k8s-cp-02"), allReady, t0.Add(10*time.Minute))
+	pl.place(a, o, on("k8s-cp-02"), nil, allReady, t0.Add(10*time.Minute))
 	if p, _ := plotOf(a, "wird"); p.Host != "h2" {
 		t.Fatalf("5 min of majority: %+v", p)
 	}
 
 	pl.ruin(a, o, "wird", true, t0.Add(11*time.Minute))
-	pl.place(a, o, on("k8s-cp-02"), allReady, t0.Add(11*time.Minute+ruinFor))
+	pl.place(a, o, on("k8s-cp-02"), nil, allReady, t0.Add(11*time.Minute+ruinFor))
 	if _, ok := plotOf(a, "wird"); ok {
 		t.Fatal("the ruin should be freed after ruinFor")
 	}
-	pl.place(a, o, on("k8s-cp-02"), allReady, t0.Add(12*time.Minute+ruinFor))
+	pl.place(a, o, on("k8s-cp-02"), nil, allReady, t0.Add(12*time.Minute+ruinFor))
 	if _, ok := plotOf(a, "wird"); ok {
 		t.Fatal("a freed ruin came back while its app is out of ArgoCD")
 	}
 	pl.ruin(a, o, "wird", false, t0.Add(13*time.Minute+ruinFor)) // back in ArgoCD
-	pl.place(a, o, on("k8s-cp-02"), allReady, t0.Add(13*time.Minute+ruinFor))
+	pl.place(a, o, on("k8s-cp-02"), nil, allReady, t0.Add(13*time.Minute+ruinFor))
 	if p, ok := plotOf(a, "wird"); !ok || p.RuinAt != 0 {
 		t.Fatalf("back in ArgoCD: %+v %v", p, ok)
 	}

@@ -16,7 +16,11 @@
 //   - R7.1, desktop: 70 firing alerts stay within budget with no GL error; a building moved after a first tap is
 //     still tappable at its new place (its card opens); a model that fails to load leaves the town drawn.
 //   - selftest: every /ws frame of a fixture run (not only the hello) is scanned for leaks.
+//   - R8: the alert storm runs on both tiers; the moved building is never a machine (they never move); the leak scan
+//     adds every machine's real name, probe and node, read from relay/config.yaml at run time (never written in www/),
+//     the machine words and ports, and any IPv4 address, case-insensitively.
 import { spawn, spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
@@ -28,6 +32,9 @@ if (mode !== 'page' && mode !== 'selftest') { console.error('usage: gate.mjs pag
 const OUT = resolve(opt('out', process.env.GATE_OUT || '/tmp/mountain-gate/town'));
 const FIXTURE = resolve(opt('fixture', join(ROOT, `dev/fixtures/${mode === 'selftest' ? 'relay-hostile' : 'relay-town'}.json`)));
 const fails = [];
+// R8: the machines, from relay/config.yaml (key + the identity that must never reach the wire)
+const MACHINES = [...readFileSync(resolve(ROOT, '../relay/config.yaml'), 'utf8').matchAll(/^\s+([a-z0-9-]+):\s*\{[^}]*group: machine[^}]*\}/gm)]
+  .map(([line, key]) => ({ key, words: [...line.matchAll(/\b(?:name|probe|node): ([^,}\s]+)/g)].map((m) => m[1].toLowerCase()) }));
 const fail = (m) => { fails.push(m); console.log(`FAIL ${m}`); };
 const note = (m) => console.log(m);
 await mkdir(OUT, { recursive: true });
@@ -104,7 +111,8 @@ try {
         for (const type of ['mousePressed', 'mouseReleased']) await page.s('Input.dispatchMouseEvent', { type, x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
         return waitFor(page, `!document.getElementById('card').hidden && document.querySelector('#card h2').textContent`, 3000);
       };
-      const mover = await page.evalJSON(`(() => { const ps = __town.world.state.plots.filter((p) => !p.ruinAt && p.host !== 'h3'); return ps[0]?.app; })()`);
+      const mover = await page.evalJSON(`(() => { const m = ${JSON.stringify(MACHINES.map((x) => x.key))}; // a machine never moves
+        const ps = __town.world.state.plots.filter((p) => !p.ruinAt && p.host !== 'h3' && !m.includes(p.app)); return ps[0]?.app; })()`);
       const name0 = mover && await tapAt(mover);
       if (!name0) fail(`tap: the card of ${mover} did not open`);
       await page.evalJSON(`(() => { // move it to a free grass hex on h3, as a world:plot from the relay would
@@ -118,6 +126,8 @@ try {
       const name1 = await tapAt(mover);
       note(`tap: ${mover} → "${name0}", moved to h3 → ${name1 ? `"${name1}"` : 'NO CARD'}`);
       if (!name1) fail(`tap: ${mover} moved to h3 can no longer be tapped`);
+    }
+    if (name === 'desktop' || name === 'phone-low') { // 70 alerts stay within budget, on both tiers (R8)
       await page.evalJSON(`(__town.fly(''), Array.from({ length: 70 }, (_, i) => __town.inject({ t: 'ev', kind: 'alert.fire', id: 'gate' + i, ts: Date.now(),
         fp: (0x1000000000000000n + BigInt(i)).toString(16), sev: ['info', 'warning', 'critical'][i % 3], layer: 'apps', startsAt: Date.now() })).length)`);
       await sleep(1500);
@@ -150,11 +160,17 @@ try {
       ws.onerror = () => j(new Error('ws error'));
       setTimeout(() => { ws.close(); r(got); }, 20000);
     }).catch((e) => { fail(`selftest: /ws ${e.message}`); return []; });
-    const all = frames.join('\n');
+    const all = frames.join('\n').toLowerCase();
     // R7.1: no product name of a platform service either (the wire carries role keys: gate, guardhouse, warehouse, …)
+    // R8: no machine identity (names, probes and nodes from config.yaml), no machine word or port, no IPv4 at all
     for (const leak of ['10.0.3', '10.233', 'k8s-', 'bnei.lan', 'traefik', 'authentik', 'argocd', 'grafana', 'prometheus', 'infisical',
-      'longhorn', 'garage', 'zot', 'pigsty', 'has-journal', 'adminweb', '<script>'])
+      'longhorn', 'garage', 'zot', 'pigsty', 'has-journal', 'adminweb', '<script>',
+      'guest-', 'k9s', 'pg-', 'pg0', 'patroni', 'etcd', 'postgres', 'blackbox', 'probe_success', 'instance', 'hermes', 'runner', 'lxc',
+      '.mesh', 'laptop', 'server1', ':8008', ':2379', ':3900', ':2049', ':9119', ...MACHINES.flatMap((m) => m.words)])
       if (all.includes(leak)) fail(`selftest: "${leak}" on /ws: ${all.slice(Math.max(0, all.indexOf(leak) - 120), all.indexOf(leak) + 40)}`);
+    const ip = all.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
+    if (ip) fail(`selftest: an IPv4 address on /ws: ${ip[0]}`);
+    if (MACHINES.length !== 12) fail(`selftest: read ${MACHINES.length} machines from config.yaml, want 12`);
     if (frames.length < 5 || !frames.some((f) => f.includes('"t":"metrics"'))) fail(`selftest: only ${frames.length} frames in 20 s`);
     note(`selftest: ${frames.length} frames, ${all.length} bytes scanned`);
   }

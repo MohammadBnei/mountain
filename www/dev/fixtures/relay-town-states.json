@@ -922,6 +922,50 @@
       "m": {},
       "v": 0.58
      }
+    ],
+    "guests": [
+     {
+      "m": {
+       "target": "guest-archive-h1"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "guest-archive-h2"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "guest-witness"
+      },
+      "v": 0
+     },
+     {
+      "m": {
+       "target": "guest-granary"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "guest-cellar"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "guest-forge"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "guest-mill"
+      },
+      "v": 1
+     }
     ]
    },
    "am": []
