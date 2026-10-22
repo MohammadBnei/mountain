@@ -54,7 +54,7 @@ func TestPlotPlacement(t *testing.T) {
 		pod("searxng", "searxng-1", "k8s-worker-01"),          // private: no plot
 		pod("wird", "wird-adminweb-55-z", "k8s-cp-03"),        // private workload in a public namespace
 		pod("monitoring", "prometheus-0", "k8s-worker-9.lan")) // unmapped node: no host, no plot
-	pl.place(a, o, pods, allReady, now)
+	pl.place(a, o, pods, nil, allReady, now)
 	frames := drain(c)
 	ps := plotsOf(frames)
 	if len(ps) != 2 {
@@ -80,16 +80,16 @@ func TestPlotPlacement(t *testing.T) {
 	// a rolling restart: the majority flips to h2 for under 5 min, then back. Nothing moves.
 	h2 := []sample{pod("wird", "wird-8a-a", "k8s-worker-02"), pod("wird", "wird-8a-b", "k8s-cp-02")}
 	for i := range 19 {
-		pl.place(a, o, h2, allReady, now.Add(time.Duration(i+1)*15*time.Second))
+		pl.place(a, o, h2, nil, allReady, now.Add(time.Duration(i+1)*15*time.Second))
 	}
-	pl.place(a, o, wird, allReady, now.Add(20*15*time.Second))
+	pl.place(a, o, wird, nil, allReady, now.Add(20*15*time.Second))
 	if ps := plotsOf(drain(c)); len(ps) != 0 {
 		t.Fatalf("a short flip moved the building: %v", ps)
 	}
 	// a real move: h2 leads for 5 min
 	t0 := now.Add(time.Hour)
 	for i := range 22 {
-		pl.place(a, o, h2, allReady, t0.Add(time.Duration(i)*15*time.Second))
+		pl.place(a, o, h2, nil, allReady, t0.Add(time.Duration(i)*15*time.Second))
 	}
 	if w2, _ := plotOf(a, "wird"); w2.Host != "h2" {
 		t.Fatalf("wird after 5 min on h2: %+v", w2)
@@ -101,13 +101,13 @@ func TestPlotPlacement(t *testing.T) {
 	h3 := []sample{pod("wird", "wird-9-a", "k8s-cp-03")}
 	down := map[string]bool{"h1": true, "h2": false, "h3": true}
 	for i := range 30 {
-		pl.place(a, o, h3, down, t0.Add(time.Hour+time.Duration(i)*15*time.Second))
+		pl.place(a, o, h3, nil, down, t0.Add(time.Hour+time.Duration(i)*15*time.Second))
 	}
 	if w3, _ := plotOf(a, "wird"); w3.Host != "h2" {
 		t.Fatalf("moved off a NotReady host: %+v", w3)
 	}
 	// an empty answer (KSM restarting) keeps every plot
-	pl.place(a, o, nil, allReady, t0.Add(3*time.Hour))
+	pl.place(a, o, nil, nil, allReady, t0.Add(3*time.Hour))
 	if ps := plotsOf(drain(c)); len(ps) != 0 {
 		t.Fatalf("empty answer emitted %v", ps)
 	}
@@ -117,7 +117,7 @@ func TestPlotPlacement(t *testing.T) {
 func TestPlotRuins(t *testing.T) {
 	a, c := testApp(t)
 	pl, o, now := newPlacer(), &Out{app: a, name: "prom"}, time.Unix(1_800_000_000, 0)
-	pl.place(a, o, []sample{pod("wird", "wird-1", "k8s-cp-01")}, allReady, now)
+	pl.place(a, o, []sample{pod("wird", "wird-1", "k8s-cp-01")}, nil, allReady, now)
 	pl.ruin(a, o, "wird", true, now)
 	pl.ruin(a, o, "wird", true, now) // idempotent
 	if p, _ := plotOf(a, "wird"); p.RuinAt != now.UnixMilli() {
@@ -128,7 +128,7 @@ func TestPlotRuins(t *testing.T) {
 		t.Fatalf("rebuilt: %+v", p)
 	}
 	pl.ruin(a, o, "wird", true, now)
-	pl.place(a, o, nil, allReady, now.Add(ruinFor))
+	pl.place(a, o, nil, nil, allReady, now.Add(ruinFor))
 	if _, ok := plotOf(a, "wird"); ok {
 		t.Fatal("old ruins must free the plot")
 	}
@@ -148,7 +148,7 @@ func TestPlant(t *testing.T) {
 	dusk, _ := time.Parse(time.RFC3339, "2026-10-22T16:30:00Z")
 	night, _ := time.Parse(time.RFC3339, "2026-12-21T23:00:00Z")
 	pl, o := newPlacer(), &Out{app: a, name: "prom"}
-	pl.place(a, o, []sample{pod("wird", "wird-1", "k8s-cp-01")}, allReady, time.Now())
+	pl.place(a, o, []sample{pod("wird", "wird-1", "k8s-cp-01")}, nil, allReady, time.Now())
 	w, _ := plotOf(a, "wird")
 	drain(c)
 
@@ -198,7 +198,7 @@ func TestPlant(t *testing.T) {
 		}
 	}
 	drain(c)
-	pl.place(a, o, []sample{pod("dream-analyst", "dream-analyst-1", "k8s-cp-03")}, allReady, time.Now())
+	pl.place(a, o, []sample{pod("dream-analyst", "dream-analyst-1", "k8s-cp-03")}, nil, allReady, time.Now())
 	frames := drain(c)
 	ms, ps := marksOf(frames), plotsOf(frames)
 	if len(ms) != 1 || ms[0]["gone"] != true || len(ps) != 1 || ps[0]["host"] != "h3" {

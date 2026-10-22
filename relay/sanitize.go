@@ -38,15 +38,25 @@ func (c *Config) appOfNS(ns, workload string) string {
 	return c.Namespaces[ns]
 }
 
+// appOfWork is appOfNS for the workload signals (pods, churn, replicas): R8 machines are not workloads (granary keeps
+// the garage namespace for its traffic, pools and alerts, but its building follows its probe, never pods or ArgoCD).
+func (c *Config) appOfWork(ns, workload string) string {
+	if app := c.appOfNS(ns, workload); !c.machine(app) {
+		return app
+	}
+	return ""
+}
+
 // appOfArgo maps an ArgoCD Application name (argocd_app_sync_total has no dest_namespace, 02 gotchas).
 // destNS (argocd_app_info's dest_namespace, "" when unknown) decides rot: an app deploying into a
 // namespace config.yaml knows (public or not) is mapped on purpose; only an unknown one counts.
+// An R8 machine is never an ArgoCD app ("": no presence, sync or health).
 func (c *Config) appOfArgo(name, destNS string) string {
 	if _, ok := c.Apps[name]; ok {
-		return name
+		return map[bool]string{true: "", false: name}[c.machine(name)]
 	}
 	if app, ok := c.Namespaces[name]; ok {
-		return app
+		return map[bool]string{true: "", false: app}[c.machine(app)]
 	}
 	if _, known := c.Namespaces[destNS]; destNS != "" && !known {
 		unmapped("app", name)
@@ -102,7 +112,7 @@ const (
 	fBucket        // int 0..8
 	fHealth        // ArgoCD health enum
 	fNum           // float64
-	fGroup         // platform|user|service
+	fGroup         // platform|user|service|machine
 	fULID          //
 	fFP            // 16 hex (salted alert fingerprint hash)
 	fSev           // info|warning|critical
@@ -116,6 +126,8 @@ const (
 	fHandle        // a moderated handle (handle(), validators.go) or "a visitor"
 	fHexC          // int in [-town.MaxRadius, town.MaxRadius]: a local hex coordinate
 	fKind          // a town building kind (town.Kinds)
+	fProbed        // R8: a probed machine's key (config.yaml machine with probe)
+	fUpDown        // R8: up|down
 )
 
 // spec: frame kind -> field -> type. Every field is required, except a "name?" field, which is left out when
@@ -128,6 +140,7 @@ var spec = map[string]map[string]int{
 	"ev:quorum":        {"up": fHosts},
 	"ev:replicas":      {"app": fApp, "bucket": fBucket},
 	"ev:app.gone":      {"app": fApp},
+	"ev:machine":       {"app": fProbed, "state": fUpDown}, // R8: a probed machine's state, debounced (machines.go)
 	"ev:alert.fire":    {"fp": fFP, "sev": fSev, "layer": fLayer, "startsAt": fNat, "host?": fHost, "app?": fApp},
 	"ev:alert.resolve": {"fp": fFP, "sev": fSev, "layer": fLayer, "durS": fNat, "host?": fHost, "app?": fApp},
 	// the src_github events (W3c)
@@ -199,7 +212,7 @@ func (c *Config) valid(typ int, v any) bool {
 		f, ok := v.(float64)
 		return ok && finite(f)
 	case fGroup:
-		return v == "platform" || v == "user" || v == "service"
+		return v == "platform" || v == "user" || v == "service" || v == "machine"
 	case fULID:
 		s, ok := v.(string)
 		return ok && ulidRE.MatchString(s)
@@ -245,6 +258,11 @@ func (c *Config) valid(typ int, v any) bool {
 	case fKind:
 		s, ok := v.(string)
 		return ok && slices.Contains(town.Kinds, s)
+	case fProbed:
+		s, ok := v.(string)
+		return ok && c.machine(s) && c.Apps[s].Probe != ""
+	case fUpDown:
+		return v == "up" || v == "down"
 	}
 	return false
 }

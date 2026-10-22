@@ -451,6 +451,43 @@
     "app"
    ],
    "additionalProperties": false
+  },
+  {
+   "description": "R8: a probed machine's state (relay machines.go), sent only after it has held 10 minutes; app is a machine's role key.",
+   "properties": {
+    "t": {
+     "const": "ev"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "kind": {
+     "const": "machine"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "state": {
+     "enum": [
+      "up",
+      "down"
+     ]
+    }
+   },
+   "required": [
+    "t",
+    "id",
+    "ts",
+    "kind",
+    "app",
+    "state"
+   ],
+   "additionalProperties": false
   }
  ],
  "$defs": {

@@ -768,6 +768,45 @@
       },
       "v": 1
      }
+    ],
+    "guests": [
+     {
+      "m": {
+       "target": "guest-archive-h1",
+       "instance": "192.168.1.207:8008",
+       "job": "blackbox-pg02",
+       "hostname": "pg02.bnei.lan"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "guest-witness",
+       "instance": "192.168.1.197:2379"
+      },
+      "v": 0
+     },
+     {
+      "m": {
+       "target": "guest-granary",
+       "instance": "garage-storage.bnei.lan:3900"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "guest-k9s-dashboard",
+       "instance": "192.168.1.50:22"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "target": "guest-evil<script>",
+       "instance": "10.0.3.9:9119"
+      },
+      "v": 1
+     }
     ]
    },
    "am": [],

@@ -172,10 +172,11 @@ type State struct {
 	Marks    []Mark            `json:"marks"`    // W4: active visitor marks (world:mark), oldest first, ≤ marksMax; gone removes
 	Plots    []Plot            `json:"plots"`    // R7: town buildings (world:plot), one per app, ≤ plotsMax; gone removes
 	Quorum   []string          `json:"quorum"`   // R7.1: hosts whose PVE node is in quorum (ev quorum); null = not known yet
+	Machines map[string]string `json:"machines"` // R8: probed machine -> up|down (ev machine, debounced); absent = not known yet
 }
 
 func newState() State {
-	return State{Alerts: []Alert{}, Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}, Marks: []Mark{}, Plots: []Plot{}}
+	return State{Alerts: []Alert{}, Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}, Marks: []Mark{}, Plots: []Plot{}, Machines: map[string]string{}}
 }
 
 // Fire broadcasts ev alert.fire{fp, sev, layer, startsAt}; the hub tap adds it to hello.state.alerts (replacing the
@@ -228,6 +229,12 @@ func (s *State) apply(f frameF, raw []byte) {
 		delete(s.Health, f.App)
 		delete(s.Replicas, f.App)
 		delete(s.Builds, f.App)
+		delete(s.Machines, f.App)
+	case "ev:machine":
+		if s.Machines == nil { // a snapshot from before R8 deploy B
+			s.Machines = map[string]string{}
+		}
+		s.Machines[f.App] = f.State
 	case "ev:build":
 		if f.State == "queued" || f.State == "running" {
 			s.Builds[f.App] = f.State

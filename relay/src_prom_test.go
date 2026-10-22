@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -153,7 +154,10 @@ var (
 	hostile   = []string{"k8s-", "bnei.lan", "evil", "pve-", "kube-system", "monitoring", "agent-fleet", "has-journal", `"hq"`, "adminweb",
 		"coredns", "6443", "ghcr", "uid", "nfs", "wird-pg", "default", "namespace", `"pod"`, "kubernetescrd",
 		// R7.1: no product name of a platform service, anywhere (they are role keys: gate, guardhouse, …)
-		"traefik", "authentik", "argocd", "longhorn", "infisical", "garage", "zot", "pigsty", "prometheus", "grafana"}
+		"traefik", "authentik", "argocd", "longhorn", "infisical", "garage", "zot", "pigsty", "prometheus", "grafana",
+		// R8: no machine's identity (its real name, probe target and node come from config.yaml: machineNameWords)
+		"guest-", "k9s", "pg-", "pg0", "patroni", "etcd", "postgres", "blackbox", "probe_success", "instance", "hermes",
+		"runner", "lxc", ".mesh", "laptop", "server1", ":8008", ":2379", ":3900", ":2049", ":9119"}
 )
 
 // TestFixtureTimeline replays www/dev/fixtures/relay-hostile.json: the W1a events come out,
@@ -234,21 +238,33 @@ func TestFixtureTimeline(t *testing.T) {
 	}
 
 	// town plots: wird's pods run on h1 (its hostile pod labels never leave); a private namespace and an unmapped
-	// node get none
-	if ps := plotsOf(steps[0]); len(ps) != 1 || ps[0]["app"] != "wird" || ps[0]["host"] != "h1" {
-		t.Errorf("plots: %v", ps)
+	// node get none. R8: the VMs in the Ready answer and the answering guests stand on their own host; the k9s and
+	// hostile targets get nothing.
+	cfg, _ := loadConfig(configYAML)
+	var apps, vms []string
+	for _, p := range plotsOf(steps[0]) {
+		if cfg.machine(p["app"].(string)) {
+			vms = append(vms, p["app"].(string)+"@"+p["host"].(string))
+		} else {
+			apps = append(apps, p["app"].(string)+"@"+p["host"].(string))
+		}
+	}
+	slices.Sort(vms)
+	if fmt.Sprint(apps) != "[wird@h1]" || fmt.Sprint(vms) != "[archive-h1@h1 granary@h1 hall-h1@h1 hall-h2@h2 keep-h1@h1 keep-h2@h2 keep-h3@h3 witness@h3]" {
+		t.Errorf("plots: apps %v, machines %v", apps, vms)
 	}
 
 	validate(t, steps)
 
 	// nothing hostile leaves the relay
+	words := append(slices.Clone(hostile), machineNameWords(t)...)
 	for _, fr := range all {
 		b, _ := json.Marshal(fr)
-		s := string(b)
+		s := strings.ToLower(string(b))
 		if ipRE.MatchString(s) || versionRE.MatchString(s) {
 			t.Errorf("IP/version leak: %s", s)
 		}
-		for _, h := range hostile {
+		for _, h := range words {
 			if strings.Contains(s, h) {
 				t.Errorf("leak %q: %.200s", h, s)
 			}

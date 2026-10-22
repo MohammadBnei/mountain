@@ -18,6 +18,7 @@ package main
 // placeMu serialises plot placement with visitor plants (toy_plant.go), so both never take the same hex.
 
 import (
+	"log"
 	"maps"
 	"slices"
 	"sync"
@@ -118,11 +119,12 @@ func goneMark(m Mark) map[string]any {
 	return map[string]any{"id": m.ID, "mark": m.Mark, "pose": map[string]any{}, "weight": 0.0, "gone": true}
 }
 
-// place runs once per successful poll with the pods answer (namespace, pod, node series) and the hosts' Ready.
-func (pl *placer) place(a *App, o *Out, pods []sample, ready map[string]bool, now time.Time) {
+// place runs once per successful poll with the pods answer (namespace, pod, node series), the machines present
+// (R8, machines.go) and the hosts' Ready.
+func (pl *placer) place(a *App, o *Out, pods []sample, machines []string, ready map[string]bool, now time.Time) {
 	counts := map[string]map[string]int{}
 	for _, s := range pods {
-		app := a.Cfg.appOfNS(s.L["namespace"], s.L["pod"])
+		app := a.Cfg.appOfWork(s.L["namespace"], s.L["pod"])
 		if app == "" {
 			continue
 		}
@@ -187,6 +189,18 @@ func (pl *placer) place(a *App, o *Out, pods []sample, ready map[string]bool, no
 			delete(pl.cand, app)
 		}
 	}
+	// R8 machines: on their configured host, never moved; before the pods answer, which says nothing about them
+	for _, app := range machines {
+		if _, has := plots[app]; has || pl.retired[app] || len(plots) >= plotsMax {
+			continue
+		}
+		h := a.Cfg.Apps[app].Host
+		if x, ok := slot(app, h); ok {
+			emit(Plot{App: app, Host: h, Q: x.Q, R: x.R, Role: a.Cfg.roleOf(app)}, false)
+		} else {
+			slotFailed(app)
+		}
+	}
 	if len(pods) == 0 { // an empty answer is no answer (KSM restarting, or on the host that went down)
 		return
 	}
@@ -209,6 +223,8 @@ func (pl *placer) place(a *App, o *Out, pods []sample, ready map[string]bool, no
 			}
 			if x, ok := slot(app, best); ok {
 				emit(Plot{App: app, Host: best, Q: x.Q, R: x.R, Role: a.Cfg.roleOf(app)}, false)
+			} else {
+				slotFailed(app)
 			}
 			delete(pl.cand, app)
 		case best == cur.Host || !ready[cur.Host]:
@@ -223,6 +239,16 @@ func (pl *placer) place(a *App, o *Out, pods []sample, ready map[string]bool, no
 		}
 	}
 }
+
+// slotFailed logs (key only) and counts an app that found no free hex on its island, once per app.
+func slotFailed(app string) {
+	if _, dup := slotFailSeen.LoadOrStore(app, true); !dup {
+		log.Printf("plots: no free hex for %s", app)
+		SlotFailed.Add("", 1)
+	}
+}
+
+var slotFailSeen sync.Map
 
 // ruin marks app's building as ruins (app.gone) or, ruins = false, rebuilds it (the app is back in ArgoCD).
 func (pl *placer) ruin(a *App, o *Out, app string, ruins bool, now time.Time) {
