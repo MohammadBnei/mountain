@@ -120,7 +120,7 @@ async function start() {
   // Status always comes with a word (Ukubi): the colour only repeats it.
   const healthText = { Healthy: ['running', 'en marche', 'ok'], Progressing: ['deploying', 'en déploiement', 'warn'], Degraded: ['degraded', 'dégradé', 'bad'],
     Missing: ['missing', 'absent', 'bad'], Suspended: ['suspended', 'suspendu', 'info'], Unknown: ['unknown', 'inconnu', 'info'] };
-  const span = (cls, text) => Object.assign(document.createElement('span'), { className: cls, textContent: text });
+  const word = (cls, text) => Object.assign(document.createElement('span'), { className: cls, textContent: text });
   function fillCard() {
     const p = buildings.plots().find((x) => x.app === carded);
     if (!p) return closeCard();
@@ -130,14 +130,14 @@ async function start() {
     card.querySelector('h2').textContent = a.name || p.app;
     card.querySelector('.desc').textContent = a[lang()] || a.en || '';
     const st = [];
-    if (p.ruinAt) st.push(span('bad', F ? 'retirée du cluster' : 'removed from the cluster'));
+    if (p.ruinAt) st.push(word('bad', F ? 'retirée du cluster' : 'removed from the cluster'));
     else {
       const h = healthText[s.health[p.app]];
-      if (h) st.push(span(h[2], h[F ? 1 : 0]));
-      if (s.builds[p.app]) st.push(span('warn', F ? 'construction en cours' : 'build in progress'));
+      if (h) st.push(word(h[2], h[F ? 1 : 0]));
+      if (s.builds[p.app]) st.push(word('warn', F ? 'construction en cours' : 'build in progress'));
       const n = s.alerts.filter((x) => x.app === p.app).length;
-      if (n) st.push(span('bad', F ? `${n} alerte${n > 1 ? 's' : ''}` : `${n} alert${n > 1 ? 's' : ''}`));
-      if (p.down) st.push(span('bad', F ? `hôte ${p.host} hors ligne` : `host ${p.host} down`));
+      if (n) st.push(word('bad', F ? `${n} alerte${n > 1 ? 's' : ''}` : `${n} alert${n > 1 ? 's' : ''}`));
+      if (p.down) st.push(word('bad', F ? `hôte ${p.host} hors ligne` : `host ${p.host} down`));
     }
     card.querySelector('.state').replaceChildren(...st);
     const go = card.querySelector('.go');
@@ -148,7 +148,7 @@ async function start() {
   function fillPanel() {
     const F = fr(), s = world.state, n = s.plots.filter((p) => !p.ruinAt).length;
     line.textContent = F ? `Le cluster ukubi en direct : ${n} bâtiments sur 3 îles, une par hôte.` : `The ukubi cluster, live: ${n} buildings on 3 islands, one per host.`;
-    const parts = world.town.islands.map((i) => world.ready[i.host] === false ? span('bad', `${i.host} ${F ? 'hors ligne' : 'down'}`) : span('ok', `${i.host} ${F ? 'en ligne' : 'up'}`));
+    const parts = world.town.islands.map((i) => world.ready[i.host] === false ? word('bad', `${i.host} ${F ? 'hors ligne' : 'down'}`) : word('ok', `${i.host} ${F ? 'en ligne' : 'up'}`));
     const al = s.alerts.length;
     if (al) { // the LED: lit only while something fires; it takes you there
       const b = document.createElement('button');
