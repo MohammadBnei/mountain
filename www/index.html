@@ -3,24 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mountain · ukubi</title>
-<meta name="description" content="The ukubi cluster as a live Aretē mountain.">
+<title>ukubi · live town</title>
+<meta name="description" content="The ukubi cluster as a live town: every app and service is a building on the host it runs on.">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
-<script type="importmap">{"imports":{"three":"./vendor/build/three.module.js","three/addons/":"./vendor/examples/jsm/","cannon-es":"./vendor/cannon-es/cannon-es.js"}}</script>
-<script type="module" src="./js/boot.js"></script>
+<script type="importmap">{"imports":{"three":"./vendor/build/three.module.js","three/addons/":"./vendor/examples/jsm/"}}</script>
+<script type="module" src="./js/main.js"></script>
 </head>
 <body>
 <canvas id="c"></canvas>
-<p id="stale" hidden></p>
-<p id="cutlabel" hidden></p>
+<div id="labels" aria-hidden="true"></div>
+<p id="stale" role="status" hidden></p>
+<p id="loader">Building the town…</p>
 <div id="dock">
-<section id="legend" hidden><h2 id="legendtitle"></h2><dl></dl></section>
-<div id="card" hidden><button id="cardclose" type="button">&#215;</button><p class="kicker"></p><h2></h2><p class="desc"></p><a class="go" target="_blank" rel="noopener" hidden></a><div class="try" hidden><button type="button" class="rec"></button><p class="said" aria-live="polite"></p></div><p class="means"></p></div>
-<section id="panel"><p id="toolhint" aria-live="polite" hidden></p><p id="line" aria-live="polite"></p><p id="facts"></p></section>
+<div id="card" hidden><button id="cardclose" type="button" aria-label="Close"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button><p class="kicker"></p><h2></h2><p class="desc"></p><p class="state"></p><a class="go" target="_blank" rel="noopener" hidden></a></div>
+<section id="panel"><p id="line"></p><p id="facts"></p></section>
 <p id="toystatus" role="status" hidden></p>
-<div id="bar"><nav id="toys" hidden></nav><nav id="story"><button id="prev" type="button" aria-label="Previous section">&#8592;</button><button id="next" type="button" aria-label="Next section">&#8594;</button></nav><button id="legendbtn" type="button" aria-expanded="false" aria-controls="legend">?</button><details id="signin" hidden><summary>Sign in</summary><p><a id="login">I have an account</a><a id="enroll" rel="noopener">Create an account</a></p></details></div>
+<div id="bar"><button id="overview" type="button" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7l7-4 7 4v6l-7 4-7-4z M3 7l7 4 7-4 M10 11v6"/></svg><span>Whole town</span></button><button id="plant" type="button" aria-pressed="false" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 17V9 M10 9c0-3 2-5 5-5 0 3-2 5-5 5z M10 12c0-2-2-4-5-4 0 2 2 4 5 4z M5 17h10"/></svg><span>Plant</span></button><button id="erase" type="button" aria-pressed="false" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12 M8 6V4h4v2 M6 6l1 11h6l1-11"/></svg><span>Remove</span></button><details id="signin" hidden><summary>Sign in</summary><p><a id="login">I have an account</a><a id="enroll" rel="noopener">Create an account</a></p></details></div>
 </div>
-<p id="fallback" hidden>This page draws the cluster as a 3D mountain and needs WebGL2.</p>
+<p id="fallback" hidden>This page draws the cluster as a 3D town and needs WebGL2.</p>
 </body>
 </html>

@@ -7,8 +7,3 @@ import "embed"
 //
 //go:embed www
 var WWW embed.FS
-
-// Units is units.json: shared Go/JS constants (frozen W2). www/js/units.json is a byte copy.
-//
-//go:embed units.json
-var Units []byte

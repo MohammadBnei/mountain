@@ -1,6 +1,0 @@
-{
-  "_": "veins behaviour fixture: a new knowledge-linked (ref) vein on the apps band, its re-fire (thicker, other ends: the seam and the thicker radius stay), and the count that overflows the 32-vein cap.",
-  "vein": { "fp": "feedfacecafebeef", "a": [-19.9, 46.7, 2.04], "b": [-10.37, 42.57, 24.39], "thick": 0.5, "layer": "apps", "ref": true },
-  "refire": { "fp": "feedfacecafebeef", "a": [0, 10, 60], "b": [5, 10, 60], "thick": 0.9, "layer": "apps", "ref": true },
-  "overflow": 40
-}

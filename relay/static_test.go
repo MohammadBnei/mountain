@@ -39,7 +39,7 @@ func TestStaticVersioned(t *testing.T) {
 	idx, _ := fs.ReadFile(mountain.WWW, "www/index.html")
 	h := static(fstest.MapFS{
 		"index.html": {Data: idx},
-		"js/boot.js": {Data: []byte("import('./main.js')")},
+		"js/main.js": {Data: []byte("export {}")},
 	}, false)
 	get := func(p string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
@@ -48,9 +48,9 @@ func TestStaticVersioned(t *testing.T) {
 	}
 	rec := get("/")
 	html := rec.Body.String()
-	m := regexp.MustCompile(`src="(/v/[0-9a-f]{12}/)js/boot.js"`).FindStringSubmatch(html)
+	m := regexp.MustCompile(`src="(/v/[0-9a-f]{12}/)js/main.js"`).FindStringSubmatch(html)
 	if rec.Code != 200 || m == nil || rec.Header().Get("Cache-Control") != "no-cache" {
-		t.Fatalf("/: want no-cache html with a /v/<build>/js/boot.js script, got %d %q\n%s", rec.Code, rec.Header().Get("Cache-Control"), html)
+		t.Fatalf("/: want no-cache html with a /v/<build>/js/main.js script, got %d %q\n%s", rec.Code, rec.Header().Get("Cache-Control"), html)
 	}
 	prefix := m[1]
 	for _, want := range []string{`href="` + prefix + `style.css"`, `"three":"` + prefix + `vendor/build/three.module.js"`, `"three/addons/":"` + prefix + `vendor/examples/jsm/"`} {
@@ -69,14 +69,14 @@ func TestStaticVersioned(t *testing.T) {
 			t.Errorf("CSP lacks the served inline script hash %s", hash)
 		}
 	}
-	rec = get(prefix + "js/boot.js")
-	if rec.Code != 200 || rec.Body.String() != "import('./main.js')" || rec.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+	rec = get(prefix + "js/main.js")
+	if rec.Code != 200 || rec.Body.String() != "export {}" || rec.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
 		t.Fatalf("versioned asset: got %d %q %q", rec.Code, rec.Header().Get("Cache-Control"), rec.Body.String())
 	}
-	if rec = get("/js/boot.js"); rec.Code != 200 || rec.Header().Get("Cache-Control") != "no-cache" {
+	if rec = get("/js/main.js"); rec.Code != 200 || rec.Header().Get("Cache-Control") != "no-cache" {
 		t.Fatalf("unversioned asset: want 200 no-cache, got %d %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
-	if rec = get("/v/000000000000/js/boot.js"); rec.Code != 404 || rec.Header().Get("Cache-Control") != "no-store" {
+	if rec = get("/v/000000000000/js/main.js"); rec.Code != 404 || rec.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("another build: want a no-store 404, got %d %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
 }

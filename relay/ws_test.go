@@ -1,12 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
-	"time"
 )
 
 func TestClientIP(t *testing.T) {
@@ -31,15 +28,11 @@ func TestClientIP(t *testing.T) {
 	}
 }
 
-// TestPublicMux: /api/topology lists allowlisted sites only (schema-valid world:site payloads),
-// and a cross-origin /ws upgrade through the real public mux gets 403.
+// TestPublicMux: /api/topology is gone (R7: plots ride the hello), and a cross-origin /ws upgrade through the real
+// public mux gets 403.
 func TestPublicMux(t *testing.T) {
 	a, _ := testApp(t)
 	app = a
-	for name := range a.Cfg.Apps {
-		liveApps[name] = true
-	}
-	liveApps["has-journal"] = true  // live but not allowlisted: no site
 	Public.Handle("GET /ws", a.Hub) // serve() registers it at startup
 	srv := httptest.NewServer(Public)
 	defer srv.Close()
@@ -49,24 +42,10 @@ func TestPublicMux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var topo struct {
-		Sites []map[string]any
-		Hosts []string
-	}
-	json.NewDecoder(resp.Body).Decode(&topo)
 	resp.Body.Close()
-	if len(topo.Sites) != len(a.Cfg.Apps) || len(topo.Hosts) != 3 {
-		t.Fatalf("topology: %+v", topo)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("/api/topology: %d, want 404", resp.StatusCode)
 	}
-	frames := []map[string]any{}
-	for _, s := range topo.Sites {
-		if _, ok := a.Cfg.Apps[s["app"].(string)]; !ok {
-			t.Errorf("non-allowlisted site %v", s)
-		}
-		s["t"], s["kind"] = "world", "site"
-		frames = append(frames, s)
-	}
-	validate(t, [][]map[string]any{frames})
 
 	for _, o := range []string{"https://evil.example", "http://mountain.bnei.dev", ""} {
 		_, resp, err := dial(t, ws, o)
@@ -79,26 +58,4 @@ func TestPublicMux(t *testing.T) {
 		t.Fatalf("same-origin upgrade: %v", err)
 	}
 	c.CloseNow()
-}
-
-// TestTopologyWaitsFirstPoll: a fresh relay answers /api/topology after its first poll, not empty before it.
-func TestTopologyWaitsFirstPoll(t *testing.T) {
-	a, c := testApp(t)
-	app, polled, polledOnce = a, make(chan struct{}), sync.Once{}
-	rec, done := httptest.NewRecorder(), make(chan struct{})
-	go func() { topology(rec, httptest.NewRequest("GET", "/api/topology", nil)); close(done) }()
-	time.Sleep(50 * time.Millisecond)
-	select {
-	case <-done:
-		t.Fatalf("answered before the first poll: %s", rec.Body)
-	default:
-	}
-	f := &fixture{prom: []map[string][]fixtureSeries{{"info": {{M: map[string]string{"name": "wird", "health_status": "Healthy"}, V: 1}}}}}
-	run(t, a, c, f, 0)
-	<-done
-	var topo struct{ Sites []struct{ App string } }
-	json.Unmarshal(rec.Body.Bytes(), &topo)
-	if len(topo.Sites) != 1 || topo.Sites[0].App != "wird" || rec.Header().Get("Cache-Control") != "no-store" {
-		t.Fatalf("topology after the first poll: %s %v", rec.Body, rec.Header())
-	}
 }

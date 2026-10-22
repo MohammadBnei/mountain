@@ -1,8 +1,0 @@
-{
-  "_": "eruption behaviour fixture: an ok sync paired with its deposit (same id, deposit first to prove either order pairs), then a failed sync (ash, no land).",
-  "timeline": [
-    { "type": "world:deposit", "payload": { "id": "01JA0000000000000000000020", "x0": 60, "z0": 70, "w": 4, "h": 4, "cells": [100, 200, 200, 100, 200, 400, 400, 200, 200, 400, 400, 200, 100, 200, 200, 100] } },
-    { "type": "ev:argo.sync", "payload": { "id": "01JA0000000000000000000020", "app": "wird", "ok": true } }
-  ],
-  "failed": { "type": "ev:argo.sync", "payload": { "id": "01JA0000000000000000000021", "app": "wird", "ok": false } }
-}

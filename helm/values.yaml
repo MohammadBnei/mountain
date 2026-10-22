@@ -50,14 +50,12 @@ envFrom:
       name: mountain-oidc
       optional: true
 
-# Alert fp salt (02: never rotated, veins link to it): key MOUNTAIN_FP_SALT in
+# Alert fp salt (02: never rotated: a re-fire keeps its fp across relay restarts): key MOUNTAIN_FP_SALT in
 # Infisical mountain-8c-cz, synced to the Secret mountain-infisical and loaded
 # verbatim via envFrom. Without the key the relay boots and drops alerts (fail closed).
 # MOUNTAIN_GITHUB_TOKEN (same project, optional): fine-grained read-only PAT for src_github.
-# Unset = builds / gitops snow / ADR ash / vein refs off, logged once, no stale alarm.
-# STT_TOKEN_MOUNTAIN (same project AND ukubi-stt's own project, optional; relay/stt.go): the relay's
-# ukubi-stt client token for the stt card's live test (signed-in visitors/admins). Unset = the test answers 503.
-# VISITORS_ENABLED (same project, optional; W4 kill switch, 06): "false" hides the surface layer and
+# Unset = builds / gitops commits / ADR merges off, logged once, no stale alarm.
+# VISITORS_ENABLED (same project, optional; W4 kill switch, 06): "false" hides the plant toolbar and
 # rejects marks. It must flip WITHOUT a restart, so autoReload is off (the operator would otherwise
 # roll the pod on every change of this Secret): the key is also mounted as a file below, which the
 # kubelet refreshes in place, and the relay re-reads it every 10 s (Infisical resync 60 s + kubelet

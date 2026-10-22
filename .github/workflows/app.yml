@@ -21,7 +21,6 @@ on:
       - 'relay/**'
       - 'www/**'
       - 'embed.go'
-      - 'units.json'
       - 'go.mod'
       - 'go.sum'
       - 'Dockerfile'
@@ -50,7 +49,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v5
-      # plan/style/tokens.json is part of the checkout: the copy check needs it.
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -79,7 +77,7 @@ jobs:
       - name: Schema check (Go-generated hello fixture)
         run: |
           set -euo pipefail
-          go run ./relay dump-hello --seed 1 --out "$RUNNER_TEMP/hello.json"
+          go run ./relay dump-hello --events www/dev/fixtures/hello-events.json --out "$RUNNER_TEMP/hello.json"
           node www/dev/schema/check.mjs "$RUNNER_TEMP/hello.json"
           node www/dev/schema/check.mjs
       # Chrome is not installed on ukubi-build and is not apt-installed here (04): the gate

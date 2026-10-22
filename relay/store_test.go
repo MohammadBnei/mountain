@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/MohammadBnei/mountain/relay/worldcore"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // testDSN returns MOUNTAIN_TEST_DSN (a URL) pointed at a fresh schema, or skips: DB tests need a real Postgres
@@ -46,7 +45,7 @@ func storedApp(t *testing.T, dsn string) *App {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := newApp(cfg, Opts{Seed: 1, FPSalt: devFPSalt}, utcDay(time.Now()))
+	a := newApp(cfg, Opts{FPSalt: devFPSalt}, utcDay(time.Now()))
 	a.attach(context.Background(), dsn, false)
 	if a.store == nil {
 		t.Fatal("attach: no store")
@@ -54,37 +53,33 @@ func storedApp(t *testing.T, dsn string) *App {
 	return a
 }
 
-// TestDBRestartSurvival: deposits (before and after a snapshot) and a firing alert survive a close and a
-// reopen from the same DB; the hello rebuilt from it is the same world.
+// TestDBRestartSurvival: plots (before and after a snapshot), a firing alert, health, a build and a plant survive a
+// close and a reopen from the same DB; the hello rebuilt from it is the same town.
 func TestDBRestartSurvival(t *testing.T) {
 	dsn := testDSN(t)
 	a := storedApp(t, dsn)
-	p, out := newProm(a), &Out{app: a, name: "alerts"}
-	p.deposit(out, "wird", 1)
+	withToys(t, a)
+	pl, prom, out := newPlacer(), &Out{app: a, name: "prom"}, &Out{app: a, name: "alerts"}
+	pl.place(a, prom, []sample{pod("wird", "wird-1", "k8s-cp-01")}, allReady, time.Now())
 	a.snapshot(time.Now())
-	p.deposit(out, "editable-blog", 0.5)
-	al := Alert{FP: a.FP("abc"), Sev: "critical", Layer: "k8s", StartsAt: 1760450000000}
+	pl.place(a, prom, []sample{pod("wird", "wird-1", "k8s-cp-01"), pod("traefik", "traefik-1", "k8s-cp-02")}, allReady, time.Now())
+	al := Alert{FP: a.FP("abc"), Sev: "critical", Layer: "k8s", StartsAt: 1760450000000, Host: "h2"}
 	if out.Fire(al) == "" || out.Fire(Alert{FP: a.FP("gone"), Sev: "warning", Layer: "apps", StartsAt: 1}) == "" {
 		t.Fatal("fire dropped")
 	}
 	out.Resolve(Alert{FP: a.FP("gone"), Sev: "warning", Layer: "apps"}, 5)
-	// W3b state: a vein (warning, 20 min), snow, an ash day + band, a health/replicas/build, one before the snapshot below
-	out.Resolve(Alert{FP: a.FP("vein"), Sev: "warning", Layer: "bedrock"}, 1200)
-	out.Ev("gitops.commit", map[string]any{"n": 10})
-	out.Ev("adr.merge", map[string]any{"day": "2026-10-14", "title": "not on the allowlist"})
 	out.Ev("argo.health", map[string]any{"app": "wird", "status": "Degraded"})
 	out.Ev("build", map[string]any{"app": "wird", "state": "running"})
-	if len(a.State.Veins) != 1 || len(a.State.Ash) != 1 || a.State.Ash[0].Title != "" || a.State.Glacier.Mass != 0.54 ||
-		len(a.State.Glacier.Tongues) != 2 || a.State.Builds["wird"] != "running" || a.Metrics.Snowline >= 0.8*a.World.HMax {
-		t.Fatalf("live W3b state: %+v, snowline %v", a.State, a.Metrics.Snowline)
+	if _, why := ackOf(t, a.place(visitor("s1", "ana"), "r", "plant", map[string]any{"h": 1.0, "q": 4.0, "r": -2.0}, false, time.Now())); why != "" {
+		t.Fatalf("plant: %s", why)
+	}
+	if len(a.State.Plots) != 2 || len(a.State.Marks) != 1 || a.State.Builds["wird"] != "running" {
+		t.Fatalf("live state: %+v", a.State)
 	}
 	a.store.Close(5 * time.Second)
 
 	b := storedApp(t, dsn)
 	defer b.store.Close(time.Second)
-	if !slices.Equal(a.Land, b.Land) || !slices.ContainsFunc(b.Land, func(v int16) bool { return v != 0 }) {
-		t.Fatal("h.land differs after restart")
-	}
 	if fmt.Sprint(a.State) != fmt.Sprint(b.State) || len(b.State.Alerts) != 1 || b.State.Alerts[0] != al {
 		t.Fatalf("state: %v, want %v", b.State, a.State)
 	}
@@ -94,66 +89,138 @@ func TestDBRestartSurvival(t *testing.T) {
 	}
 	json.Unmarshal(a.Hello(), &ha)
 	json.Unmarshal(b.Hello(), &hb)
-	if ha.Snapshot.Land != hb.Snapshot.Land || fmt.Sprint(ha.Deltas) != fmt.Sprint(hb.Deltas) || len(hb.Deltas) != 7 {
+	if ha.Snapshot != hb.Snapshot || hb.Snapshot.Epoch != townEpoch || fmt.Sprint(ha.Deltas) != fmt.Sprint(hb.Deltas) || len(hb.Deltas) != 2 {
 		t.Fatalf("hello: snapshot or deltas differ (%d vs %d deltas)", len(ha.Deltas), len(hb.Deltas))
 	}
-	// a third boot after a snapshot: no deltas, same land
+	// a third boot after a snapshot: no deltas, same state
 	b.snapshot(time.Now())
 	b.store.flush(5 * time.Second)
 	c := storedApp(t, dsn)
 	defer c.store.Close(time.Second)
-	if !slices.Equal(c.Land, a.Land) || len(c.since) != 0 {
-		t.Fatalf("restore after a snapshot: land equal %v, %d deltas", slices.Equal(c.Land, a.Land), len(c.since))
+	if len(c.since) != 0 || fmt.Sprint(c.State) != fmt.Sprint(a.State) {
+		t.Fatalf("restore from the snapshot row alone: %d deltas, state %+v, want %+v", len(c.since), c.State, a.State)
 	}
-	if fmt.Sprint(c.State) != fmt.Sprint(a.State) || c.Metrics.Snowline != a.Metrics.Snowline {
-		t.Fatalf("restore from the snapshot row alone: state %+v, want %+v", c.State, a.State)
-	}
-	// a snapshot row from before W3b (state = alerts only) restores the defaults, not nil
+	// a snapshot row from before the town's state fields (alerts only) restores the defaults, not nil
 	if _, err := c.store.pool.Exec(context.Background(), `UPDATE snapshots SET state = '{"alerts":[]}'`); err != nil {
 		t.Fatal(err)
 	}
 	d := storedApp(t, dsn)
 	defer d.store.Close(time.Second)
-	if d.State.Glacier.Mass != 0.5 || d.State.Veins == nil || d.State.Health == nil {
+	if d.State.Plots == nil || d.State.Health == nil || d.State.Marks == nil {
 		t.Fatalf("old snapshot row: %+v", d.State)
 	}
 }
 
-// TestDBReplay: scrub yesterday and today from stored frames; the start-of-day land folds in the frames
-// after yesterday's last snapshot; the frame validates against www/dev/schema/replay.json.
-func TestDBReplay(t *testing.T) {
+// TestDBTownEpoch: migration 004 archives the mountain's history (nothing is lost) and hides its toys' marks; a
+// mountain snapshot row (seed 1) is never folded into the town; the rollback script brings the mountain back.
+func TestDBTownEpoch(t *testing.T) {
 	dsn := testDSN(t)
-	a := storedApp(t, dsn) // boots on an empty DB: no snapshot of seed 1 yet, so it writes today's
-	s := a.store
-	defer s.Close(time.Second)
-	if _, err := s.pool.Exec(context.Background(), "TRUNCATE snapshots"); err != nil { // start the history yesterday instead
+	ctx := context.Background()
+	c, err := pgx.Connect(ctx, dsn)
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer c.Close(ctx)
+	// the mountain's database: migrations 001-003 and some history
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upTo := func(last string) {
+		for _, f := range []string{"001_init.sql", "002_detail.sql", "003_marks.sql", "004_town.sql"} {
+			if f > last {
+				return
+			}
+			b, _ := migrations.ReadFile("migrations/" + f)
+			if _, err := pool.Exec(ctx, string(b)); err != nil {
+				t.Fatalf("%s: %v", f, err)
+			}
+			pool.Exec(ctx, "CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, at timestamptz NOT NULL DEFAULT now())")
+			pool.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", f)
+		}
+	}
+	upTo("003_marks.sql")
+	for _, q := range []string{
+		`INSERT INTO snapshots (day, seq, ts, seed, land, state, metrics) VALUES ('2026-10-20', nextval('frame_seq'), now(), 1, '\x0000', '{"alerts":[],"veins":[]}', '{}')`,
+		`INSERT INTO events (id, ts, day, kind, public) VALUES ('01JA0000000000000000000001', now(), '2026-10-20', 'argo.sync', '{"t":"ev","kind":"argo.sync","app":"wird","ok":true}')`,
+		`INSERT INTO world_deltas (ts, day, kind, frame) VALUES (now(), '2026-10-20', 'deposit', '{"t":"world","kind":"deposit"}')`,
+		`INSERT INTO marks (id, sub, handle, toy, ts, day, pose, weight) VALUES ('01JA0000000000000000000002', 's1', 'a visitor', 'cairns', now(), '2026-10-20', '{"pos":[1,2,3]}', 1)`,
+	} {
+		if _, err := pool.Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pool.Close()
+	a := storedApp(t, dsn) // applies 004, finds no town snapshot, starts empty
+	defer a.store.Close(time.Second)
+	var n, archived, hidden int
+	c.QueryRow(ctx, "SELECT count(*) FROM events").Scan(&n)
+	c.QueryRow(ctx, "SELECT (SELECT count(*) FROM mountain_archive_events) + (SELECT count(*) FROM mountain_archive_world_deltas) + (SELECT count(*) FROM mountain_archive_snapshots)").Scan(&archived)
+	c.QueryRow(ctx, "SELECT count(*) FROM marks WHERE deleted_at IS NOT NULL").Scan(&hidden)
+	if n != 0 || archived != 3 || hidden != 1 || len(a.State.Plots) != 0 || len(a.State.Marks) != 0 {
+		t.Fatalf("after 004: %d events, %d archived rows, %d hidden marks, state %+v", n, archived, hidden, a.State)
+	}
+	if first, err := a.store.started(ctx); err != nil || first != utcDay(time.Now()) {
+		t.Fatalf("town_epoch: %q %v", first, err)
+	}
+	// a mountain row written after 004 (a reverted image, say) is not the town's
+	c.Exec(ctx, `INSERT INTO snapshots (day, seq, ts, seed, land, state, metrics) VALUES ('2026-10-19', nextval('frame_seq'), now(), 1, '\x00', '{"alerts":[{"fp":"0123456789abcdef","sev":"info","layer":"apps","startsAt":1}]}', '{}')`)
+	if r, err := a.store.load(ctx, nil); err != nil || r == nil || len(r.state.Alerts) != 0 {
+		t.Fatalf("load must read the town's own snapshot only: %+v %v", r, err)
+	}
+	a.store.flush(5 * time.Second)
+	// the rollback script restores the mountain exactly
+	b, err := os.ReadFile("rollback/004_town_down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Exec(ctx, string(b)); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	c.QueryRow(ctx, "SELECT (SELECT count(*) FROM events) + (SELECT count(*) FROM world_deltas)").Scan(&n)
+	c.QueryRow(ctx, "SELECT count(*) FROM marks WHERE deleted_at IS NOT NULL").Scan(&hidden)
+	if n != 2 || hidden != 0 {
+		t.Fatalf("after the rollback: %d mountain frames back, %d marks still hidden", n, hidden)
+	}
+}
+
+// TestDBReplay: scrub yesterday and today from stored frames; the start-of-day state folds in the frames after
+// yesterday's last snapshot; a day before the town (town_epoch) is unavailable; the frame validates against
+// www/dev/schema/replay.json.
+func TestDBReplay(t *testing.T) {
+	dsn := testDSN(t)
+	a := storedApp(t, dsn) // boots on an empty DB: no town snapshot yet, so it writes today's
+	s := a.store
+	defer s.Close(time.Second)
 	now := time.Now().UTC()
-	today, yday := utcDay(now), utcDay(now.AddDate(0, 0, -1))
+	today, yday, before := utcDay(now), utcDay(now.AddDate(0, 0, -1)), utcDay(now.AddDate(0, 0, -2))
+	if _, err := s.pool.Exec(context.Background(), "TRUNCATE snapshots"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(context.Background(), "UPDATE town_epoch SET started = $1", yday); err != nil {
+		t.Fatal(err)
+	}
 	at := func(day string, h int) time.Time {
 		d, _ := time.Parse(time.DateOnly, day)
 		return d.Add(time.Duration(h) * time.Hour)
 	}
 	out := &Out{app: a, name: "test"}
-	land := make([]int16, worldcore.Grid*worldcore.Grid)
-	dep := func(id string, ts time.Time) {
-		d := worldcore.RasterDeposit(id, 10, 10, 1, worldcore.Solid(a.World.Base, land))
-		d.AddTo(land)
-		s.frame("world", "deposit", "", ts, out.worldFrame("deposit", map[string]any{"id": id, "x0": d.X0, "z0": d.Z0, "w": d.W, "h": d.H, "cells": worldcore.EncodeI16(d.Cells)}))
+	plot := func(app string, q int, ts time.Time) Plot {
+		p := Plot{App: app, Host: "h1", Q: q, R: 1, Role: "home"}
+		s.frame("world", "plot", "", ts, out.worldFrame("plot", p.frame(false)))
+		return p
 	}
 	st := newState()
-	s.snapshot(yday, at(yday, 0), 1, land, mustJSON(st), mustJSON(emptyMetrics(1)))
-	dep("01JA0000000000000000000001", at(yday, 12))
+	s.snapshot(yday, at(yday, 0), mustJSON(st), mustJSON(emptyMetrics()))
+	st.Plots = append(st.Plots, plot("wird", 1, at(yday, 12)))
 	al := Alert{FP: a.FP("x"), Sev: "warning", Layer: "k8s", StartsAt: at(yday, 12).UnixMilli()}
 	_, fire := out.evFrame("alert.fire", map[string]any{"fp": al.FP, "sev": al.Sev, "layer": al.Layer, "startsAt": int(al.StartsAt)})
 	s.frame("ev", "alert.fire", ULID(), at(yday, 13), fire)
 	st.Alerts = append(st.Alerts, al)
-	s.snapshot(yday, at(yday, 23), 1, land, mustJSON(st), mustJSON(emptyMetrics(1)))
-	dep("01JA0000000000000000000002", at(yday, 23).Add(30*time.Minute)) // after yesterday's last snapshot
-	startToday := slices.Clone(land)
-	dep("01JA0000000000000000000003", at(today, 0).Add(time.Minute))
-	s.metrics(at(today, 0).Add(5*time.Minute), mustJSON(emptyMetrics(1)))
+	s.snapshot(yday, at(yday, 23), mustJSON(st), mustJSON(emptyMetrics()))
+	plot("dream-analyst", 2, at(yday, 23).Add(30*time.Minute)) // after yesterday's last snapshot
+	plot("vos-monolith", -1, at(today, 0).Add(time.Minute))
+	s.metrics(at(today, 0).Add(5*time.Minute), mustJSON(emptyMetrics()))
 	if !s.flush(5 * time.Second) {
 		t.Fatal("flush")
 	}
@@ -174,15 +241,16 @@ func TestDBReplay(t *testing.T) {
 		return r, m
 	}
 	ry, my := get(yday)
-	if ry.Error != "" || ry.Day != yday || len(ry.Frames) != 3 || len(ry.State.Alerts) != 0 || ry.Snapshot.Land != worldcore.EncodeI16(make([]int16, len(land))) {
-		t.Fatalf("yesterday: error %q, %d frames, %d alerts at start", ry.Error, len(ry.Frames), len(ry.State.Alerts))
+	if ry.Error != "" || ry.Day != yday || len(ry.Frames) != 3 || len(ry.State.Alerts) != 0 || len(ry.State.Plots) != 0 {
+		t.Fatalf("yesterday: error %q, %d frames, state at start %+v", ry.Error, len(ry.Frames), ry.State)
 	}
 	rt, mt := get(today)
-	if rt.Error != "" || len(rt.Frames) != 1 || len(rt.Metrics) != 1 || len(rt.State.Alerts) != 1 || rt.State.Alerts[0] != al {
+	if rt.Error != "" || len(rt.Frames) != 1 || len(rt.Metrics) != 1 || len(rt.State.Alerts) != 1 || rt.State.Alerts[0] != al ||
+		len(rt.State.Plots) != 2 || rt.Snapshot.Day != today {
 		t.Fatalf("today: error %q, %d frames, %d metrics, state %v", rt.Error, len(rt.Frames), len(rt.Metrics), rt.State)
 	}
-	if rt.Snapshot.Land != worldcore.EncodeI16(startToday) || rt.Snapshot.Day != today {
-		t.Fatal("today's snapshot must be yesterday's last snapshot + the deposit after it")
+	if rb, _ := get(before); rb.Error != "unavailable" {
+		t.Fatalf("a day before the town: %q, want unavailable", rb.Error)
 	}
 	replays.Lock()
 	cy, ct := replays.m[yday], replays.m[today]
@@ -260,22 +328,23 @@ func TestAlertsRestored(t *testing.T) {
 	}
 }
 
-// TestSnapshotRollover (memory-only): a snapshot folds the hello deltas into hello.snapshot.land, and at
-// UTC rollover App.Day advances and hello.snapshot.day follows.
+// TestSnapshotRollover (memory-only): a snapshot folds the hello deltas into the state, and at UTC rollover App.Day
+// advances and hello.snapshot.day follows.
 func TestSnapshotRollover(t *testing.T) {
 	a, _ := testApp(t)
-	newProm(a).deposit(&Out{app: a}, "wird", 1)
+	newPlacer().place(a, &Out{app: a, name: "prom"}, []sample{pod("wird", "wird-1", "k8s-cp-01")}, allReady, time.Now())
 	var h struct {
 		Snapshot Snapshot
 		Deltas   []json.RawMessage
+		State    State
 	}
 	json.Unmarshal(a.Hello(), &h)
-	if h.Snapshot.Land != worldcore.EncodeI16(make([]int16, len(a.Land))) || len(h.Deltas) != 3 {
-		t.Fatalf("before a snapshot: base land + deposit, site and glacier deltas, got %d deltas", len(h.Deltas))
+	if len(h.Deltas) != 1 || len(h.State.Plots) != 1 {
+		t.Fatalf("before a snapshot: the plot delta, got %d deltas", len(h.Deltas))
 	}
 	a.snapshot(time.Date(2026, 10, 15, 0, 0, 30, 0, time.UTC))
 	json.Unmarshal(a.Hello(), &h)
-	if h.Snapshot.Day != "2026-10-15" || a.Day != "2026-10-15" || h.Snapshot.Land != worldcore.EncodeI16(a.Land) || len(h.Deltas) != 0 {
+	if h.Snapshot.Day != "2026-10-15" || a.Day != "2026-10-15" || len(h.Deltas) != 0 || len(h.State.Plots) != 1 {
 		t.Fatalf("after rollover: day %s, %d deltas", h.Snapshot.Day, len(h.Deltas))
 	}
 }

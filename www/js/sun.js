@@ -1,7 +1,6 @@
-// The real sun and moon over Paris (01 world.sun / world.moon, 03-model-sky "full"): SunCalc's low-precision formulas
-// (mourner/suncalc, BSD-2), positions + the moon's lit fraction only (no rise/set times). Orchestrator-owned helper; sky
-// imports it and writes world.sun / world.moon / world.rig = {elev, rising} from it (the host turns world.rig into
-// kit.setPhase and world.sun + world.moon into kit.setSky).
+// The real sun and moon over Paris (03-objects: the sky and the night): SunCalc's low-precision formulas
+// (mourner/suncalc, BSD-2), positions + the moon's lit fraction only (no rise/set times). main.js lights the town
+// from it; relay/sun.go mirrors the elevation, which picks the plant toy's item.
 //   sun(ms = now(), lat = PARIS.lat, lon = PARIS.lon)  → {elev (deg), az (deg from north, clockwise), rising}
 //   moon(ms = now(), lat = PARIS.lat, lon = PARIS.lon) → {elev, az, frac (0 new .. 1 full)}
 //   now() → ms: the wall clock; on a dev host (127.0.0.1) ?at=<ISO date> pins it there (QA of noon, dusk, moon nights)

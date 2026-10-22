@@ -3,7 +3,7 @@ FROM golang:1.27 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
-COPY embed.go units.json ./
+COPY embed.go ./
 COPY relay ./relay
 COPY www ./www
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /relay ./relay

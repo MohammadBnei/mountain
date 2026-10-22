@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "mark.json",
   "title": "mark frames (W4, 06; relay validators.go): client -> server mark / mark.delete, and the server's answer to that client alone",
-  "description": "mark: place a toy mark (session visitor|admin; named = sign it with the moderated handle); the pose is the toy's own shape (03-model-<toy>), validated by relay toy_<toy>.go. mark.delete: admin only. Answer {t:'mark', ref?, id} (accepted; the mark itself arrives as world:mark) or {t:'mark', ref?, error}: off | auth | toy | rate | bad | unknown | a toy's own reason. An accept or a rate refusal also carries the sender's quota: next (s until the next mark is allowed) and left (marks left in the rolling 24 h).",
+  "description": "mark: place a toy mark (session visitor|admin; named = sign it with the moderated handle); the pose is the toy's own shape (plant: {h, q, r}, 06), validated by relay toy_<toy>.go. mark.delete: admin only. Answer {t:'mark', ref?, id} (accepted; the mark itself arrives as world:mark) or {t:'mark', ref?, error}: off | auth | toy | rate | bad | unknown | a toy's own reason. An accept or a rate refusal also carries the sender's quota: next (s until the next mark is allowed) and left (marks left in the rolling 24 h).",
   "type": "object",
   "required": ["t"],
   "oneOf": [

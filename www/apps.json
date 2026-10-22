@@ -1,0 +1,120 @@
+{
+ "mountain": {
+  "name": "Town",
+  "url": "https://mountain.bnei.dev",
+  "en": "This page: the cluster drawn as a live town.",
+  "fr": "Cette page : le cluster dessiné en ville vivante.",
+  "group": "platform",
+  "wire": "app"
+ },
+ "editable-blog": {
+  "name": "Blog",
+  "url": "https://blog.bnei.dev",
+  "en": "A personal blog, static pages written in markdown.",
+  "fr": "Un blog personnel, des pages statiques écrites en markdown.",
+  "group": "user",
+  "wire": "app"
+ },
+ "dream-analyst": {
+  "name": "Dream Analyst",
+  "url": "https://dreamer.bnei.dev",
+  "en": "A dream journal: write or dictate a dream, an AI reads its symbols with you.",
+  "fr": "Un journal de rêves : écrivez ou dictez un rêve, une IA en lit les symboles avec vous.",
+  "group": "user",
+  "wire": "app"
+ },
+ "vos-monolith": {
+  "name": "VocOnSteroid",
+  "url": "https://www.voconsteroid.com",
+  "en": "Learn vocabulary through the links between words: roots, synonyms, etymology.",
+  "fr": "Apprendre le vocabulaire par les liens entre les mots : racines, synonymes, étymologie.",
+  "group": "user",
+  "wire": "app"
+ },
+ "vos-monolith-dev": {
+  "name": "VocOnSteroid (dev)",
+  "en": "The test copy of VocOnSteroid, where new versions land first.",
+  "fr": "La copie de test de VocOnSteroid, où arrivent d'abord les nouvelles versions.",
+  "group": "user",
+  "wire": "app"
+ },
+ "wedding-2026": {
+  "name": "Wedding 2026",
+  "url": "https://wedding.bnei.dev",
+  "en": "A wedding site in four languages, with RSVPs and a chatbot for guests.",
+  "fr": "Un site de mariage en quatre langues, avec réponses des invités et un chatbot.",
+  "group": "user",
+  "wire": "app"
+ },
+ "ukubi-stt": {
+  "name": "Speech to text",
+  "en": "Speech-to-text running on the cluster's GPU.",
+  "fr": "Transcription de la voix, sur le GPU du cluster.",
+  "group": "platform",
+  "wire": "agent"
+ },
+ "wird": {
+  "name": "Wird",
+  "url": "https://wird.bnei.dev",
+  "en": "Understand the ayas you recite in prayer, word by word, down to their roots.",
+  "fr": "Comprendre les versets récités dans la prière, mot à mot, jusqu'à leurs racines.",
+  "group": "user",
+  "wire": "app"
+ },
+ "gate": {
+  "name": "Gate",
+  "en": "Every request to the cluster comes in through here, and is routed to its app.",
+  "fr": "Chaque requête vers le cluster entre par ici, puis est dirigée vers son application.",
+  "group": "service",
+  "wire": "network"
+ },
+ "guardhouse": {
+  "name": "Guardhouse",
+  "en": "Sign-in for every app: who you are, and what you may open.",
+  "fr": "La connexion de toutes les applications : qui vous êtes, et ce que vous pouvez ouvrir.",
+  "group": "service",
+  "wire": "network"
+ },
+ "craneyard": {
+  "name": "Crane yard",
+  "en": "Deploys every app from its git repository, and keeps it as written there.",
+  "fr": "Déploie chaque application depuis son dépôt git, et la garde telle qu’écrite.",
+  "group": "service",
+  "wire": "compute"
+ },
+ "watchtower": {
+  "name": "Watchtower",
+  "en": "Watches the whole cluster: the numbers and the alarms this town is drawn from.",
+  "fr": "Surveille tout le cluster : les mesures et les alertes dont cette ville est dessinée.",
+  "group": "service",
+  "wire": "compute"
+ },
+ "warehouse": {
+  "name": "Warehouse",
+  "en": "Replicated disks: each volume kept on three hosts at once.",
+  "fr": "Des disques répliqués : chaque volume gardé sur trois hôtes à la fois.",
+  "group": "service",
+  "wire": "storage"
+ },
+ "vault": {
+  "name": "Vault",
+  "en": "Keeps the secrets (passwords, keys) and hands each app only its own.",
+  "fr": "Garde les secrets (mots de passe, clés) et ne donne à chaque application que les siens.",
+  "group": "service",
+  "wire": "data"
+ },
+ "granary": {
+  "name": "Granary",
+  "en": "File storage for the apps: pictures, uploads, backups.",
+  "fr": "Le stockage de fichiers des applications : images, envois, sauvegardes.",
+  "group": "service",
+  "wire": "storage"
+ },
+ "depot": {
+  "name": "Depot",
+  "en": "Stores the app images built here before they are deployed.",
+  "fr": "Garde les images d’applications construites ici avant leur déploiement.",
+  "group": "service",
+  "wire": "storage"
+ }
+}

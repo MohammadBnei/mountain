@@ -22,8 +22,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/MohammadBnei/mountain/relay/worldcore"
 )
 
 // Source is one upstream (Prometheus, Alertmanager, GitHub).
@@ -108,7 +106,7 @@ func (o *Out) Detail(id string, detail map[string]any) {
 	o.app.store.detail(id, b)
 }
 
-// World sanitises and broadcasts {t:"world", kind, ...payload} (kind = deposit|vein|glacier|ash|site|mark|cloud|rain|plot).
+// World sanitises and broadcasts {t:"world", kind, ...payload} (kind = plot|mark).
 func (o *Out) World(kind string, payload map[string]any) {
 	o.app.Hub.Broadcast(o.worldFrame(kind, payload))
 }
@@ -159,7 +157,7 @@ type Alert struct {
 	StartsAt int64  `json:"startsAt"`       // unix ms, Alertmanager startsAt
 	Host     string `json:"host,omitempty"` // R7: h1..h3 from the alert's node label, when it has one (the beacon's island)
 	App      string `json:"app,omitempty"`  // R7: allowlisted app from its namespace label, when it has one (the beacon's building)
-	Name     string `json:"-"`              // alertname: memory only (vein ref), never on the wire nor in the DB
+	Name     string `json:"-"`              // alertname: memory only, never on the wire nor in the DB
 }
 
 // State is hello.state (www/dev/schema/hello.json): what a reload must not lose. It changes only through the frames
@@ -168,20 +166,15 @@ type Alert struct {
 // (they only send an ev on change).
 type State struct {
 	Alerts   []Alert           `json:"alerts"`
-	Veins    []worldcore.Vein  `json:"veins"`    // ≤ 32, oldest first (world:vein)
-	Glacier  worldcore.Glacier `json:"glacier"`  // the last world:glacier
-	Ash      []worldcore.Ash   `json:"ash"`      // ≤ 32, newest day first (world:ash)
 	Health   map[string]string `json:"health"`   // app -> ArgoCD health (ev argo.health)
 	Replicas map[string]int    `json:"replicas"` // app -> replica bucket (ev replicas)
 	Builds   map[string]string `json:"builds"`   // app -> queued|running: builds in flight (ev build, W3c)
 	Marks    []Mark            `json:"marks"`    // W4: active visitor marks (world:mark), oldest first, ≤ marksMax; gone removes
-	Clouds   []Cloud           `json:"clouds"`   // W4: live toy clouds (world:cloud), one per id, ≤ cloudsMax; state gone removes
 	Plots    []Plot            `json:"plots"`    // R7: town buildings (world:plot), one per app, ≤ plotsMax; gone removes
 }
 
 func newState() State {
-	return State{Alerts: []Alert{}, Veins: []worldcore.Vein{}, Glacier: worldcore.NewGlacier(), Ash: []worldcore.Ash{},
-		Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}, Marks: []Mark{}, Clouds: []Cloud{}, Plots: []Plot{}}
+	return State{Alerts: []Alert{}, Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}, Marks: []Mark{}, Plots: []Plot{}}
 }
 
 // Fire broadcasts ev alert.fire{fp, sev, layer, startsAt}; the hub tap adds it to hello.state.alerts (replacing the
@@ -203,19 +196,17 @@ func (a Alert) where(f map[string]any) map[string]any {
 	return f
 }
 
-// Resolve broadcasts ev alert.resolve{fp, sev, layer, durS}; the tap drops it from hello.state.alerts, and an alert
-// of severity ≥ warning that lasted ≥ 10 min becomes a world:vein (App.derive).
+// Resolve broadcasts ev alert.resolve{fp, sev, layer, durS}; the tap drops it from hello.state.alerts.
 func (o *Out) Resolve(a Alert, durS int) string {
 	return o.Ev("alert.resolve", a.where(map[string]any{"fp": a.FP, "sev": a.Sev, "layer": a.Layer, "durS": durS}))
 }
 
-// frameF is every field State.apply, fold and derive read from a broadcast frame.
+// frameF is every field State.apply and fold read from a broadcast frame.
 type frameF struct {
-	T, Kind, ID, FP, Sev, Layer, App, Host, Status, State, Day, Title string
-	StartsAt, TS                                                      int64
-	DurS, Bucket, N                                                   int
-	OK, Gone                                                          bool
-	worldcore.Glacier                                                 // mass, tongues, ash
+	T, Kind, ID, FP, Sev, Layer, App, Host, Status, State string
+	StartsAt, TS                                          int64
+	Bucket                                                int
+	Gone                                                  bool
 }
 
 // apply updates the state for one broadcast ev or world frame (as sent: sanitised).
@@ -239,15 +230,6 @@ func (s *State) apply(f frameF, raw []byte) {
 		} else {
 			delete(s.Builds, f.App)
 		}
-	case "world:vein":
-		var v worldcore.Vein
-		if json.Unmarshal(raw, &v) == nil {
-			s.Veins = worldcore.AddVein(s.Veins, v)
-		}
-	case "world:glacier":
-		s.Glacier = worldcore.Glacier{Mass: f.Mass, Tongues: f.Tongues, Ash: f.Ash}
-	case "world:ash":
-		s.Ash, _ = worldcore.AddAshLine(s.Ash, worldcore.Ash{Day: f.Day, Title: f.Title})
 	case "world:mark": // W4 (validators.go): a new id appends (the oldest beyond marksMax drops out), gone removes
 		var m Mark
 		if json.Unmarshal(raw, &m) == nil {
@@ -264,22 +246,6 @@ func (s *State) apply(f frameF, raw []byte) {
 			if !f.Gone {
 				s.Plots = append(s.Plots, p)
 				s.Plots = s.Plots[max(0, len(s.Plots)-plotsMax):]
-			}
-		}
-	case "world:cloud": // W4: replaces its id in place (a new id appends, oldest beyond cloudsMax drop), state gone removes
-		var c Cloud
-		if json.Unmarshal(raw, &c) == nil {
-			i := slices.IndexFunc(s.Clouds, func(x Cloud) bool { return x.ID == c.ID })
-			switch {
-			case c.State == "gone":
-				if i >= 0 {
-					s.Clouds = slices.Delete(s.Clouds, i, i+1)
-				}
-			case i >= 0:
-				s.Clouds[i] = c
-			default:
-				s.Clouds = append(s.Clouds, c)
-				s.Clouds = s.Clouds[max(0, len(s.Clouds)-cloudsMax):]
 			}
 		}
 	}
@@ -322,10 +288,7 @@ type Metrics struct {
 	Storage        Storage               `json:"storage"`
 	CPU            float64               `json:"cpu"`
 	Mem            float64               `json:"mem"`
-	Heat           float64               `json:"heat"`
-	BuildsInFlight int                   `json:"buildsInFlight"`
-	Wind           XZ                    `json:"wind"`
-	Snowline       float64               `json:"snowline"` // world units
+	BuildsInFlight int                   `json:"buildsInFlight"` // GitHub builds queued or running (src_github)
 	Rx             float64               `json:"rx"`
 	River          float64               `json:"river"`
 	Hosts          map[string]Host       `json:"hosts"`
@@ -339,12 +302,6 @@ type AppMetrics struct {
 	ErrB   int  `json:"errB"`
 	Spike  bool `json:"spike"`
 	BytesB int  `json:"bytesB"`
-}
-
-// XZ is a horizontal vector in world units.
-type XZ struct {
-	X float64 `json:"x"`
-	Z float64 `json:"z"`
 }
 
 type Storage struct {
@@ -368,8 +325,8 @@ type Host struct {
 	Load  float64 `json:"load"`
 }
 
-func emptyMetrics(snowline float64) Metrics {
-	return Metrics{T: "metrics", Apps: map[string]AppMetrics{}, Storage: Storage{Pools: []Pool{}}, Snowline: snowline,
+func emptyMetrics() Metrics {
+	return Metrics{T: "metrics", Apps: map[string]AppMetrics{}, Storage: Storage{Pools: []Pool{}},
 		Hosts: map[string]Host{"h1": {}, "h2": {}, "h3": {}}, Stale: map[string]int64{}, Visitors: true}
 }
 

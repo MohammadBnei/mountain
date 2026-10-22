@@ -1,168 +1,262 @@
-// Page: kit rig + world + socket + the models of page.js, the story camera (story.js), post on desktop.
-// Orchestrator-owned. ?fixture=1 loads dev/fixtures/hello.json instead of /ws (static serving).
-// Host duties: world.rig → kit.setPhase on change; world.sun + world.moon → kit.setSky (W5, once a second: sky writes them);
-// cards.js: the cards + legend (W5); world.stale → the "stale since" label (sky dims via kit.setStale);
-// cut.js: compose the field providers once, then world.clip → uClip every frame; story.js writes world.clip from P.
-// W4 (toys.js): the surface models hang under one group the kill switch hides (metrics.visitors), the toolbar + tool input,
-// and the footprint RT (kit.drawStamps; its stamp scene hides with the group).
-// Dev (127.0.0.1): ?cut=<depth>[&cutaz=<rad>] holds the cut open instead (perf.mjs --cut).
-// Dev (127.0.0.1): globalThis.__page = {renderer, scene, camera, post, world, kit, quality(), orbit(), story()} for the gate.
+// The live town (R7): ukubi as three islands, one per Proxmox host, every app and service a building on the host
+// its pods run on. The relay (/ws) is the only source: hello, then ev / world / metrics frames (js/world.js).
+// Opens on the whole town; tap an island or a building to fly in (and read its card), tap the sea to fly back.
+// The sky follows the real sun over Paris (js/sun.js). Dev (127.0.0.1): window.__town hooks for the gate.
 import * as THREE from 'three';
-import * as kit from './kit.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createWorld } from './world.js';
 import { connect } from './socket.js';
-import { profiles, finale } from './layout.js';
-import { page } from './page.js';
-import { makeCtx, checkModel, wire } from './contract.js';
-import { createPost } from './post.js';
-import * as cut from './cut.js';
-import * as story from './story.js';
-import { SURFACE, createToys } from './toys.js';
-import { createCards } from './cards.js';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { sun as sunAt, now as clock } from './sun.js';
+import { createLabels } from './labels.js';
+import { createToys } from './toys.js';
 
+const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
-const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: kit.QUALITY !== 'low' });
-const ratioMax = Math.min(devicePixelRatio, 1.5); // bloom at DPR 2 on a retina laptop costs heat for detail fog hides
-renderer.setPixelRatio(ratioMax);
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(finale.fov, 1, 1, 2000);
-kit.rig(renderer, scene);
-const post = createPost(renderer, scene, camera); // null on phones (low tier)
-
 const dev = location.hostname === '127.0.0.1';
-const world = createWorld({ dev });
-if (dev) globalThis.__page = { renderer, scene, camera, post, world, kit, quality: () => ({ rung, fps: ladder[rung][0], ratio: ladder[rung][1], charging }), orbit: () => orbit };
-if (q.has('fixture')) fetch('./dev/fixtures/hello.json').then((r) => r.json()).then(world.applyHello);
-else connect({ world });
-await world.ready;
+const lang = () => (q.get('lang') || navigator.language || 'en').slice(0, 2) === 'fr' ? 'fr' : 'en';
+const coarse = matchMedia('(pointer: coarse)').matches;
+globalThis.__quality = q.get('q') || (coarse && ((navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcurrency || 8) <= 4) ? 'low' : 'high');
+if (dev) globalThis.__town = { ready: false };
+const RETRY = 'town:reloaded';
+const store = (f) => { try { return f(sessionStorage); } catch { return null; } };
 
-const models = [], surface = new THREE.Group();
-scene.add(surface);
-for (const name of page) {
-  let build;
-  try {
-    ({ default: build } = await import(`../models/${name}/index.js`));
-  } catch (e) {
-    console.warn(`main: model ${name} not available yet`, e.message);
-    continue;
+if (!document.createElement('canvas').getContext('webgl2')) {
+  document.getElementById('fallback').hidden = false;
+  document.getElementById('loader').hidden = true;
+  canvas.remove();
+} else start().then(() => store((s) => s.removeItem(RETRY)), (e) => {
+  console.error(e);
+  if (dev) globalThis.__town = { ready: true, error: String(e?.stack || e) };
+  // A failed load (a deploy retired this page's /v/<build>/ modules, a flaky fetch) reloads once onto the current
+  // index; the sessionStorage flag stops a loop and is cleared once a load succeeds.
+  const loader = document.getElementById('loader');
+  if (dev || store((s) => s.getItem(RETRY)) || store((s) => (s.setItem(RETRY, '1'), true)) !== true) {
+    loader.textContent = 'The town could not be built. Reload to try again.';
+    return;
   }
-  const m = await build(makeCtx({ THREE, kit, world, name, profile: profiles[name] }));
-  const bad = checkModel(m, profiles[name]);
-  if (bad.length) { console.error(`main: ${name}: ${bad.join('; ')}`); continue; }
-  wire(m, world);
-  (SURFACE.has(name) ? surface : scene).add(m.root);
-  models.push(m);
-}
-
-cut.compose(models);
-const cutKnob = dev && q.has('cut');
-if (cutKnob) world.write('clip', 'story', cut.at(Number(q.get('cut')), Number(q.get('cutaz') || 0)));
-
-function resize() {
-  const w = innerWidth, h = innerHeight;
-  renderer.setSize(w, h, false);
-  post?.setSize(w, h);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
-addEventListener('resize', resize);
-resize();
-
-const staleEl = document.getElementById('stale'), hhmm = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit' });
-let staleShown, rig, sunSeen;
-function host() {
-  if (world.rig !== rig) { rig = world.rig; kit.setPhase(rig.elev, rig.rising); } // sky writes a new object per change
-  if (world.sun !== sunSeen) { sunSeen = world.sun; kit.setSky(world.sun, world.moon); } // both written together, once a second
-  if (world.stale !== staleShown) {
-    staleShown = world.stale;
-    staleEl.hidden = staleShown == null;
-    if (staleShown != null) staleEl.textContent = `stale since ${hhmm.format(staleShown)}`;
-  }
-}
-
-// Orbit (drag, wheel/pinch; no pan) around the current section's look point (05, R5: the mouse always orbits). The
-// first touch takes the camera from the story keyframe; a story step, or 45 s after the last input, glides it back.
-// Limits keep the camera off the massif and above the valley floor.
-const key = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
-const gOff = new THREE.Vector3(), gKey = new THREE.Vector3(), still = matchMedia('(prefers-reduced-motion: reduce)'); // glide-back scratch
-const orbit = new OrbitControls(camera, renderer.domElement);
-Object.assign(orbit, { enablePan: false, enableDamping: true, dampingFactor: 0.08, minDistance: 110, maxDistance: 260,
-  minPolarAngle: 0.9, maxPolarAngle: 1.7, rotateSpeed: 0.6, zoomSpeed: 0.8 });
-let orbiting = false, idleAt = 0;
-orbit.addEventListener('start', () => { orbiting = true; idleAt = 0; });
-orbit.addEventListener('end', () => { idleAt = performance.now() + 45000; });
-const tale = story.createStory({ world, onStep: () => { if (orbiting) idleAt = performance.now(); } });
-if (dev) globalThis.__page.story = () => ({ P: tale.P, section: tale.section, hash: location.hash, clip: world.clip });
-let lastP = NaN;
-const toys = createToys({ world, camera, canvas: renderer.domElement, orbit, tale, models, surface });
-createCards({ world, camera, canvas: renderer.domElement, models, toys });
-if (dev) Object.assign(globalThis.__page, { surface, models });
-
-const DT = 1 / 30;
-// Adaptive draw rate (heat/battery): a ladder of [fps, pixel ratio] from cheapest to richest. 60 fps is
-// allowed only while charging on desktop (Battery API; none = never). Each ~1 s window of draws: mean
-// frame > 1.2× its budget steps one rung down and doubles that rung's retry wait; otherwise, once the
-// wait is over, it probes one rung up. The sim steps at 1/30 s either way; at 60 only the camera moves in between.
-const ladder = [[30, Math.min(1, ratioMax)], [30, Math.min(1.25, ratioMax)], [30, ratioMax], [60, ratioMax]]
-  .filter((r, i, l) => !i || r[0] !== l[i - 1][0] || r[1] !== l[i - 1][1]);
-let charging = false, rung = ladder.findLastIndex((r) => r[0] === 30), gSum = 0, gN = 0;
-const wait = ladder.map(() => 3000), upAt = ladder.map(() => 0);
-const top = () => (charging && kit.QUALITY !== 'low' ? ladder.length - 1 : ladder.findLastIndex((r) => r[0] === 30));
-const setRung = (i) => { rung = i; renderer.setPixelRatio(ladder[i][1]); post?.composer.setPixelRatio(ladder[i][1]); }; // the composer keeps its own copy
-navigator.getBattery?.().then((b) => {
-  const set = () => { charging = b.charging; if (rung > top()) setRung(top()); };
-  set();
-  b.addEventListener('chargingchange', set);
-}).catch(() => {});
-function govern(ms, now) {
-  gSum += Math.min(ms, 200); gN++;
-  if (gSum < 1000) return;
-  const late = gSum / gN > 1.2 * (1000 / ladder[rung][0]);
-  gSum = gN = 0;
-  if (late && rung > 0) { wait[rung] = Math.min(wait[rung] * 2, 120000); upAt[rung] = now + wait[rung]; setRung(rung - 1); }
-  else if (!late && rung < top() && now >= upAt[rung + 1]) setRung(rung + 1);
-}
-let acc = 0, t = 0, last = performance.now(), drawn = 0;
-addEventListener('visibilitychange', () => { drawn = gSum = gN = 0; }); // the gap of a hidden tab is not a slow frame
-renderer.setAnimationLoop((now) => {
-  if (now - drawn < 1000 / ladder[rung][0] - 2) return;
-  if (drawn) govern(now - drawn, now);
-  drawn = now;
-  acc = Math.min(acc + (now - last) / 1000, 0.25);
-  last = now;
-  while (acc >= DT) {
-    world.step(DT);
-    for (const m of models) m.step(DT, t);
-    acc -= DT;
-    t += DT;
-  }
-  host();
-  const P = tale.tick(now);
-  toys.tick();
-  if (kit.stampScene.visible !== surface.visible) { kit.stampScene.visible = surface.visible; kit.stampScene.userData.dirty = true; }
-  kit.drawStamps(renderer);
-  if (P !== lastP) { // pose + cut follow P only while it moves
-    lastP = P;
-    if (!cutKnob) world.write('clip', 'story', story.clip(P));
-    for (const m of models) m.pose(P);
-  }
-  kit.U.uSnowline.value = world.snowline;
-  kit.U.uHMax.value = world.hmax; // deposits and resyncs move the summit
-  cut.apply(world);
-  const tc = t + acc; // camera time between sim steps: smooth at 60 fps
-  story.view(P, tc, camera.aspect, key);
-  if (!orbiting) { camera.position.copy(key.pos); camera.lookAt(key.look); orbit.target.copy(key.look); }
-  else if (idleAt && now > idleAt) { // idle or a step: glide back onto the keyframe, then hand the camera back to it
-    // around the target, not through the mountain: the offset turns and its length eases (never inside both radii)
-    const k = still.matches ? 1 : 0.05; // reduced motion: jump back
-    gOff.subVectors(camera.position, orbit.target); gKey.subVectors(key.pos, key.look);
-    const len = gOff.length() + (gKey.length() - gOff.length()) * k;
-    orbit.target.lerp(key.look, k);
-    camera.position.copy(orbit.target).add(gOff.lerp(gKey, k).setLength(len));
-    camera.lookAt(orbit.target);
-    if (camera.position.distanceTo(key.pos) < 0.5) { orbiting = false; idleAt = 0; }
-  } else orbit.update();
-  if (post) post.render(t);
-  else renderer.render(scene, camera);
+  loader.textContent = 'Could not load, retrying…';
+  setTimeout(() => location.reload(), 1000);
 });
+
+async function start() {
+  const kit = await import('./kit.js');
+  const low = kit.QUALITY === 'low';
+  const apps = await (await fetch(new URL('../apps.json', import.meta.url))).json();
+  const world = createWorld();
+  if (q.has('hello')) fetch(q.get('hello')).then((r) => r.json()).then(world.applyHello); // dev: a hello file, no relay
+  else connect({ world, ...(dev && q.get('ws') ? { url: q.get('ws') } : {}) }); // dev: a relay on another port
+  await world.loaded;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, low ? 1.25 : 2));
+  renderer.shadowMap.enabled = !low;
+  const scene = new THREE.Scene();
+  const bg = new THREE.Color(kit.ukubi.office.surface);
+  scene.background = bg;
+  scene.fog = new THREE.Fog(bg, 70, 160);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0xd9cfc4, 1.6);
+  const sun = new THREE.DirectionalLight(0xfff4e6, 2.4);
+  sun.castShadow = !low;
+  sun.shadow.mapSize.set(4096, 4096);
+  Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 140 });
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+  const moon = new THREE.DirectionalLight(0xa9bbff, 0);
+  scene.add(hemi, sun, sun.target, moon);
+
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 400);
+  const controls = new OrbitControls(camera, canvas);
+  Object.assign(controls, { enableDamping: true, dampingFactor: 0.08, minDistance: 6, maxDistance: 120, maxPolarAngle: 1.35, screenSpacePanning: false });
+
+  // ---- the town
+  const ctx = { THREE, kit, world, apps };
+  const [islands, bridges, buildings, marks, people] = await Promise.all(['islands', 'bridges', 'buildings', 'marks', 'people']
+    .map(async (n) => (await import(`./objects/${n}.js`)).default(ctx)));
+  for (const o of [islands, bridges, buildings, marks, people]) scene.add(o.root);
+  const labels = createLabels({ THREE, layer: document.getElementById('labels'), apps, lang });
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---- camera: overview of the three islands, or one island / building up close
+  const centres = islands.islands.map((i) => i.centre);
+  const mid = centres.reduce((a, c) => [a[0] + c[0] / 3, a[1] + c[1] / 3], [0, 0]);
+  const span = 0.85 * (Math.max(...centres.map((c) => Math.hypot(c[0] - mid[0], c[1] - mid[1]))) + 2 * world.town.radius);
+  let fly = null;
+  function view(target, radius) {
+    // distance so a sphere of `radius` fits the narrower screen axis, seen from the front-high angle
+    const fov = THREE.MathUtils.degToRad(camera.fov), aspect = camera.aspect;
+    const half = Math.min(fov / 2, Math.atan(Math.tan(fov / 2) * aspect));
+    const d = radius / Math.sin(half);
+    const dir = new THREE.Vector3(0.15, 0.85, 0.85).normalize(); // front-high: the islands read as a map, buildings still stand up
+    return { pos: target.clone().addScaledVector(dir, d), target };
+  }
+  const overview = () => view(new THREE.Vector3(mid[0], 0, mid[1] + 3), span); // a little forward: the dock covers the bottom
+  function flyTo(v, dur = reduced ? 0.01 : 1.2) {
+    fly = { from: camera.position.clone(), fromT: controls.target.clone(), to: v.pos, toT: v.target, t0: performance.now(), dur: dur * 1000 };
+    overviewBtn.hidden = v.home === true;
+  }
+  const overviewBtn = document.getElementById('overview');
+  overviewBtn.onclick = () => { closeCard(); flyTo({ ...overview(), home: true }); };
+
+  // ---- picking: a tap (not a drag) picks a building, else an island, else flies home
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  let down = null;
+  canvas.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+  canvas.addEventListener('pointerup', (e) => {
+    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
+    down = null;
+    if (toys.tap(e)) return; // plant / remove mode takes the tap
+    const r = canvas.getBoundingClientRect();
+    ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    pick(ray);
+  });
+  function pick(r) {
+    const hb = r.intersectObjects(buildings.pickables(), false)[0];
+    const p = hb && buildings.plotOf(hb);
+    if (p) { openCard(p); return flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5)); }
+    const hi = r.intersectObjects(islands.pickables, false)[0];
+    if (hi) {
+      closeCard();
+      const c = islands.islands.find((i) => i.host === hi.object.userData.pick.host).centre;
+      return flyTo(view(new THREE.Vector3(c[0], 0, c[1]), 2 * world.town.radius + 1.5));
+    }
+    closeCard();
+    flyTo({ ...overview(), home: true });
+  }
+
+  // ---- card + panel
+  const card = document.getElementById('card'), fr = () => lang() === 'fr';
+  let carded = null;
+  function openCard(p) { carded = p.app; card.hidden = false; fillCard(); }
+  function closeCard() { carded = null; card.hidden = true; }
+  document.getElementById('cardclose').onclick = closeCard;
+  // Status always comes with a word (Ukubi): the colour only repeats it.
+  const healthText = { Healthy: ['running', 'en marche', 'ok'], Progressing: ['deploying', 'en déploiement', 'warn'], Degraded: ['degraded', 'dégradé', 'bad'],
+    Missing: ['missing', 'absent', 'bad'], Suspended: ['suspended', 'suspendu', 'info'], Unknown: ['unknown', 'inconnu', 'info'] };
+  const word = (cls, text) => Object.assign(document.createElement('span'), { className: cls, textContent: text });
+  function fillCard() {
+    const p = buildings.plots().find((x) => x.app === carded);
+    if (!p) return closeCard();
+    const a = apps[p.app] || {}, s = world.state, F = fr();
+    card.style.setProperty('--wire', `var(--wire-${p.wire})`);
+    card.querySelector('.kicker').textContent = `${a.group === 'service' ? 'service' : (F ? 'application' : 'app')} · ${F ? 'hôte' : 'host'} ${p.host}`;
+    card.querySelector('h2').textContent = a.name || p.app;
+    card.querySelector('.desc').textContent = a[lang()] || a.en || '';
+    const st = [];
+    if (p.ruinAt) st.push(word('bad', F ? 'retirée du cluster' : 'removed from the cluster'));
+    else {
+      const h = healthText[s.health[p.app]];
+      if (h) st.push(word(h[2], h[F ? 1 : 0]));
+      if (s.builds[p.app]) st.push(word('warn', F ? 'construction en cours' : 'build in progress'));
+      const n = s.alerts.filter((x) => x.app === p.app).length;
+      if (n) st.push(word('bad', F ? `${n} alerte${n > 1 ? 's' : ''}` : `${n} alert${n > 1 ? 's' : ''}`));
+      if (p.down) st.push(word('bad', F ? `hôte ${p.host} hors ligne` : `host ${p.host} down`));
+    }
+    card.querySelector('.state').replaceChildren(...st);
+    const go = card.querySelector('.go');
+    go.hidden = !a.url || !!p.ruinAt;
+    if (a.url) { go.href = a.url; go.textContent = `${F ? 'Ouvrir' : 'Open'} ${a.name}`; }
+  }
+  const line = document.getElementById('line'), facts = document.getElementById('facts'), staleEl = document.getElementById('stale');
+  function fillPanel() {
+    const F = fr(), s = world.state, n = s.plots.filter((p) => !p.ruinAt).length;
+    line.textContent = F ? `Le cluster ukubi en direct : ${n} bâtiments sur 3 îles, une par hôte.` : `The ukubi cluster, live: ${n} buildings on 3 islands, one per host.`;
+    const parts = world.town.islands.map((i) => world.ready[i.host] === false ? word('bad', `${i.host} ${F ? 'hors ligne' : 'down'}`) : word('ok', `${i.host} ${F ? 'en ligne' : 'up'}`));
+    const al = s.alerts.length;
+    if (al) { // the LED: lit only while something fires; it takes you there
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.append(Object.assign(document.createElement('span'), { className: 'led' }), F ? `${al} alerte${al > 1 ? 's' : ''}` : `${al} alert${al > 1 ? 's' : ''}`);
+      b.onclick = () => goAlert(s.alerts[0]);
+      parts.push(b);
+    }
+    facts.replaceChildren(...parts);
+    staleEl.hidden = world.stale == null;
+    if (world.stale != null) staleEl.textContent = `${F ? 'Figé depuis' : 'Stale since'} ${new Date(world.stale).toLocaleTimeString(F ? 'fr' : 'en', { hour: '2-digit', minute: '2-digit' })}`;
+    if (carded) fillCard();
+  }
+  function goAlert(al) {
+    const p = al.app && buildings.plots().find((x) => x.app === al.app);
+    if (p) { openCard(p); return flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5)); }
+    const host = al.host || buildings.plots().find((x) => x.role === 'watchtower')?.host || 'h1';
+    const c = islands.islands.find((i) => i.host === host).centre;
+    flyTo(view(new THREE.Vector3(c[0], 0, c[1]), 2 * world.town.radius + 1.5));
+  }
+  world.on('state', fillPanel); world.on('metrics', fillPanel); world.on('hello', fillPanel);
+  const toys = createToys({ THREE, kit, world, canvas, camera, lang });
+  scene.add(toys.aim);
+  fillPanel();
+
+  // ---- sky: the real sun over Paris → day, dusk, night
+  // Ukubi: the Office surface by day, the Underground surface at night (with the Glow theme: the wires light up)
+  const day = { bg: new THREE.Color(kit.ukubi.office.surface), hemi: low ? 1.1 : 1.6, sun: low ? 3.2 : 2.4 };
+  const dark = { bg: new THREE.Color(kit.ukubi.glow.surface), hemi: 0.85, sun: 0 };
+  const dusk = new THREE.Color(0xf2c9a0);
+  let night = 0, skyAt = 0, pinned = null;
+  function sky(ms) {
+    const s = sunAt(ms), el = s.elev;
+    night = kit.clamp01((4 - el) / 12); // +4° → day, −8° → night
+    const glow = kit.clamp01(1 - Math.abs(el - 1) / 7) * (1 - night * 0.6); // a warm band around sunset/sunrise
+    bg.copy(day.bg).lerp(dusk, glow * 0.55).lerp(dark.bg, night);
+    scene.fog.color.copy(bg);
+    hemi.intensity = THREE.MathUtils.lerp(day.hemi, dark.hemi, night);
+    sun.intensity = THREE.MathUtils.lerp(day.sun, 0.25, night);
+    sun.color.set(0xfff4e6).lerp(new THREE.Color(0xffb27a), glow);
+    moon.intensity = 0.9 * night;
+    // light from the sun's real direction (south = −z, so the day arc crosses the default view), never from below
+    const az = THREE.MathUtils.degToRad(s.az), e = THREE.MathUtils.degToRad(Math.max(el, 12));
+    sun.position.set(mid[0] - 60 * Math.cos(e) * Math.sin(az), 60 * Math.sin(e), mid[1] + 60 * Math.cos(e) * Math.cos(az));
+    sun.target.position.set(mid[0], 0, mid[1]);
+    moon.position.set(mid[0] + 30, 50, mid[1] + 40);
+    document.body.classList.toggle('glow', night > 0.5);
+  }
+
+  // ---- loop
+  let w = 0, h = 0, last = performance.now(), t = 0, drawn = 0;
+  const fps = low ? 30 : 60;
+  function resize() {
+    if (canvas.clientWidth === w && canvas.clientHeight === h) return;
+    w = canvas.clientWidth; h = canvas.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  resize();
+  { const v = overview(); camera.position.copy(v.pos); controls.target.copy(v.target); controls.update(); }
+  sky(pinned ?? clock());
+  document.getElementById('loader').hidden = true;
+  renderer.setAnimationLoop((nowMs) => {
+    if (nowMs - drawn < 1000 / fps - 2) return;
+    drawn = nowMs;
+    const dt = Math.min(0.1, (nowMs - last) / 1000); last = nowMs; t += dt;
+    resize();
+    if (nowMs - skyAt > 30000) { skyAt = nowMs; sky(pinned ?? clock()); }
+    if (fly) {
+      const f = Math.min(1, (nowMs - fly.t0) / fly.dur), k = kit.easeInOut(f);
+      camera.position.lerpVectors(fly.from, fly.to, k);
+      controls.target.lerpVectors(fly.fromT, fly.toT, k);
+      if (f >= 1) fly = null;
+    }
+    controls.update();
+    { const d = camera.position.distanceTo(controls.target); scene.fog.near = d + 25 + 200 * night; scene.fog.far = d + 110 + 400 * night; }
+    islands.update(); bridges.update(dt, night); marks.update(night);
+    buildings.update(dt, t, night);
+    people.update(t);
+    toys.tick();
+    world.step(dt);
+    labels.update(buildings.plots(), camera, w, h);
+    renderer.render(scene, camera);
+  });
+
+  if (dev) globalThis.__town = {
+    ready: true, world, scene, renderer, camera, controls, buildings,
+    inject: (f) => world.applyFrame(f),
+    sunAt: (iso) => { pinned = Date.parse(iso); skyAt = 0; sky(pinned); },
+    fly: (what) => {
+      const p = buildings.plots().find((x) => x.app === what);
+      if (p) { openCard(p); flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5), 0.01); return; }
+      const is = islands.islands.find((i) => i.host === what);
+      if (is) return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * world.town.radius + 1.5), 0.01);
+      closeCard(); flyTo({ ...overview(), home: true }, 0.01);
+    },
+    info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length }),
+  };
+}

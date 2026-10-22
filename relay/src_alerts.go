@@ -81,11 +81,6 @@ func (s *alertsSource) poll(ctx context.Context, out *Out, now time.Time) {
 		return
 	}
 	out.OK()
-	s.a.mu.Lock()
-	for fp, x := range cur {
-		s.a.names[fp] = x.Name // ponytail: never pruned; distinct alerts are few
-	}
-	s.a.mu.Unlock()
 	if s.stale {
 		out.Metrics(func(m *Metrics) { delete(m.Stale, "alerts") })
 		s.stale = false

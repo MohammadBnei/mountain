@@ -1,489 +1,164 @@
-// Kit: the only source of materials, colours, the light rig and procedural helpers (09-style).
-// ORCHESTRATOR-OWNED, style FROZEN; tokens + factories FROZEN W2 (FROZEN.sha256). Colours come from tokens.json (byte copy of plan/style/tokens.json,
-// a Go test keeps them equal); nothing here invents a colour. Every factory tags userData.kit.
-//
-// Exported interface (models use only these):
-//   token(name) → '#rrggbb' in the current phase ('name@dusk' = pinned dusk, semantic names allowed)
-//   color(name) → THREE.Color;  rampColor(ramp, t, out?) → THREE.Color;  RAMPS, FACET re-exported from layout
-//   lit(tokenOrRamp, opts?)  glow(token, intensity, {mesh}?)  line(token, intensity)  points(token, size)
-//   dome()  terrain({veins, closed}?)  crystal()  lava()  flow(token)  stamp()  cave(caves, heightAt)  field(glsl, uniforms)
-//   clipped(material) → material (adds the uClip discard)
-//   rock(seed)  puff(seed)  shard(seed)  setRampAt(mesh, i, t)  lavaHeat(material, v)  dispose(root)
-//   rig(renderer, scene) → {hemi, dir, moon, dome, floor (the sea), discs};  setPhase(elev, rising);  setKey(key);  setComposed(on) (post.js);  setStale(k)
-//   setSky(sun, moon) (W5: real light directions + discs, from world.sun / world.moon);  SEA (sea level, units)
-//   U (terrain uniforms; writers: setPhase → stops/uSnowLift/uEmber/uPoolK, setPool → uPool/uPoolCol/uHeat, setStale (sky) → uStale,
-//      setVeins → uVeins/uVeinN, main/socket → uSnowline, cut.js (from world.clip) → uClip; shimmer → uWobble, and the post haze
-//      uHaze (amplitude) + uMask (world x, y, z, radius; radius 0 = the frame's foot), which post.js projects to the screen);
-//      setPool(...)  setVeins(caps)
-//   footprintRT (512² RGBA8, sampled by terrain uFootprint: .r = trodden, snow × (1 − .5 r)), stampScene, stampCamera,
-//      drawStamps(renderer) (W4): footprints adds stamp() meshes to stampScene (instance colour r = weight, additive) and sets
-//      stampScene.userData.dirty; the host (main.js) calls drawStamps each frame, which redraws the RT only when dirty.
-//      stampCamera looks UP from below (up +z), so RT u = (x + 100) / 200, v = (z + 100) / 200: the terrain's lookup.
+// Clay kit for the town (R7), from pi-lab compose/www/js/kit.js: every material comes from here, tagged
+// userData.kit (the gate rejects anything else). Clay = the KayKit atlas repainted (models/clay.png, 8×4 cells).
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import T from './tokens.json' with { type: 'json' };
-import { patchTerrain, patchClip, patchCrystal, patchLava, domeVert, domeFrag, flowVert, flowFrag, CUT } from './shaders.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+const base = new URL('../', import.meta.url); // the page root (models/ lives there)
+
+// 'low' (weak phones): Lambert instead of PBR, no shadows. Set by main.js before anything is built.
 export const QUALITY = globalThis.__quality || 'high';
 const LOW = QUALITY === 'low';
-export const KEYS = ['night', 'dawn', 'day', 'dusk'];
-export const SEA = -16; // sea level (R6 island; the old valley haze floor's height): shaders darken wet rock just above it
-export const TOKENS = T;
-export const RAMPS = { ...T.ramps.semantic, ...T.ramps.env };
-const ENV_RAMP = new Set(Object.keys(T.ramps.env));
 
-// ---------- colour math (sRGB space, 8-bit rounding: the generator's rule) ----------
-const h2r = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
-const r2h = (c) => '#' + c.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('');
-export const mixHex = (a, b, t) => (t <= 0 ? a : t >= 1 ? b : r2h(h2r(a).map((v, i) => v + (h2r(b)[i] - v) * t)));
-
-// ---------- phase ----------
-let ph = { a: 'dusk', b: 'dusk', w: 0 };
-const rigAt = (k) => (ph.w <= 0 ? T[ph.a].rig[k] : T[ph.a].rig[k] + (T[ph.b].rig[k] - T[ph.a].rig[k]) * ph.w);
-
-export function token(name) {
-  const [n, pin] = name.split('@');
-  if (n in T.semantic) return T.semantic[n];
-  if (!(n in T.dusk)) throw new Error(`kit: unknown token ${name}`);
-  if (pin) return T[pin][n];
-  return mixHex(T[ph.a][n], T[ph.b][n], ph.w);
-}
-export const color = (name, out = new THREE.Color()) => out.set(token(name));
-const rigHex = (k) => mixHex(T[ph.a].rig[k], T[ph.b].rig[k], ph.w);
-const unit = (c) => c.multiplyScalar(1 / Math.max(c.r, c.g, c.b, 1e-6)); // rig colours at unit max channel
-
-export function rampColor(name, t, out = new THREE.Color()) {
-  const stops = RAMPS[name];
-  if (!stops) throw new Error(`kit: unknown ramp ${name}`);
-  const hex = ([s, v]) => (!ENV_RAMP.has(name) ? v : name === 'rock' && s === 0 ? mixHex(token('rock1'), token('emberRoot'), rigAt('ember')) : token(v));
-  t = Math.min(1, Math.max(0, t));
-  let i = 0;
-  while (i < stops.length - 2 && t > stops[i + 1][0]) i++;
-  const [a, b] = [stops[i], stops[i + 1]];
-  return out.set(mixHex(hex(a), hex(b), (t - a[0]) / (b[0] - a[0])));
-}
-
-// ---------- registry for setPhase ----------
-const tracked = new Set(); // materials with a kitToken (colour) or kitLift (emissive lift)
-const rampMeshes = new Set();
-const hooks = new Set(); // (internal) per-phase callbacks: cave mouths, dome, rig
-function tag(m, kind, extra = {}) {
-  m.userData.kit = kind;
-  Object.assign(m.userData, extra);
-  if (m.userData.kitToken || m.userData.kitLift) {
-    tracked.add(m);
-    m.addEventListener('dispose', () => tracked.delete(m));
-    paint(m);
-  }
-  return m;
-}
-function paint(m) {
-  const { kitToken: n, kitIntensity: k = 1, kitLift } = m.userData;
-  if (n) {
-    color(n, m.color);
-    if (k !== 1) m.color.multiplyScalar(k);
-  }
-  if (kitLift) m.emissive.copy(m.color).multiplyScalar(rigAt('snowLift') * kitLift);
-}
-
-// ---------- materials ----------
-function base(opts) {
+function tag(m) { m.userData.kit = true; return m; }
+function clayMat(color, extra = {}) {
   if (LOW) {
-    const { roughness, metalness, ...rest } = opts;
-    return new THREE.MeshLambertMaterial({ flatShading: true, fog: true, ...rest });
+    const { roughness, metalness, ...rest } = extra;
+    return tag(new THREE.MeshLambertMaterial({ color, ...rest }));
   }
-  return new THREE.MeshStandardMaterial({ flatShading: true, fog: true, roughness: 1, metalness: 0, ...opts });
+  return tag(new THREE.MeshStandardMaterial({ color, roughness: 0.9, metalness: 0, ...extra }));
 }
-const assertToken = (n, allowed) => {
-  token(n);
-  if (allowed && !allowed.includes(n.split('@')[0])) throw new Error(`kit: ${n} not allowed here (${allowed.join('|')})`);
+
+// Ukubi design system (claude.ai artifact "Ukubi"): the page is Office by day, Underground · Glow at night.
+export const ukubi = {
+  office: { surface: 0xf5eee2, sunken: 0xebe1d0 },
+  glow: { surface: 0x1c1814, sunken: 0x14110e },
+  // Wires: each system has its own cable colour, the same everywhere it appears (roofs, label dots, the card).
+  // Office values by day (muted, earthy), Glow values at night (lit).
+  wires: {
+    office: { agent: 0xa8643c, data: 0x3f7f7a, app: 0x9a7a28, network: 0x4f6a8c, storage: 0x7e5670, compute: 0x6a7a3a },
+    glow: { agent: 0xff7a2e, data: 0x1ff2dc, app: 0xffd83a, network: 0x3fa2ff, storage: 0xff5cc8, compute: 0xb4ff3c },
+  },
 };
-const FIXED = ['gold', 'magma', 'lavaHot', 'sunCore', 'sunMid', 'sunHalo', 'elmo', 'above', 'slopes', 'water', 'ink', ...Object.keys(T.semantic)];
 
-/** Lit surface: a token, or a ramp name (colours then come per instance via setRampAt). */
-export function lit(name, opts = {}) {
-  if (RAMPS[name]) return tag(base({ ...opts, color: 0xffffff }), 'lit', { kitRamp: name });
-  assertToken(name);
-  return tag(base(opts), 'lit', { kitToken: name });
-}
-
-let SPRITE;
-function sprite() { // round soft sprite, generated (no canvas, no loader)
-  if (SPRITE) return SPRITE;
-  const n = 64, d = new Uint8Array(n * n * 4);
-  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-    const r = Math.hypot(x - n / 2 + 0.5, y - n / 2 + 0.5) / (n / 2), a = r < 0.4 ? 1 - (r / 0.4) * 0.65 : Math.max(0, 0.35 * (1 - (r - 0.4) / 0.6));
-    d.set([255, 255, 255, Math.round(a * 255)], (y * n + x) * 4);
-  }
-  SPRITE = new THREE.DataTexture(d, n, n);
-  SPRITE.needsUpdate = true;
-  return SPRITE;
-}
-
-/** Additive glow, fog off. SpriteMaterial (kit sprite) by default, MeshBasicMaterial with {mesh:true}. */
-export function glow(name, intensity = 1, { mesh = false } = {}) {
-  assertToken(name, FIXED);
-  const o = { blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false };
-  const m = mesh ? new THREE.MeshBasicMaterial(o) : new THREE.SpriteMaterial({ ...o, map: sprite() });
-  return tag(m, 'glow', { kitToken: name, kitIntensity: intensity });
-}
-export function line(name, intensity = 1) {
-  assertToken(name, FIXED);
-  return tag(new THREE.LineBasicMaterial({ blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }), 'line', { kitToken: name, kitIntensity: intensity });
-}
-export function points(name, size = 1) {
-  assertToken(name);
-  return tag(new THREE.PointsMaterial({ size, map: sprite(), transparent: true, depthWrite: false, fog: true }), 'points', { kitToken: name });
-}
-
-// Terrain uniforms: one shared set for every terrain material.
-const VEINS_MAX = 64;
-const veinTex = new THREE.DataTexture(new Float32Array(VEINS_MAX * 3 * 4), VEINS_MAX, 3, THREE.RGBAFormat, THREE.FloatType);
-veinTex.needsUpdate = true;
-export const footprintRT = new THREE.WebGLRenderTarget(512, 512, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat, depthBuffer: false });
-export const stampScene = new THREE.Scene();
-export const stampCamera = new THREE.OrthographicCamera(-100, 100, 100, -100, 1, 2000);
-stampCamera.position.set(0, -1000, 0); stampCamera.up.set(0, 0, 1); stampCamera.lookAt(0, 0, 0); stampCamera.updateMatrixWorld();
-/** Redraw the footprint RT from stampScene when it is dirty (cleared first: the scene is the whole picture). */
-export function drawStamps(renderer) {
-  if (!stampScene.userData.dirty) return;
-  stampScene.userData.dirty = false;
-  const prev = renderer.getRenderTarget(), c = renderer.getClearColor(new THREE.Color()), a = renderer.getClearAlpha();
-  renderer.setRenderTarget(footprintRT); renderer.setClearColor(0x000000, 0); renderer.clear();
-  renderer.render(stampScene, stampCamera);
-  renderer.setRenderTarget(prev); renderer.setClearColor(c, a);
-}
-export const U = {
-  uClip: { value: new THREE.Vector4(0, 1, 0, 1e4) }, uSnowline: { value: 1e4 }, uHMax: { value: 60 },
-  uWobble: { value: 0 }, uHeat: { value: 0 }, uStale: { value: 0 }, uSnowLift: { value: 0 }, uEmber: { value: 1 }, uPoolK: { value: 1 },
-  uPool: { value: new THREE.Vector4(0, 66, 30, 9) }, uPoolCol: { value: new THREE.Color() },
-  uVeins: { value: veinTex }, uVeinN: { value: 0 }, uFootprint: { value: footprintRT.texture },
-  uRock0: { value: new THREE.Color() }, uRock1: { value: new THREE.Color() }, uEmberRoot: { value: new THREE.Color() },
-  uSnow: { value: new THREE.Color() }, uIce: { value: new THREE.Color() }, uTrail: { value: new THREE.Color() },
-  uGold: { value: color('gold') }, uVeinRef: { value: color('sunHalo') },
-  uCaves: { value: Array.from({ length: 5 }, () => new THREE.Vector4()) }, // cave() mouth centres (w = 1 live)
-  uHaze: { value: 0 }, uMask: { value: new THREE.Vector4() }, // post haze (not terrain): shimmer only (W3c; uHeat is magma's pool heat)
+export const colors = {
+  bg: ukubi.office.surface, night: ukubi.glow.surface,
+  grass: 0x9fb487, earth: 0x8f7663, stone: 0xb9b6b2, wood: 0x9c7f62,
+  offwhite: 0xefe9e1, raspberry: 0xc51a4a, slate: 0x6f767b, ink: 0x2c2219,
+  window: 0xffc27a, windowGlow: 0xd9862f, fire: 0xff8a2a,
 };
-color('magma', U.uPoolCol.value).multiplyScalar(0.6);
 
-/** Ember pool (09): centre (x, z), radii (rx, rz), heat. Writer: magma. Default (0, 66, 30, 9): the board's (0, 86)
- *  sits below the sea (then the haze floor) once the rim is softened (Freeze item 2), and at (0, 76) the foot is a steep drop with
- *  no flat ground under the mask (W1b carry, Freeze item 3), so it sits on the visible foot terrace. */
-export function setPool(x, z, rx, rz, heat) {
-  U.uPool.value.set(x, z, rx, rz);
-  if (heat !== undefined) U.uHeat.value = heat;
-}
-/** Veins: [{a:[x,y,z], b:[x,y,z], ra, rb, ref?}] in terrain object space (≤ 64). W3 veins adds the jittered fork expansion. */
-export function setVeins(caps) {
-  const d = veinTex.image.data;
-  d.fill(0);
-  caps.slice(0, VEINS_MAX).forEach((c, i) => {
-    d.set([...c.a, c.ra], i * 4);
-    d.set([...c.b, c.rb], (VEINS_MAX + i) * 4);
-    d[(2 * VEINS_MAX + i) * 4] = c.ref ? 1 : 0;
-  });
-  U.uVeinN.value = Math.min(caps.length, VEINS_MAX);
-  veinTex.needsUpdate = true;
-}
+export const palette = {
+  grass: clayMat(colors.grass), earth: clayMat(colors.earth), stone: clayMat(colors.stone), wood: clayMat(colors.wood),
+  offwhite: clayMat(colors.offwhite), raspberry: clayMat(colors.raspberry), slate: clayMat(colors.slate),
+  ink: clayMat(colors.ink),
+  smoke: clayMat(0xdedad4, { emissive: 0x5a5753, emissiveIntensity: 1, transparent: true, opacity: 0.85 }),
+  fire: clayMat(colors.fire, { emissive: colors.fire, emissiveIntensity: 1.6 }),
+  window: clayMat(colors.window, { emissive: colors.windowGlow, emissiveIntensity: 0 }),
+  white: clayMat(0xffffff), // per-instance colour (InstancedMesh.instanceColor) carries the hue
+};
 
-/** The mountain surface: lit + terrain patch. Geometry supplies `bench` (0..1). closed: DoubleSide (closed body, 01). */
-export function terrain({ veins = !LOW, closed = false } = {}) {
-  const m = base({ color: 0xffffff, ...(closed ? { side: THREE.DoubleSide } : {}) });
-  m.onBeforeCompile = (sh) => patchTerrain(sh, U, { veins });
-  m.customProgramCacheKey = () => `kit-terrain-${LOW}-${veins}-${CUT.key}`; // a new cut composition never reuses a stale program
-  return tag(m, 'terrain');
-}
-export function crystal() {
-  const m = base({ color: 0xffffff });
-  m.onBeforeCompile = patchCrystal;
-  m.customProgramCacheKey = () => `kit-crystal-${LOW}`;
-  return tag(m, 'crystal', { kitRamp: 'group' });
-}
-export function lava() {
-  const m = base({ color: 0xffffff });
-  m.userData.uniforms = { uLavaHeat: { value: 1 } };
-  m.onBeforeCompile = (sh) => { patchLava(sh, m.userData.uniforms); patchClip(sh, U); }; // eruption lava is clipped (01)
-  m.customProgramCacheKey = () => `kit-lava-${LOW}`;
-  return tag(m, 'lava', { kitRamp: 'lava' });
-}
-/** Lava emissive gain, capped at 1.6 (09). */
-export const lavaHeat = (m, v) => (m.userData.uniforms.uLavaHeat.value = Math.min(1.6, Math.max(0, v)));
-
-export function flow(name = 'water') {
-  assertToken(name, ['water', 'longhorn', 'local', 'unmeasuredWater', 'unmeasuredLocal']);
-  const m = new THREE.ShaderMaterial({
-    fog: true, transparent: true, depthWrite: false, vertexShader: flowVert, fragmentShader: flowFrag,
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uColor: { value: color(name) }, uTime: { value: 0 }, uOpacity: { value: name === 'local' ? 0.8 : 0.55 } }]),
-  });
-  return tag(m, 'flow', { kitToken: name });
-}
-/** Make a kit material honour uClip (a clipped model's non-terrain parts, 01 clipping list). */
-export function clipped(m) {
-  m.onBeforeCompile = (sh) => patchClip(sh, U);
-  m.customProgramCacheKey = () => `kit-clip-${m.type}`;
+/** A material whose emissive is multiplied by each instance's colour: roofs and rails that light up in their
+ *  wire colour at night (emissiveIntensity 0 by day). */
+export function glowing(name = 'white') {
+  const m = variant(name, { emissive: new THREE.Color(1, 1, 1), emissiveIntensity: 0 });
+  m.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n#if defined( USE_INSTANCING_COLOR ) || defined( USE_COLOR )\n totalEmissiveRadiance *= vColor.rgb;\n#endif');
+  };
+  m.customProgramCacheKey = () => 'kit-glowing';
   return m;
 }
-/** Footprint stamp (stampScene only): white × instance colour, summed (trails where many walk), both faces. */
-export const stamp = () => tag(new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide, fog: false }), 'stamp');
 
-/** Cut-face field provider (09 field(), cut.js composes it): glsl defines `vec4 <name>Field(vec3 p, vec4 base)`
- *  (p world, base/return = linear rgb + glow weight a). uniforms {name: token | value}: a token name becomes a colour
- *  uniform kept on the current phase; anything else (data textures, vectors, numbers) is wrapped as is. */
-export function field(glsl, uniforms = {}) {
-  const u = {};
-  for (const [k, v] of Object.entries(uniforms)) {
-    if (typeof v !== 'string') { u[k] = { value: v }; continue; }
-    const c = (u[k] = { value: color(v) }).value;
-    hooks.add(() => color(v, c)); // ponytail: never unregistered; providers live as long as the page
-  }
-  return { kit: 'field', glsl, uniforms: u };
-}
+const manager = new THREE.LoadingManager();
+manager.onProgress = (url, loaded, total) => globalThis.__loader?.models(loaded, total);
 
-/** Sky dome mesh + star field (one per scene). Uniforms written only by setPhase. */
-export function dome() {
-  const u = { uSky0: { value: new THREE.Color() }, uSky1: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uInk: { value: color('ink') }, uStars: { value: 0 }, uStale: U.uStale };
-  const m = tag(new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false, uniforms: u, vertexShader: domeVert, fragmentShader: domeFrag }), 'dome');
-  const paintDome = () => { color('sky0', u.uSky0.value); color('sky1', u.uSky1.value); color('horizon', u.uHorizon.value); u.uStars.value = rigAt('stars'); };
-  hooks.add(paintDome);
-  paintDome();
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), m);
-  mesh.userData.kitHook = paintDome;
-  mesh.renderOrder = -1;
-  return mesh;
+const clayTex = new THREE.TextureLoader(manager).load(new URL('models/clay.png', base).href);
+clayTex.colorSpace = THREE.SRGBColorSpace;
+clayTex.flipY = false; // glTF UV convention
+const sharedOpts = { map: clayTex };
+export const shared = LOW ? tag(new THREE.MeshLambertMaterial(sharedOpts)) : tag(new THREE.MeshStandardMaterial({ ...sharedOpts, roughness: 0.9, metalness: 0 }));
+
+/** A per-object copy of a palette material (or of `shared`) that may be animated without touching the others. */
+export function variant(name, extra = {}) {
+  const src = name === 'shared' ? shared : palette[name];
+  if (!src) throw new Error(`kit.variant: unknown material ${name}`);
+  const m = src.clone();
+  Object.assign(m, extra);
+  return tag(m);
 }
 
-// ---------- procedural helpers ----------
-export function mulberry(a) {
-  return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
-/** Icosahedron(1,1), seeded ±25 % vertex jitter, non-indexed (80 tris). */
-export function rock(seed = 1) {
-  const r = mulberry(seed), g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position, s = new Map();
-  for (let i = 0; i < p.count; i++) {
-    const k = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;
-    if (!s.has(k)) s.set(k, 0.75 + r() * 0.5);
-    p.setXYZ(i, p.getX(i) * s.get(k), p.getY(i) * s.get(k), p.getZ(i) * s.get(k));
-  }
-  g.computeVertexNormals();
-  return g;
-}
-/** 3–5 merged Icosahedron(r, 0) lumps, bottom flattened (≤ 100 tris). */
-export function puff(seed = 1) {
-  const r = mulberry(seed), n = 3 + Math.floor(r() * 3), parts = [];
-  for (let i = 0; i < n; i++) {
-    const s = 0.5 + r() * 0.6;
-    parts.push(new THREE.IcosahedronGeometry(s, 0).translate((r() - 0.5) * 1.6, r() * 0.4, (r() - 0.5) * 1.0));
-  }
-  const g = mergeGeometries(parts);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) if (p.getY(i) < 0) p.setY(i, 0);
-  g.computeVertexNormals();
-  return g;
-}
-/** Hex prism with a seeded off-centre tip (≤ 36 tris). */
-export function shard(seed = 1) {
-  const r = mulberry(seed), g = new THREE.CylinderGeometry(0.3, 0.21, 1, 6).toNonIndexed(), p = g.attributes.position;
-  const tx = (r() - 0.5) * 0.25, tz = (r() - 0.5) * 0.25, th = 0.3 + r() * 0.4;
-  for (let i = 0; i < p.count; i++) if (p.getY(i) > 0.49 && Math.abs(p.getX(i)) < 1e-6 && Math.abs(p.getZ(i)) < 1e-6) p.setXYZ(i, tx, 0.5 + th, tz);
-  g.computeVertexNormals();
-  return g;
+/** A line material (the aiming ring), kit-tagged. */
+export const lineMat = (color) => tag(new THREE.LineBasicMaterial({ color }));
+
+export function mesh(geometry, material, shadows = !LOW) {
+  const m = new THREE.Mesh(geometry, material);
+  m.castShadow = m.receiveShadow = shadows;
+  return m;
 }
 
-/** Instance colour from a ramp; env ramps are re-evaluated by setPhase. */
-export function setRampAt(mesh, i, t) {
-  const name = mesh.material.userData.kitRamp;
-  if (!name) throw new Error('kit.setRampAt: material has no ramp (use lit(ramp), crystal() or lava())');
-  (mesh.userData.kitRampT ||= [])[i] = t;
-  mesh.setColorAt(i, rampColor(name, t));
-  mesh.instanceColor.needsUpdate = true;
-  if (ENV_RAMP.has(name) && !rampMeshes.has(mesh)) rampMeshes.add(mesh);
+export function instanced(geometry, material, count, shadows = !LOW) {
+  const m = new THREE.InstancedMesh(geometry, material, Math.max(1, count));
+  m.castShadow = m.receiveShadow = shadows;
+  m.count = 0;
+  return m;
 }
 
-/**
- * Cave mouths at Go `caves[]` (09 cave()): 4 InstancedMeshes (mouth, brow, jambs, threshold rocks).
- * heightAt(x, z) → world y of heightSolid. Dusk legibility (09 Freeze item 1): the brow/jamb rocks get a
- * snowLift-style emissive lift (colour × rig.snowLift), so the dark mouth reads by contrast; no new light. The terrain
- * patch lifts the rock around each mouth the same way (U.uCaves, ≤ 5 = Go's max caves).
- */
-export function cave(caves, heightAt) {
-  const g = new THREE.Group(), n = caves.length, W = 2.6, e = 0.5;
-  const mouthG = new THREE.CircleGeometry(1, 13), mp = mouthG.attributes.position, rad = [];
-  for (let i = 0; i < mp.count; i++) {
-    const a = Math.atan2(mp.getY(i), mp.getX(i)), rr = Math.hypot(mp.getX(i), mp.getY(i)), j = rr > 0 ? 0.78 + ((Math.sin(a * 5.3) + 1) / 2) * 0.44 : 1;
-    mp.setXYZ(i, mp.getX(i) * j * 3.6, Math.max(-0.55, mp.getY(i) * j) * 2.6, 0);
-    rad.push(Math.pow(rr, 4) * 0.8);
-  }
-  mouthG.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(mp.count * 3), 3));
-  const paintMouth = () => {
-    const c = mouthG.attributes.color, d = color('deep'), r1 = color('rock1'), t = new THREE.Color();
-    rad.forEach((w, i) => c.setXYZ(i, ...t.lerpColors(d, r1, w).toArray()));
-    c.needsUpdate = true;
-  };
-  hooks.add(paintMouth);
-  paintMouth();
-  const mouthM = tag(new THREE.MeshBasicMaterial({ vertexColors: true, fog: true, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }), 'cave');
-  const rockG = rock(3), browM = lit('rock0'), jambM = lit('stone'), looseM = lit('rock0');
-  browM.userData.kitLift = jambM.userData.kitLift = 1;
-  tracked.add(browM); tracked.add(jambM); paint(browM); paint(jambM);
-  [mouthM, browM, jambM, looseM].forEach(clipped); // the caves belong to the clipped mountain
-  const mouth = new THREE.InstancedMesh(mouthG, mouthM, n), brow = new THREE.InstancedMesh(rockG, browM, n);
-  const jamb = new THREE.InstancedMesh(rockG, jambM, n * 3), loose = new THREE.InstancedMesh(rockG, looseM, n * 3);
-  const F = new THREE.Object3D(), L = new THREE.Object3D(), M = new THREE.Matrix4();
-  const put = (im, k, pos, scale, rot) => { L.position.set(...pos); L.scale.set(...scale); L.rotation.set(...rot); L.updateMatrix(); im.setMatrixAt(k, M.multiplyMatrices(F.matrix, L.matrix)); };
-  U.uCaves.value.forEach((v) => v.set(0, 0, 0, 0));
-  caves.forEach((c, i) => {
-    const r = mulberry(c.seed), out = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), tan = new THREE.Vector3(out.z, 0, -out.x), ym = c.y + 2.4;
-    let dd = W;
-    while (dd < W + 10 && heightAt(c.x - out.x * dd, c.z - out.z * dd) < ym) dd += 0.1;
-    const P = new THREE.Vector3(c.x - out.x * dd, ym, c.z - out.z * dd);
-    const nrm = new THREE.Vector3(heightAt(P.x - e, P.z) - heightAt(P.x + e, P.z), 2 * e, heightAt(P.x, P.z - e) - heightAt(P.x, P.z + e)).normalize().lerp(out, 0.5).normalize();
-    F.position.copy(P).addScaledVector(nrm, 0.35);
-    U.uCaves.value[i]?.set(P.x, P.y, P.z, 1);
-    F.lookAt(F.position.clone().add(nrm));
-    F.updateMatrix();
-    put(mouth, i, [0, 0, 0], [1, 1, 1], [0, 0, 0]);
-    put(brow, i, [(r() - 0.5) * 0.8, 2.5, 0.5], [3.6, 0.9, 1.3], [0.2, 0, (r() - 0.5) * 0.25]);
-    [[-3.5, 0.2, 0.9 + r() * 0.4], [3.3 + r() * 0.4, -0.1, 0.6 + r() * 0.3], [-2.8, 1.6, 0.5 + r() * 0.3]].forEach(([x, y, k], j) => put(jamb, i * 3 + j, [x, y, 0.2], [k, k * 1.3, k * 0.8], [r() * 3, r() * 3, r() * 3]));
-    for (let j = 0; j < 3; j++) {
-      const k = 0.3 + r() * 0.4, q = P.clone().addScaledVector(out, 1.2 + r() * 1.5).addScaledVector(tan, (r() - 0.5) * 6);
-      L.position.set(q.x, heightAt(q.x, q.z) + k * 0.3, q.z); L.scale.set(k, k * 0.7, k); L.rotation.set(r() * 3, r() * 3, r() * 3); L.updateMatrix();
-      loose.setMatrixAt(i * 3 + j, L.matrix);
+const loader = new GLTFLoader(manager);
+const cache = new Map();
+/** models/<name>.glb as one plain non-indexed float geometry in model space (node transforms baked, int16 de-quantized). */
+export async function geometry(name) {
+  if (!cache.has(name)) cache.set(name, loader.loadAsync(new URL(`models/${name}.glb`, base).href).then((gltf) => {
+    const parts = [];
+    gltf.scene.updateMatrixWorld(true);
+    gltf.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const src = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, g = new THREE.BufferGeometry();
+      for (const a of ['position', 'normal', 'uv']) {
+        const at = src.attributes[a], arr = new Float32Array(at.count * at.itemSize);
+        for (let i = 0; i < at.count; i++) for (let c = 0; c < at.itemSize; c++) arr[i * at.itemSize + c] = at.getComponent(i, c);
+        g.setAttribute(a, new THREE.BufferAttribute(arr, at.itemSize));
+      }
+      parts.push(g.applyMatrix4(o.matrixWorld));
+    });
+    return parts;
+  }));
+  const parts = await cache.get(name);
+  return parts.map((g) => g.clone());
+}
+
+// clay.png is an 8×4 grid of colour cells: [col, row] (row 0 at the top, glTF v).
+export const CELL = { sage: [4, 1], tan: [3, 1], olive: [0, 2], teal: [1, 2], cream: [5, 2], stone: [2, 0], dark: [4, 0] };
+const cellOf = (u, v) => [Math.floor(u * 8), Math.floor(v * 4)];
+
+/** Move each triangle's UVs from one atlas cell to another (pick(normalY) → target cell or null to keep). */
+export function recell(g, from, pick, vScale = 1, vShift = 0) {
+  const uv = g.attributes.uv, n = g.attributes.normal;
+  for (let i = 0; i < uv.count; i += 3) {
+    const [cu, cv] = cellOf((uv.getX(i) + uv.getX(i + 1) + uv.getX(i + 2)) / 3, (uv.getY(i) + uv.getY(i + 1) + uv.getY(i + 2)) / 3);
+    if (cu !== from[0] || cv !== from[1]) continue;
+    const to = pick((n.getY(i) + n.getY(i + 1) + n.getY(i + 2)) / 3);
+    if (!to) continue;
+    for (let j = i; j < i + 3; j++) {
+      const fv = uv.getY(j) * 4 - cv;
+      uv.setXY(j, uv.getX(j) - from[0] / 8 + to[0] / 8, (to[1] + vShift + fv * vScale) / 4);
     }
-  });
-  mouth.userData.facet = 'exempt';
-  for (const m of [brow, jamb, loose]) m.userData.facet = 'cave';
-  g.add(mouth, brow, jamb, loose);
-  g.userData.kitHook = paintMouth;
+  }
   return g;
 }
 
-/** Unregister and free everything under root (geometries, materials, kit phase hooks, ramp meshes),
- *  e.g. old caves before cave() runs again on a resync hello. Textures (kit sprite) are kept. */
-export function dispose(root) {
-  root.traverse((o) => {
-    hooks.delete(o.userData.kitHook);
-    rampMeshes.delete(o);
-    o.geometry?.dispose();
-    for (const m of [o.material].flat()) m?.dispose(); // dispose event drops it from `tracked`
-  });
-}
-
-// ---------- rig ----------
-// Lights (W5, R6: "real sun light, and real moon light + an ambient light"): the directional sun and moon come FROM the
-// real bodies (setSky), each with its disc on the same vector; the hemisphere is the ambient floor. Until the first
-// setSky (gate, styleboard, sandbox) the sun is the board's per-key direction (SUN: [azimuth°, elevation°], camera on +z)
-// and no disc shows.
-const SUN = { night: [-35, 35], dawn: [-60, 8], day: [20, 50], dusk: [55, 6] };
-const sunDir = (k) => { const [az, el] = SUN[k].map((d) => (d * Math.PI) / 180); return new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el) * 0.4 + 0.6).normalize(); };
-// Compass → world: south is −z (the finale camera on +z looks south, so the day arc crosses its view), west is +x.
-const toWorld = (az, el, out) => { const a = az * Math.PI / 180, e = el * Math.PI / 180; return out.set(-Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)); };
-const above = (el) => Math.min(1, Math.max(0, (el + 1) / 5)); // fades in over the first degrees above the horizon
-const DISC = 800, SUN_D = 56, MOON_D = 34, MOON_I = 1.6; // disc distance and sizes (m, ~4° / 2.4°: legible, not real); full-moon light
-let SKY = null; // {sun, moon} from setSky
-let RIG = null;
-
-/** Pins tone mapping, exposure, fog, hemisphere + sun and moon directionals with their discs, dome, the sea. No shadows. */
-export function rig(renderer, scene) {
-  renderer.toneMapping = THREE.LinearToneMapping;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = false;
-  scene.fog = new THREE.FogExp2(0x000000, 0.0035);
-  const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1), dir = new THREE.DirectionalLight(0xffffff, 1), moon = new THREE.DirectionalLight(0xffffff, 0);
-  // the sea (R6 island): the land dives under it at the rim (r ≈ 84–88). iceDeep lifted 20 % toward ice (night: still
-  // reads as water, not a hole) around the island, turning to the horizon
-  // colour by r 400, so the far sea already is the horizon where it meets the sky (styleboard haze seam: a camera-distance
-  // fog alone leaves a few-pixel band). Out to r 1700, past the dome.
-  const seaG = new THREE.RingGeometry(0, 1700, 48, 12).rotateX(-Math.PI / 2).translate(0, SEA, 0), sp = seaG.attributes.position;
-  seaG.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(sp.count * 3), 3));
-  const paintSea = () => {
-    const c = seaG.attributes.color, a = color('iceDeep').lerp(color('ice'), 0.2), b = color('horizon'), t = new THREE.Color();
-    for (let i = 0; i < sp.count; i++) { const r = Math.hypot(sp.getX(i), sp.getZ(i)), k = Math.min(1, Math.max(0, (r - 120) / 280)); c.setXYZ(i, ...t.lerpColors(a, b, k * k * (3 - 2 * k)).toArray()); }
-    c.needsUpdate = true;
+/** Split a non-indexed geometry into [rest, picked] by a triangle test on its mean UV (u, v). */
+export function splitByUV(g, test) {
+  const uv = g.attributes.uv, keep = [], pick = [];
+  for (let i = 0; i < uv.count; i += 3) {
+    const u = (uv.getX(i) + uv.getX(i + 1) + uv.getX(i + 2)) / 3, v = (uv.getY(i) + uv.getY(i + 1) + uv.getY(i + 2)) / 3;
+    (test(u, v) ? pick : keep).push(i);
+  }
+  const take = (tris) => {
+    const out = new THREE.BufferGeometry();
+    for (const a of ['position', 'normal', 'uv']) {
+      const src = g.attributes[a], s = src.itemSize, arr = new Float32Array(tris.length * 3 * s);
+      tris.forEach((i, n) => arr.set(src.array.subarray(i * s, (i + 3) * s), n * 3 * s));
+      out.setAttribute(a, new THREE.BufferAttribute(arr, s));
+    }
+    return out;
   };
-  hooks.add(paintSea);
-  paintSea();
-  const floor = new THREE.Mesh(seaG, tag(new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), 'sea'));
-  floor.userData.kitHook = paintSea;
-  const sunD = new THREE.Sprite(glow('sunCore', 1.2)), halo = new THREE.Sprite(glow('sunMid', 0.5)), moonD = new THREE.Sprite(glow('ink', 0.9));
-  sunD.scale.setScalar(SUN_D); halo.scale.setScalar(SUN_D * 3); moonD.scale.setScalar(MOON_D);
-  for (const x of [sunD, halo, moonD]) Object.assign(x, { visible: false, renderOrder: -0.9 });
-  const sky = dome();
-  scene.add(hemi, dir, dir.target, moon, moon.target, floor, sky, sunD, halo, moonD);
-  const prev = renderer.getRenderTarget();
-  renderer.setRenderTarget(footprintRT); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.setRenderTarget(prev);
-  RIG = { renderer, scene, hemi, dir, moon, floor, dome: sky, discs: { sun: sunD, halo, moon: moonD } };
-  apply();
-  return RIG;
+  return [take(keep), take(pick)];
 }
 
-let lastW = { a: null, b: null, w: -1 };
-function apply() {
-  for (const m of tracked) paint(m);
-  for (const f of hooks) f();
-  color('rock0', U.uRock0.value); color('rock1', U.uRock1.value); color('emberRoot', U.uEmberRoot.value);
-  color('snow', U.uSnow.value); color('ice', U.uIce.value); color('trail', U.uTrail.value);
-  U.uSnowLift.value = rigAt('snowLift');
-  U.uEmber.value = rigAt('ember');
-  U.uPoolK.value = rigAt('pool');
-  if (lastW.a !== ph.a || lastW.b !== ph.b || Math.abs(lastW.w - ph.w) >= 0.01) {
-    lastW = { ...ph };
-    for (const m of rampMeshes) m.userData.kitRampT.forEach((t, i) => t !== undefined && m.setColorAt(i, rampColor(m.material.userData.kitRamp, t)));
-    for (const m of rampMeshes) m.instanceColor.needsUpdate = true;
-  }
-  if (!RIG) return;
-  const { renderer, scene, hemi, dir } = RIG;
-  renderer.toneMappingExposure = rigAt('exposure');
-  // direct path: fog mixes after tone mapping, so pre-expose it to match the exposed floor and dome (day 1.25);
-  // composer path (post.js): fog mixes in the linear target before OutputPass exposes everything
-  scene.fog.color.set(rigHex('fog')).multiplyScalar(RIG.composed ? 1 : renderer.toneMappingExposure);
-  scene.fog.density = rigAt('fogD');
-  unit(hemi.color.set(rigHex('hemiSky')));
-  unit(hemi.groundColor.set(rigHex('hemiGround')));
-  hemi.intensity = rigAt('hemiI');
-  unit(dir.color.set(rigHex('dir')));
-  lights();
-}
-/** Light directions + intensities and the discs (setSky alone redoes only this). */
-function lights() {
-  if (!RIG) return;
-  const { dir, moon, discs: D } = RIG;
-  if (!SKY) {
-    dir.intensity = rigAt('dirI');
-    dir.position.copy(sunDir(ph.a).lerp(sunDir(ph.b), ph.w).normalize().multiplyScalar(100));
-    moon.intensity = 0;
-    return;
-  }
-  const { sun: s, moon: m } = SKY;
-  dir.intensity = rigAt('dirI') * above(s.elev);
-  toWorld(s.az, s.elev, dir.position);
-  D.sun.position.copy(dir.position).multiplyScalar(DISC); D.halo.position.copy(D.sun.position);
-  D.sun.visible = D.halo.visible = s.elev > -1;
-  dir.position.multiplyScalar(100);
-  unit(color('ice', moon.color));
-  moon.intensity = m ? MOON_I * m.frac * above(m.elev) : 0;
-  D.moon.visible = !!m && m.elev > -1;
-  if (m) { toWorld(m.az, m.elev, moon.position); D.moon.position.copy(moon.position).multiplyScalar(DISC); moon.position.multiplyScalar(100); }
-}
+// The KayKit roof cells (pi-lab office.js muteRoof): the team-colour blue, repainted slate in clay.png.
+export const inRoof = (u, v) => (u > 0.125 && u < 0.25 && v > 0.25 && v < 0.5) || (u < 0.125 && v > 0.75);
 
-/** Key blend for a sun elevation (09 "Phase"). */
-export function keyMix(elev, rising) {
-  const tw = rising ? 'dawn' : 'dusk';
-  if (elev <= -12) return { a: 'night', b: 'night', w: 0 };
-  if (elev < -4) return { a: 'night', b: tw, w: (elev + 12) / 8 };
-  if (elev <= 6) return { a: tw, b: tw, w: 0 };
-  if (elev < 15) return { a: tw, b: 'day', w: (elev - 6) / 9 };
-  return { a: 'day', b: 'day', w: 0 };
-}
-/** Lerp every kit colour, ramp, terrain stop, fog and the rig to the sun elevation. Writer: sky via world.rig. */
-export function setPhase(elev, rising) { ph = keyMix(elev, rising); apply(); }
-/** Exact key (gate / styleboard). */
-export function setKey(k) { if (!KEYS.includes(k)) throw new Error(`kit: unknown key ${k}`); ph = { a: k, b: k, w: 0 }; apply(); }
-export const phase = () => ({ ...ph });
-/** Stale dimming 0..1 (sky eases it toward world.stale ? 1 : 0): terrain desaturates, the dome and its stars dim. Writer: sky. */
-export const setStale = (k) => (U.uStale.value = Math.min(1, Math.max(0, k)));
-/** The real sun {elev, az} and moon {elev, az, frac} (js/sun.js; the host passes world.sun / world.moon once a second):
- *  light directions, intensities and discs. Colours stay per key (setPhase). */
-export function setSky(sun, moon) { if (!sun) return; SKY = { sun, moon }; lights(); }
-/** post.js: the composer renders this rig (fog colour not pre-exposed). */
-export function setComposed(on) { RIG.composed = on; apply(); }
-apply();
+// --- small helpers ---
+export const clamp01 = (x) => Math.min(1, Math.max(0, x));
+export const easeInOut = (x) => x * x * (3 - 2 * x);
+export function easeOutBack(x, s = 1.70158) { const c3 = s + 1; return 1 + c3 * Math.pow(x - 1, 3) + s * Math.pow(x - 1, 2); }
