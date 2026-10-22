@@ -91,7 +91,7 @@ async function start() {
   // ---- camera: overview of the three islands, or one island / building up close
   const centres = islands.islands.map((i) => i.centre);
   const mid = centres.reduce((a, c) => [a[0] + c[0] / 3, a[1] + c[1] / 3], [0, 0]);
-  const span = 0.85 * (Math.max(...centres.map((c) => Math.hypot(c[0] - mid[0], c[1] - mid[1]))) + 2 * world.town.radius);
+  const span = 0.85 * Math.max(...islands.islands.map((i) => Math.hypot(i.centre[0] - mid[0], i.centre[1] - mid[1]) + 2 * i.radius));
   let fly = null;
   function view(target, radius) {
     // distance so a sphere of `radius` fits the narrower screen axis, seen from the front-high angle
@@ -137,8 +137,8 @@ async function start() {
     const hi = r.intersectObjects(islands.pickables, false)[0];
     if (hi) {
       closeCard();
-      const c = islands.islands.find((i) => i.host === hi.object.userData.pick.host).centre;
-      return flyTo(view(new THREE.Vector3(c[0], 0, c[1]), 2 * world.town.radius + 1.5));
+      const is = islands.islands.find((i) => i.host === hi.object.userData.pick.host);
+      return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5));
     }
     closeCard();
     flyTo({ ...overview(), home: true });
@@ -199,8 +199,8 @@ async function start() {
     const p = al.app && buildings.plots().find((x) => x.app === al.app);
     if (p) { openCard(p); return flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5)); }
     const host = al.host || buildings.plots().find((x) => x.role === 'watchtower')?.host || 'h1';
-    const c = islands.islands.find((i) => i.host === host).centre;
-    flyTo(view(new THREE.Vector3(c[0], 0, c[1]), 2 * world.town.radius + 1.5));
+    const is = islands.islands.find((i) => i.host === host);
+    flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5));
   }
   world.on('state', fillPanel); world.on('metrics', fillPanel); world.on('hello', fillPanel);
   const toys = createToys({ THREE, kit, world, canvas, camera, lang });
@@ -275,7 +275,7 @@ async function start() {
       const p = buildings.plots().find((x) => x.app === what);
       if (p) { openCard(p); flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5), 0.01); return; }
       const is = islands.islands.find((i) => i.host === what);
-      if (is) return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * world.town.radius + 1.5), 0.01);
+      if (is) return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5), 0.01);
       closeCard(); flyTo({ ...overview(), home: true }, 0.01);
     },
     info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length }),

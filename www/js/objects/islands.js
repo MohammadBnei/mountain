@@ -29,13 +29,15 @@ export default async function build({ THREE, kit, world }) {
     }
     const [cx, cz] = is.centre;
     parts.push(well.clone().applyMatrix4(xf(cx, 0, cz, 0, 1.6)));
-    // earth cone under the tiles, lumpy and faceted, darker toward the tip (pi-lab island.js, scaled to radius 4)
-    const top = -0.9, R = 2 * world.town.radius - 0.2; // inside the tiles' outline, so no rim pokes out
-    const prof = [[0.4, -7.5], [0.3 * R, -6.4], [0.55 * R, -4.6], [0.8 * R, -2.6], [R, -0.9]].map(([r, y]) => new THREE.Vector2(r, y));
+    // earth cone under the tiles, lumpy and faceted, darker toward the tip (pi-lab island.js at radius 4; R8: an island's
+    // radius follows its host's power, and the cone's depth follows the radius)
+    const top = -0.9, R = 2 * is.radius - 0.2, k = is.radius / 4; // inside the tiles' outline, so no rim pokes out
+    const tip = -7.5 * k;
+    const prof = [[0.4, tip], [0.3 * R, -6.4 * k], [0.55 * R, -4.6 * k], [0.8 * R, -2.6 * k], [R, -0.9]].map(([r, y]) => new THREE.Vector2(r, y));
     const cone = new THREE.LatheGeometry(prof, 14).toNonIndexed();
     const cp = cone.attributes.position, cuv = cone.attributes.uv, seed = is.host.charCodeAt(1);
     for (let i = 0; i < cp.count; i++) {
-      const x = cp.getX(i), y = cp.getY(i), z = cp.getZ(i), d = (top - y) / (top + 7.5);
+      const x = cp.getX(i), y = cp.getY(i), z = cp.getZ(i), d = (top - y) / (top - tip);
       const a = Math.atan2(z, x), f = 1 + (0.1 * Math.sin(a * 3 + seed) + 0.07 * Math.sin(a * 7 + d * 4 + seed)) * d;
       cp.setXYZ(i, cx + x * f, y, cz + z * f);
       cuv.setXY(i, (CELL.tan[0] + 0.5) / 8, (CELL.tan[1] + 0.05 + 0.9 * d) / 4);

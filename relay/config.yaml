@@ -6,19 +6,21 @@
 # public wire only as the "other" aggregate, with no site and no name.
 
 # Public app allowlist (registry.yaml, 2026-10-14). group: platform|user|service; building: a town kind
-# (relay/town Kinds), the building the app's plot carries.
+# (relay/town Kinds), the building the app's plot carries. R8 typology: the kind's family (relay/town families) says
+# where it stands: Shops (user apps with public traffic) on the street front, Houses for small apps, Public near the
+# square, Defense at the town's edge, Industry in the outskirts.
 # Deliberately absent: agent-fleet-core (fleet, excluded by plan), has-journal
 # (forwardAuth-gated, internal data), wird-adminweb (platform-admins only),
 # hq (private dashboard).
 apps:
-  mountain:        { group: platform, display: mountain, building: castle }
-  editable-blog:   { group: user, display: blog, building: house }
+  mountain:        { group: platform, display: mountain, building: playhouse }
+  editable-blog:   { group: user, display: blog, building: bookshop }
   dream-analyst:   { group: user, display: dreamer, building: tavern }
-  vos-monolith:    { group: user, display: vos, building: market }
+  vos-monolith:    { group: user, display: vos, building: alehouse }
   vos-monolith-dev: { group: user, display: vos dev, building: home }
   wedding-2026:    { group: user, display: wedding, building: church }
-  ukubi-stt:       { group: platform, display: stt, building: tower }
-  wird:            { group: user, display: wird, building: house }
+  ukubi-stt:       { group: platform, display: stt, building: home }
+  wird:            { group: user, display: wird, building: inn }
   # Platform services (R7, user decision "full services"): public under a generic ROLE key only, never the
   # product name (a sanitize test greps every frame for the names). They flow like apps: syncs, health, churn,
   # Traefik traffic, pools, and a building on the host their pods run on. Amends ADR-0056 (plan/adr-0056-amendment.md).

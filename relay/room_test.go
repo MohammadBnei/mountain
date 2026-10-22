@@ -23,7 +23,7 @@ func TestPlantRoom(t *testing.T) {
 		return ackOf(t, a.place(visitor(fmt.Sprint("s", n), "ana"), "r", "plant", map[string]any{"h": 1.0, "q": float64(x.Q), "r": float64(x.R)}, false, time.Now()))
 	}
 	var hexes []town.Hex
-	for _, x := range town.Hexes {
+	for _, x := range town.Hexes("h1") {
 		if town.Plantable("h1", x) {
 			hexes = append(hexes, x)
 		}

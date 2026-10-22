@@ -57,7 +57,8 @@ export default async function build({ THREE, kit, world }) {
     for (const { p, n, bad } of list) {
       const is = t.islands.find((i) => i.host === p.host);
       is.tilesList ||= [];
-      if (!is.tilesList.length) for (let r = -t.radius; r <= t.radius; r++) for (let q = Math.max(-t.radius, -r - t.radius); q <= Math.min(t.radius, -r + t.radius); q++) is.tilesList.push([q, r]);
+      const R = is.radius;
+      if (!is.tilesList.length) for (let r = -R; r <= R; r++) for (let q = Math.max(-R, -r - R); q <= Math.min(R, -r + R); q++) is.tilesList.push([q, r]);
       const heads = t.bridges.flatMap((b) => (b.a === p.host ? [[b.aq, b.ar]] : b.b === p.host ? [[b.bq, b.br]] : []));
       const inner = path(is, s.plots, p);
       const count = Math.max(1, Math.round(n * k));

@@ -114,7 +114,7 @@ const (
 	fToy           // a registered toy name (validators.go RegisterToy)
 	fPose          // a toy's sanitised pose: ≤ 16 keys [a-z][A-Za-z0-9]{0,15} -> finite number | bool | ≤ 16 finite numbers (no text)
 	fHandle        // a moderated handle (handle(), validators.go) or "a visitor"
-	fHexC          // int in [-town.Radius, town.Radius]: a local hex coordinate
+	fHexC          // int in [-town.MaxRadius, town.MaxRadius]: a local hex coordinate
 	fKind          // a town building kind (town.Kinds)
 )
 
@@ -241,7 +241,7 @@ func (c *Config) valid(typ int, v any) bool {
 		return ok && (s == anonHandle || handle(s) == s)
 	case fHexC:
 		n, ok := v.(int)
-		return ok && n >= -town.Radius && n <= town.Radius
+		return ok && n >= -town.MaxRadius && n <= town.MaxRadius
 	case fKind:
 		s, ok := v.(string)
 		return ok && slices.Contains(town.Kinds, s)

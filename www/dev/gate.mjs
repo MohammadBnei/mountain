@@ -108,7 +108,7 @@ try {
       const name0 = mover && await tapAt(mover);
       if (!name0) fail(`tap: the card of ${mover} did not open`);
       await page.evalJSON(`(() => { // move it to a free grass hex on h3, as a world:plot from the relay would
-        const w = __town.world, is = w.town.islands.find((i) => i.host === 'h3'), R = w.town.radius, p = w.state.plots.find((x) => x.app === ${JSON.stringify(mover)});
+        const w = __town.world, is = w.town.islands.find((i) => i.host === 'h3'), R = is.radius, p = w.state.plots.find((x) => x.app === ${JSON.stringify(mover)});
         let idx = 0, hex = null;
         for (let r = -R; r <= R; r++) for (let q = Math.max(-R, -r - R); q <= Math.min(R, -r + R); q++, idx++)
           if (!hex && is.tiles[idx] === 'g' && !w.state.plots.some((x) => x.host === 'h3' && x.q === q && x.r === r) && !w.state.marks.some((m) => m.pose.h === 3 && m.pose.q === q && m.pose.r === r)) hex = { q, r };

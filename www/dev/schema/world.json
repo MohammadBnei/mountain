@@ -133,28 +133,12 @@
   },
   "hexc": {
    "type": "integer",
-   "minimum": -4,
-   "maximum": 4
+   "minimum": -7,
+   "maximum": 7
   },
   "role": {
-   "description": "town building kind (relay/town Kinds)",
-   "enum": [
-    "home",
-    "house",
-    "market",
-    "tavern",
-    "tower",
-    "church",
-    "castle",
-    "gate",
-    "guardhouse",
-    "craneyard",
-    "watchtower",
-    "warehouse",
-    "vault",
-    "granary",
-    "depot"
-   ]
+   "description": "R8: town building kind (relay/town Kinds; its family decides where it stands)",
+   "enum": ["alehouse", "archive", "bookshop", "castle", "cellar", "church", "craneyard", "depot", "forge", "gate", "granary", "guardhouse", "hall", "home", "house", "inn", "keep", "market", "mill", "playhouse", "tavern", "tower", "vault", "warehouse", "watchtower", "witness"]
   },
   "plot": {
    "description": "R7 town plot: an app's building on the island of the host its pods run on (relay plots.go). ruinAt: app.gone time (unix ms), the building is ruins.",

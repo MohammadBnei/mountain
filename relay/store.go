@@ -394,10 +394,11 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 	st := r.state
 	since := fold(&st, r.frames)
 	st.Marks = slices.DeleteFunc(st.Marks, func(m Mark) bool { return mountainToys[m.Mark] }) // R7: their toys are gone
-	// an app dropped from config.yaml: its plot could never be freed (its frames fail sanitize)
+	// an app dropped from config.yaml: its plot could never be freed (its frames fail sanitize). R8: a plot whose
+	// building kind changed in config.yaml goes too, and the first poll places the new kind where its family belongs.
 	st.Plots = slices.DeleteFunc(st.Plots, func(p Plot) bool {
 		_, ok := a.Cfg.Apps[p.App]
-		return !ok
+		return !ok || p.Role != a.Cfg.roleOf(p.App)
 	})
 	ids := make([]string, len(st.Marks))
 	for i, m := range st.Marks {

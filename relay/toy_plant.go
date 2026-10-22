@@ -70,7 +70,7 @@ func islandFull(host string, plots []Plot, plants map[town.Hex]Mark) bool {
 			built[pl.hex()] = true
 		}
 	}
-	for _, x := range town.Hexes {
+	for _, x := range town.Hexes(host) {
 		if _, planted := plants[x]; town.Plantable(host, x) && !built[x] && !planted {
 			return false
 		}

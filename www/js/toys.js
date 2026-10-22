@@ -58,13 +58,13 @@ export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
     const p = new THREE.Vector3();
     if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p)) return null;
     const [Q, R] = worldToHex(p.x, p.z);
-    const i = world.town.islands.findIndex((is) => ring(Q - is.q, R - is.r) <= world.town.radius);
+    const i = world.town.islands.findIndex((is) => ring(Q - is.q, R - is.r) <= is.radius);
     if (i < 0) return null;
     const is = world.town.islands[i];
     return { h: i + 1, host: is.host, q: Q - is.q, r: R - is.r, x: p.x, z: p.z };
   }
   function hexes(h) { // the island's local hexes with their tile letter, in the relay's canonical order
-    const is = world.town.islands[h - 1], R = world.town.radius, out = [];
+    const is = world.town.islands[h - 1], R = is.radius, out = [];
     let idx = 0;
     for (let r = -R; r <= R; r++) for (let q = Math.max(-R, -r - R); q <= Math.min(R, -r + R); q++) out.push({ q, r, kind: is.tiles[idx++] });
     return out;

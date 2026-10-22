@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -61,7 +62,8 @@ func TestPlotPlacement(t *testing.T) {
 	}
 	w, _ := plotOf(a, "wird")
 	g, _ := plotOf(a, "gate")
-	if w.Host != "h1" || w.Role != "house" || g.Host != "h2" || g.Role != "gate" || (town.Hex{Q: g.Q, R: g.R}).Ring() != 1 {
+	// R8: wird is a shop (inn), on the street front; the gate is Defense, at the town's edge (ring r−2)
+	if w.Host != "h1" || w.Role != "inn" || g.Host != "h2" || g.Role != "gate" || (town.Hex{Q: g.Q, R: g.R}).Ring() != town.Radii["h2"]-2 {
 		t.Fatalf("wird %+v gate %+v", w, g)
 	}
 	for _, f := range frames {
@@ -188,7 +190,7 @@ func TestPlant(t *testing.T) {
 	}
 
 	// fill every free grass hex of h3 with plants, then an app arrives there: the oldest plant on its slot gives way
-	for _, x := range town.Hexes {
+	for _, x := range town.Hexes("h3") {
 		if town.Tile("h3", x) == town.Grass {
 			if _, why := try(noon, map[string]any{"h": 3.0, "q": float64(x.Q), "r": float64(x.R)}); why != "" {
 				t.Fatalf("fill h3 %v: %s", x, why)
@@ -247,5 +249,24 @@ func TestPodsQueryOptional(t *testing.T) {
 		if err := p.poll(context.Background(), &Out{app: a, name: "prom"}, time.Unix(1_800_000_000+int64(15*i), 0)); err != nil {
 			t.Fatalf("poll %d: %v", i, err)
 		}
+	}
+}
+
+// TestKindsSchema: the page's schema accepts exactly the relay's building kinds (world.json $defs.role).
+func TestKindsSchema(t *testing.T) {
+	b, err := os.ReadFile("../www/dev/schema/world.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var w struct {
+		Defs struct {
+			Role struct{ Enum []string } `json:"role"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(b, &w); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.Defs.Role.Enum; !slices.Equal(got, town.Kinds) {
+		t.Fatalf("world.json role enum %v != town.Kinds %v", got, town.Kinds)
 	}
 }
