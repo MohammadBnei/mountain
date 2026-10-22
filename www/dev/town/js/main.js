@@ -40,7 +40,7 @@ async function start() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, low ? 1.25 : 2));
   renderer.shadowMap.enabled = !low;
   const scene = new THREE.Scene();
-  const bg = new THREE.Color(kit.colors.bg);
+  const bg = new THREE.Color(kit.ukubi.office.surface);
   scene.background = bg;
   scene.fog = new THREE.Fog(bg, 70, 160);
   const hemi = new THREE.HemisphereLight(0xffffff, 0xd9cfc4, 1.6);
@@ -62,6 +62,7 @@ async function start() {
     .map(async (n) => (await import(`./objects/${n}.js`)).default(ctx)));
   for (const o of [islands, bridges, buildings, marks]) scene.add(o.root);
   const labels = createLabels({ THREE, layer: document.getElementById('labels'), apps, lang });
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---- camera: overview of the three islands, or one island / building up close
   const centres = islands.islands.map((i) => i.centre);
@@ -77,7 +78,7 @@ async function start() {
     return { pos: target.clone().addScaledVector(dir, d), target };
   }
   const overview = () => view(new THREE.Vector3(mid[0], 0, mid[1] + 3), span); // a little forward: the dock covers the bottom
-  function flyTo(v, dur = 1.2) {
+  function flyTo(v, dur = reduced ? 0.01 : 1.2) {
     fly = { from: camera.position.clone(), fromT: controls.target.clone(), to: v.pos, toT: v.target, t0: performance.now(), dur: dur * 1000 };
     overviewBtn.hidden = v.home === true;
   }
@@ -116,48 +117,65 @@ async function start() {
   function openCard(p) { carded = p.app; card.hidden = false; fillCard(); }
   function closeCard() { carded = null; card.hidden = true; }
   document.getElementById('cardclose').onclick = closeCard;
-  const healthText = { Healthy: ['running', 'en marche'], Progressing: ['deploying', 'en déploiement'], Degraded: ['degraded', 'dégradé'],
-    Missing: ['missing', 'absent'], Suspended: ['suspended', 'suspendu'], Unknown: ['unknown', 'inconnu'] };
+  // Status always comes with a word (Ukubi): the colour only repeats it.
+  const healthText = { Healthy: ['running', 'en marche', 'ok'], Progressing: ['deploying', 'en déploiement', 'warn'], Degraded: ['degraded', 'dégradé', 'bad'],
+    Missing: ['missing', 'absent', 'bad'], Suspended: ['suspended', 'suspendu', 'info'], Unknown: ['unknown', 'inconnu', 'info'] };
+  const span = (cls, text) => Object.assign(document.createElement('span'), { className: cls, textContent: text });
   function fillCard() {
     const p = buildings.plots().find((x) => x.app === carded);
     if (!p) return closeCard();
     const a = apps[p.app] || {}, s = world.state, F = fr();
-    card.style.setProperty('--roof', `#${new THREE.Color(p.roof).getHexString()}`);
-    card.querySelector('.kicker').textContent = `${a.group === 'service' ? (F ? 'service' : 'service') : (F ? 'application' : 'app')} · ${F ? 'hôte' : 'host'} ${p.host}`;
+    card.style.setProperty('--wire', `var(--wire-${p.wire})`);
+    card.querySelector('.kicker').textContent = `${a.group === 'service' ? 'service' : (F ? 'application' : 'app')} · ${F ? 'hôte' : 'host'} ${p.host}`;
     card.querySelector('h2').textContent = a.name || p.app;
     card.querySelector('.desc').textContent = a[lang()] || a.en || '';
     const st = [];
-    if (p.ruinAt) st.push(F ? 'Retirée du cluster.' : 'Removed from the cluster.');
+    if (p.ruinAt) st.push(span('bad', F ? 'retirée du cluster' : 'removed from the cluster'));
     else {
-      const h = s.health[p.app];
-      if (h) st.push(`${healthText[h]?.[F ? 1 : 0] || h}`);
-      if (s.builds[p.app]) st.push(F ? 'une construction en cours' : 'a build in progress');
+      const h = healthText[s.health[p.app]];
+      if (h) st.push(span(h[2], h[F ? 1 : 0]));
+      if (s.builds[p.app]) st.push(span('warn', F ? 'construction en cours' : 'build in progress'));
       const n = s.alerts.filter((x) => x.app === p.app).length;
-      if (n) st.push(F ? `${n} alerte${n > 1 ? 's' : ''}` : `${n} alert${n > 1 ? 's' : ''}`);
-      if (p.down) st.push(F ? `l’hôte ${p.host} ne répond plus` : `host ${p.host} is down`);
+      if (n) st.push(span('bad', F ? `${n} alerte${n > 1 ? 's' : ''}` : `${n} alert${n > 1 ? 's' : ''}`));
+      if (p.down) st.push(span('bad', F ? `hôte ${p.host} hors ligne` : `host ${p.host} down`));
     }
-    card.querySelector('.state').textContent = st.join(' · ');
+    card.querySelector('.state').replaceChildren(...st);
     const go = card.querySelector('.go');
     go.hidden = !a.url || !!p.ruinAt;
-    if (a.url) { go.href = a.url; go.textContent = `${F ? 'Ouvrir' : 'Open'} ${a.name} ↗`; }
+    if (a.url) { go.href = a.url; go.textContent = `${F ? 'Ouvrir' : 'Open'} ${a.name}`; }
   }
   const line = document.getElementById('line'), facts = document.getElementById('facts'), staleEl = document.getElementById('stale');
   function fillPanel() {
     const F = fr(), s = world.state, n = s.plots.filter((p) => !p.ruinAt).length;
     line.textContent = F ? `Le cluster ukubi en direct : ${n} bâtiments sur 3 îles, une par hôte.` : `The ukubi cluster, live: ${n} buildings on 3 islands, one per host.`;
-    const hosts = world.town.islands.map((i) => `${i.host} ${world.ready[i.host] === false ? '✗' : '✓'}`).join('  ');
+    const parts = world.town.islands.map((i) => world.ready[i.host] === false ? span('bad', `${i.host} ${F ? 'hors ligne' : 'down'}`) : span('ok', `${i.host} ${F ? 'en ligne' : 'up'}`));
     const al = s.alerts.length;
-    facts.textContent = `${hosts}${al ? (F ? ` · ${al} alerte${al > 1 ? 's' : ''}` : ` · ${al} alert${al > 1 ? 's' : ''}`) : ''}`;
+    if (al) { // the LED: lit only while something fires; it takes you there
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.append(Object.assign(document.createElement('span'), { className: 'led' }), F ? `${al} alerte${al > 1 ? 's' : ''}` : `${al} alert${al > 1 ? 's' : ''}`);
+      b.onclick = () => goAlert(s.alerts[0]);
+      parts.push(b);
+    }
+    facts.replaceChildren(...parts);
     staleEl.hidden = world.stale == null;
-    if (world.stale != null) staleEl.textContent = `${F ? 'figé depuis' : 'stale since'} ${new Date(world.stale).toLocaleTimeString(F ? 'fr' : 'en', { hour: '2-digit', minute: '2-digit' })}`;
+    if (world.stale != null) staleEl.textContent = `${F ? 'Figé depuis' : 'Stale since'} ${new Date(world.stale).toLocaleTimeString(F ? 'fr' : 'en', { hour: '2-digit', minute: '2-digit' })}`;
     if (carded) fillCard();
+  }
+  function goAlert(al) {
+    const p = al.app && buildings.plots().find((x) => x.app === al.app);
+    if (p) { openCard(p); return flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5)); }
+    const host = al.host || buildings.plots().find((x) => x.role === 'watchtower')?.host || 'h1';
+    const c = islands.islands.find((i) => i.host === host).centre;
+    flyTo(view(new THREE.Vector3(c[0], 0, c[1]), 2 * world.town.radius + 1.5));
   }
   world.on('state', fillPanel); world.on('metrics', fillPanel); world.on('hello', fillPanel);
   fillPanel();
 
   // ---- sky: the real sun over Paris → day, dusk, night
-  const day = { bg: new THREE.Color(kit.colors.bg), hemi: low ? 1.1 : 1.6, sun: low ? 3.2 : 2.4 };
-  const dark = { bg: new THREE.Color(0x1a2240), hemi: 0.85, sun: 0 };
+  // Ukubi: the Office surface by day, the Underground surface at night (with the Glow theme: the wires light up)
+  const day = { bg: new THREE.Color(kit.ukubi.office.surface), hemi: low ? 1.1 : 1.6, sun: low ? 3.2 : 2.4 };
+  const dark = { bg: new THREE.Color(kit.ukubi.glow.surface), hemi: 0.85, sun: 0 };
   const dusk = new THREE.Color(0xf2c9a0);
   let night = 0, skyAt = 0, pinned = null;
   function sky(ms) {
@@ -175,7 +193,7 @@ async function start() {
     sun.position.set(mid[0] - 60 * Math.cos(e) * Math.sin(az), 60 * Math.sin(e), mid[1] + 60 * Math.cos(e) * Math.cos(az));
     sun.target.position.set(mid[0], 0, mid[1]);
     moon.position.set(mid[0] + 30, 50, mid[1] + 40);
-    document.body.classList.toggle('night', night > 0.5);
+    document.body.classList.toggle('glow', night > 0.5);
   }
 
   // ---- loop
@@ -205,8 +223,8 @@ async function start() {
     }
     controls.update();
     { const d = camera.position.distanceTo(controls.target); scene.fog.near = d + 25 + 200 * night; scene.fog.far = d + 110 + 400 * night; }
-    islands.update(); bridges.update(dt); marks.update(night);
-    buildings.update(dt, t);
+    islands.update(); bridges.update(dt, night); marks.update(night);
+    buildings.update(dt, t, night);
     labels.update(buildings.plots(), camera, w, h);
     renderer.render(scene, camera);
   });

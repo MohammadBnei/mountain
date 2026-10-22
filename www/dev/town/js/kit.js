@@ -18,17 +18,24 @@ function clayMat(color, extra = {}) {
   return tag(new THREE.MeshStandardMaterial({ color, roughness: 0.9, metalness: 0, ...extra }));
 }
 
-export const colors = {
-  bg: 0xf5f3ef, night: 0x0b1020,
-  grass: 0x9fb487, earth: 0x8f7663, stone: 0xb9b6b2, wood: 0x9c7f62,
-  roof: 0x8b97a6, offwhite: 0xefe9e1, raspberry: 0xc51a4a, slate: 0x6f767b, ink: 0x2b2f33,
-  window: 0xffc27a, windowGlow: 0xd9862f, smoke: 0x8d8a86, fire: 0xff8a2a, ember: 0xffd27a,
-  ok: 0x7fa36a, warn: 0xe0a33a, crit: 0xd24a3a, grey: 0x9a9a9a,
+// Ukubi design system (claude.ai artifact "Ukubi"): the page is Office by day, Underground · Glow at night.
+export const ukubi = {
+  office: { surface: 0xf5eee2, sunken: 0xebe1d0 },
+  glow: { surface: 0x1c1814, sunken: 0x14110e },
+  // Wires: each system has its own cable colour, the same everywhere it appears (roofs, label dots, the card).
+  // Office values by day (muted, earthy), Glow values at night (lit).
+  wires: {
+    office: { agent: 0xa8643c, data: 0x3f7f7a, app: 0x9a7a28, network: 0x4f6a8c, storage: 0x7e5670, compute: 0x6a7a3a },
+    glow: { agent: 0xff7a2e, data: 0x1ff2dc, app: 0xffd83a, network: 0x3fa2ff, storage: 0xff5cc8, compute: 0xb4ff3c },
+  },
 };
 
-// Roof colours: one per app, muted clay hues that stay apart from each other and from the grass.
-export const roofs = [0xc51a4a, 0x3f7fb0, 0xd9862f, 0x6a5aa8, 0x2f8f83, 0xb0603a, 0x8a9a3a, 0xa05a8a];
-export const serviceRoof = 0x6f767b; // services: slate
+export const colors = {
+  bg: ukubi.office.surface, night: ukubi.glow.surface,
+  grass: 0x9fb487, earth: 0x8f7663, stone: 0xb9b6b2, wood: 0x9c7f62,
+  offwhite: 0xefe9e1, raspberry: 0xc51a4a, slate: 0x6f767b, ink: 0x2c2219,
+  window: 0xffc27a, windowGlow: 0xd9862f, fire: 0xff8a2a,
+};
 
 export const palette = {
   grass: clayMat(colors.grass), earth: clayMat(colors.earth), stone: clayMat(colors.stone), wood: clayMat(colors.wood),
@@ -39,6 +46,18 @@ export const palette = {
   window: clayMat(colors.window, { emissive: colors.windowGlow, emissiveIntensity: 0 }),
   white: clayMat(0xffffff), // per-instance colour (InstancedMesh.instanceColor) carries the hue
 };
+
+/** A material whose emissive is multiplied by each instance's colour: roofs and rails that light up in their
+ *  wire colour at night (emissiveIntensity 0 by day). */
+export function glowing(name = 'white') {
+  const m = variant(name, { emissive: new THREE.Color(1, 1, 1), emissiveIntensity: 0 });
+  m.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n#if defined( USE_INSTANCING_COLOR ) || defined( USE_COLOR )\n totalEmissiveRadiance *= vColor.rgb;\n#endif');
+  };
+  m.customProgramCacheKey = () => 'kit-glowing';
+  return m;
+}
 
 const manager = new THREE.LoadingManager();
 manager.onProgress = (url, loaded, total) => globalThis.__loader?.models(loaded, total);

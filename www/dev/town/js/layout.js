@@ -66,12 +66,7 @@ export const BUILDINGS = {
   depot: { glb: 'building_home_A_blue', s: 2.03, props: [['crate_A_small', 0.75, 0.5, 0.1, 2.2], ['crate_A_small', -0.75, 0.45, 0.4, 2.2], ['crate_A_small', 0.72, 0.5, 0.2, 1.8, 0.3]] },
 };
 
-// Roof colour per app: services slate, apps from kit.roofs by the app's sorted position (stable as apps come and go
-// only when the allowlist changes).
-export function roofOf(kit, app, group, apps) {
-  if (group === 'service') return kit.serviceRoof;
-  const users = Object.keys(apps).filter((a) => apps[a].group !== 'service').sort();
-  return kit.roofs[Math.max(0, users.indexOf(app)) % kit.roofs.length];
-}
+// The Ukubi wire of an app or service (apps.json "wire": app | agent | data | network | storage | compute).
+export const wireOf = (apps, app) => apps[app]?.wire || 'app';
 
 export const v3 = (x, y, z) => new THREE.Vector3(x, y, z);

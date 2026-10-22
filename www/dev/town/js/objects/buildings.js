@@ -7,7 +7,7 @@
 // building in (crane drop + squash, pi-lab office.js); pod.churn makes it hop (pi-lab main.js hopPose), and a
 // crashloop keeps it hopping until the next healthy sync.
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BUILDINGS, plotXZ, roofOf } from '../layout.js';
+import { BUILDINGS, plotXZ, wireOf } from '../layout.js';
 
 const DROP = 0.9, HOP = 0.75;
 
@@ -16,8 +16,9 @@ export default async function build({ THREE, kit, world, apps }) {
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), P = new THREE.Vector3(), S = new THREE.Vector3();
   const C = new THREE.Color();
 
-  // ---- geometry per kind: body (clay atlas, roof cells cut out, props merged in) + roof (white, tinted per instance)
-  const kinds = {};
+  // ---- geometry per kind: body (clay atlas, roof cells cut out, props merged in) + roof (white, tinted per instance
+  // in its Ukubi wire colour; at night the roofs light up in the Glow theme's wire colours)
+  const kinds = {}, roofMat = kit.glowing();
   async function kindOf(role) {
     if (kinds[role]) return kinds[role];
     const spec = BUILDINGS[role] || BUILDINGS.home;
@@ -33,7 +34,7 @@ export default async function build({ THREE, kit, world, apps }) {
     bg.computeBoundingBox();
     const k = {
       body: kit.instanced(bg, kit.shared, 16),
-      roof: kit.instanced(roof.scale(spec.s, spec.s, spec.s), kit.palette.white, 16),
+      roof: kit.instanced(roof.scale(spec.s, spec.s, spec.s), roofMat, 16),
       height: bg.boundingBox.max.y, width: Math.max(bg.boundingBox.max.x - bg.boundingBox.min.x, bg.boundingBox.max.z - bg.boundingBox.min.z),
       apps: [],
     };
@@ -97,7 +98,7 @@ export default async function build({ THREE, kit, world, apps }) {
       const is = world.town.islands.find((i) => i.host === p.host), [cx, cz] = plotXZ(world.town, p.host, 0, 0);
       const yaw = Math.atan2(cx - x, cz - z);
       const a = apps[p.app] || {}, health = s.health[p.app], down = world.ready[p.host] === false;
-      list.push({ ...p, k, x, z, yaw, is, roof: roofOf(kit, p.app, a.group, apps), down, health,
+      list.push({ ...p, k, x, z, yaw, is, wire: wireOf(apps, p.app), down, health,
         building: !!s.builds[p.app] || health === 'Progressing', smoke: health === 'Degraded', faded: health === 'Missing' || health === 'Suspended' });
     }
     plots = list;
@@ -138,8 +139,10 @@ export default async function build({ THREE, kit, world, apps }) {
   return {
     root,
     /** → true while something moves (the host keeps rendering). */
-    update(dt, t) {
+    update(dt, t, night = 0) {
       now = t;
+      roofMat.emissiveIntensity = 0.9 * night;
+      const wires = kit.ukubi.wires[night > 0.5 ? 'glow' : 'office'];
       if (dirty && !relaying) relaying = relayout().finally(() => { relaying = null; }); // a new kind's GLB loads async
       for (const k of Object.values(kinds)) { k.body.count = k.roof.count = 0; k.apps = []; }
       let nS = 0, nR = 0, nSm = 0, busy = false;
@@ -160,7 +163,7 @@ export default async function build({ THREE, kit, world, apps }) {
         k.body.setMatrixAt(i, M);
         k.roof.setMatrixAt(i, M);
         k.body.setColorAt(i, p.down ? grey : C.setScalar(p.faded ? 0.72 : 1));
-        k.roof.setColorAt(i, p.down ? grey : C.set(p.roof).multiplyScalar(p.faded ? 0.6 : 1));
+        k.roof.setColorAt(i, p.down ? grey : C.set(wires[p.wire]).multiplyScalar(p.faded ? 0.6 : 1));
         k.apps[i] = p.app;
         if (p.building) {
           M.compose(P.set(p.x, 0, p.z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(k.width / 1.6, Math.max(0.8, k.height / 1.5), k.width / 1.6));

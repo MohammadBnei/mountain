@@ -16,6 +16,7 @@ export function createLabels({ THREE, layer, apps, lang }) {
         const text = p.ruinAt ? `${name} · ${lang() === 'fr' ? 'ruines' : 'gone'}` : name;
         if (el.textContent !== text) { el.textContent = text; el._w = 0; }
         el.classList.toggle('service', a.group === 'service');
+        el.style.setProperty('--wire', `var(--wire-${a.wire || 'app'})`);
         el.classList.toggle('down', !!p.down);
         el.classList.toggle('gone', !!p.ruinAt);
         v.set(p.x, (p.ruinAt ? 0.5 : p.k.height) + 0.35 + (p.down ? -SINK : 0), p.z);
