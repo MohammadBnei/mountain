@@ -25,11 +25,19 @@ service:
     - name: metrics
       port: 9090
 
-# Public page: no forwardAuth. The chart's baseline (origin lock, rate limit,
-# headers) stays on (infra-bootstrap ADR-0053 Decision 5). CSP is set by the
-# Go relay, where a test pins it. Traefik overwrites the backend's
-# Referrer-Policy, so it is set here to match the relay's.
+# Gated (R8 deploy C1, infra-bootstrap ADR-0065): the whole site sits behind
+# authentik forwardAuth, Middleware/mountain-forwardauth (namespace default,
+# declared in infra-bootstrap with its `mountain-gate` provider: platform-admins
+# and invited mountain-visitors). The chart appends it after the baseline
+# (origin lock, rate limit, headers), which stays on (ADR-0053 Decision 5). The
+# relay trusts no forwarded header; its own OIDC sign-in still carries the
+# roles. Revert this ref before infra-bootstrap's Middleware, or the route
+# errors (404). CSP is set by the Go relay, where a test pins it. Traefik
+# overwrites the backend's Referrer-Policy, so it is set here to match.
 ingress:
+  middlewares:
+    - name: mountain-forwardauth
+      namespace: default
   baseline:
     headers:
       referrerPolicy: no-referrer

@@ -4,8 +4,9 @@
 `//go:embed www`), imported by relay. Go 1.27 toolchain.
 
 **Ports:**
-- `:8080` public: `/`, `/v/<build>/…`, `/ws`, `/auth/*`, `/healthz`. `/api/topology` is gone (R7): plots ride the
-  hello.
+- `:8080` routed: `/`, `/v/<build>/…`, `/ws`, `/auth/*`, `/healthz`. `/api/topology` is gone (R7): plots ride the
+  hello. Since R8 deploy C every routed path sits behind the authentik forwardAuth gate (infra-bootstrap ADR-0065;
+  `helm/values.yaml` `ingress.middlewares`); `/healthz` probes and `:9090` never go through the ingress.
 - **`:9090` metrics, a separate port via `service.extraPorts`**, never routed by the IngressRoute.
 
 **Static files:**
@@ -125,6 +126,10 @@ frames (02).
   - `Ping` needs a concurrent reader goroutine, or it never returns.
 - Cookie: `Secure; HttpOnly; SameSite=Lax`, signed, **TTL ≤ 1 h** with a groups re-check on refresh.
 - OIDC `state` is random. The return view is in a short-lived signed cookie.
+- **The gate (R8 C):** the relay trusts no forwarded identity; the page signs in to it by itself behind the gate
+  (`toys.js autoSignIn`, once per 10 min) and reloads once onto the login wall when the gate session lapses
+  (`socket.js gateLapsed`: `/auth/me` with `redirect: 'manual'`, an opaque redirect or a 401). `/v/` is
+  `Cache-Control: private` so Cloudflare keeps no copy.
 - **`CF-Connecting-IP` is trusted only when the TCP peer is in a Cloudflare range.** Otherwise the peer IP is used
   (LAN/pod CIDR spoofing is accepted and noted).
 

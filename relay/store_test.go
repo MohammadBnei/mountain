@@ -431,3 +431,47 @@ func TestSnapshotRollover(t *testing.T) {
 		t.Fatalf("after rollover: day %s, %d deltas", h.Snapshot.Day, len(h.Deltas))
 	}
 }
+
+// TestDBReplicas006: migration 006 rewrites stored replica buckets (events and snapshots) to the coarse ones,
+// exactly as replicaB would have bucketed them; other kinds, other fields and a snapshot without replicas stay.
+func TestDBReplicas006(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+	a := storedApp(t, dsn) // 006 already ran, on empty tables
+	a.store.Close(5 * time.Second)
+	c, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close(ctx)
+	for b := 0; b <= 8; b++ {
+		if _, err := c.Exec(ctx, "INSERT INTO events (id, ts, day, kind, public) VALUES ($1, now(), current_date, 'replicas', $2)",
+			fmt.Sprint("r", b), fmt.Sprintf(`{"t":"ev","kind":"replicas","app":"wird","bucket":%d}`, b)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.Exec(ctx, `INSERT INTO events (id, ts, day, kind, public) VALUES ('x', now(), current_date, 'pod.churn', '{"t":"ev","kind":"pod.churn","app":"wird","bucket":7}')`)
+	c.Exec(ctx, `INSERT INTO snapshots (day, seq, ts, seed, land, state, metrics) VALUES
+		('2026-10-20', 1, now(), 3, '', '{"replicas":{"wird":3,"vos-monolith":6,"mountain":1},"plots":[]}', '{}'),
+		('2026-10-21', 2, now(), 3, '', '{"plots":[]}', '{}')`)
+	m, _ := migrations.ReadFile("migrations/006_replicas.sql")
+	if _, err := c.Exec(ctx, string(m)); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := c.Query(ctx, "SELECT id, public->>'bucket' FROM events ORDER BY id")
+	got := map[string]string{}
+	for rows.Next() {
+		var id, b string
+		rows.Scan(&id, &b)
+		got[id] = b
+	}
+	if fmt.Sprint(got) != "map[r0:0 r1:1 r2:2 r3:2 r4:2 r5:3 r6:4 r7:5 r8:5 x:7]" {
+		t.Fatalf("events after 006: %v", got)
+	}
+	var s1, s2 string
+	c.QueryRow(ctx, "SELECT state->>'replicas' FROM snapshots WHERE day = '2026-10-20'").Scan(&s1)
+	c.QueryRow(ctx, "SELECT state::text FROM snapshots WHERE day = '2026-10-21'").Scan(&s2)
+	if s1 != `{"wird": 2, "mountain": 1, "vos-monolith": 4}` || s2 != `{"plots": []}` {
+		t.Fatalf("snapshots after 006: %s / %s", s1, s2)
+	}
+}

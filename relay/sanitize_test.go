@@ -73,6 +73,7 @@ func TestSanitizeCorpus(t *testing.T) {
 		{"ev:quorum", map[string]any{"up": []string{"h1", "pve-bnei"}}},
 		{"ev:argo.health", map[string]any{"app": "wird", "status": "Healthy v2.11"}},
 		{"ev:replicas", map[string]any{"app": "wird", "bucket": 9}},
+		{"ev:replicas", map[string]any{"app": "wird", "bucket": 6}}, // R8 deploy C1: 0..5 now
 		{"ev:pod.churn", map[string]any{"app": "wird", "restarts": -1, "oom": false, "crashloop": false}},
 		{"ev:pod.evicted", map[string]any{"app": "wird"}},
 		{"world:site", map[string]any{"app": "wird", "x": 1.0, "z": 1.0, "y": 1.0, "tier": 1, "group": "admin"}},
