@@ -74,6 +74,7 @@ building (it is an LXC). The owner's answers, one question at a time, are the R8
 | Deploy C2 | Annexes: a copy of the app's building + banner, zoom levels | Built; styleboard to the owner. PR after C1 is live |
 | Civ (R9) | Levels from 30-day sync activity, the herald, technologies, golden age bunting, turns, a guide (00 Civ row) | Built locally on C2 (relay `3a969fc`, page `42937cd`); styleboard **signed off by the owner** (2026-10-23). PR after C2 is live |
 | Engine | Measure (shadow shapes, walker shadows, simplification test, gate breakdown), then BatchedMesh | After Civ (its worst case fits as is) |
+| Play (research) | Make the town playable with fleet agents: owner interview, architecture, doubt cycle (`09-play.md`) | Research done 2026-10-23; fleet + infra ADRs next, bridge and an interim queue in parallel |
 | Later | **The sea** (owner, 2026-10-23): water between the islands, with waves | After Deploy C; its own plan |
 
 **Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads
