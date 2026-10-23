@@ -186,8 +186,11 @@ async function start() {
   });
   function pick(r) {
     const hb = r.intersectObjects(buildings.pickables(), false)[0];
-    const p = hb && buildings.plotOf(hb);
-    if (p) { openCard(p); return flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5)); }
+    const tent = hb && buildings.annexOf(hb), p = hb && buildings.plotOf(hb);
+    if (p) { // R8 C: a tent opens its app's card (that island first in "also on") and the camera flies to the tent
+      openCard(p, tent?.host);
+      return flyTo(view(new THREE.Vector3(tent ? tent.x : p.x, 0.6, tent ? tent.z : p.z), 4.5));
+    }
     const hi = r.intersectObjects(islands.pickables, false)[0];
     if (hi) {
       closeCard();
@@ -200,8 +203,8 @@ async function start() {
 
   // ---- card + panel
   const card = document.getElementById('card'), fr = () => lang() === 'fr';
-  let carded = null;
-  function openCard(p) { carded = p.app; card.hidden = false; fillCard(); }
+  let carded = null, cardedAt = null; // cardedAt: the island of the tent that opened the card (R8 C), listed first
+  function openCard(p, at = null) { carded = p.app; cardedAt = at; card.hidden = false; fillCard(); }
   world.on('names', () => { if (carded) fillCard(); }); // R8: an admin's names arrive (or leave) with /auth/me
   function closeCard() { carded = null; card.hidden = true; }
   document.getElementById('cardclose').onclick = closeCard;
@@ -234,6 +237,10 @@ async function start() {
       const n = s.alerts.filter((x) => x.app === p.app).length;
       if (n) st.push(word('bad', F ? `${n} alerte${n > 1 ? 's' : ''}` : `${n} alert${n > 1 ? 's' : ''}`));
       if (p.down) st.push(word('bad', F ? `hôte ${p.host} hors ligne` : `host ${p.host} down`));
+      // R8 C: its tents, the hosts it also runs on (never how many pods); a down host says so
+      const also = buildings.annexes().filter((x) => x.app === p.app).sort((x, y) => (y.host === cardedAt) - (x.host === cardedAt) || x.host.localeCompare(y.host))
+        .map((x) => (x.down ? `${x.host} (${F ? 'hors ligne' : 'down'})` : x.host));
+      if (also.length) st.push(word('info', `${F ? 'aussi sur' : 'also on'} ${new Intl.ListFormat(F ? 'fr' : 'en', { type: 'conjunction' }).format(also)}`));
     }
     card.querySelector('.state').replaceChildren(...st);
     const go = card.querySelector('.go');
@@ -332,6 +339,7 @@ async function start() {
       obstacle: dockBox,
       chips: w < 600 && home && !moved && !fly ? islands.islands : null, // the phone's overview: one chip per island
       machines: !(home && !moved), // R8: machine names only once the camera leaves the overview
+      tents: buildings.annexes(), // R8 C: named with the machines, once the camera leaves the overview
     });
     renderer.render(scene, camera);
   });
@@ -341,12 +349,15 @@ async function start() {
     inject: (f) => world.applyFrame(f),
     sunAt: (iso) => { pinned = Date.parse(iso); skyAt = 0; sky(pinned); },
     fly: (what) => {
+      const tent = buildings.annexes().find((x) => x.key === what); // R8 C: 'app@h1'
+      const main = tent && buildings.plots().find((x) => x.app === tent.app);
+      if (main) { openCard(main, tent.host); flyTo(view(new THREE.Vector3(tent.x, 0.6, tent.z), 4.5), 0.01); return; }
       const p = buildings.plots().find((x) => x.app === what);
       if (p) { openCard(p); flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5), 0.01); return; }
       const is = islands.islands.find((i) => i.host === what);
       if (is) return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5), 0.01);
       closeCard(); flyTo(overview(), 0.01);
     },
-    info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length }),
+    info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length, annexes: buildings.annexes().length }),
   };
 }

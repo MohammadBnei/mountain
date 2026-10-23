@@ -108,6 +108,20 @@ Rot guard:
 - `mountain_unmapped_total{kind=node|app|repo|ns|probe}` plus a rule.
 - A CI check diffs the app allowlist and the ns map against `infra-bootstrap/gitops/apps/registry.yaml`.
 
+## Annexes (R8 deploy C, `relay/annexes.go`, infra-bootstrap ADR-0065)
+- `world:annex {app, host, q, r, gone?}` folds into `State.Annexes` (≤ 48, one per app@host): a tent beside an app on
+  each other host it also runs pods on. Never a count.
+- One rule, every poll (and in `ruin()`): a tent stands only beside a standing (not ruined) plot of a non-machine app
+  on another host; a published tent failing it goes at once.
+- Wanted from the optional query `annexpods` (the `pods` expression minus pods a Job owns): hosts other than the
+  plot's with ≥ 1 such pod. A difference holds `annexHold` (5 min) in every poll, both ways. Blind (empty or failed)
+  clears every clock; an app missing from the answer, a NotReady host and the app's pending move target keep their
+  tents.
+- Placement: a free grass hex, outskirts first (`town.Slot` with the Industry ring order, keyed app@host); never a
+  plot's, a tent's or a plant's. A plot takes a tent's hex before a plant's (the tent's gone frame first, then it is
+  placed again in the same poll); a plant is refused on a tent (`plot`).
+- Restore prunes by geometry only; replica buckets were coarsened with them (C1, migration 006).
+
 ## Event enum (FROZEN)
 `Ev{id (ULID), ts, kind, …}`:
 

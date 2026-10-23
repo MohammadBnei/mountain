@@ -71,7 +71,7 @@ building (it is an LXC). The owner's answers, one question at a time, are the R8
 | Deploy B | The machines: keeps, halls, guests from `guest-*` probes, debounced state, admin names via `/auth/me` | Live 2026-10-22 (`e4ca1b1`): 12 machines, the 7 guests published up after their 10-min hold |
 | Deploy C0 | The gate, in infra-bootstrap (ADR-0065): `mountain-gate` forwardAuth, invitation-only enrollment | PR open; the owner merges, then reviews `mountain-visitors` |
 | Deploy C1 | The gate ref, automatic relay sign-in, the expiry reload, private assets, coarse replicas + migration 006 | After C0 is live and the group reviewed. Live checks are the owner's from here |
-| Deploy C2 | Annexes for minority pods (tents) | After C1; styleboard sign-off first |
+| Deploy C2 | Annexes for minority pods (tents) | Built; styleboard to the owner. PR after C1 is live |
 
 **Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads
 the bigger islands with its old code and draws buildings off its old tiles until it is reloaded. Cosmetic, no data;

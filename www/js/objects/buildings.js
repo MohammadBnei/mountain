@@ -11,15 +11,21 @@
 // not already open on a road, the shortest walk over free grass to a spoke or the square (a BFS, recomputed with the
 // plots), drawn as tan caps. They reserve nothing: a plot or a plant may take a street hex, and the street reroutes.
 // Industry and Houses cast no shadow (the low, busy kinds; it keeps the shadow pass small).
+// R8 C tents (world.state.annexes): an app's annex on another host it runs on, a small tent with its canopy in the
+// app's wire colour (a softer glow than roofs at night), greyed with its island; nothing else (no lamp, scaffold,
+// smoke, flag or ground). A tent drops in when it goes up live, never with its app's syncs. Tapping one opens the
+// app's card. A tent beside no standing building of its app, or on its app's own island, is not drawn (the relay
+// removes it on its next poll). Tents block streets and walkers like buildings.
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BUILDINGS, familyOf, islandsOf, plotXZ, wireOf } from '../layout.js';
 
 const GROUND = { defense: 0xaaa69f, public: 0xece2cf, industry: 0xb49272 }, STREET = 0xdcc8a2;
 const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 
-/** The streets of an island: local hexes from each door to the road (see above). plots: [{q, r}] on that island. */
-export function streets(is, plots) {
-  const key = (q, r) => `${q},${r}`, taken = new Set(plots.map((p) => key(p.q, p.r))), out = new Map();
+/** The streets of an island: local hexes from each door to the road (see above). plots: [{q, r}] on that island;
+ *  blocked: more taken hexes with no door of their own (R8 C tents). */
+export function streets(is, plots, blocked = []) {
+  const key = (q, r) => `${q},${r}`, taken = new Set(plots.concat(blocked).map((p) => key(p.q, p.r))), out = new Map();
   const free = (q, r) => is.tileAt(q, r)?.kind === 'g' && !taken.has(key(q, r));
   const onRoad = (q, r) => DIRS.some(([dq, dr]) => 'rsb'.includes(is.tileAt(q + dq, r + dr)?.kind || 'x'));
   for (const p of [...plots].sort((a, b) => a.q - b.q || a.r - b.r)) {
@@ -50,10 +56,12 @@ export default async function build({ THREE, kit, world, apps }) {
 
   // ---- geometry per kind: body (clay atlas, roof cells cut out, props merged in) + roof (white, tinted per instance
   // in its Ukubi wire colour; at night the roofs light up in the Glow theme's wire colours)
-  const kinds = {}, roofMat = kit.glowing(), CAP = 16; // instances per kind (≤ 64 plots, never 16 of one kind)
+  const kinds = {}, roofMat = kit.glowing(), clothMat = kit.glowing(), CAP = 16; // instances per kind (≤ 64 plots, never 16 of one kind)
+  const capOf = (role) => (role === 'tent' ? 48 : CAP); // R8 C: up to 48 tents, one kind
   async function kindOf(role) {
-    if (kinds[role]) return kinds[role];
+    if (role in kinds) return kinds[role]; // a failed tent load stays null: no refetch on every change
     try { return await loadKind(role); } catch (e) {
+      if (role === 'tent') { console.warn('buildings: tents failed to load, none drawn', e); return (kinds.tent = null); } // never homes
       // a model that failed to load (a network blip; a 404 = this page's build was retired) stands in as a home,
       // so one GLB never freezes the town; the 404 also asks main.js for the one reload onto the current build
       if (/\b404\b/.test(String(e))) globalThis.dispatchEvent?.(new Event('town:retired'));
@@ -65,7 +73,7 @@ export default async function build({ THREE, kit, world, apps }) {
   async function loadKind(role) {
     const spec = BUILDINGS[role] || BUILDINGS.home;
     const src = mergeGeometries(await kit.geometry(spec.glb));
-    const [body, roof] = kit.splitByUV(src, kit.inRoof);
+    const [body, roof] = kit.splitByUV(src, spec.cloth || kit.inRoof);
     const bodies = [body.scale(spec.s, spec.s, spec.s)];
     for (const [name, x, z, ry, s] of spec.props || []) {
       const g = mergeGeometries(await kit.geometry(name));
@@ -75,11 +83,11 @@ export default async function build({ THREE, kit, world, apps }) {
     const bg = mergeGeometries(bodies);
     bg.computeBoundingBox();
     const k = {
-      body: kit.instanced(bg, kit.shared, CAP),
-      roof: kit.instanced(roof.scale(spec.s, spec.s, spec.s), roofMat, CAP),
+      body: kit.instanced(bg, kit.shared, capOf(role)),
+      roof: kit.instanced(roof.scale(spec.s, spec.s, spec.s), role === 'tent' ? clothMat : roofMat, capOf(role)),
       family: familyOf(role),
       height: bg.boundingBox.max.y, width: Math.max(bg.boundingBox.max.x - bg.boundingBox.min.x, bg.boundingBox.max.z - bg.boundingBox.min.z),
-      apps: [],
+      apps: [], items: [], // items: the tents, per instance (R8 C)
     };
     for (const m of [k.body, k.roof]) {
       m.userData.pick = { kind: 'building', of: k }; m.frustumCulled = false; root.add(m);
@@ -140,11 +148,12 @@ export default async function build({ THREE, kit, world, apps }) {
   for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, cap, ...Object.values(flames)]) { m.frustumCulled = false; root.add(m); }
 
   // ---- state → layout
-  let plots = [], beacons = [], dirty = true, relaying = null, retryAt = 0;
+  let plots = [], tents = [], beacons = [], dirty = true, relaying = null, retryAt = 0;
   const acts = new Map(); // app → {type, t0, until?}
   world.on('state', () => { dirty = true; });
   world.on('metrics', () => { dirty = true; }); // hosts' Ready rides the metrics frame
   world.on('world:plot', (p) => { if (!p.gone && !p.ruinAt) acts.set(p.app, { type: 'drop', t0: now }); });
+  world.on('world:annex', (x) => { if (!x.gone) acts.set(`${x.app}@${x.host}`, { type: 'drop', t0: now }); }); // a tent's own act
   world.on('ev:argo.sync', (f) => {
     if (f.ok) { acts.set(f.app, { type: 'drop', t0: now }); failed.delete(f.app); } else failed.set(f.app, now + 600);
   });
@@ -166,11 +175,20 @@ export default async function build({ THREE, kit, world, apps }) {
         building: !!s.builds[p.app] || health === 'Progressing', smoke: health === 'Degraded', faded: health === 'Missing' || health === 'Suspended' });
     }
     plots = list;
+    // R8 C tents: only beside a standing building of their app on another island
+    const tentKind = s.annexes?.length ? await kindOf('tent') : kinds.tent, standing = new Map(list.filter((p) => !p.ruinAt).map((p) => [p.app, p]));
+    tents = [];
+    for (const x of s.annexes || []) {
+      const main = standing.get(x.app);
+      if (!tentKind || !main || main.host === x.host) continue;
+      const [tx, tz] = plotXZ(world.town, x.host, x.q, x.r), [cx, cz] = plotXZ(world.town, x.host, 0, 0);
+      tents.push({ ...x, key: `${x.app}@${x.host}`, k: tentKind, x: tx, z: tz, yaw: Math.atan2(cx - tx, cz - tz), wire: main.wire, down: world.ready[x.host] === false });
+    }
     ground = [];
     for (const is of isles) {
       const here = list.filter((p) => p.host === is.host);
       for (const p of here) if (!p.ruinAt && GROUND[p.k.family]) ground.push({ host: p.host, q: p.q, r: p.r, color: GROUND[p.k.family] });
-      for (const [q, r] of streets(is, here)) ground.push({ host: is.host, q, r, color: STREET });
+      for (const [q, r] of streets(is, here, tents.filter((x) => x.host === is.host))) ground.push({ host: is.host, q, r, color: STREET });
     }
     // beacons: at the alert's app, else its host's square, else the watchtower, else h1's square
     const byApp = new Map(list.map((p) => [p.app, p])), tower = list.find((p) => p.role === 'watchtower');
@@ -189,18 +207,18 @@ export default async function build({ THREE, kit, world, apps }) {
   }
 
   function pose(p, t) {
-    // → [y offset, squash (y scale), spin] from the plot's live act
-    const a = acts.get(p.app);
+    // → [y offset, squash (y scale), spin] from the plot's live act (a tent's: keyed app@host)
+    const id = p.key || p.app, a = acts.get(id);
     if (!a) return [0, 1, 0];
     const s = t - a.t0;
     if (a.type === 'drop') {
-      if (s >= DROP + 0.5) { acts.delete(p.app); return [0, 1, 0]; }
+      if (s >= DROP + 0.5) { acts.delete(id); return [0, 1, 0]; }
       if (s < DROP * 0.6) { const f = s / (DROP * 0.6); return [3.2 * (1 - f * f), 1 + 0.25 * (1 - f), 0]; }
       const v = (s - DROP * 0.6) / (DROP * 0.4 + 0.5), d = Math.exp(-6 * v);
       return [0, 1 - 0.28 * d * Math.cos(v * 22), 0];
     }
     const cycle = a.loop ? (s % 1.6) : s;
-    if (!a.loop && s >= HOP + 0.6) { acts.delete(p.app); return [0, 1, 0]; }
+    if (!a.loop && s >= HOP + 0.6) { acts.delete(id); return [0, 1, 0]; }
     if (cycle < HOP) { const f = cycle / HOP; return [1.1 * 4 * f * (1 - f), 1 + 0.15 * Math.abs(Math.cos(Math.PI * f)), Math.PI * 2 * kit.easeInOut(f)]; }
     const v = cycle - HOP, d = Math.exp(-6 * v);
     return [0, 1 - 0.25 * d * Math.cos(v * 24), 0];
@@ -213,12 +231,13 @@ export default async function build({ THREE, kit, world, apps }) {
     update(dt, t, night = 0) {
       now = t;
       roofMat.emissiveIntensity = 0.75 * night;
+      clothMat.emissiveIntensity = 0.35 * night; // R8 C: tents glow softer than roofs
       lampMat.emissiveIntensity = 0.1 + 2.4 * night;
       const wires = kit.ukubi.wires[night > 0.5 ? 'glow' : 'office'];
       if (dirty && !relaying && t >= retryAt) relaying = relayout() // a new kind's GLB loads async
         .catch((e) => { console.error('buildings:', e); dirty = true; retryAt = t + 5; }) // keep the last town, retry
         .finally(() => { relaying = null; });
-      for (const k of new Set(Object.values(kinds))) { k.body.count = k.roof.count = 0; k.apps = []; }
+      for (const k of new Set(Object.values(kinds))) if (k) { k.body.count = k.roof.count = 0; k.apps = []; k.items = []; }
       ruins.apps = [];
       let nS = 0, nR = 0, nSm = 0, nL = 0, nF = 0, busy = false;
       const counts = { info: 0, warning: 0, critical: 0 };
@@ -259,6 +278,21 @@ export default async function build({ THREE, kit, world, apps }) {
           }
         }
       }
+      for (const x of tents) { // R8 C: their own drop, their host's grey; nothing else
+        const k = x.k;
+        if (k.body.count >= k.body.instanceMatrix.count) break;
+        const [dy, sq] = pose(x, t);
+        busy ||= acts.has(x.key);
+        const i = k.body.count++;
+        k.roof.count++;
+        M.compose(P.set(x.x, dy - (x.down ? SINK : 0), x.z), Q.setFromEuler(E.set(0, x.yaw, 0)), S.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq)));
+        k.body.setMatrixAt(i, M);
+        k.roof.setMatrixAt(i, M);
+        k.body.setColorAt(i, x.down ? grey : C.setScalar(1));
+        k.roof.setColorAt(i, x.down ? grey : C.set(wires[x.wire]));
+        k.apps[i] = x.app;
+        k.items[i] = x;
+      }
       for (const b of beacons) {
         busy = true;
         const n = counts[b.sev]++, fl = 1 + 0.18 * Math.sin(t * 9 + b.seed) + 0.1 * Math.sin(t * 23 + b.seed * 3);
@@ -281,20 +315,25 @@ export default async function build({ THREE, kit, world, apps }) {
       scaffold.count = nS; rubble.count = nR; smoke.count = nSm;
       lampPost.count = lamp.count = night > 0.05 ? nL : 0; failPole.count = failCloth.count = nF;
       for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, cap, ...Object.values(flames)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-      for (const k of new Set(Object.values(kinds))) for (const m of [k.body, k.roof]) {
+      for (const k of new Set(Object.values(kinds))) if (k) for (const m of [k.body, k.roof]) {
         m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
         m.boundingSphere = null; // three computes an InstancedMesh's sphere once, on the first raycast: moved plots must stay tappable
       }
       rubble.boundingSphere = null;
       return busy;
     },
-    /** Building under a raycast hit → its plot (cards, fly-to). */
+    /** Building under a raycast hit → its plot (cards, fly-to); a tent → its app's plot (the card is the app's). */
     plotOf(hit) {
       const k = hit.object.userData.pick?.of;
       const app = k?.apps[hit.instanceId];
       return app ? plots.find((p) => p.app === app) : null;
     },
+    /** A tent under a raycast hit → {app, host, q, r, x, z} (R8 C: fly to the tent, open its app's card), else null. */
+    annexOf(hit) {
+      return hit.object.userData.pick?.of?.items?.[hit.instanceId] || null;
+    },
     plots: () => plots,
-    pickables: () => [...new Set(Object.values(kinds))].flatMap((k) => [k.body, k.roof]).concat(rubble),
+    annexes: () => tents,
+    pickables: () => [...new Set(Object.values(kinds))].filter(Boolean).flatMap((k) => [k.body, k.roof]).concat(rubble),
   };
 }
