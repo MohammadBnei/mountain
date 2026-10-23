@@ -5,14 +5,17 @@
 // wire. Apps are placed first, then services, then machines, which are named only once the camera leaves the
 // overview. The dock is an obstacle: no label hides behind the panel. chips (the phone's overview, where forty names
 // would be noise): one label per island instead, "h1 · 12 buildings", and no building names.
+// R8 C: a tent (an app's annex on another island) carries its app's name once the camera leaves the overview, like a
+// machine, and is placed last: it never takes a building's place.
 const SINK = 0.5; // islands.js: a down island sinks this far
 
 export function createLabels({ THREE, layer, apps, lang }) {
   const els = new Map(), v = new THREE.Vector3(), placed = [];
   document.fonts?.ready.then(() => { for (const el of els.values()) el._w = 0; }); // widths measured before the web font swap in
   return {
-    /** plots: buildings.plots(); obstacle: [x0, y0, x1, y1] in canvas px (the dock); chips: islands → island labels. */
-    update(plots, camera, w, h, { obstacle, chips, machines = true } = {}) {
+    /** plots: buildings.plots(); obstacle: [x0, y0, x1, y1] in canvas px (the dock); chips: islands → island labels;
+     *  tents: buildings.annexes(), named with the machines (machines = false hides both). */
+    update(plots, camera, w, h, { obstacle, chips, machines = true, tents = [] } = {}) {
       const seen = new Set(), cand = [];
       if (chips) {
         for (const is of chips) {
@@ -48,7 +51,21 @@ export function createLabels({ THREE, layer, apps, lang }) {
         if (v.z >= 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) { el.hidden = true; continue; }
         cand.push({ el, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, d, svc: { service: 1, machine: 2 }[a.group] || 0 });
       }
-      cand.sort((a, b) => a.svc - b.svc || a.d - b.d); // apps first, then services, then machines
+      for (const x of chips || !machines ? [] : tents) {
+        seen.add(x.key);
+        let el = els.get(x.key);
+        if (!el) { el = document.createElement('span'); el.className = 'label tent'; layer.append(el); els.set(x.key, el); }
+        const a = apps[x.app] || {}, text = a.name || x.app;
+        if (el.textContent !== text) { el.textContent = text; el._w = 0; }
+        el.style.setProperty('--wire', `var(--wire-${a.wire || 'app'})`);
+        el.classList.toggle('down', !!x.down);
+        v.set(x.x, x.k.height + 0.3 + (x.down ? -SINK : 0), x.z);
+        const d = v.distanceTo(camera.position);
+        v.project(camera);
+        if (v.z >= 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) { el.hidden = true; continue; }
+        cand.push({ el, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, d, svc: 3 });
+      }
+      cand.sort((a, b) => a.svc - b.svc || a.d - b.d); // apps first, then services, then machines, then tents
       placed.length = 0;
       if (obstacle) placed.push(obstacle);
       for (const c of cand) {

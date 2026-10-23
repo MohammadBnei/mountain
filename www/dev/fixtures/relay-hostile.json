@@ -767,6 +767,17 @@
        "node": "k8s-worker-9.bnei.lan"
       },
       "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "pod": "wird-865ce724-x2",
+       "node": "k8s-worker-02",
+       "host_ip": "10.0.3.18",
+       "pod_ip": "10.233.67.4",
+       "uid": "9a2d"
+      },
+      "v": 1
      }
     ],
     "guests": [
@@ -804,6 +815,55 @@
       "m": {
        "target": "guest-evil<script>",
        "instance": "10.0.3.9:9119"
+      },
+      "v": 1
+     }
+    ],
+    "annexpods": [
+     {
+      "m": {
+       "namespace": "wird",
+       "pod": "wird-865ce724-x0",
+       "node": "k8s-cp-01",
+       "host_ip": "10.0.3.17",
+       "pod_ip": "10.233.66.30",
+       "uid": "8f1c"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "pod": "wird-adminweb-55-z",
+       "node": "k8s-cp-02",
+       "host_ip": "10.0.3.18"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "has-journal",
+       "pod": "has-journal-0",
+       "node": "k8s-cp-02"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "pod": "wird-865ce724-x1",
+       "node": "k8s-worker-9.bnei.lan"
+      },
+      "v": 1
+     },
+     {
+      "m": {
+       "namespace": "wird",
+       "pod": "wird-865ce724-x2",
+       "node": "k8s-worker-02",
+       "host_ip": "10.0.3.18",
+       "pod_ip": "10.233.67.4",
+       "uid": "9a2d"
       },
       "v": 1
      }

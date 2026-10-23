@@ -10,7 +10,7 @@
 //     the immutable /v/<build>/ prefix;
 //   - the page, desktop (1280×800) and phone low tier (390×844, ?q=low): built without a console error, an exception,
 //     a failed request or a request to another origin; the town drawn (plots > 0, labels shown) within the page
-//     budget (≤ 220 draw calls, ≤ 200k triangles, shadow pass included);
+//     budget (≤ 220 draw calls; ≤ 350k triangles on the high tier, ≤ 200k on phone-low; shadow pass included);
 //   - resync: the relay restarts on the same port, the page says "stale since" while it is down and resyncs through
 //     the next hello (stale cleared).
 //   - R7.1, desktop: 70 firing alerts stay within budget with no GL error; a building moved after a first tap is
@@ -90,8 +90,9 @@ try {
     if (!ready || err) { fail(`${name}: town never built ${err || ''}`); await page.close(); continue; }
     await sleep(3000);
     const info = await page.evalJSON(`({ ...__town.info(), labels: [...document.querySelectorAll('.label')].filter((l) => !l.hidden).length, quality: globalThis.__quality })`);
+    const TRIS = info.quality === 'low' ? 200000 : 350000; // owner, 2026-10-23: the high tier (desktop) gets room for the Civ release
     note(`${name}: ${JSON.stringify(info)}`);
-    if (info.draws > 220 || info.tris > 200000) fail(`${name}: over the page budget (${info.draws} draws / 220, ${info.tris} tris / 200k)`);
+    if (info.draws > 220 || info.tris > TRIS) fail(`${name}: over the page budget (${info.draws} draws / 220, ${info.tris} tris / ${TRIS / 1000}k)`);
     if (!info.labels) fail(`${name}: no building label shown`);
     if (qs && info.quality !== 'low') fail(`${name}: ?q=low did not select the low tier`);
     if (blocked) { // the tavern still stands (drawn as a home), every other building too
@@ -127,6 +128,62 @@ try {
       note(`tap: ${mover} → "${name0}", moved to h3 → ${name1 ? `"${name1}"` : 'NO CARD'}`);
       if (!name1) fail(`tap: ${mover} moved to h3 can no longer be tapped`);
     }
+    if (name === 'desktop' || name === 'phone-low') { // R8 C: every app's tents on both tiers (≤ 32), all drawn, and the alerts below on top
+      const n = await page.evalJSON(`(() => { const w = __town.world, m = ${JSON.stringify(MACHINES.map((x) => x.key))}, taken = new Set(
+          w.state.plots.map((p) => p.host + ',' + p.q + ',' + p.r).concat(w.state.marks.map((k) => 'h' + k.pose.h + ',' + k.pose.q + ',' + k.pose.r)));
+        let n = 0;
+        for (const p of w.state.plots) {
+          if (p.ruinAt || m.includes(p.app)) continue;
+          for (const is of w.town.islands) {
+            if (is.host === p.host) continue;
+            const R = is.radius; let idx = 0, hex = null;
+            for (let r = -R; r <= R; r++) for (let q = Math.max(-R, -r - R); q <= Math.min(R, -r + R); q++, idx++)
+              if (!hex && is.tiles[idx] === 'g' && !taken.has(is.host + ',' + q + ',' + r)) hex = { q, r };
+            if (!hex) continue;
+            taken.add(is.host + ',' + hex.q + ',' + hex.r);
+            __town.inject({ t: 'world', kind: 'annex', app: p.app, host: is.host, q: hex.q, r: hex.r }); n++;
+          }
+        }
+        __town.fly(''); return n; })()`);
+      await sleep(1500);
+      const ti = await page.evalJSON('__town.info()');
+      note(`tents ×${n}: ${JSON.stringify(ti)}`);
+      if (!n || ti.annexes !== n || (mode !== 'selftest' && n < 20)) fail(`tents: ${ti.annexes} drawn of ${n} injected`);
+      if (ti.draws > 220 || ti.tris > TRIS) fail(`tents: over the page budget (${ti.draws} draws, ${ti.tris} tris)`);
+      for (const h of ['h1', 'h2', 'h3']) { // R8 C zoom levels: close up, an island's copies stand whole
+        await page.evalJSON(`(__town.fly('${h}'), true)`);
+        await sleep(1500);
+        const ci = await page.evalJSON('__town.info()');
+        note(`tents ×${n}, ${h} close: ${JSON.stringify(ci)}`);
+        if (ci.draws > 220 || ci.tris > TRIS) fail(`tents, ${h} close: over the page budget (${ci.draws} draws, ${ci.tris} tris)`);
+      }
+      await page.evalJSON(`(__town.fly(''), true)`);
+      await sleep(1500);
+      if (name === 'desktop') { // a tap on a tent opens its app's card ("also on …") and the camera stays on the tent
+        let t0 = null, pt = null; // the first tent in clear view once the camera is there (a big building may hide one)
+        for (let i = 0; i < 8 && !pt; i++) {
+          t0 = await page.evalJSON(`(() => { const x = __town.buildings.annexes()[${i}]; __town.fly(x.key); return { key: x.key, host: x.host, x: x.x, z: x.z }; })()`);
+          await sleep(400);
+          await page.evalJSON(`document.getElementById('cardclose').click()`);
+          await sleep(500); // the dock shrinks with the card and the camera refits: project after that
+          pt = await page.evalJSON(`(async () => { const THREE = await import('three'), T = __town, x = T.buildings.annexes().find((y) => y.key === ${JSON.stringify(t0.key)});
+            const v = new THREE.Vector3(x.x, x.k.height * 0.4, x.z).project(T.camera), r = T.renderer.domElement.getBoundingClientRect();
+            const rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2(v.x, v.y), T.camera);
+            const hit = rc.intersectObjects(T.buildings.pickables(), false)[0];
+            return hit && T.buildings.annexOf(hit)?.key === x.key ? { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height } : null; })()`);
+        }
+        if (!pt) fail('tent tap: no tent in clear view');
+        else for (const type of ['mousePressed', 'mouseReleased']) await page.s('Input.dispatchMouseEvent', { type, x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
+        const card = await waitFor(page, `!document.getElementById('card').hidden && document.querySelector('#card .state').textContent`, 3000);
+        await sleep(1200);
+        const at = await page.evalJSON(`(() => { const c = __town.controls.target; return Math.hypot(c.x - ${t0.x}, c.z - ${t0.z}); })()`);
+        note(`tent tap: ${t0.key} → "${card}", camera ${at.toFixed(2)} from the tent`);
+        if (!card || !card.includes(`also on ${t0.host}`)) fail(`tent tap: the card of ${t0.key} does not say "also on ${t0.host}" first (${card})`);
+        if (at > 0.5) fail(`tent tap: the camera is ${at.toFixed(2)} from the tent`);
+        await page.evalJSON(`(document.getElementById('cardclose').click(), __town.fly(''))`);
+        await sleep(800);
+      }
+    }
     if (name === 'desktop' || name === 'phone-low') { // 70 alerts stay within budget, on both tiers (R8)
       await page.evalJSON(`(__town.fly(''), Array.from({ length: 70 }, (_, i) => __town.inject({ t: 'ev', kind: 'alert.fire', id: 'gate' + i, ts: Date.now(),
         fp: (0x1000000000000000n + BigInt(i)).toString(16), sev: ['info', 'warning', 'critical'][i % 3], layer: 'apps', startsAt: Date.now() })).length)`);
@@ -134,7 +191,7 @@ try {
       const storm = await page.evalJSON('__town.info()');
       const glErr = await page.evalJSON(`(() => { const gl = __town.renderer.getContext(); return gl.getError(); })()`);
       note(`alerts ×70: ${JSON.stringify(storm)} gl ${glErr}`);
-      if (storm.draws > 220 || storm.tris > 200000) fail(`alerts ×70: over the page budget (${storm.draws} draws, ${storm.tris} tris)`);
+      if (storm.draws > 220 || storm.tris > TRIS) fail(`alerts ×70: over the page budget (${storm.draws} draws, ${storm.tris} tris)`);
       if (glErr) fail(`alerts ×70: WebGL error ${glErr}`);
       const led = await page.evalJSON(`[__town.world.state.alerts.length, document.getElementById('facts').textContent]`);
       if (led[0] < 70 || !led[1].includes(`${led[0]} alerts`)) fail(`alerts ×70: the LED says "${led[1]}" for ${led[0]} alerts`);

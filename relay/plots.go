@@ -108,10 +108,13 @@ type placer struct {
 	cand    map[string]string    // app -> host leading since `since` (observed in every poll since then)
 	since   map[string]time.Time //
 	retired map[string]bool      // ruins freed: no new plot until the app is back in ArgoCD (ruin(…, false))
+	acand   map[string]time.Time // R8 C (annexes.go): app@host -> since its tent's wanted and published states differ
+	evicted map[string]bool      // app@host tents a plot took the hex of this poll: annexes() places them again at once
 }
 
 func newPlacer() *placer {
-	return &placer{cand: map[string]string{}, since: map[string]time.Time{}, retired: map[string]bool{}}
+	return &placer{cand: map[string]string{}, since: map[string]time.Time{}, retired: map[string]bool{},
+		acand: map[string]time.Time{}, evicted: map[string]bool{}}
 }
 
 // goneMark is the world:mark frame that removes m.
@@ -146,6 +149,10 @@ func (pl *placer) place(a *App, o *Out, pods []sample, machines []string, ready 
 		plots[p.App] = p
 	}
 	plants := plantAt(a.State.Marks)
+	annexes := map[string]Annex{}
+	for _, x := range a.State.Annexes {
+		annexes[x.key()] = x
+	}
 	a.mu.Unlock()
 
 	emit := func(p Plot, gone bool) {
@@ -156,18 +163,43 @@ func (pl *placer) place(a *App, o *Out, pods []sample, machines []string, ready 
 		}
 		o.World("plot", p.frame(gone))
 	}
+	// slot: a free hex, else a tent's (R8 C: the tent goes first and is placed again this poll), else a plant's (it
+	// gives way). The app's own tent on host does not count: a building moving there replaces it (the move below).
 	slot := func(app, host string) (town.Hex, bool) {
-		taken := map[town.Hex]bool{}
+		taken, tents := map[town.Hex]bool{}, map[town.Hex]Annex{}
 		for _, p := range plots {
 			if p.Host == host && p.App != app {
 				taken[p.hex()] = true
 			}
 		}
-		avoid := map[town.Hex]bool{}
+		for _, x := range annexes {
+			if x.Host == host && x.App != app {
+				tents[x.hex()] = x
+			}
+		}
+		stage1, avoid := maps.Clone(taken), map[town.Hex]bool{}
 		for x := range plants[host] {
+			stage1[x] = true
+		}
+		for x := range tents {
 			avoid[x] = true
 		}
-		x, ok := town.Slot(app, host, a.Cfg.roleOf(app), taken, avoid)
+		x, ok := town.Slot(app, host, a.Cfg.roleOf(app), stage1, avoid)
+		if !ok { // no free hex and no tent: today's rule, a plant gives way
+			for x := range tents {
+				taken[x] = true
+			}
+			avoid = map[town.Hex]bool{}
+			for x := range plants[host] {
+				avoid[x] = true
+			}
+			x, ok = town.Slot(app, host, a.Cfg.roleOf(app), taken, avoid)
+		}
+		if t, tent := tents[x]; ok && tent {
+			o.World("annex", t.frame(true))
+			delete(annexes, t.key())
+			pl.evicted[t.key()] = true
+		}
 		if m, planted := plants[host][x]; ok && planted { // the island is full: the plant on the chosen hex gives way
 			o.World("mark", goneMark(m))
 			a.store.unmark(m.ID, now)
@@ -233,6 +265,10 @@ func (pl *placer) place(a *App, o *Out, pods []sample, machines []string, ready 
 			pl.cand[app], pl.since[app] = best, now
 		case now.Sub(pl.since[app]) >= moveAfter:
 			if x, ok := slot(app, best); ok {
+				if t, tent := annexes[annexKey(app, best)]; tent { // its own tent there: the building replaces it
+					o.World("annex", t.frame(true))
+					delete(annexes, t.key())
+				}
 				emit(Plot{App: app, Host: best, Q: x.Q, R: x.R, Role: cur.Role, RuinAt: cur.RuinAt}, false)
 			}
 			delete(pl.cand, app)
@@ -270,6 +306,7 @@ func (pl *placer) ruin(a *App, o *Out, app string, ruins bool, now time.Time) {
 	p.RuinAt = 0
 	if ruins {
 		p.RuinAt = now.UnixMilli()
+		dropAnnexes(a, o, app, "") // R8 C: no tent beside ruins (annexes.go annexOK)
 	}
 	o.World("plot", p.frame(false))
 }

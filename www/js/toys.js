@@ -92,7 +92,7 @@ export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
   function free(hx) { // toy_plant.go mirrored: grass or meadow, no building, no plant, or a full island's oldest plant
     const all = hexes(hx.h), host = world.town.islands[hx.h - 1].host;
     const open = (x) => x.kind === 'g' || x.kind === 'm';
-    const built = (x) => world.state.plots.some((p) => p.host === host && p.q === x.q && p.r === x.r);
+    const built = (x) => world.state.plots.concat(world.state.annexes || []).some((p) => p.host === host && p.q === x.q && p.r === x.r); // R8 C: tents too
     const plants = world.state.marks.filter((m) => m.mark === 'plant' && m.pose.h === hx.h); // oldest first
     const planted = (x) => plants.some((m) => m.pose.q === x.q && m.pose.r === x.r);
     const me = all.find((x) => x.q === hx.q && x.r === hx.r);

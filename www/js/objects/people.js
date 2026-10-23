@@ -60,14 +60,15 @@ export default async function build({ THREE, kit, world }) {
     }
     const total = list.reduce((a, x) => a + x.n, 0), k = total > MAX ? MAX / total : 1;
     let id = 0;
-    const paved = new Map(islandsOf(t).map((is) => [is.host, new Set(streets(is, s.plots.filter((x) => x.host === is.host)).map(([q, r]) => `${q},${r}`))]));
+    const tents = s.annexes || [], built = s.plots.concat(tents); // R8 C: walkers go round tents too
+    const paved = new Map(islandsOf(t).map((is) => [is.host, new Set(streets(is, s.plots.filter((x) => x.host === is.host), tents.filter((x) => x.host === is.host)).map(([q, r]) => `${q},${r}`))]));
     for (const { p, n, bad } of list) {
       const is = t.islands.find((i) => i.host === p.host);
       is.tilesList ||= [];
       const R = is.radius;
       if (!is.tilesList.length) for (let r = -R; r <= R; r++) for (let q = Math.max(-R, -r - R); q <= Math.min(R, -r + R); q++) is.tilesList.push([q, r]);
       const heads = t.bridges.flatMap((b) => (b.a === p.host ? [[b.aq, b.ar]] : b.b === p.host ? [[b.bq, b.br]] : []));
-      const inner = path(is, s.plots, p, paved.get(p.host));
+      const inner = path(is, built, p, paved.get(p.host));
       const count = Math.max(1, Math.round(n * k));
       for (let i = 0; i < count; i++) {
         const [hq, hr] = heads[i % heads.length], len = ring(hq, hr);

@@ -226,6 +226,23 @@
    "kind": "machine",
    "app": "witness",
    "state": "down"
+  },
+  {
+   "t": "world",
+   "kind": "annex",
+   "app": "wird",
+   "host": "h2",
+   "q": 2,
+   "r": -3
+  },
+  {
+   "t": "world",
+   "kind": "annex",
+   "app": "wird",
+   "host": "h2",
+   "q": 2,
+   "r": -3,
+   "gone": true
   }
  ],
  "invalid": [
@@ -431,6 +448,38 @@
    "kind": "machine",
    "app": "witness",
    "state": "flapping"
+  },
+  {
+   "t": "world",
+   "kind": "annex",
+   "app": "wird",
+   "host": "h2",
+   "q": 2,
+   "r": -3,
+   "n": 3
+  },
+  {
+   "t": "world",
+   "kind": "annex",
+   "app": "wird",
+   "host": "h4",
+   "q": 2,
+   "r": -3
+  },
+  {
+   "t": "world",
+   "kind": "annex",
+   "app": "wird",
+   "host": "h2",
+   "q": 2
+  },
+  {
+   "t": "world",
+   "kind": "annex",
+   "app": "Wird.bnei.lan",
+   "host": "h2",
+   "q": 2,
+   "r": -3
   }
  ]
 }

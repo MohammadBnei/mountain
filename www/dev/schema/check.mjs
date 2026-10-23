@@ -83,9 +83,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     report('replay with a metrics frame among its frames', validate({ ...replay, frames: [hello.metrics] }), false);
     const dw = createWorld(), seen = [];
     dw.applyHello(hello);
-    for (const k of ['plot', 'mark']) dw.on(`world:${k}`, (p, type) => seen.push(type));
+    for (const k of ['plot', 'mark', 'annex']) dw.on(`world:${k}`, (p, type) => seen.push(type));
     for (const f of valid.filter((f) => f.t === 'world')) { try { dw.applyFrame(f); } catch (e) { seen.push(e.message); } }
-    report('valid world frames → world:<kind> bus', seen.join() === 'world:mark,world:mark,world:plot,world:plot,world:plot' ? [] : [seen.join()]);
+    report('valid world frames → world:<kind> bus', seen.join() === 'world:mark,world:mark,world:plot,world:plot,world:plot,world:annex,world:annex' ? [] : [seen.join()]);
   }
   console.log(bad ? `SCHEMA FAIL (${bad})` : 'SCHEMA PASS');
   process.exit(bad ? 1 : 0);

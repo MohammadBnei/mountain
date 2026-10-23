@@ -128,6 +128,7 @@ const (
 	fKind          // a town building kind (town.Kinds)
 	fProbed        // R8: a probed machine's key (config.yaml machine with probe)
 	fUpDown        // R8: up|down
+	fWork          // R8 C: an allowlisted app key that is not a machine (a tent's app)
 )
 
 // spec: frame kind -> field -> type. Every field is required, except a "name?" field, which is left out when
@@ -151,6 +152,8 @@ var spec = map[string]map[string]int{
 	"world:mark": {"id": fULID, "mark": fToy, "pose": fPose, "weight": fNum, "by?": fHandle, "gone?": fBool},
 	// R7: town plots (plots.go). ruinAt = app.gone time (unix ms), gone = the plot is freed
 	"world:plot": {"app": fApp, "host": fHost, "q": fHexC, "r": fHexC, "role": fKind, "ruinAt?": fNat, "gone?": fBool},
+	// R8 C: an app's tent on another host it runs on (annexes.go); never a count
+	"world:annex": {"app": fWork, "host": fHost, "q": fHexC, "r": fHexC, "gone?": fBool},
 }
 
 var (
@@ -263,6 +266,10 @@ func (c *Config) valid(typ int, v any) bool {
 		return ok && c.machine(s) && c.Apps[s].Probe != ""
 	case fUpDown:
 		return v == "up" || v == "down"
+	case fWork:
+		s, ok := v.(string)
+		_, in := c.Apps[s]
+		return ok && in && !c.machine(s)
 	}
 	return false
 }

@@ -49,6 +49,32 @@ const KINDS = `(() => {
     [3, [-5, -3], ['home', 'house']]];
   for (const [r, qs, kinds] of rows) kinds.forEach((k, i) => __town.inject({ t: 'world', kind: 'plot', app: k, host: 'h1', q: qs[i], r, role: k }));
 })()`;
+// R8 C annexes (copies of the app's building), as the relay would put them up live: the DaemonSet services (watchtower, warehouse) on both other
+// islands, a few apps on one more; outskirts first (the relay's ring order), never on a plot, a plant or a tent.
+const TENTS = `(() => {
+  const w = __town.world, H = ['h1', 'h2', 'h3'], taken = new Set(w.state.plots.map((p) => p.host + ',' + p.q + ',' + p.r)
+    .concat(w.state.marks.map((m) => 'h' + m.pose.h + ',' + m.pose.q + ',' + m.pose.r)));
+  const free = (host, key) => { // ring R-1 down to 1 (the relay's tent order), rotated by the key like town.Slot's fnv seed
+    const is = w.town.islands.find((i) => i.host === host), R = is.radius, seed = [...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+    for (let ring = R - 1; ring >= 1; ring--) {
+      const out = [];
+      let idx = 0;
+      for (let r = -R; r <= R; r++) for (let q = Math.max(-R, -r - R); q <= Math.min(R, -r + R); q++, idx++)
+        if (is.tiles[idx] === 'g' && Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) === ring && !taken.has(host + ',' + q + ',' + r)) out.push({ q, r });
+      if (out.length) return out[seed % out.length];
+    }
+    return null; };
+  for (const [app, n] of [['watchtower', 2], ['warehouse', 2], ['gate', 1], ['guardhouse', 1], ['wird', 1], ['vos-monolith', 1], ['dream-analyst', 1]]) {
+    const p = w.state.plots.find((x) => x.app === app && !x.ruinAt);
+    if (!p) continue;
+    for (const host of H.filter((h) => h !== p.host).slice(0, n)) {
+      const x = free(host, app + '@' + host);
+      if (!x) continue;
+      taken.add(host + ',' + x.q + ',' + x.r);
+      __town.inject({ t: 'world', kind: 'annex', app, host, q: x.q, r: x.r });
+    }
+  }
+})()`;
 const views = [
   // [name, width, height, setup (in the page), wait seconds]
   ['overview-noon', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('home')`, 2],
@@ -70,6 +96,15 @@ const views = [
   ['machines-h1-night', 1280, 800, `__town.sunAt('2026-10-22T21:00:00Z'); __town.fly('h1')`, 3],
   ['card-witness-admin', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('witness')`, 2, SF, '&role=admin&names=1'],
   ['card-keep-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('keep-h2')`, 2],
+  // R8 C tents: the overview, an island close up (tents named only near the camera), a tent's card (its app's, "also
+  // on"), the softer glow at night, a down island's tents greyed with it, the phone
+  ['tents-overview', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; __town.fly('home')`, 3],
+  ['tents-h3', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; __town.fly('h3')`, 3],
+  ['tents-card', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; setTimeout(() => __town.fly(__town.buildings.annexes().find((x) => x.app === 'watchtower').key), 1500)`, 4],
+  ['tents-h2-night', 1280, 800, `__town.sunAt('2026-10-22T21:00:00Z'); ${TENTS}; __town.fly('h2')`, 3],
+  ['tents-down-h1', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; __town.fly('h1')`, 3, SF],
+  ['tents-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; __town.fly('home')`, 3],
+  ['tents-card-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; setTimeout(() => __town.fly(__town.buildings.annexes().find((x) => x.app === 'wird')?.key || ''), 1500)`, 4],
   // the styleboard: every state at once (injected frames on top of the fixture's live ones)
   ['states-overview', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${STATES}; __town.fly('home')`, 3, SF],
   ['states-h2', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${STATES}; __town.fly('h2')`, 3, SF],

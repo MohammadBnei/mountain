@@ -4,7 +4,7 @@
 //   createWorld() → world
 //   world.town       hello.town: {islands:[{host, q, r, radius, tiles}], bridges:[{a, b, aq, ar, bq, br}]} (R8: a radius per island)
 //   world.build      hello.build: the relay's www build id (R8; main.js reloads a page from another build)
-//   world.state      {alerts, health, replicas, builds, marks, plots, machines}: hello.state, then every frame, BEFORE its emit
+//   world.state      {alerts, health, replicas, builds, marks, plots, machines, annexes}: hello.state, then every frame, BEFORE its emit
 //   world.metrics    the last metrics frame;  world.stale  null | unix ms (oldest stale source, or the socket drop)
 //   world.ready      host → bool (ev node.ready, metrics.hosts; absent = not measured yet: draw it up)
 //   world.quorum     [hosts] | null (hello.state.quorum, then ev quorum; null = not known yet)
@@ -20,7 +20,7 @@
 export function createWorld() {
   const subs = new Map(), acks = new Map();
   let refN = 0, resolveReady, play = null; // play: {day, queue, gap, t, timer, done: [resolve, reject]}
-  const emptyState = () => ({ alerts: [], health: {}, replicas: {}, builds: {}, marks: [], plots: [], machines: {} });
+  const emptyState = () => ({ alerts: [], health: {}, replicas: {}, builds: {}, marks: [], plots: [], machines: {}, annexes: [] });
   const w = {
     town: null, build: null, state: emptyState(), metrics: null, stale: null, ready: {}, quorum: null, quota: null, named: false, replay: null,
     loaded: new Promise((r) => (resolveReady = r)),
@@ -108,6 +108,10 @@ export function createWorld() {
     if (f.kind === 'plot') {
       s.plots = s.plots.filter((x) => x.app !== p.app);
       if (!p.gone) { const { gone, ...plot } = p; s.plots = s.plots.concat(plot).slice(-64); }
+    }
+    if (f.kind === 'annex') { // R8 C: one tent per app@host (relay annexes.go)
+      s.annexes = s.annexes.filter((x) => x.app !== p.app || x.host !== p.host);
+      if (!p.gone) { const { gone, ...tent } = p; s.annexes = s.annexes.concat(tent).slice(-48); }
     }
   }
 

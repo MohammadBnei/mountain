@@ -41,6 +41,7 @@ func init() {
 	Plots.Set("", 0)
 	QueryFailed.Add("pods", 0)
 	QueryFailed.Add("guests", 0)
+	QueryFailed.Add("annexpods", 0)
 	SlotFailed.Add("", 0)
 	Unmapped.Add("probe", 0) // R8: the series exists from the start, so "flat at 0" is a real reading
 }

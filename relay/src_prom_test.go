@@ -217,6 +217,10 @@ func TestFixtureTimeline(t *testing.T) {
 		t.Errorf("app.gone: want exactly one, at step 43: %v", gone)
 	}
 	one(3+40, "app.gone", map[string]any{"app": "dream-analyst"})
+	// R8 C: one tent, wird's on h2; none for has-journal (private), the unmapped node or a machine
+	if got, st := annexFrames(all), tents(a); fmt.Sprint(got) != "[wird@h2]" || fmt.Sprint(st) != "[wird@h2]" {
+		t.Errorf("tents: frames %v, state %v", got, st)
+	}
 
 	// metrics: Traefik reset handled, 5xx only, storage pools by allowlist
 	var m map[string]any
