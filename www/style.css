@@ -119,3 +119,12 @@ canvas:active { cursor: grabbing; }
 #toystatus { margin: 0; padding: 4px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); font: 500 13px/20px var(--font-sans); text-align: center; }
 canvas.aiming { cursor: crosshair; }
 @media (max-width: 600px) { #bar button span { display: none; } #bar button[aria-pressed="true"] span, #plant span { display: inline; } }
+
+/* R9 Civ: the herald's decree (a speech label), the golden age chip, the guide card's list; screen-reader-only text */
+.label.herald { border-color: var(--ochre-700); background: var(--surface-raised); color: var(--ink); font-weight: 600; }
+.label.herald::before { border-radius: 2px; background: var(--ochre-700); }
+#facts .gold { color: var(--ochre-700); }
+#card dl.guide { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font: 400 13px/18px var(--font-sans); color: var(--ink); }
+#card dl.guide dt { font-weight: 600; }
+#card dl.guide dd { margin: 0; color: var(--ink-muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

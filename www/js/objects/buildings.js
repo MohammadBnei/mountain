@@ -16,6 +16,10 @@
 // lamp. A copy has no lamp, scaffold, smoke, flag or ground, greys with its island, and drops in when it goes up live,
 // never with its app's syncs. Tapping one opens the app's card. A copy beside no standing building of its app, or on
 // its app's own island, is not drawn (the relay removes it on its next poll). Copies block streets and walkers.
+// R9 Civ levels (world.state.levels, from the app's successful syncs of the last 30 days): level 2 stands 15% taller
+// with props at its back corners (a barrel, a crate, a sack), level 3 30% taller with a low stone ring open at the door
+// and a weathervane on top, the way a Civ town hall shows its age. A copy follows its app. A live level-up plays a
+// short scaffold-and-pulse ("improved"); a level-down is quiet.
 // Zoom levels: in the overview a copy stands as its banner alone ("this app also lives here"); once the camera comes
 // in, the island it looks at (the one nearest the orbit target) shows its copies whole. It keeps every view in budget.
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -49,7 +53,7 @@ export function streets(is, plots, blocked = []) {
   return [...out.values()];
 }
 
-const DROP = 0.9, HOP = 0.75;
+const DROP = 0.9, HOP = 0.75, LIFT = [1, 1.15, 1.3], IMPROVE = 2.5; // LIFT: a level's height; IMPROVE: its moment, s
 
 export default async function build({ THREE, kit, world, apps }) {
   const root = new THREE.Group();
@@ -143,6 +147,31 @@ export default async function build({ THREE, kit, world, apps }) {
   const failPole = kit.instanced(fpole.scale(3, 3, 3), kit.shared, N);
   const failCloth = kit.instanced(fcloth.scale(3, 3, 3), kit.variant('raspberry', { color: new THREE.Color(0xa5402a) }), N); // Ukubi danger
   const failed = new Map(); // app → until (t, s)
+  // R9 levels: the props (level 2+), the stone ring and the weathervane (level 3), shared by every kind
+  const L = N + 48; // plots + annex copies
+  const props = kit.instanced(mergeGeometries([
+    ...(await kit.geometry('barrel')).map((g) => g.scale(1.6, 1.6, 1.6).translate(-0.62, 0, -0.56)),
+    ...(await kit.geometry('crate_A_small')).map((g) => g.scale(2.2, 2.2, 2.2).rotateY(0.5).translate(0.6, 0, -0.6)),
+    ...(await kit.geometry('sack')).map((g) => g.scale(2.0, 2.0, 2.0).translate(0.74, 0, -0.28)),
+  ]), kit.shared, L);
+  const ring = kit.instanced(mergeGeometries(Array.from({ length: 5 }, (_, i) => { // a wall on the hex's own edges, open on
+    // the edge facing +x (dress() turns that edge to the door): the buildings fill their hex, so it stands at the tile's
+    // rim (0.97: two neighbours' walls never meet) and tall enough to show over a base, with a post at each corner
+    const a = (Math.PI / 3) * (1 + i), c = a - Math.PI / 6; // edge normals 60°..300°; corners between them
+    return mergeGeometries([
+      atlasCell(box(1.0, 0.34, 0.09, 0, 0.17, 0).rotateY(a + Math.PI / 2).translate(Math.cos(a) * 0.97, 0, -Math.sin(a) * 0.97).toNonIndexed(), kit.CELL.stone),
+      atlasCell(box(0.15, 0.46, 0.15, 0, 0.23, 0).translate(Math.cos(c) * 1.1, 0, -Math.sin(c) * 1.1).toNonIndexed(), kit.CELL.stone),
+      ...(i === 4 ? [atlasCell(box(0.15, 0.46, 0.15, 0, 0.23, 0).translate(Math.cos(a + Math.PI / 6) * 1.1, 0, -Math.sin(a + Math.PI / 6) * 1.1).toNonIndexed(), kit.CELL.stone)] : []),
+    ]);
+  })), kit.shared, L);
+  const vane = kit.instanced(mergeGeometries([
+    atlasCell(new THREE.CylinderGeometry(0.018, 0.018, 0.36, 5).translate(0, 0.18, 0).toNonIndexed(), kit.CELL.dark),
+    atlasCell(new THREE.BoxGeometry(0.26, 0.05, 0.015).translate(0.04, 0.3, 0).toNonIndexed(), kit.CELL.dark),
+    atlasCell(new THREE.ConeGeometry(0.035, 0.07, 4).rotateZ(-Math.PI / 2).translate(0.2, 0.3, 0).toNonIndexed(), kit.CELL.dark),
+    atlasCell(new THREE.SphereGeometry(0.035, 6, 4).translate(0, 0.38, 0).toNonIndexed(), kit.CELL.dark),
+  ]), kit.shared, L);
+  const improved = new Map(); // app → t0 of its level-up moment (R9)
+  let lastLevels = {}; // the levels the page last drew: a live ev level above it is a level-up
   // R8 C: an annex copy's banner, the same flag in the app's wire colour (the roofs' glowing material, tinted per instance)
   const bannerPole = kit.instanced(failPole.geometry, kit.shared, N); // the same scaled flag (scale() works in place)
   const bannerCloth = kit.instanced(failCloth.geometry, roofMat, N);
@@ -151,7 +180,7 @@ export default async function build({ THREE, kit, world, apps }) {
   cap.castShadow = false;
   const isles = islandsOf(world.town);
   let ground = [];
-  for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, bannerPole, bannerCloth, cap, ...Object.values(flames)]) { m.frustumCulled = false; root.add(m); }
+  for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, bannerPole, bannerCloth, cap, props, ring, vane, ...Object.values(flames)]) { m.frustumCulled = false; root.add(m); }
 
   // ---- state → layout
   let plots = [], tents = [], beacons = [], dirty = true, relaying = null, retryAt = 0;
@@ -159,6 +188,11 @@ export default async function build({ THREE, kit, world, apps }) {
   world.on('state', () => { dirty = true; });
   world.on('metrics', () => { dirty = true; }); // hosts' Ready rides the metrics frame
   world.on('world:plot', (p) => { if (!p.gone && !p.ruinAt) acts.set(p.app, { type: 'drop', t0: now }); });
+  world.on('hello', () => { lastLevels = { ...world.state.levels }; improved.clear(); }); // a resync redraws, never replays a level-up
+  world.on('ev:level', (f) => {
+    if (!world.replay && f.level > (lastLevels[f.app] || 1)) improved.set(f.app, now);
+    lastLevels = { ...world.state.levels };
+  });
   world.on('world:annex', (x) => { if (!x.gone) acts.set(`${x.app}@${x.host}`, { type: 'drop', t0: now }); }); // a copy's own act
   world.on('ev:argo.sync', (f) => {
     if (f.ok) { acts.set(f.app, { type: 'drop', t0: now }); failed.delete(f.app); } else failed.set(f.app, now + 600);
@@ -177,7 +211,8 @@ export default async function build({ THREE, kit, world, apps }) {
       const yaw = Math.atan2(cx - x, cz - z);
       const a = apps[p.app] || {}, health = s.health[p.app], down = world.ready[p.host] === false;
       // R8: off = a probed machine not answering (its own state, 10 min held): greyed and dark, but not sunk: its island is up
-      list.push({ ...p, k, x, z, yaw, is, wire: wireOf(apps, p.app), down, health, off: s.machines?.[p.app] === 'down',
+      const level = s.levels?.[p.app] || 1;
+      list.push({ ...p, k, x, z, yaw, is, level, height: k.height * LIFT[level - 1], wire: wireOf(apps, p.app), down, health, off: s.machines?.[p.app] === 'down',
         building: !!s.builds[p.app] || health === 'Progressing', smoke: health === 'Degraded', faded: health === 'Missing' || health === 'Suspended' });
     }
     plots = list;
@@ -188,7 +223,7 @@ export default async function build({ THREE, kit, world, apps }) {
       const main = standing.get(x.app);
       if (!main || main.host === x.host) continue;
       const [tx, tz] = plotXZ(world.town, x.host, x.q, x.r), [cx, cz] = plotXZ(world.town, x.host, 0, 0);
-      tents.push({ ...x, key: `${x.app}@${x.host}`, k: main.k, x: tx, z: tz, yaw: Math.atan2(cx - tx, cz - tz), wire: main.wire, down: world.ready[x.host] === false });
+      tents.push({ ...x, key: `${x.app}@${x.host}`, k: main.k, level: main.level, height: main.height, x: tx, z: tz, yaw: Math.atan2(cx - tx, cz - tz), wire: main.wire, down: world.ready[x.host] === false });
     }
     ground = [];
     for (const is of isles) {
@@ -246,6 +281,21 @@ export default async function build({ THREE, kit, world, apps }) {
       for (const k of new Set(Object.values(kinds))) { k.body.count = k.roof.count = k.copy.body.count = k.copy.roof.count = 0; k.apps = []; k.copy.apps = []; k.copy.items = []; }
       ruins.apps = [];
       let nS = 0, nR = 0, nSm = 0, nL = 0, nF = 0, busy = false;
+      let nP = 0, nG = 0, nV = 0;
+      const dress = (p, dy, h) => { // R9: a level's props, ring and weathervane, greyed and sunk with the island
+        if (p.level < 2) return;
+        const y = dy - (p.down ? SINK : 0), tint = p.down ? grey : C.setScalar(1);
+        M.compose(P.set(p.x, y, p.z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1));
+        if (nP < L) { props.setMatrixAt(nP, M); props.setColorAt(nP++, tint); }
+        if (p.level < 3) return;
+        if (nG < L) { // world-aligned like the tile: the open edge is the one nearest the door (+z turned by yaw)
+          const door = Math.atan2(-Math.cos(p.yaw), Math.sin(p.yaw)), step = Math.PI / 3;
+          M.compose(P.set(p.x, y, p.z), Q.setFromEuler(E.set(0, Math.round(door / step) * step, 0)), S.set(1, 1, 1));
+          ring.setMatrixAt(nG, M); ring.setColorAt(nG++, tint);
+        }
+        M.compose(P.set(p.x, y + h, p.z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1));
+        if (nV < L) { vane.setMatrixAt(nV, M); vane.setColorAt(nV++, tint); }
+      };
       const counts = { info: 0, warning: 0, critical: 0 };
       for (const p of plots) {
         if (p.ruinAt) {
@@ -258,28 +308,32 @@ export default async function build({ THREE, kit, world, apps }) {
         }
         const [dy, sq, spin] = pose(p, t);
         busy ||= acts.has(p.app);
-        const k = p.k;
+        const k = p.k, up = improved.has(p.app) ? t - improved.get(p.app) : -1;
+        if (up >= IMPROVE) improved.delete(p.app);
+        const lift = LIFT[p.level - 1] * (up >= 0 && up < IMPROVE ? 1 + 0.06 * Math.sin(up * 9) * (1 - up / IMPROVE) : 1);
+        busy ||= up >= 0;
         if (k.body.count >= CAP) continue; // more than CAP of one kind: never with the allowlist (≤ 64 plots)
         const i = k.body.count++;
         k.roof.count++;
-        M.compose(P.set(p.x, dy - (p.down ? SINK : 0), p.z), Q.setFromEuler(E.set(0, p.yaw + spin, 0)), S.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq)));
+        M.compose(P.set(p.x, dy - (p.down ? SINK : 0), p.z), Q.setFromEuler(E.set(0, p.yaw + spin, 0)), S.set(1 / Math.sqrt(sq), sq * lift, 1 / Math.sqrt(sq)));
         k.body.setMatrixAt(i, M);
         k.roof.setMatrixAt(i, M);
+        dress(p, dy, p.height * (lift / LIFT[p.level - 1]));
         k.body.setColorAt(i, p.down || p.off ? grey : C.setScalar(p.faded ? 0.72 : 1));
         k.roof.setColorAt(i, p.down || p.off ? grey : C.set(wires[p.wire]).multiplyScalar(p.faded ? 0.6 : 1));
         k.apps[i] = p.app;
         const fx = (lx, lz) => [p.x + Math.cos(p.yaw) * lx + Math.sin(p.yaw) * lz, p.z - Math.sin(p.yaw) * lx + Math.cos(p.yaw) * lz];
         if (nL < N && !p.off) { const [x, z] = fx(0.5 * k.width, 0.5 * k.width); M.compose(P.set(x, p.down ? -SINK : 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); lampPost.setMatrixAt(nL, M); lamp.setMatrixAt(nL++, M); }
         if ((failed.get(p.app) ?? -1) > t && nF < N) { const [x, z] = fx(-0.5 * k.width, 0.45 * k.width); M.compose(P.set(x, 0, z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(1, 1, 1)); failPole.setMatrixAt(nF, M); failCloth.setMatrixAt(nF++, M); }
-        if (p.building && nS < N) {
-          M.compose(P.set(p.x, 0, p.z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(k.width / 1.6, Math.max(0.8, k.height / 1.5), k.width / 1.6));
+        if ((p.building || (up >= 0 && up < IMPROVE)) && nS < N) {
+          M.compose(P.set(p.x, 0, p.z), Q.setFromEuler(E.set(0, p.yaw, 0)), S.set(k.width / 1.6, Math.max(0.8, p.height / 1.5), k.width / 1.6));
           scaffold.setMatrixAt(nS++, M);
         }
         if (p.smoke) {
           busy = true;
           for (let j = 0; j < 4 && nSm < smoke.instanceMatrix.count; j++) {
             const f = (t * 0.35 + j / 4) % 1, s = 0.6 + 1.6 * f;
-            M.compose(P.set(p.x + 0.25 * Math.sin(j * 2.1 + t * 0.6) + 0.3 * f, k.height * 0.85 + 0.3 + f * 1.6, p.z + 0.2 * Math.cos(j * 1.7)), Q.identity(), S.set(s, s, s));
+            M.compose(P.set(p.x + 0.25 * Math.sin(j * 2.1 + t * 0.6) + 0.3 * f, p.height * 0.85 + 0.3 + f * 1.6, p.z + 0.2 * Math.cos(j * 1.7)), Q.identity(), S.set(s, s, s));
             smoke.setMatrixAt(nSm++, M);
           }
         }
@@ -300,9 +354,10 @@ export default async function build({ THREE, kit, world, apps }) {
         if (near && k.body.count < CAP) {
           const i = k.body.count++;
           k.roof.count++;
-          M.compose(P.set(x.x, dy - (x.down ? SINK : 0), x.z), Q.setFromEuler(E.set(0, x.yaw, 0)), S.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq)));
+          M.compose(P.set(x.x, dy - (x.down ? SINK : 0), x.z), Q.setFromEuler(E.set(0, x.yaw, 0)), S.set(1 / Math.sqrt(sq), sq * LIFT[x.level - 1], 1 / Math.sqrt(sq)));
           k.body.setMatrixAt(i, M);
           k.roof.setMatrixAt(i, M);
+          dress(x, dy, x.height); // after: dress() reuses M
           k.body.setColorAt(i, x.down ? grey : C.setScalar(1));
           k.roof.setColorAt(i, x.down ? grey : C.set(wires[x.wire]));
           k.apps[i] = x.app;
@@ -338,9 +393,9 @@ export default async function build({ THREE, kit, world, apps }) {
       for (const b of beacons) { M.compose(P.set(b.x, 0, b.z), Q.identity(), S.set(1, 1, 1)); brazier.setMatrixAt(nb++, M); }
       brazier.count = nb;
       for (const [sev, m] of Object.entries(flames)) m.count = counts[sev];
-      scaffold.count = nS; rubble.count = nR; smoke.count = nSm;
+      scaffold.count = nS; rubble.count = nR; smoke.count = nSm; props.count = nP; ring.count = nG; vane.count = nV;
       lampPost.count = lamp.count = night > 0.05 ? nL : 0; failPole.count = failCloth.count = nF;
-      for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, bannerPole, bannerCloth, cap, ...Object.values(flames)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+      for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, bannerPole, bannerCloth, cap, props, ring, vane, ...Object.values(flames)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
       for (const k of new Set(Object.values(kinds))) for (const m of [k.body, k.roof, k.copy.body, k.copy.roof]) {
         m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
         m.boundingSphere = null; // three computes an InstancedMesh's sphere once, on the first raycast: moved plots must stay tappable
@@ -360,6 +415,8 @@ export default async function build({ THREE, kit, world, apps }) {
     },
     plots: () => plots,
     annexes: () => tents,
+    /** R9: buildings still in their level-up moment. */
+    improving: () => improved.size,
     /** R8 C: annex copies drawn whole this frame (the rest stand as their banner). */
     copies: () => [...new Set(Object.values(kinds))].reduce((n, k) => n + k.copy.body.count, 0),
     pickables: () => [...new Set(Object.values(kinds))].flatMap((k) => [k.body, k.roof, k.copy.body, k.copy.roof]).concat(rubble),

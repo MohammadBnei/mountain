@@ -14,16 +14,29 @@ export function createLabels({ THREE, layer, apps, lang }) {
   document.fonts?.ready.then(() => { for (const el of els.values()) el._w = 0; }); // widths measured before the web font swap in
   return {
     /** plots: buildings.plots(); obstacle: [x0, y0, x1, y1] in canvas px (the dock); chips: islands → island labels;
-     *  tents: buildings.annexes(), named with the machines (machines = false hides both). */
-    update(plots, camera, w, h, { obstacle, chips, machines = true, tents = [] } = {}) {
+     *  tents: buildings.annexes(), named with the machines (machines = false hides both); notes: the herald's decrees
+     *  [{key, host, x, y, z, text}], placed first (in the chips' overview, a decree takes its island's chip). */
+    update(plots, camera, w, h, { obstacle, chips, machines = true, tents = [], notes = [] } = {}) {
       const seen = new Set(), cand = [];
+      const said = new Map(notes.map((n) => [n.host, n.text]));
+      for (const n of chips ? [] : notes) {
+        seen.add(n.key);
+        let el = els.get(n.key);
+        if (!el) { el = document.createElement('span'); el.className = 'label herald'; layer.append(el); els.set(n.key, el); }
+        if (el.textContent !== n.text) { el.textContent = n.text; el._w = 0; }
+        v.set(n.x, n.y + (n.down ? -SINK : 0), n.z);
+        const d = v.distanceTo(camera.position);
+        v.project(camera);
+        if (v.z >= 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) { el.hidden = true; continue; }
+        cand.push({ el, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, d, svc: -1 });
+      }
       if (chips) {
         for (const is of chips) {
           const key = `@${is.host}`, n = plots.filter((p) => p.host === is.host && !p.ruinAt).length;
           seen.add(key);
           let el = els.get(key);
           if (!el) { el = document.createElement('span'); el.className = 'label chip'; layer.append(el); els.set(key, el); }
-          const text = `${is.host} · ${n} ${lang() === 'fr' ? (n === 1 ? 'bâtiment' : 'bâtiments') : (n === 1 ? 'building' : 'buildings')}`;
+          const text = said.get(is.host) || `${is.host} · ${n} ${lang() === 'fr' ? (n === 1 ? 'bâtiment' : 'bâtiments') : (n === 1 ? 'building' : 'buildings')}`; // R9: a decree takes the chip
           if (el.textContent !== text) { el.textContent = text; el._w = 0; }
           v.set(is.centre[0], 3, is.centre[1]);
           const d = v.distanceTo(camera.position);
@@ -45,7 +58,7 @@ export function createLabels({ THREE, layer, apps, lang }) {
         el.classList.toggle('down', !!p.down || !!p.off);
         el.classList.toggle('gone', !!p.ruinAt);
         if (a.group === 'machine' && !machines) { el.hidden = true; continue; } // R8: machines are named up close only
-        v.set(p.x, (p.ruinAt ? 0.5 : p.k.height) + 0.35 + (p.down ? -SINK : 0), p.z);
+        v.set(p.x, (p.ruinAt ? 0.5 : (p.height ?? p.k.height)) + 0.35 + (p.down ? -SINK : 0), p.z);
         const d = v.distanceTo(camera.position);
         v.project(camera);
         if (v.z >= 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) { el.hidden = true; continue; }
@@ -59,18 +72,19 @@ export function createLabels({ THREE, layer, apps, lang }) {
         if (el.textContent !== text) { el.textContent = text; el._w = 0; }
         el.style.setProperty('--wire', `var(--wire-${a.wire || 'app'})`);
         el.classList.toggle('down', !!x.down);
-        v.set(x.x, x.k.height + 0.3 + (x.down ? -SINK : 0), x.z);
+        v.set(x.x, (x.height ?? x.k.height) + 0.3 + (x.down ? -SINK : 0), x.z);
         const d = v.distanceTo(camera.position);
         v.project(camera);
         if (v.z >= 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) { el.hidden = true; continue; }
         cand.push({ el, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, d, svc: 3 });
       }
-      cand.sort((a, b) => a.svc - b.svc || a.d - b.d); // apps first, then services, then machines, then tents
+      cand.sort((a, b) => a.svc - b.svc || a.d - b.d); // the herald first, then apps, services, machines, tents
       placed.length = 0;
       if (obstacle) placed.push(obstacle);
       for (const c of cand) {
         if (!c.el._w) { c.el.hidden = false; c.el._w = c.el.offsetWidth; } // a hidden label measures 0: show it to measure
         const cw = (c.el._w || 80) + 4, ch = 22;
+        c.x = Math.min(w - cw / 2 - 2, Math.max(cw / 2 + 2, c.x)); // inside the canvas: a long decree near an edge stays readable
         const r = [c.x - cw / 2, c.y - ch, c.x + cw / 2, c.y];
         const hit = placed.some((o) => r[0] < o[2] && r[2] > o[0] && r[1] < o[3] && r[3] > o[1]);
         c.el.hidden = hit;

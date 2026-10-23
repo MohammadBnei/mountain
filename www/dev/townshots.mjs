@@ -75,6 +75,20 @@ const TENTS = `(() => {
     }
   }
 })()`;
+// R9 Civ: levels from activity (injected ev level), the technologies (ev tech), a golden age (calm set 9 days back
+// on the page, dev only), the herald (a live sync)
+const CIV = `(() => {
+  const w = __town.world, L = { wird: 3, 'vos-monolith': 2, craneyard: 3, gate: 2, watchtower: 3, 'dream-analyst': 2, 'wedding-2026': 3, depot: 2, mountain: 2, guardhouse: 3 };
+  for (const [app, level] of Object.entries(L)) __town.inject({ t: 'ev', id: 'civ' + app, ts: Date.now(), kind: 'level', app, level });
+  __town.inject({ t: 'ev', id: 'civtech', ts: Date.now(), kind: 'tech', count: 65, top: 65 });
+  w.state.alerts = []; w.state.calm = new Date(Date.now() - 9 * 864e5).toISOString().slice(0, 10); w.emit('state', w.state);
+})()`;
+const CIV_STEADY = `(() => { // the same town, levels set quietly (no level-up moment): the steady look
+  const w = __town.world;
+  w.state.levels = { wird: 3, 'vos-monolith': 2, craneyard: 3, gate: 2, watchtower: 3, 'dream-analyst': 2, 'wedding-2026': 3, depot: 2, mountain: 2, guardhouse: 3 };
+  w.state.tech = { count: 65, top: 65 }; w.state.alerts = []; w.state.calm = new Date(Date.now() - 9 * 864e5).toISOString().slice(0, 10); w.emit('state', w.state);
+})()`;
+const HERALD = `__town.inject({ t: 'ev', id: 'civsync', ts: Date.now(), kind: 'argo.sync', app: 'wedding-2026', ok: true })`;
 const views = [
   // [name, width, height, setup (in the page), wait seconds]
   ['overview-noon', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); __town.fly('home')`, 2],
@@ -105,6 +119,16 @@ const views = [
   ['tents-down-h1', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; __town.fly('h1')`, 3, SF],
   ['tents-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; __town.fly('home')`, 3],
   ['tents-card-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; setTimeout(() => __town.fly(__town.buildings.annexes().find((x) => x.app === 'wird')?.key || ''), 1500)`, 4],
+  // R9 Civ
+  ['civ-overview', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${CIV_STEADY}; __town.fly('home')`, 7],
+  ['civ-h1', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${CIV}; __town.fly('h1')`, 2], // the level-up moment: scaffolds, the herald's decree,
+  ['civ-h3-herald', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${CIV_STEADY}; __town.fly('h3'); setTimeout(() => { ${HERALD} }, 2500)`, 7],
+  ['civ-night', 1280, 800, `__town.sunAt('2026-10-22T21:00:00Z'); ${CIV_STEADY}; __town.fly('h1')`, 7],
+  ['civ-tech-card', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${CIV_STEADY}; __town.fly('home'); setTimeout(() => [...document.querySelectorAll('#facts button')].find((b) => /technolog/.test(b.textContent))?.click(), 1500)`, 3],
+  ['civ-guide', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${CIV_STEADY}; __town.fly('home'); setTimeout(() => [...document.querySelectorAll('#facts button')].find((b) => /guide/.test(b.textContent))?.click(), 1500)`, 3],
+  ['civ-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); ${CIV_STEADY}; __town.fly('home'); setTimeout(() => { ${HERALD} }, 2500)`, 7],
+  ['civ-tents-h3', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${CIV_STEADY}; ${TENTS}; __town.fly('h3')`, 7], // the copies follow their app's level
+  ['civ-card-wird', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${CIV_STEADY}; setTimeout(() => __town.fly('wird'), 1500)`, 7],
   // the styleboard: every state at once (injected frames on top of the fixture's live ones)
   ['states-overview', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${STATES}; __town.fly('home')`, 3, SF],
   ['states-h2', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${STATES}; __town.fly('h2')`, 3, SF],
