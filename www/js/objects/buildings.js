@@ -144,8 +144,8 @@ export default async function build({ THREE, kit, world, apps }) {
   const failCloth = kit.instanced(fcloth.scale(3, 3, 3), kit.variant('raspberry', { color: new THREE.Color(0xa5402a) }), N); // Ukubi danger
   const failed = new Map(); // app → until (t, s)
   // R8 C: an annex copy's banner, the same flag in the app's wire colour (the roofs' glowing material, tinted per instance)
-  const bannerPole = kit.instanced(fpole.scale(3, 3, 3), kit.shared, N);
-  const bannerCloth = kit.instanced(fcloth.scale(3, 3, 3), roofMat, N);
+  const bannerPole = kit.instanced(failPole.geometry, kit.shared, N); // the same scaled flag (scale() works in place)
+  const bannerCloth = kit.instanced(failCloth.geometry, roofMat, N);
   // ground caps and streets: one instanced flat hex (pointy-top like the tiles), tinted per instance
   const cap = kit.instanced(new THREE.CylinderGeometry(0.98, 0.98, 0.05, 6).translate(0, 0.025, 0), kit.palette.white, 256);
   cap.castShadow = false;

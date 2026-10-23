@@ -10,7 +10,7 @@
 //     the immutable /v/<build>/ prefix;
 //   - the page, desktop (1280×800) and phone low tier (390×844, ?q=low): built without a console error, an exception,
 //     a failed request or a request to another origin; the town drawn (plots > 0, labels shown) within the page
-//     budget (≤ 220 draw calls, ≤ 200k triangles, shadow pass included);
+//     budget (≤ 220 draw calls; ≤ 350k triangles on the high tier, ≤ 200k on phone-low; shadow pass included);
 //   - resync: the relay restarts on the same port, the page says "stale since" while it is down and resyncs through
 //     the next hello (stale cleared).
 //   - R7.1, desktop: 70 firing alerts stay within budget with no GL error; a building moved after a first tap is
@@ -90,8 +90,9 @@ try {
     if (!ready || err) { fail(`${name}: town never built ${err || ''}`); await page.close(); continue; }
     await sleep(3000);
     const info = await page.evalJSON(`({ ...__town.info(), labels: [...document.querySelectorAll('.label')].filter((l) => !l.hidden).length, quality: globalThis.__quality })`);
+    const TRIS = info.quality === 'low' ? 200000 : 350000; // owner, 2026-10-23: the high tier (desktop) gets room for the Civ release
     note(`${name}: ${JSON.stringify(info)}`);
-    if (info.draws > 220 || info.tris > 200000) fail(`${name}: over the page budget (${info.draws} draws / 220, ${info.tris} tris / 200k)`);
+    if (info.draws > 220 || info.tris > TRIS) fail(`${name}: over the page budget (${info.draws} draws / 220, ${info.tris} tris / ${TRIS / 1000}k)`);
     if (!info.labels) fail(`${name}: no building label shown`);
     if (qs && info.quality !== 'low') fail(`${name}: ?q=low did not select the low tier`);
     if (blocked) { // the tavern still stands (drawn as a home), every other building too
@@ -148,13 +149,13 @@ try {
       const ti = await page.evalJSON('__town.info()');
       note(`tents ×${n}: ${JSON.stringify(ti)}`);
       if (!n || ti.annexes !== n || (mode !== 'selftest' && n < 20)) fail(`tents: ${ti.annexes} drawn of ${n} injected`);
-      if (ti.draws > 220 || ti.tris > 200000) fail(`tents: over the page budget (${ti.draws} draws, ${ti.tris} tris)`);
+      if (ti.draws > 220 || ti.tris > TRIS) fail(`tents: over the page budget (${ti.draws} draws, ${ti.tris} tris)`);
       for (const h of ['h1', 'h2', 'h3']) { // R8 C zoom levels: close up, an island's copies stand whole
         await page.evalJSON(`(__town.fly('${h}'), true)`);
         await sleep(1500);
         const ci = await page.evalJSON('__town.info()');
         note(`tents ×${n}, ${h} close: ${JSON.stringify(ci)}`);
-        if (ci.draws > 220 || ci.tris > 200000) fail(`tents, ${h} close: over the page budget (${ci.draws} draws, ${ci.tris} tris)`);
+        if (ci.draws > 220 || ci.tris > TRIS) fail(`tents, ${h} close: over the page budget (${ci.draws} draws, ${ci.tris} tris)`);
       }
       await page.evalJSON(`(__town.fly(''), true)`);
       await sleep(1500);
@@ -190,7 +191,7 @@ try {
       const storm = await page.evalJSON('__town.info()');
       const glErr = await page.evalJSON(`(() => { const gl = __town.renderer.getContext(); return gl.getError(); })()`);
       note(`alerts ×70: ${JSON.stringify(storm)} gl ${glErr}`);
-      if (storm.draws > 220 || storm.tris > 200000) fail(`alerts ×70: over the page budget (${storm.draws} draws, ${storm.tris} tris)`);
+      if (storm.draws > 220 || storm.tris > TRIS) fail(`alerts ×70: over the page budget (${storm.draws} draws, ${storm.tris} tris)`);
       if (glErr) fail(`alerts ×70: WebGL error ${glErr}`);
       const led = await page.evalJSON(`[__town.world.state.alerts.length, document.getElementById('facts').textContent]`);
       if (led[0] < 70 || !led[1].includes(`${led[0]} alerts`)) fail(`alerts ×70: the LED says "${led[1]}" for ${led[0]} alerts`);

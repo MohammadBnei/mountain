@@ -9,7 +9,7 @@ One meaning per channel, readable by day. Every object follows the contract in 0
 |---|---|---|
 | host bucket h1..h3 | a floating hex island (`hello.town`) sized by its host's hardware (R8: radius 7/5/4): a square with a well, roads to the bridge heads, the town, the outskirts, an outer meadow, and a short stone wall either side of each bridge head | `islands.js` |
 | host `ready` false | the island greys and sinks a little; its buildings grey with it. Unknown (no answer yet) is drawn up | `islands.js`, `buildings.js` |
-| an app's pods on another host (R8 C, `world:annex`) | a small tent on that island's outskirts, its canopy in the app's wire colour (a softer glow than roofs at night), greyed with its island; named with the machines (off the overview), last; a tap opens the app's card ("also on h1 and h3", the tapped island first) and flies to the tent. Never a count | `buildings.js`, `labels.js` |
+| an app's pods on another host (R8 C, `world:annex`) | a full copy of the app's building on that island's outskirts, marked by a banner in its wire colour (the main building keeps its ground cap and lamp). Zoom levels: in the overview a copy stands as its banner alone; the island in focus shows its copies whole. Greyed with its island; named with the machines, last; a tap opens the app's card ("also on h1 and h3", the tapped island first) and flies to the copy. Never a count | `buildings.js`, `labels.js` |
 | `quorum{up[]}` | the drawbridge to a host out of quorum is raised (both halves swing up) | `bridges.js` |
 | an app or service | a KayKit building on its plot (`world:plot`), facing the square, roof tinted by its Ukubi wire, name label. Its kind's family (R8) sets where it stands and the ground under it | `buildings.js`, `labels.js` |
 | the town's ways (R8) | streets: tan hex caps along the shortest walk over free grass from each door to a road. They reserve nothing, and walkers keep to them | `buildings.js`, `people.js` |
@@ -68,11 +68,12 @@ Only the role key reaches the wire.
 - Each object instances per kind: building bodies and roofs, scaffolds, smoke, rubble, braziers, flames, lamps,
   flags, walkers and marks.
 - The page gate's fixture (`relay-town.json`: all 27 apps, services and machines placed, builds, firing alerts, visitor
-  marks, traffic) stays within 220 draws and 200k tris on desktop and on phone-low (`gate.mjs page`).
+  marks, traffic) stays within 220 draws on both tiers, and 350k tris on the high tier (desktop) / 200k on phone-low
+  (`gate.mjs page`; owner, 2026-10-23, room for the Civ release).
 - `relay-town-states.json` drives the styleboard (`townshots.mjs`): every building state side by side.
 - Phone-low caps walkers at 24 (72 on desktop) and has no shadow pass.
-- R8 C: the gate adds every app's tents (30 on `relay-town.json`) under the 70 alerts, on both tiers: tents are one
-  instanced kind (≤ 48, 86 tris each, no shadow), +2 draws and ~2.5k tris.
+- R8 C: the gate adds every app's annex copies (30 on `relay-town.json`) under the 70 alerts, on both tiers, in the
+  overview (banners) and with each island in focus (whole copies, on their own meshes casting no shadow).
 - Labels show on every tier, decluttered: nearest first, apps before services, never behind the dock.
 - A model that fails to load is drawn as a home. A 404, meaning this page's build was retired, also reloads the page
   once (R7.1).
