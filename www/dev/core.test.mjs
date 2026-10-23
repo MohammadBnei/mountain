@@ -3,7 +3,7 @@
 //   node www/dev/core.test.mjs
 import { readFileSync } from 'node:fs';
 import { createWorld } from '../js/world.js';
-import { connect } from '../js/socket.js';
+import { connect, gateLapsed } from '../js/socket.js';
 import { sun, moon } from '../js/sun.js';
 
 let bad = 0;
@@ -87,6 +87,45 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   c.close();
   await sleep(1200);
   ok(socks.length === 4, 'close() stops reconnecting');
+  Math.random = rnd;
+}
+
+// ---- the gate (R8 deploy C1): a lapsed forwardAuth session → one reload; anything else → none ----
+{
+  const store = new Map(), st = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+  let reloads = 0;
+  const reload = () => reloads++;
+  const answer = (r) => async () => r;
+  ok(await gateLapsed({ fetchFn: answer({ type: 'opaqueredirect', status: 0 }), reload, store: st, now: 1e9 }) && reloads === 1, 'gate: a redirect reloads once');
+  ok(!(await gateLapsed({ fetchFn: answer({ type: 'opaqueredirect', status: 0 }), reload, store: st, now: 1e9 + 60e3 })) && reloads === 1, 'gate: a second redirect within 5 min does not reload again');
+  ok(await gateLapsed({ fetchFn: answer({ type: 'basic', status: 401 }), reload, store: st, now: 1e9 + 6 * 60e3 }) && reloads === 2, 'gate: a 401 counts, after the 5 min');
+  for (const r of [{ type: 'basic', status: 502 }, { type: 'basic', status: 429 }, { type: 'basic', status: 200 }]) {
+    ok(!(await gateLapsed({ fetchFn: answer(r), reload, store: { getItem: () => null, setItem() {} }, now: 2e9 })), `gate: ${r.status} does not reload`);
+  }
+  ok(!(await gateLapsed({ fetchFn: async () => { throw new Error('offline'); }, reload, store: st, now: 3e9 })) && reloads === 2, 'gate: a network error does not reload');
+  // the socket asks once per run of failures, at the second close without a hello
+  const w5 = createWorld(), rnd = Math.random;
+  Math.random = () => 0;
+  let probes = 0;
+  const n0 = socks.length;
+  const c = connect({ url: 'ws://x/ws', world: w5, probe: () => probes++ });
+  await sleep(10);
+  socks[n0].recv(hello);
+  socks[n0].close();
+  ok(probes === 0, 'probe: not at the first close');
+  await sleep(600);
+  socks[n0 + 1].close();
+  ok(probes === 1, 'probe: at the second close without a hello');
+  await sleep(1100);
+  socks[n0 + 2].close();
+  ok(probes === 1, 'probe: once per run of failures');
+  await sleep(2100);
+  socks[n0 + 3].recv(hello);
+  socks[n0 + 3].close();
+  await sleep(600);
+  socks[n0 + 4].close();
+  ok(probes === 2, 'probe: a hello starts a new run');
+  c.close();
   Math.random = rnd;
 }
 

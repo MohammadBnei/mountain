@@ -227,12 +227,17 @@ func norm(x, ref float64) float64 {
 	return math.Round(math.Min(1, math.Log1p(math.Max(0, x))/math.Log1p(ref))*20) / 20
 }
 
-// replicaB buckets a replica count: 0..4 as-is, then 5..7 → 5, 8..15 → 6, 16..31 → 7, 32+ → 8.
+// replicaB buckets a replica count: 0, 1, 2..4 → 2, 5..7 → 3, 8..15 → 4, 16+ → 5. Coarse at the low end on purpose
+// (R8 deploy C, infra-bootstrap ADR-0065): read with an app's annexes (the hosts it runs on), exact small counts
+// would give its pods per host. Migration 006 rewrote the stored history to these buckets.
 func replicaB(n int) int {
-	if n <= 4 {
+	switch {
+	case n <= 1:
 		return max(0, n)
+	case n <= 4:
+		return 2
 	}
-	return min(8, 4+bits.Len(uint(n/4)))
+	return min(5, 1+bits.Len(uint(n/2)))
 }
 
 func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {

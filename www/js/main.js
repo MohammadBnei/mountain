@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createWorld } from './world.js';
-import { connect } from './socket.js';
+import { connect, gateLapsed } from './socket.js';
 import { sun as sunAt, now as clock } from './sun.js';
 import { createLabels } from './labels.js';
 import { createToys } from './toys.js';
@@ -51,7 +51,7 @@ async function start() {
   const apps = await (await fetch(new URL('../apps.json', import.meta.url))).json();
   const world = createWorld();
   if (q.has('hello')) fetch(q.get('hello')).then((r) => r.json()).then(world.applyHello); // dev: a hello file, no relay
-  else connect({ world, ...(dev && q.get('ws') ? { url: q.get('ws') } : {}) }); // dev: a relay on another port
+  else connect({ world, ...(dev && q.get('ws') ? { url: q.get('ws') } : { probe: () => gateLapsed() }) }); // dev: a relay on another port
   const slow = setTimeout(() => { // no hello yet: say so in words (the socket keeps retrying)
     document.getElementById('loader').textContent = lang() === 'fr'
       ? 'Impossible de joindre la ville pour l’instant, nouvel essai… (trop d’onglets ouverts sur ce réseau ?)'

@@ -1,11 +1,10 @@
-// Visitor toolbar (R7): sign in, then plant something on a free hex (relay toy_plant.go): a tree by day, a flag at
+// Visitor toolbar (R7): signed in, plant something on a free hex (relay toy_plant.go): a tree by day, a flag at
 // dawn/dusk, a lantern at night; the relay decides from the real sun, the button only previews it. Admins also get
 // an eraser (mark.delete). Plant mode: a tap on a tile plants there (a drag still orbits); a hex ring under the
 // pointer says whether the relay will take it. Every answer is said in words (Ukubi: status comes with a word).
 import { sun } from './sun.js';
 import { hexXZ, worldToHex, ring } from './layout.js';
-
-const ENROLL = 'https://authentik.bnei.dev/if/flow/mountain-enrollment/'; // 08: the brand enrollment_flow is unset on purpose
+import { gateLapsed } from './socket.js';
 const itemOf = (elev) => (elev > 6 ? 0 : elev >= -6 ? 1 : 2);
 const ITEM = { en: ['Plant a tree', 'Plant a flag', 'Light a lantern'], fr: ['Planter un arbre', 'Planter un drapeau', 'Allumer une lanterne'] };
 const DONE = { en: ['Tree planted.', 'Flag planted.', 'Lantern lit.'], fr: ['Arbre planté.', 'Drapeau planté.', 'Lanterne allumée.'] };
@@ -24,11 +23,29 @@ export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
 
   const split = new URLSearchParams(location.search).has('ws'); // dev: page and relay on two ports, no /auth here
   let known = false, noted = false; // known: the quota (from /auth/me or an ack), until then Plant waits
+  // R8 deploy C1 (infra-bootstrap ADR-0065): everyone here passed the authentik gate, so the relay's own sign-in (its
+  // roles: plants, admin detail) needs no click: a page with no relay session goes through /auth/login at once
+  // (implicit consent, back here). At most once per 10 min (sessionStorage): an account with no role stays a viewer,
+  // and the plain "Sign in" link remains for a later try.
+  const returnTo = () => (/^\?[A-Za-z0-9=&_.-]{0,63}$/.test(location.search) ? `/${location.search}` : '/');
+  function autoSignIn() {
+    try {
+      if (Date.now() - Number(sessionStorage.getItem('mountain.signin') || 0) < 10 * 60e3) return false;
+      sessionStorage.setItem('mountain.signin', String(Date.now()));
+    } catch { return false; } // no storage, no guard: never redirect blind
+    location.assign(`/auth/login?return=${encodeURIComponent(returnTo())}`);
+    return true;
+  }
   function me() { // the session, re-read when the page comes back (it lapses after 1 h) and on an "auth" refusal
-    (split ? Promise.resolve(null) : fetch('/auth/me').then((r) => (r.ok ? r.json() : null))).then((a) => {
+    // redirect: 'manual': behind the gate an expired session answers a redirect to the login wall (gateLapsed)
+    (split ? Promise.resolve(null) : fetch('/auth/me', { redirect: 'manual' }).then((r) => {
+      if (r.type === 'opaqueredirect' || r.status === 401) { gateLapsed(); return null; }
+      return r.ok ? r.json() : null;
+    })).then((a) => {
       role = a?.role || 'view';
       const pin = location.hostname === '127.0.0.1' && new URLSearchParams(location.search).get('role'); // dev: preview the toolbar
       if (pin) role = pin;
+      if (a?.enabled && role === 'view' && !a?.signedIn && !pin && autoSignIn()) return;
       signin.hidden = !(a?.enabled && role === 'view' && !a?.signedIn);
       world.named = !!a?.handle;
       // R8: the machines' real names, for a platform admin only (/auth/me). Kept here, never stored, gone with the session
@@ -45,10 +62,8 @@ export function createToys({ THREE, kit, world, canvas, camera, lang, fly }) {
   }
   me();
   addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') me(); });
-  $('login').href = `/auth/login?return=${encodeURIComponent('/')}`;
-  Object.assign($('enroll'), { href: `${ENROLL}?next=${encodeURIComponent(`${location.origin}/auth/login?return=%2F`)}` }); // back to the town, signed in
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') { signin.open = false; setMode(null); } });
-  addEventListener('pointerdown', (e) => { if (!signin.contains(e.target)) signin.open = false; });
+  signin.href = `/auth/login?return=${encodeURIComponent(returnTo())}`;
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') setMode(null); });
 
   // the aiming ring: a hex outline on the tile under the pointer, success or danger by the relay's own rule
   const pts = [];

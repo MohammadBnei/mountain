@@ -231,7 +231,7 @@ func TestMachineUnmapped(t *testing.T) {
 		t.Errorf("unmapped probes counted %v, want 1 (guest-new-box)", d)
 	}
 	for _, f := range drain(r.c) {
-		if b, _ := json.Marshal(f); strings.Contains(strings.ToLower(string(b)), "k9s") {
+		if b, _ := json.Marshal(f); strings.Contains(scrubIDs(strings.ToLower(string(b))), "k9s") {
 			t.Fatal("k9s reached the wire")
 		}
 	}
@@ -307,7 +307,7 @@ func TestDBMachineNames(t *testing.T) {
 		(SELECT coalesce(string_agg(state::text, ' '), '') FROM snapshots)`).Scan(&rows); err != nil {
 		t.Fatal(err)
 	}
-	all := strings.ToLower(rows + string(b.Hello()))
+	all := scrubIDs(strings.ToLower(rows + string(b.Hello())))
 	if !strings.Contains(all, `"cellar"`) {
 		t.Fatal("the scan saw no machine at all")
 	}

@@ -70,7 +70,7 @@ func TestStaticVersioned(t *testing.T) {
 		}
 	}
 	rec = get(prefix + "js/main.js")
-	if rec.Code != 200 || rec.Body.String() != "export {}" || rec.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+	if rec.Code != 200 || rec.Body.String() != "export {}" || rec.Header().Get("Cache-Control") != "private, max-age=31536000, immutable" {
 		t.Fatalf("versioned asset: got %d %q %q", rec.Code, rec.Header().Get("Cache-Control"), rec.Body.String())
 	}
 	if rec = get("/js/main.js"); rec.Code != 200 || rec.Header().Get("Cache-Control") != "no-cache" {

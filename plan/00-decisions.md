@@ -2,7 +2,8 @@
 
 | Topic | Decision |
 |---|---|
-| Audience | A public, sanitised live layer. **Detail mode** for `platform-admins` |
+| Audience | A sanitised live layer, **gated since R8 deploy C** (below). **Detail mode** for `platform-admins` |
+| Gate **(R8 C)** | The owner chose to **put the whole site behind authentik forwardAuth** rather than trim what the annexes show (infra-bootstrap ADR-0065): `Middleware/mountain-forwardauth` (`helm/values.yaml`) on the `mountain-gate` provider, for `platform-admins` and **invited** `mountain-visitors` (enrollment is invitation-only, no captcha). Behind it the page signs in to the relay by itself (no button), reloads once onto the login wall when the gate session lapses, and `/v/` assets are `private`. The sanitising, role keys and buckets stay, as defence in depth against an invited visitor. Agents can no longer check the live site |
 | Repo **(R3)** | **Private** `MohammadBnei/mountain`, plan inside. No fork-PR risk to the self-hosted build runner |
 | Metaphor **(R7)** | **A live town** (pi-lab's kit), replacing the Aretē mountain, whose metaphor did not carry over to 3D. Live only: no scroll story |
 | Islands **(R7)** | **3 islands = the Proxmox host buckets h1..h3**, joined by bridges. A bridge to a host out of quorum is raised |
@@ -18,8 +19,8 @@
 | Cluster access **(R2)** | PromQL only, no RBAC, no ServiceAccount |
 | Transport | WebSocket, a single `/ws`. The session cookie, read at upgrade, adds detail frames |
 | Relay **(R2)** | 1 replica, `Recreate` |
-| Truth | A real metric **sets** the state; the animation only shows the change. Exact counts (pods, requests) never leave the relay, only buckets |
-| Visitors **(R2)** | Shared and persisted, after hardening and moderation (08) |
+| Truth | A real metric **sets** the state; the animation only shows the change. Exact counts (pods, requests) never leave the relay, only buckets. **R8 C:** replica buckets are coarse (0, 1, 2–4, 5–7, 8–15, 16+), so with the annexes they give no small exact counts; migration 006 rewrote the history to them |
+| Visitors **(R2)** | Shared and persisted, after hardening and moderation (08). **R8 C:** invited only (an invitation stage replaced the Turnstile captcha) |
 | Email **(R3)** | **Shared SMTP2GO sender. Keep Wird's email-verification stage.** The accepted risk is recorded in ADR-B, with a quota watch |
 | Deploy **(R4)** | hq/wedding style. The helm values live in this repo (`helm/values.yaml`); CI pins the `:sha` tag in-repo; the ArgoCD app points at this repo's `helm/` |
 | Push **(R4)** | Pushing to main deploys, so it is outward-facing: **merge only after the user confirms**. For R7 the owner asked for deploys after phase 1 and phase 4 |

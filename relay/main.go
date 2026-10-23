@@ -416,6 +416,8 @@ func buildID(www fs.FS) string {
 // so headers alone cannot stop a returning browser mixing module versions across a deploy (live: old
 // kit.js + new post.js => setComposed undefined). Instead every asset index.html references lives under
 // /v/<build>/ (immutable: a new deploy is a new URL); / itself is no-cache and Cloudflare serves it DYNAMIC.
+// /v/ is `private` (R8 deploy C1, infra-bootstrap ADR-0065): the site sits behind a forwardAuth gate, and a
+// shared cache would hand a signed-in visitor's copy to anyone holding the URL. Browsers still keep it a year.
 // Relative imports inside modules resolve under the same prefix. Unversioned paths still work (no-cache +
 // content ETags) for pages loaded before the deploy; another build's /v/<id>/ is a no-store 404, which
 // main.js answers with one reload onto the current index.
@@ -449,7 +451,7 @@ func static(www fs.FS, dev bool) http.Handler {
 				http.NotFound(w, r)
 				return
 			}
-			p, cache = "/"+strings.TrimPrefix(p, prefix), "public, max-age=31536000, immutable"
+			p, cache = "/"+strings.TrimPrefix(p, prefix), "private, max-age=31536000, immutable"
 			r = r.Clone(r.Context())
 			r.URL.Path, r.URL.RawPath = p, ""
 		}

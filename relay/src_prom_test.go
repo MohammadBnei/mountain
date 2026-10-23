@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/bits"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -149,7 +150,10 @@ func TestOOMRule(t *testing.T) {
 }
 
 var (
-	ipRE      = regexp.MustCompile(`\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`)
+	ipRE = regexp.MustCompile(`\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`)
+	// idRE: an event or mark id, lowercased. A random ULID can spell a leak word ("nfs", "k9s"), so the
+	// case-insensitive scans blank ids first (scrubIDs)
+	idRE      = regexp.MustCompile(`"id": ?"[0-9a-z]{26}"`)
 	versionRE = regexp.MustCompile(`v\d+\.\d+|\d+\.\d+\.\d+-`)
 	hostile   = []string{"k8s-", "bnei.lan", "evil", "pve-", "kube-system", "monitoring", "agent-fleet", "has-journal", `"hq"`, "adminweb",
 		"coredns", "6443", "ghcr", "uid", "nfs", "wird-pg", "default", "namespace", `"pod"`, "kubernetescrd",
@@ -205,7 +209,7 @@ func TestFixtureTimeline(t *testing.T) {
 	one(2, "pod.churn", map[string]any{"app": "dream-analyst", "restarts": 0, "oom": false, "crashloop": true})
 	one(2, "argo.sync", map[string]any{"app": "vos-monolith", "ok": false})
 	one(2, "node.ready", map[string]any{"host": "h3", "ready": false})
-	one(2, "replicas", map[string]any{"app": "vos-monolith", "bucket": 5})
+	one(2, "replicas", map[string]any{"app": "vos-monolith", "bucket": 3})
 	one(2, "argo.health", map[string]any{"app": "wird", "status": "Degraded"})
 	one(3, "quorum", map[string]any{"up": []any{"h1", "h2"}})
 	// dream-analyst is absent from step 3 on: app.gone exactly 10 min (40 polls) later, once
@@ -260,7 +264,7 @@ func TestFixtureTimeline(t *testing.T) {
 	words := append(slices.Clone(hostile), machineNameWords(t)...)
 	for _, fr := range all {
 		b, _ := json.Marshal(fr)
-		s := strings.ToLower(string(b))
+		s := scrubIDs(strings.ToLower(string(b)))
 		if ipRE.MatchString(s) || versionRE.MatchString(s) {
 			t.Errorf("IP/version leak: %s", s)
 		}
@@ -271,6 +275,9 @@ func TestFixtureTimeline(t *testing.T) {
 		}
 	}
 }
+
+// scrubIDs blanks the ids (random ULIDs) in lowercased frame JSON before a leak scan.
+func scrubIDs(s string) string { return idRE.ReplaceAllString(s, `"id":""`) }
 
 // validate runs www/dev/schema/check.mjs over every frame (Go and JS share one schema checker).
 func validate(t *testing.T, steps [][]map[string]any) {
@@ -373,5 +380,43 @@ func TestFixtureOneClock(t *testing.T) {
 	got = append(got, evs(drain(c), "pod.churn")...)
 	if len(got) != 3 {
 		t.Fatalf("want 3 crashloop events (steps 1, 3, 5), got %d: %v", len(got), got)
+	}
+}
+
+// TestReplicaB: the coarse buckets (R8 deploy C), and every old bucket maps onto exactly one new one (migration 006).
+func TestReplicaB(t *testing.T) {
+	want := map[int]int{0: 0, 1: 1, 2: 2, 3: 2, 4: 2, 5: 3, 7: 3, 8: 4, 15: 4, 16: 5, 31: 5, 32: 5, 1000: 5, -1: 0}
+	for n, b := range want {
+		if got := replicaB(n); got != b {
+			t.Errorf("replicaB(%d) = %d, want %d", n, got, b)
+		}
+	}
+	old := func(n int) int { // the R7 buckets: 0..4 as-is, 5..7 → 5, 8..15 → 6, 16..31 → 7, 32+ → 8
+		if n <= 4 {
+			return max(0, n)
+		}
+		return min(8, 4+bits.Len(uint(n/4)))
+	}
+	to := map[int]int{}
+	for n := 0; n <= 200; n++ {
+		if b, seen := to[old(n)]; seen && b != replicaB(n) {
+			t.Fatalf("old bucket %d spans new buckets %d and %d", old(n), b, replicaB(n))
+		}
+		to[old(n)] = replicaB(n)
+	}
+	if fmt.Sprint(to) != "map[0:0 1:1 2:2 3:2 4:2 5:3 6:4 7:5 8:5]" {
+		t.Fatalf("old → new = %v (migration 006 hard-codes it)", to)
+	}
+}
+
+// TestScrubIDs: the CI frame whose random id spelled "nfs" scans clean once ids are blanked; a leak outside the id
+// still shows.
+func TestScrubIDs(t *testing.T) {
+	ci := `{"app":"archive-h1","id":"01m5m45jj3dt0zavxjknfspgg4","kind":"machine","state":"up","t":"ev","ts":1792750570051}`
+	if s := scrubIDs(ci); strings.Contains(s, "nfs") || !strings.Contains(s, `"archive-h1"`) {
+		t.Fatalf("id kept: %s", s)
+	}
+	if s := scrubIDs(`{"app":"nfs-storage","id":"01m5m45jj3dt0zavxjkx0spgg4"}`); !strings.Contains(s, "nfs") {
+		t.Fatalf("a real leak hidden: %s", s)
 	}
 }

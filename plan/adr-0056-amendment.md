@@ -35,7 +35,7 @@ service** as a building on the island of the host its pods run on, and the owner
 - Two names of the mechanism stay public, on purpose:
   - the event kinds `argo.sync` and `argo.health`: they name how deploys are observed, not a service of the cluster;
   - the sign-up link to the identity provider (`authentik.bnei.dev/if/flow/mountain-enrollment/`): a visitor is sent
-    there to sign in anyway.
+    there to sign in anyway. (Gone in R8 deploy C: the site is gated and enrollment is by invitation, ADR-0065.)
 - Still private: agent-fleet, hq, has-journal, wird-adminweb, pgweb, searxng, thot, ente, proxmox, actions-runner,
   kube-system and every namespace not listed.
 

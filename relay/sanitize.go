@@ -109,7 +109,7 @@ const (
 	fHosts         // []string of h1..h3
 	fBool          //
 	fNat           // int >= 0
-	fBucket        // int 0..8
+	fBucket        // int 0..5 (replicaB)
 	fHealth        // ArgoCD health enum
 	fNum           // float64
 	fGroup         // platform|user|service|machine
@@ -201,7 +201,7 @@ func (c *Config) valid(typ int, v any) bool {
 		return ok && n >= 0
 	case fBucket:
 		n, ok := v.(int)
-		return ok && n >= 0 && n <= 8
+		return ok && n >= 0 && n <= 5
 	case fHealth:
 		s, ok := v.(string)
 		return ok && healthOK[s]

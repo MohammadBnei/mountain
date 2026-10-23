@@ -32,7 +32,7 @@ Probes ran with `KUBECONFIG=~/.kube/ukubi-admin.conf`.
 | health | `argocd_app_info{health_status, sync_status}` |
 | app gone | absent from `argocd_app_info` **for 10 min while `up{job=~".*application-controller.*"} == 1`** |
 | restarts / OOM / CrashLoop | restart counter diff. OOM only when restarts went up **and** `…_last_terminated_reason{reason="OOMKilled"} == 1`. CrashLoop from `…_waiting_reason{reason="CrashLoopBackOff"}` going 0 → 1 |
-| replicas | `kube_deployment_status_replicas`, bucketed |
+| replicas | `kube_deployment_status_replicas`, bucketed: 0, 1, 2–4, 5–7, 8–15, 16+ (`replicaB`, R8 C; migration 006 rewrote the stored history) |
 | **pods (R7)** | `max by (namespace, pod, node) (kube_pod_info{node!=""}) * on (namespace, pod) group_left() max by (namespace, pod) (kube_pod_status_phase{phase="Running"} == 1) unless on (namespace, pod) kube_pod_deletion_timestamp` (promtool-tested, `relay/testdata/pods.test.yaml`). **Optional**: a failure is logged once and never marks the poll stale. Feeds placement only |
 | node Ready / capacity | `kube_node_status_condition`, `kube_node_status_allocatable` |
 | PVE quorum | `probe_success{target=~"pve-.*"}` (verified label). The first answer is a baseline (`hello.state.quorum`, R7.1); after that, a change is `ev quorum` |
