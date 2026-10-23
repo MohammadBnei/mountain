@@ -150,7 +150,10 @@ func TestOOMRule(t *testing.T) {
 }
 
 var (
-	ipRE      = regexp.MustCompile(`\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`)
+	ipRE = regexp.MustCompile(`\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`)
+	// idRE: an event or mark id, lowercased. A random ULID can spell a leak word ("nfs", "k9s"), so the
+	// case-insensitive scans blank ids first (scrubIDs)
+	idRE      = regexp.MustCompile(`"id": ?"[0-9a-z]{26}"`)
 	versionRE = regexp.MustCompile(`v\d+\.\d+|\d+\.\d+\.\d+-`)
 	hostile   = []string{"k8s-", "bnei.lan", "evil", "pve-", "kube-system", "monitoring", "agent-fleet", "has-journal", `"hq"`, "adminweb",
 		"coredns", "6443", "ghcr", "uid", "nfs", "wird-pg", "default", "namespace", `"pod"`, "kubernetescrd",
@@ -261,7 +264,7 @@ func TestFixtureTimeline(t *testing.T) {
 	words := append(slices.Clone(hostile), machineNameWords(t)...)
 	for _, fr := range all {
 		b, _ := json.Marshal(fr)
-		s := strings.ToLower(string(b))
+		s := scrubIDs(strings.ToLower(string(b)))
 		if ipRE.MatchString(s) || versionRE.MatchString(s) {
 			t.Errorf("IP/version leak: %s", s)
 		}
@@ -272,6 +275,9 @@ func TestFixtureTimeline(t *testing.T) {
 		}
 	}
 }
+
+// scrubIDs blanks the ids (random ULIDs) in lowercased frame JSON before a leak scan.
+func scrubIDs(s string) string { return idRE.ReplaceAllString(s, `"id":""`) }
 
 // validate runs www/dev/schema/check.mjs over every frame (Go and JS share one schema checker).
 func validate(t *testing.T, steps [][]map[string]any) {
@@ -400,5 +406,17 @@ func TestReplicaB(t *testing.T) {
 	}
 	if fmt.Sprint(to) != "map[0:0 1:1 2:2 3:2 4:2 5:3 6:4 7:5 8:5]" {
 		t.Fatalf("old → new = %v (migration 006 hard-codes it)", to)
+	}
+}
+
+// TestScrubIDs: the CI frame whose random id spelled "nfs" scans clean once ids are blanked; a leak outside the id
+// still shows.
+func TestScrubIDs(t *testing.T) {
+	ci := `{"app":"archive-h1","id":"01m5m45jj3dt0zavxjknfspgg4","kind":"machine","state":"up","t":"ev","ts":1792750570051}`
+	if s := scrubIDs(ci); strings.Contains(s, "nfs") || !strings.Contains(s, `"archive-h1"`) {
+		t.Fatalf("id kept: %s", s)
+	}
+	if s := scrubIDs(`{"app":"nfs-storage","id":"01m5m45jj3dt0zavxjkx0spgg4"}`); !strings.Contains(s, "nfs") {
+		t.Fatalf("a real leak hidden: %s", s)
 	}
 }
