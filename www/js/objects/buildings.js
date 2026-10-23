@@ -11,11 +11,13 @@
 // not already open on a road, the shortest walk over free grass to a spoke or the square (a BFS, recomputed with the
 // plots), drawn as tan caps. They reserve nothing: a plot or a plant may take a street hex, and the street reroutes.
 // Industry and Houses cast no shadow (the low, busy kinds; it keeps the shadow pass small).
-// R8 C tents (world.state.annexes): an app's annex on another host it runs on, a small tent with its canopy in the
-// app's wire colour (a softer glow than roofs at night), greyed with its island; nothing else (no lamp, scaffold,
-// smoke, flag or ground). A tent drops in when it goes up live, never with its app's syncs. Tapping one opens the
-// app's card. A tent beside no standing building of its app, or on its app's own island, is not drawn (the relay
-// removes it on its next poll). Tents block streets and walkers like buildings.
+// R8 C annexes (world.state.annexes): an app's pods on another island show as a full copy of its own building there
+// (every kind fits a tile), marked by a banner in the app's wire colour; the main building keeps its ground cap and
+// lamp. A copy has no lamp, scaffold, smoke, flag or ground, greys with its island, and drops in when it goes up live,
+// never with its app's syncs. Tapping one opens the app's card. A copy beside no standing building of its app, or on
+// its app's own island, is not drawn (the relay removes it on its next poll). Copies block streets and walkers.
+// Zoom levels: in the overview a copy stands as its banner alone ("this app also lives here"); once the camera comes
+// in, the island it looks at (the one nearest the orbit target) shows its copies whole. It keeps every view in budget.
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BUILDINGS, familyOf, islandsOf, plotXZ, wireOf } from '../layout.js';
 
@@ -56,12 +58,10 @@ export default async function build({ THREE, kit, world, apps }) {
 
   // ---- geometry per kind: body (clay atlas, roof cells cut out, props merged in) + roof (white, tinted per instance
   // in its Ukubi wire colour; at night the roofs light up in the Glow theme's wire colours)
-  const kinds = {}, roofMat = kit.glowing(), clothMat = kit.glowing(), CAP = 16; // instances per kind (≤ 64 plots, never 16 of one kind)
-  const capOf = (role) => (role === 'tent' ? 48 : CAP); // R8 C: up to 48 tents, one kind
+  const kinds = {}, roofMat = kit.glowing(), CAP = 24; // instances per kind, annex copies included (≤ 64 plots + 48 copies, never 24 of one kind)
   async function kindOf(role) {
-    if (role in kinds) return kinds[role]; // a failed tent load stays null: no refetch on every change
+    if (kinds[role]) return kinds[role];
     try { return await loadKind(role); } catch (e) {
-      if (role === 'tent') { console.warn('buildings: tents failed to load, none drawn', e); return (kinds.tent = null); } // never homes
       // a model that failed to load (a network blip; a 404 = this page's build was retired) stands in as a home,
       // so one GLB never freezes the town; the 404 also asks main.js for the one reload onto the current build
       if (/\b404\b/.test(String(e))) globalThis.dispatchEvent?.(new Event('town:retired'));
@@ -72,7 +72,7 @@ export default async function build({ THREE, kit, world, apps }) {
   }
   async function loadKind(role) {
     const spec = BUILDINGS[role] || BUILDINGS.home;
-    const [body, roof] = spec.shape ? tentShape(spec.shape) : kit.splitByUV(mergeGeometries(await kit.geometry(spec.glb)), kit.inRoof);
+    const [body, roof] = kit.splitByUV(mergeGeometries(await kit.geometry(spec.glb)), kit.inRoof);
     const bodies = [body.scale(spec.s, spec.s, spec.s)];
     for (const [name, x, z, ry, s] of spec.props || []) {
       const g = mergeGeometries(await kit.geometry(name));
@@ -82,70 +82,22 @@ export default async function build({ THREE, kit, world, apps }) {
     const bg = mergeGeometries(bodies);
     bg.computeBoundingBox();
     const k = {
-      body: kit.instanced(bg, kit.shared, capOf(role)),
-      roof: kit.instanced(roof.scale(spec.s, spec.s, spec.s), role === 'tent' ? clothMat : roofMat, capOf(role)),
+      body: kit.instanced(bg, kit.shared, CAP),
+      roof: kit.instanced(roof.scale(spec.s, spec.s, spec.s), roofMat, CAP),
       family: familyOf(role),
       height: bg.boundingBox.max.y, width: Math.max(bg.boundingBox.max.x - bg.boundingBox.min.x, bg.boundingBox.max.z - bg.boundingBox.min.z),
-      apps: [], items: [], // items: the tents, per instance (R8 C)
+      apps: [],
     };
+    // R8 C: the annex copies of this kind, on their own pair of meshes that cast no shadow (a copy repeats a building,
+    // the shadow pass would pay for it twice); apps and items per copy instance
+    k.copy = { body: kit.instanced(k.body.geometry, kit.shared, CAP), roof: kit.instanced(k.roof.geometry, roofMat, CAP), apps: [], items: [] };
+    for (const m of [k.copy.body, k.copy.roof]) { m.userData.pick = { kind: 'building', of: k.copy }; m.frustumCulled = false; m.castShadow = false; root.add(m); }
     for (const m of [k.body, k.roof]) {
       m.userData.pick = { kind: 'building', of: k }; m.frustumCulled = false; root.add(m);
       if (k.family === 'industry' || k.family === 'houses') m.castShadow = false;
     }
     kinds[role] = k;
     return k;
-  }
-
-  // R8 C: the annex, drawn: [body (walls, posts, door: clay cells), roof (white, tinted per instance)], front = +z.
-  // hut: a small wooden house (the default); bell: a cone tent; ridge: an A-frame tent. The dev page previews any
-  // (?tent=bell).
-  function tentShape(shape) {
-    if (location.hostname === '127.0.0.1') shape = new URLSearchParams(location.search).get('tent') || shape;
-    const tri = (cell, ...faces) => { // faces: [outward, a, b, c, …]: each triangle wound to face `outward`
-      const pos = [], a = new THREE.Vector3(), b = new THREE.Vector3(), n = new THREE.Vector3();
-      for (const [out, ...pts] of faces) for (let i = 1; i + 1 < pts.length; i++) {
-        let t = [pts[0], pts[i], pts[i + 1]];
-        n.crossVectors(a.subVectors(new THREE.Vector3(...t[1]), new THREE.Vector3(...t[0])), b.subVectors(new THREE.Vector3(...t[2]), new THREE.Vector3(...t[0])));
-        if (n.dot(new THREE.Vector3(...out)) < 0) t = [t[0], t[2], t[1]];
-        pos.push(...t.flat());
-      }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      g.computeVertexNormals();
-      return paint(g, cell);
-    };
-    const paint = (g, [c, r]) => { // every vertex on one clay cell (the atlas look); toNonIndexed keeps merges uniform
-      g = g.index ? g.toNonIndexed() : g;
-      const uv = new Float32Array((g.attributes.position.count) * 2);
-      for (let i = 0; i < uv.length; i += 2) { uv[i] = (c + 0.5) / 8; uv[i + 1] = (r + 0.5) / 4; }
-      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-      return g;
-    };
-    const POLE = [6, 0], DOOR = kit.CELL.dark;
-    if (shape === 'hut') { // a small wooden house: plank walls, darker corner posts, a door, a pitched roof (the wire)
-      const w = 0.7, d = 0.8, wh = 0.58, rh = 0.42, o = 0.06, X = w / 2 + o, Z = d / 2 + o, f = d / 2;
-      const walls = paint(new THREE.BoxGeometry(w, wh, d).translate(0, wh / 2, 0), POLE);
-      const gables = tri(POLE, [[0, 0, 1], [-w / 2, wh, f], [w / 2, wh, f], [0, wh + rh * (w / 2) / X, f]],
-        [[0, 0, -1], [-w / 2, wh, -f], [w / 2, wh, -f], [0, wh + rh * (w / 2) / X, -f]]);
-      const posts = [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz]) => paint(new THREE.BoxGeometry(0.07, wh, 0.07).translate(sx * (w / 2 - 0.02), wh / 2, sz * (f - 0.02)), DOOR));
-      const door = tri(DOOR, [[0, 0, 1], [-0.11, 0.01, f + 0.006], [0.11, 0.01, f + 0.006], [0.11, 0.3, f + 0.006], [-0.11, 0.3, f + 0.006]]);
-      const y0 = wh - rh * o / X, top = wh + rh * (w / 2) / X; // the eaves overhang, on the walls' slope
-      const roof = tri([0, 0], [[-1, 1, 0], [-X, y0, -Z], [-X, y0, Z], [0, top, Z], [0, top, -Z]], [[1, 1, 0], [X, y0, -Z], [X, y0, Z], [0, top, Z], [0, top, -Z]],
-        [[0, -1, 0], [-X, y0 - 0.001, -Z], [X, y0 - 0.001, -Z], [X, y0 - 0.001, Z], [-X, y0 - 0.001, Z]]);
-      return [mergeGeometries([walls, gables, ...posts, door]), roof];
-    }
-    const pole = (x, y0, y1, z) => paint(new THREE.CylinderGeometry(0.025, 0.025, y1 - y0, 5).translate(x, (y0 + y1) / 2, z), POLE);
-    if (shape === 'bell') {
-      const r = 0.58, h = 1.0, seg = 8, zf = r * Math.cos(Math.PI / seg) + 0.008;
-      const cloth = paint(new THREE.ConeGeometry(r, h, seg, 1, true, Math.PI / seg).translate(0, h / 2, 0), [0, 0]);
-      const door = tri(DOOR, [[0, 0, 1], [-0.17, 0.01, zf], [0.17, 0.01, zf], [0, 0.48, zf * (1 - 0.47 / h)]]);
-      return [mergeGeometries([door, pole(0, h - 0.05, h + 0.16, 0)]), cloth];
-    }
-    const w = 1.0, d = 1.2, h = 0.82, f = d / 2;
-    const cloth = tri([0, 0], [[-1, 1, 0], [-w / 2, 0, -f], [-w / 2, 0, f], [0, h, f], [0, h, -f]], [[1, 1, 0], [w / 2, 0, -f], [w / 2, 0, f], [0, h, f], [0, h, -f]],
-      [[0, 0, -1], [-w / 2, 0, -f], [w / 2, 0, -f], [0, h, -f]], [[0, 0, 1], [-w / 2, 0, f], [w / 2, 0, f], [0, h, f]]);
-    const door = tri(DOOR, [[0, 0, 1], [-0.17, 0.01, f + 0.008], [0.17, 0.01, f + 0.008], [0, 0.5, f + 0.008]]);
-    return [mergeGeometries([door, pole(0, h - 0.04, h + 0.14, f), pole(0, h - 0.04, h + 0.14, -f)]), cloth];
   }
 
   // ---- overlays, all instanced
@@ -191,12 +143,15 @@ export default async function build({ THREE, kit, world, apps }) {
   const failPole = kit.instanced(fpole.scale(3, 3, 3), kit.shared, N);
   const failCloth = kit.instanced(fcloth.scale(3, 3, 3), kit.variant('raspberry', { color: new THREE.Color(0xa5402a) }), N); // Ukubi danger
   const failed = new Map(); // app → until (t, s)
+  // R8 C: an annex copy's banner, the same flag in the app's wire colour (the roofs' glowing material, tinted per instance)
+  const bannerPole = kit.instanced(fpole.scale(3, 3, 3), kit.shared, N);
+  const bannerCloth = kit.instanced(fcloth.scale(3, 3, 3), roofMat, N);
   // ground caps and streets: one instanced flat hex (pointy-top like the tiles), tinted per instance
   const cap = kit.instanced(new THREE.CylinderGeometry(0.98, 0.98, 0.05, 6).translate(0, 0.025, 0), kit.palette.white, 256);
   cap.castShadow = false;
   const isles = islandsOf(world.town);
   let ground = [];
-  for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, cap, ...Object.values(flames)]) { m.frustumCulled = false; root.add(m); }
+  for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, bannerPole, bannerCloth, cap, ...Object.values(flames)]) { m.frustumCulled = false; root.add(m); }
 
   // ---- state → layout
   let plots = [], tents = [], beacons = [], dirty = true, relaying = null, retryAt = 0;
@@ -204,7 +159,7 @@ export default async function build({ THREE, kit, world, apps }) {
   world.on('state', () => { dirty = true; });
   world.on('metrics', () => { dirty = true; }); // hosts' Ready rides the metrics frame
   world.on('world:plot', (p) => { if (!p.gone && !p.ruinAt) acts.set(p.app, { type: 'drop', t0: now }); });
-  world.on('world:annex', (x) => { if (!x.gone) acts.set(`${x.app}@${x.host}`, { type: 'drop', t0: now }); }); // a tent's own act
+  world.on('world:annex', (x) => { if (!x.gone) acts.set(`${x.app}@${x.host}`, { type: 'drop', t0: now }); }); // a copy's own act
   world.on('ev:argo.sync', (f) => {
     if (f.ok) { acts.set(f.app, { type: 'drop', t0: now }); failed.delete(f.app); } else failed.set(f.app, now + 600);
   });
@@ -226,14 +181,14 @@ export default async function build({ THREE, kit, world, apps }) {
         building: !!s.builds[p.app] || health === 'Progressing', smoke: health === 'Degraded', faded: health === 'Missing' || health === 'Suspended' });
     }
     plots = list;
-    // R8 C tents: only beside a standing building of their app on another island
-    const tentKind = s.annexes?.length ? await kindOf('tent') : kinds.tent, standing = new Map(list.filter((p) => !p.ruinAt).map((p) => [p.app, p]));
+    // R8 C annexes: a copy of the app's building (its kind), only beside a standing one of it on another island
+    const standing = new Map(list.filter((p) => !p.ruinAt).map((p) => [p.app, p]));
     tents = [];
     for (const x of s.annexes || []) {
       const main = standing.get(x.app);
-      if (!tentKind || !main || main.host === x.host) continue;
+      if (!main || main.host === x.host) continue;
       const [tx, tz] = plotXZ(world.town, x.host, x.q, x.r), [cx, cz] = plotXZ(world.town, x.host, 0, 0);
-      tents.push({ ...x, key: `${x.app}@${x.host}`, k: tentKind, x: tx, z: tz, yaw: Math.atan2(cx - tx, cz - tz), wire: main.wire, down: world.ready[x.host] === false });
+      tents.push({ ...x, key: `${x.app}@${x.host}`, k: main.k, x: tx, z: tz, yaw: Math.atan2(cx - tx, cz - tz), wire: main.wire, down: world.ready[x.host] === false });
     }
     ground = [];
     for (const is of isles) {
@@ -258,7 +213,7 @@ export default async function build({ THREE, kit, world, apps }) {
   }
 
   function pose(p, t) {
-    // → [y offset, squash (y scale), spin] from the plot's live act (a tent's: keyed app@host)
+    // → [y offset, squash (y scale), spin] from the plot's live act (an annex copy's: keyed app@host)
     const id = p.key || p.app, a = acts.get(id);
     if (!a) return [0, 1, 0];
     const s = t - a.t0;
@@ -279,16 +234,16 @@ export default async function build({ THREE, kit, world, apps }) {
   return {
     root,
     /** → true while something moves (the host keeps rendering). */
-    update(dt, t, night = 0) {
+    /** focus: the orbit target, whose nearest island shows its annex copies whole (null = the overview: banners only). */
+    update(dt, t, night = 0, focus = null) {
       now = t;
       roofMat.emissiveIntensity = 0.75 * night;
-      clothMat.emissiveIntensity = 0.35 * night; // R8 C: tents glow softer than roofs
       lampMat.emissiveIntensity = 0.1 + 2.4 * night;
       const wires = kit.ukubi.wires[night > 0.5 ? 'glow' : 'office'];
       if (dirty && !relaying && t >= retryAt) relaying = relayout() // a new kind's GLB loads async
         .catch((e) => { console.error('buildings:', e); dirty = true; retryAt = t + 5; }) // keep the last town, retry
         .finally(() => { relaying = null; });
-      for (const k of new Set(Object.values(kinds))) if (k) { k.body.count = k.roof.count = 0; k.apps = []; k.items = []; }
+      for (const k of new Set(Object.values(kinds))) { k.body.count = k.roof.count = k.copy.body.count = k.copy.roof.count = 0; k.apps = []; k.copy.apps = []; k.copy.items = []; }
       ruins.apps = [];
       let nS = 0, nR = 0, nSm = 0, nL = 0, nF = 0, busy = false;
       const counts = { info: 0, warning: 0, critical: 0 };
@@ -329,21 +284,40 @@ export default async function build({ THREE, kit, world, apps }) {
           }
         }
       }
-      for (const x of tents) { // R8 C: their own drop, their host's grey; nothing else
-        const k = x.k;
-        if (k.body.count >= k.body.instanceMatrix.count) break;
+      let nB = 0, focusHost = null;
+      if (focus) {
+        let best = Infinity;
+        for (const is of world.town.islands) {
+          const [cx, cz] = plotXZ(world.town, is.host, 0, 0), d = Math.hypot(cx - focus.x, cz - focus.z);
+          if (d < best) { best = d; focusHost = is.host; }
+        }
+      }
+      for (const x of tents) { // R8 C: their own drop, their host's grey, a banner; nothing else
+        const k = x.k.copy, width = x.k.width;
         const [dy, sq] = pose(x, t);
         busy ||= acts.has(x.key);
-        const i = k.body.count++;
-        k.roof.count++;
-        M.compose(P.set(x.x, dy - (x.down ? SINK : 0), x.z), Q.setFromEuler(E.set(0, x.yaw, 0)), S.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq)));
-        k.body.setMatrixAt(i, M);
-        k.roof.setMatrixAt(i, M);
-        k.body.setColorAt(i, x.down ? grey : C.setScalar(1));
-        k.roof.setColorAt(i, x.down ? grey : C.set(wires[x.wire]));
-        k.apps[i] = x.app;
-        k.items[i] = x;
+        const near = x.host === focusHost;
+        if (near && k.body.count < CAP) {
+          const i = k.body.count++;
+          k.roof.count++;
+          M.compose(P.set(x.x, dy - (x.down ? SINK : 0), x.z), Q.setFromEuler(E.set(0, x.yaw, 0)), S.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq)));
+          k.body.setMatrixAt(i, M);
+          k.roof.setMatrixAt(i, M);
+          k.body.setColorAt(i, x.down ? grey : C.setScalar(1));
+          k.roof.setColorAt(i, x.down ? grey : C.set(wires[x.wire]));
+          k.apps[i] = x.app;
+          k.items[i] = x;
+        }
+        if (nB < N) { // the banner where a main building has its lamp: front right
+          const bx = x.x + Math.cos(x.yaw) * 0.5 * width + Math.sin(x.yaw) * 0.5 * width, bz = x.z - Math.sin(x.yaw) * 0.5 * width + Math.cos(x.yaw) * 0.5 * width;
+          M.compose(P.set(bx, dy - (x.down ? SINK : 0), bz), Q.setFromEuler(E.set(0, x.yaw, 0)), S.set(1, 1, 1));
+          bannerPole.setMatrixAt(nB, M);
+          bannerCloth.setMatrixAt(nB, M);
+          bannerPole.setColorAt(nB, x.down ? grey : C.setScalar(1));
+          bannerCloth.setColorAt(nB++, x.down ? grey : C.set(wires[x.wire]));
+        }
       }
+      bannerPole.count = bannerCloth.count = nB;
       for (const b of beacons) {
         busy = true;
         const n = counts[b.sev]++, fl = 1 + 0.18 * Math.sin(t * 9 + b.seed) + 0.1 * Math.sin(t * 23 + b.seed * 3);
@@ -365,26 +339,28 @@ export default async function build({ THREE, kit, world, apps }) {
       for (const [sev, m] of Object.entries(flames)) m.count = counts[sev];
       scaffold.count = nS; rubble.count = nR; smoke.count = nSm;
       lampPost.count = lamp.count = night > 0.05 ? nL : 0; failPole.count = failCloth.count = nF;
-      for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, cap, ...Object.values(flames)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-      for (const k of new Set(Object.values(kinds))) if (k) for (const m of [k.body, k.roof]) {
+      for (const m of [scaffold, rubble, smoke, brazier, lampPost, lamp, failPole, failCloth, bannerPole, bannerCloth, cap, ...Object.values(flames)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+      for (const k of new Set(Object.values(kinds))) for (const m of [k.body, k.roof, k.copy.body, k.copy.roof]) {
         m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
         m.boundingSphere = null; // three computes an InstancedMesh's sphere once, on the first raycast: moved plots must stay tappable
       }
       rubble.boundingSphere = null;
       return busy;
     },
-    /** Building under a raycast hit → its plot (cards, fly-to); a tent → its app's plot (the card is the app's). */
+    /** Building under a raycast hit → its plot (cards, fly-to); an annex copy → its app's plot (the card is the app's). */
     plotOf(hit) {
       const k = hit.object.userData.pick?.of;
       const app = k?.apps[hit.instanceId];
       return app ? plots.find((p) => p.app === app) : null;
     },
-    /** A tent under a raycast hit → {app, host, q, r, x, z} (R8 C: fly to the tent, open its app's card), else null. */
+    /** An annex copy under a raycast hit → {app, host, q, r, x, z} (R8 C: fly to it, open its app's card), else null. */
     annexOf(hit) {
       return hit.object.userData.pick?.of?.items?.[hit.instanceId] || null;
     },
     plots: () => plots,
     annexes: () => tents,
-    pickables: () => [...new Set(Object.values(kinds))].filter(Boolean).flatMap((k) => [k.body, k.roof]).concat(rubble),
+    /** R8 C: annex copies drawn whole this frame (the rest stand as their banner). */
+    copies: () => [...new Set(Object.values(kinds))].reduce((n, k) => n + k.copy.body.count, 0),
+    pickables: () => [...new Set(Object.values(kinds))].flatMap((k) => [k.body, k.roof, k.copy.body, k.copy.roof]).concat(rubble),
   };
 }

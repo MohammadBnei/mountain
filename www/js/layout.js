@@ -80,10 +80,6 @@ export const BUILDINGS = {
   // Houses: small or internal apps
   home: { glb: 'building_home_A_blue', s: 2.3 },
   house: { glb: 'building_home_B_blue', s: 2.0 },
-  // R8 C: an app's annex on another host it runs on, a small wooden house (never a plot kind; still keyed "tent").
-  // Drawn, not loaded (buildings.js tentShape): the pack has no small wooden building that is not already a home.
-  // Its roof takes the app's wire colour, like every roof; walls, posts and door stay clay.
-  tent: { shape: 'hut', s: 1 },
 };
 
 /** relay/town families, mirrored: kind → defense | public | industry | shops | houses. */
@@ -92,7 +88,7 @@ export const FAMILY = {
   craneyard: 'public', depot: 'public', warehouse: 'public', granary: 'public', archive: 'public', cellar: 'public', market: 'public',
   hall: 'industry', forge: 'industry', witness: 'industry', mill: 'industry',
   church: 'shops', tavern: 'shops', inn: 'shops', alehouse: 'shops', bookshop: 'shops', playhouse: 'shops',
-  home: 'houses', house: 'houses', tent: 'houses',
+  home: 'houses', house: 'houses',
 };
 export const familyOf = (kind) => FAMILY[kind] || 'houses';
 

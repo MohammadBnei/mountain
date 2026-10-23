@@ -49,7 +49,7 @@ const KINDS = `(() => {
     [3, [-5, -3], ['home', 'house']]];
   for (const [r, qs, kinds] of rows) kinds.forEach((k, i) => __town.inject({ t: 'world', kind: 'plot', app: k, host: 'h1', q: qs[i], r, role: k }));
 })()`;
-// R8 C tents, as the relay would put them up live: the DaemonSet services (watchtower, warehouse) on both other
+// R8 C annexes (copies of the app's building), as the relay would put them up live: the DaemonSet services (watchtower, warehouse) on both other
 // islands, a few apps on one more; outskirts first (the relay's ring order), never on a plot, a plant or a tent.
 const TENTS = `(() => {
   const w = __town.world, H = ['h1', 'h2', 'h3'], taken = new Set(w.state.plots.map((p) => p.host + ',' + p.q + ',' + p.r)
@@ -104,10 +104,6 @@ const views = [
   ['tents-h2-night', 1280, 800, `__town.sunAt('2026-10-22T21:00:00Z'); ${TENTS}; __town.fly('h2')`, 3],
   ['tents-down-h1', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; __town.fly('h1')`, 3, SF],
   ['tents-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; __town.fly('home')`, 3],
-  // the annex's shape, for the owner to compare: the bell tent on the same views (the wooden house is the default)
-  ['tents-overview-bell', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; __town.fly('home')`, 3, undefined, '&tent=bell'],
-  ['tents-card-bell', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; setTimeout(() => __town.fly(__town.buildings.annexes().find((x) => x.app === 'watchtower').key), 1500)`, 4, undefined, '&tent=bell'],
-  ['tents-h2-night-bell', 1280, 800, `__town.sunAt('2026-10-22T21:00:00Z'); ${TENTS}; __town.fly('h2')`, 3, undefined, '&tent=bell'],
   ['tents-card-phone', 390, 844, `__town.sunAt('2026-10-22T11:00:00Z'); ${TENTS}; setTimeout(() => __town.fly(__town.buildings.annexes().find((x) => x.app === 'wird')?.key || ''), 1500)`, 4],
   // the styleboard: every state at once (injected frames on top of the fixture's live ones)
   ['states-overview', 1280, 800, `__town.sunAt('2026-10-22T11:00:00Z'); ${STATES}; __town.fly('home')`, 3, SF],

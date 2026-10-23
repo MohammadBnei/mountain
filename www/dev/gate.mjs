@@ -149,6 +149,15 @@ try {
       note(`tents ×${n}: ${JSON.stringify(ti)}`);
       if (!n || ti.annexes !== n || (mode !== 'selftest' && n < 20)) fail(`tents: ${ti.annexes} drawn of ${n} injected`);
       if (ti.draws > 220 || ti.tris > 200000) fail(`tents: over the page budget (${ti.draws} draws, ${ti.tris} tris)`);
+      for (const h of ['h1', 'h2', 'h3']) { // R8 C zoom levels: close up, an island's copies stand whole
+        await page.evalJSON(`(__town.fly('${h}'), true)`);
+        await sleep(1500);
+        const ci = await page.evalJSON('__town.info()');
+        note(`tents ×${n}, ${h} close: ${JSON.stringify(ci)}`);
+        if (ci.draws > 220 || ci.tris > 200000) fail(`tents, ${h} close: over the page budget (${ci.draws} draws, ${ci.tris} tris)`);
+      }
+      await page.evalJSON(`(__town.fly(''), true)`);
+      await sleep(1500);
       if (name === 'desktop') { // a tap on a tent opens its app's card ("also on …") and the camera stays on the tent
         let t0 = null, pt = null; // the first tent in clear view once the camera is there (a big building may hide one)
         for (let i = 0; i < 8 && !pt; i++) {

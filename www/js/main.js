@@ -331,7 +331,7 @@ async function start() {
     controls.update();
     { const d = camera.position.distanceTo(controls.target); scene.fog.near = d + 25 + 200 * night; scene.fog.far = d + 110 + 400 * night; }
     islands.update(); bridges.update(dt, night); marks.update(night);
-    buildings.update(dt, t, night);
+    buildings.update(dt, t, night, home && !moved && !fly ? null : controls.target); // R8 C: annex copies by zoom level
     people.update(t);
     toys.tick();
     world.step(dt);
@@ -358,6 +358,6 @@ async function start() {
       if (is) return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5), 0.01);
       closeCard(); flyTo(overview(), 0.01);
     },
-    info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length, annexes: buildings.annexes().length }),
+    info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length, annexes: buildings.annexes().length, copies: buildings.copies(), cam: +camera.position.distanceTo(controls.target).toFixed(1) }),
   };
 }
