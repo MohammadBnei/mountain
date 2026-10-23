@@ -201,6 +201,31 @@
    "kind": "machine",
    "app": "mill",
    "state": "down"
+  },
+  {
+   "kind": "level",
+   "app": "wird",
+   "level": 3
+  },
+  {
+   "kind": "level",
+   "app": "gate",
+   "level": 2
+  },
+  {
+   "kind": "level",
+   "app": "dream-analyst",
+   "level": 2
+  },
+  {
+   "kind": "level",
+   "app": "dream-analyst",
+   "level": 1
+  },
+  {
+   "kind": "tech",
+   "count": 64,
+   "top": 65
   }
  ]
 }

@@ -4,7 +4,7 @@
 //   createWorld() → world
 //   world.town       hello.town: {islands:[{host, q, r, radius, tiles}], bridges:[{a, b, aq, ar, bq, br}]} (R8: a radius per island)
 //   world.build      hello.build: the relay's www build id (R8; main.js reloads a page from another build)
-//   world.state      {alerts, health, replicas, builds, marks, plots, machines, annexes}: hello.state, then every frame, BEFORE its emit
+//   world.state      {alerts, health, replicas, builds, marks, plots, machines, annexes, levels, tech, calm}: hello.state, then every frame, BEFORE its emit
 //   world.metrics    the last metrics frame;  world.stale  null | unix ms (oldest stale source, or the socket drop)
 //   world.ready      host → bool (ev node.ready, metrics.hosts; absent = not measured yet: draw it up)
 //   world.quorum     [hosts] | null (hello.state.quorum, then ev quorum; null = not known yet)
@@ -20,7 +20,7 @@
 export function createWorld() {
   const subs = new Map(), acks = new Map();
   let refN = 0, resolveReady, play = null; // play: {day, queue, gap, t, timer, done: [resolve, reject]}
-  const emptyState = () => ({ alerts: [], health: {}, replicas: {}, builds: {}, marks: [], plots: [], machines: {}, annexes: [] });
+  const emptyState = () => ({ alerts: [], health: {}, replicas: {}, builds: {}, marks: [], plots: [], machines: {}, annexes: [], levels: {}, tech: { count: 0, top: 0 }, calm: '' });
   const w = {
     town: null, build: null, state: emptyState(), metrics: null, stale: null, ready: {}, quorum: null, quota: null, named: false, replay: null,
     loaded: new Promise((r) => (resolveReady = r)),
@@ -92,12 +92,19 @@ export function createWorld() {
           break;
         case 'alert.resolve': s.alerts = s.alerts.filter((a) => a.fp !== f.fp); break;
         case 'argo.health': s.health[f.app] = f.status; break;
+        case 'level': if (f.level > 1) s.levels[f.app] = f.level; else delete s.levels[f.app]; break; // R9 (relay civ.go)
+        case 'tech': s.tech = { count: f.count, top: f.top }; break;
         case 'replicas': s.replicas[f.app] = f.bucket; break;
         case 'build': if (f.state === 'queued' || f.state === 'running') s.builds[f.app] = f.state; else delete s.builds[f.app]; break;
-        case 'app.gone': for (const k of ['health', 'replicas', 'builds', 'machines']) delete s[k][f.app]; break;
+        case 'app.gone': for (const k of ['health', 'replicas', 'builds', 'machines', 'levels']) delete s[k][f.app]; break;
         case 'machine': s.machines[f.app] = f.state; break; // R8: a probed machine's up|down, after 10 min held
         case 'node.ready': w.ready[f.host] = f.ready; break;
         case 'quorum': w.quorum = s.quorum = f.up; break;
+      }
+      if (['alert.fire', 'alert.resolve', 'argo.health', 'app.gone'].includes(f.kind)) { // R9: the relay's State.calm
+        const troubled = s.alerts.some((a) => a.sev === 'warning' || a.sev === 'critical') || Object.values(s.health).some((h) => h === 'Degraded' || h === 'Missing');
+        if (troubled) s.calm = '';
+        else if (!s.calm && f.ts > 0) s.calm = new Date(f.ts).toISOString().slice(0, 10);
       }
       return;
     }

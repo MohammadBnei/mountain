@@ -174,8 +174,9 @@ type App struct {
 
 	MarkSubs map[string]string // W4: active mark id -> account (OIDC sub), never public
 
-	since []json.RawMessage // hello.deltas: the world frames broadcast since the latest snapshot
-	store *Store            // nil = memory-only; set before serving, never after
+	since   []json.RawMessage // hello.deltas: the world frames broadcast since the latest snapshot
+	store   *Store            // nil = memory-only; set before serving, never after
+	started string            // R9: the town's first day (store.started at attach; hello.snapshot.started); "" memory-only
 }
 
 var app *App // set by serve before routes run
@@ -193,8 +194,9 @@ func newApp(cfg *Config, o Opts, day string) *App {
 // Snapshot is hello.snapshot (www/dev/schema/hello.json): which day's snapshot the state and deltas start from,
 // and the world's generation (store.go townEpoch).
 type Snapshot struct {
-	Day   string `json:"day"`
-	Epoch int    `json:"epoch"`
+	Day     string `json:"day"`
+	Epoch   int    `json:"epoch"`
+	Started string `json:"started,omitempty"` // R9: the town's first day (town_epoch; the page's turn counter); "" memory-only
 }
 
 // Hello returns the hello frame sent on connect: the latest snapshot + the world frames since it (02).
@@ -217,7 +219,9 @@ func (a *App) Hello() []byte {
 }
 
 // snap is hello.snapshot (and replay.snapshot).
-func (a *App) snap(day string) Snapshot { return Snapshot{Day: day, Epoch: townEpoch} }
+func (a *App) snap(day string) Snapshot {
+	return Snapshot{Day: day, Epoch: townEpoch, Started: a.started}
+}
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
