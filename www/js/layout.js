@@ -80,9 +80,10 @@ export const BUILDINGS = {
   // Houses: small or internal apps
   home: { glb: 'building_home_A_blue', s: 2.3 },
   house: { glb: 'building_home_B_blue', s: 2.0 },
-  // R8 C: an app's annex on another host it runs on (never a plot kind). Its canopy (atlas cell 5,1) takes the
-  // app's wire colour, the roof of the other kinds; the poles stay clay.
-  tent: { glb: 'tent', s: 1.6, cloth: (u, v) => u > 0.625 && u < 0.75 && v > 0.25 && v < 0.5 },
+  // R8 C: an app's annex on another host it runs on, a small wooden house (never a plot kind; still keyed "tent").
+  // Drawn, not loaded (buildings.js tentShape): the pack has no small wooden building that is not already a home.
+  // Its roof takes the app's wire colour, like every roof; walls, posts and door stay clay.
+  tent: { shape: 'hut', s: 1 },
 };
 
 /** relay/town families, mirrored: kind → defense | public | industry | shops | houses. */

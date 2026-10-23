@@ -72,8 +72,7 @@ export default async function build({ THREE, kit, world, apps }) {
   }
   async function loadKind(role) {
     const spec = BUILDINGS[role] || BUILDINGS.home;
-    const src = mergeGeometries(await kit.geometry(spec.glb));
-    const [body, roof] = kit.splitByUV(src, spec.cloth || kit.inRoof);
+    const [body, roof] = spec.shape ? tentShape(spec.shape) : kit.splitByUV(mergeGeometries(await kit.geometry(spec.glb)), kit.inRoof);
     const bodies = [body.scale(spec.s, spec.s, spec.s)];
     for (const [name, x, z, ry, s] of spec.props || []) {
       const g = mergeGeometries(await kit.geometry(name));
@@ -95,6 +94,58 @@ export default async function build({ THREE, kit, world, apps }) {
     }
     kinds[role] = k;
     return k;
+  }
+
+  // R8 C: the annex, drawn: [body (walls, posts, door: clay cells), roof (white, tinted per instance)], front = +z.
+  // hut: a small wooden house (the default); bell: a cone tent; ridge: an A-frame tent. The dev page previews any
+  // (?tent=bell).
+  function tentShape(shape) {
+    if (location.hostname === '127.0.0.1') shape = new URLSearchParams(location.search).get('tent') || shape;
+    const tri = (cell, ...faces) => { // faces: [outward, a, b, c, …]: each triangle wound to face `outward`
+      const pos = [], a = new THREE.Vector3(), b = new THREE.Vector3(), n = new THREE.Vector3();
+      for (const [out, ...pts] of faces) for (let i = 1; i + 1 < pts.length; i++) {
+        let t = [pts[0], pts[i], pts[i + 1]];
+        n.crossVectors(a.subVectors(new THREE.Vector3(...t[1]), new THREE.Vector3(...t[0])), b.subVectors(new THREE.Vector3(...t[2]), new THREE.Vector3(...t[0])));
+        if (n.dot(new THREE.Vector3(...out)) < 0) t = [t[0], t[2], t[1]];
+        pos.push(...t.flat());
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.computeVertexNormals();
+      return paint(g, cell);
+    };
+    const paint = (g, [c, r]) => { // every vertex on one clay cell (the atlas look); toNonIndexed keeps merges uniform
+      g = g.index ? g.toNonIndexed() : g;
+      const uv = new Float32Array((g.attributes.position.count) * 2);
+      for (let i = 0; i < uv.length; i += 2) { uv[i] = (c + 0.5) / 8; uv[i + 1] = (r + 0.5) / 4; }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      return g;
+    };
+    const POLE = [6, 0], DOOR = kit.CELL.dark;
+    if (shape === 'hut') { // a small wooden house: plank walls, darker corner posts, a door, a pitched roof (the wire)
+      const w = 0.7, d = 0.8, wh = 0.58, rh = 0.42, o = 0.06, X = w / 2 + o, Z = d / 2 + o, f = d / 2;
+      const walls = paint(new THREE.BoxGeometry(w, wh, d).translate(0, wh / 2, 0), POLE);
+      const gables = tri(POLE, [[0, 0, 1], [-w / 2, wh, f], [w / 2, wh, f], [0, wh + rh * (w / 2) / X, f]],
+        [[0, 0, -1], [-w / 2, wh, -f], [w / 2, wh, -f], [0, wh + rh * (w / 2) / X, -f]]);
+      const posts = [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz]) => paint(new THREE.BoxGeometry(0.07, wh, 0.07).translate(sx * (w / 2 - 0.02), wh / 2, sz * (f - 0.02)), DOOR));
+      const door = tri(DOOR, [[0, 0, 1], [-0.11, 0.01, f + 0.006], [0.11, 0.01, f + 0.006], [0.11, 0.3, f + 0.006], [-0.11, 0.3, f + 0.006]]);
+      const y0 = wh - rh * o / X, top = wh + rh * (w / 2) / X; // the eaves overhang, on the walls' slope
+      const roof = tri([0, 0], [[-1, 1, 0], [-X, y0, -Z], [-X, y0, Z], [0, top, Z], [0, top, -Z]], [[1, 1, 0], [X, y0, -Z], [X, y0, Z], [0, top, Z], [0, top, -Z]],
+        [[0, -1, 0], [-X, y0 - 0.001, -Z], [X, y0 - 0.001, -Z], [X, y0 - 0.001, Z], [-X, y0 - 0.001, Z]]);
+      return [mergeGeometries([walls, gables, ...posts, door]), roof];
+    }
+    const pole = (x, y0, y1, z) => paint(new THREE.CylinderGeometry(0.025, 0.025, y1 - y0, 5).translate(x, (y0 + y1) / 2, z), POLE);
+    if (shape === 'bell') {
+      const r = 0.58, h = 1.0, seg = 8, zf = r * Math.cos(Math.PI / seg) + 0.008;
+      const cloth = paint(new THREE.ConeGeometry(r, h, seg, 1, true, Math.PI / seg).translate(0, h / 2, 0), [0, 0]);
+      const door = tri(DOOR, [[0, 0, 1], [-0.17, 0.01, zf], [0.17, 0.01, zf], [0, 0.48, zf * (1 - 0.47 / h)]]);
+      return [mergeGeometries([door, pole(0, h - 0.05, h + 0.16, 0)]), cloth];
+    }
+    const w = 1.0, d = 1.2, h = 0.82, f = d / 2;
+    const cloth = tri([0, 0], [[-1, 1, 0], [-w / 2, 0, -f], [-w / 2, 0, f], [0, h, f], [0, h, -f]], [[1, 1, 0], [w / 2, 0, -f], [w / 2, 0, f], [0, h, f], [0, h, -f]],
+      [[0, 0, -1], [-w / 2, 0, -f], [w / 2, 0, -f], [0, h, -f]], [[0, 0, 1], [-w / 2, 0, f], [w / 2, 0, f], [0, h, f]]);
+    const door = tri(DOOR, [[0, 0, 1], [-0.17, 0.01, f + 0.008], [0.17, 0.01, f + 0.008], [0, 0.5, f + 0.008]]);
+    return [mergeGeometries([door, pole(0, h - 0.04, h + 0.14, f), pole(0, h - 0.04, h + 0.14, -f)]), cloth];
   }
 
   // ---- overlays, all instanced
