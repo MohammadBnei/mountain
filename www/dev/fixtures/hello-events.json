@@ -93,6 +93,47 @@
   },
   {
    "t": "world",
+   "kind": "annex",
+   "app": "wird",
+   "host": "h2",
+   "q": 1,
+   "r": -4
+  },
+  {
+   "t": "world",
+   "kind": "annex",
+   "app": "wird",
+   "host": "h3",
+   "q": 2,
+   "r": -3
+  },
+  {
+   "t": "world",
+   "kind": "annex",
+   "app": "gate",
+   "host": "h1",
+   "q": 2,
+   "r": -6
+  },
+  {
+   "t": "world",
+   "kind": "annex",
+   "app": "gate",
+   "host": "h3",
+   "q": -1,
+   "r": -2
+  },
+  {
+   "t": "world",
+   "kind": "annex",
+   "app": "gate",
+   "host": "h3",
+   "q": -1,
+   "r": -2,
+   "gone": true
+  },
+  {
+   "t": "world",
    "kind": "mark",
    "id": "01M5HPCD7G3VF3J95X39Y7BVKA",
    "mark": "plant",

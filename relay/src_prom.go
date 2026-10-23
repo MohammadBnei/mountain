@@ -35,7 +35,7 @@ const (
 var afterPoll = func() {}
 
 // optionalQ: queries whose failure is no answer (logged once per outage) instead of a failed poll.
-var optionalQ = map[string]bool{"pods": true, "guests": true}
+var optionalQ = map[string]bool{"pods": true, "guests": true, "annexpods": true}
 
 // promQ: name -> PromQL. The fixture server keys its timeline by these names.
 var promQ = map[string]string{
@@ -62,6 +62,8 @@ var promQ = map[string]string{
 	// R7 town plots: running pods per (namespace, pod, node), minus pods being deleted (a NotReady node's pods keep
 	// phase Running for minutes). max by() first, so a second KSM replica or a uid churn cannot make the join fail.
 	"pods": `max by (namespace, pod, node) (kube_pod_info{node!=""}) * on (namespace, pod) group_left() max by (namespace, pod) (kube_pod_status_phase{phase="Running"} == 1) unless on (namespace, pod) kube_pod_deletion_timestamp`,
+	// R8 C tents (annexes.go): the pods answer minus the pods a Job owns (a migration or backup never puts up a tent)
+	"annexpods": `max by (namespace, pod, node) (kube_pod_info{node!=""}) * on (namespace, pod) group_left() max by (namespace, pod) (kube_pod_status_phase{phase="Running"} == 1) unless on (namespace, pod) kube_pod_deletion_timestamp unless on (namespace, pod) kube_pod_owner{owner_kind="Job"}`,
 	// R8 machines: the infra guests blackbox-exporter probes (infra-bootstrap ADR-0064), by target only (never instance)
 	"guests": `max by (target) (probe_success{target=~"guest-.*"})`,
 }
@@ -425,6 +427,8 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	_, guestsOK := r["guests"]
 	here := p.machines.watch(p.a, o, p.plots, r["guests"], guestsOK, r["ready"], now)
 	p.plots.place(p.a, o, r["pods"], here, p.ready, now)
+	_, annexOK := r["annexpods"]
+	p.plots.annexes(p.a, o, r["annexpods"], annexOK, p.ready, now) // R8 C: after the plots it stands beside
 	p.a.wilt(o, now)
 	p.a.mu.Lock()
 	standing := 0

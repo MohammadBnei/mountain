@@ -8,7 +8,7 @@ package main
 //	public pose {h, q, r, item}   item 0 tree | 1 flag | 2 lantern
 //
 // Rejects: bad (not whole numbers) | reach (no such island or hex) | road (the square, a road or a bridge head)
-// | plot (a building stands there) | taken (another plant is there).
+// | plot (a building or, R8 C, a tent stands there) | taken (another plant is there).
 //
 // Room (R7.1): plants wilt after a week (plots.go wilt). When an island has no free hex left, its oldest plant gives
 // way: planting on that plant's hex replaces it (Place.Evict); every other planted hex is still taken.
@@ -52,9 +52,14 @@ func validatePlant(p *Place) (map[string]any, float64, string) {
 			return nil, 0, "plot"
 		}
 	}
+	for _, t := range p.Annex {
+		if t.Host == host && t.hex() == x {
+			return nil, 0, "plot"
+		}
+	}
 	plants := plantAt(p.Marks)[host]
 	if m, ok := plants[x]; ok {
-		if !islandFull(host, p.Plots, plants) || oldestPlant(p.Marks, h) != m.ID {
+		if !islandFull(host, p.Plots, p.Annex, plants) || oldestPlant(p.Marks, h) != m.ID {
 			return nil, 0, "taken"
 		}
 		p.Evict = m.ID
@@ -62,12 +67,17 @@ func validatePlant(p *Place) (map[string]any, float64, string) {
 	return map[string]any{"h": h, "q": q, "r": r, "item": plantItem(sunNow())}, 1, ""
 }
 
-// islandFull: no plantable hex of host's island is free of plots and plants.
-func islandFull(host string, plots []Plot, plants map[town.Hex]Mark) bool {
+// islandFull: no plantable hex of host's island is free of plots, tents and plants.
+func islandFull(host string, plots []Plot, annexes []Annex, plants map[town.Hex]Mark) bool {
 	built := map[town.Hex]bool{}
 	for _, pl := range plots {
 		if pl.Host == host {
 			built[pl.hex()] = true
+		}
+	}
+	for _, t := range annexes {
+		if t.Host == host {
+			built[t.hex()] = true
 		}
 	}
 	for _, x := range town.Hexes(host) {

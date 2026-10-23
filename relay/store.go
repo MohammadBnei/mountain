@@ -27,6 +27,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/MohammadBnei/mountain/relay/town"
 )
 
 //go:embed migrations/*.sql
@@ -412,6 +414,37 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 		}
 	}
 	st.Machines = machines
+	// R8 C: tents. Only what geometry forbids goes here (annexes.go): an app no longer configured or a machine, a hex
+	// that is no grass of a known host, or one a plot, a plant or an earlier tent holds. The one rule (annexOK) is
+	// the first poll's: its gone frames persist, and the page skips a tent beside no standing plot meanwhile.
+	held := map[string]map[town.Hex]bool{}
+	hold := func(h string, x town.Hex) bool {
+		if held[h] == nil {
+			held[h] = map[town.Hex]bool{}
+		}
+		was := held[h][x]
+		held[h][x] = true
+		return was
+	}
+	for _, p := range st.Plots {
+		hold(p.Host, p.hex())
+	}
+	for h, ps := range plantAt(st.Marks) {
+		for x := range ps {
+			hold(h, x)
+		}
+	}
+	seenTent := map[string]bool{}
+	st.Annexes = slices.DeleteFunc(slices.Clone(st.Annexes), func(x Annex) bool {
+		c, ok := a.Cfg.Apps[x.App]
+		bad := !ok || c.Group == "machine" || town.Tile(x.Host, x.hex()) != town.Grass || seenTent[x.key()] || hold(x.Host, x.hex())
+		seenTent[x.key()] = true
+		return bad
+	})
+	if st.Annexes == nil { // a snapshot from before R8 deploy C
+		st.Annexes = []Annex{}
+	}
+	st.Annexes = st.Annexes[max(0, len(st.Annexes)-annexesMax):]
 	ids := make([]string, len(st.Marks))
 	for i, m := range st.Marks {
 		ids[i] = m.ID
