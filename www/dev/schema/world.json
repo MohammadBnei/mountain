@@ -1,7 +1,7 @@
 {
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "world.json",
- "title": "world frame (R7 town): {t:'world', kind, ...payload}: plot (relay plots.go) | mark (visitor marks, validators.go).",
+ "title": "world frame (R7 town): {t:'world', kind, ...payload}: plot (relay plots.go) | mark (visitor marks, validators.go) | annex (R8 C tents, annexes.go).",
  "type": "object",
  "required": [
   "t",
@@ -90,6 +90,40 @@
     "role"
    ],
    "additionalProperties": false
+  },
+  {
+   "properties": {
+    "t": {
+     "const": "world"
+    },
+    "kind": {
+     "const": "annex"
+    },
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "host": {
+     "$ref": "#/$defs/host"
+    },
+    "q": {
+     "$ref": "#/$defs/hexc"
+    },
+    "r": {
+     "$ref": "#/$defs/hexc"
+    },
+    "gone": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "t",
+    "kind",
+    "app",
+    "host",
+    "q",
+    "r"
+   ],
+   "additionalProperties": false
   }
  ],
  "$defs": {
@@ -138,7 +172,34 @@
   },
   "role": {
    "description": "R8: town building kind (relay/town Kinds; its family decides where it stands)",
-   "enum": ["alehouse", "archive", "bookshop", "castle", "cellar", "church", "craneyard", "depot", "forge", "gate", "granary", "guardhouse", "hall", "home", "house", "inn", "keep", "market", "mill", "playhouse", "tavern", "tower", "vault", "warehouse", "watchtower", "witness"]
+   "enum": [
+    "alehouse",
+    "archive",
+    "bookshop",
+    "castle",
+    "cellar",
+    "church",
+    "craneyard",
+    "depot",
+    "forge",
+    "gate",
+    "granary",
+    "guardhouse",
+    "hall",
+    "home",
+    "house",
+    "inn",
+    "keep",
+    "market",
+    "mill",
+    "playhouse",
+    "tavern",
+    "tower",
+    "vault",
+    "warehouse",
+    "watchtower",
+    "witness"
+   ]
   },
   "plot": {
    "description": "R7 town plot: an app's building on the island of the host its pods run on (relay plots.go). ruinAt: app.gone time (unix ms), the building is ruins.",
@@ -170,6 +231,31 @@
     "ruinAt": {
      "type": "integer",
      "minimum": 0
+    }
+   }
+  },
+  "annex": {
+   "description": "R8 C tent: an app's annex on another host it also runs pods on (relay annexes.go), never a count.",
+   "type": "object",
+   "required": [
+    "app",
+    "host",
+    "q",
+    "r"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "app": {
+     "$ref": "#/$defs/app"
+    },
+    "host": {
+     "$ref": "#/$defs/host"
+    },
+    "q": {
+     "$ref": "#/$defs/hexc"
+    },
+    "r": {
+     "$ref": "#/$defs/hexc"
     }
    }
   }

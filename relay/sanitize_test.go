@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 // TestSanitizeCorpus: hostile label values (IPs, namespaces, hostnames, versions, non-allowlisted
 // apps) never come out of the lookups, and clean() passes only the closed per-kind field set.
@@ -86,6 +89,12 @@ func TestSanitizeCorpus(t *testing.T) {
 		{"ev:gitops.commit", map[string]any{"n": "3f2a9c1d"}},
 		{"ev:adr.merge", map[string]any{"day": "2026-10-15T10:00:00Z"}},
 		{"ev:adr.merge", map[string]any{"title": "ADR-0058"}},
+		// R8 C tents: a machine, an unknown host or a missing coordinate never pass
+		{"world:annex", map[string]any{"app": "granary", "host": "h1", "q": 1, "r": 0}},
+		{"world:annex", map[string]any{"app": "keep-h1", "host": "h2", "q": 1, "r": 0}},
+		{"world:annex", map[string]any{"app": "wird", "host": "h4", "q": 1, "r": 0}},
+		{"world:annex", map[string]any{"app": "wird", "host": "h2", "q": 1}},
+		{"world:annex", map[string]any{"app": "wird", "host": "h2", "q": 1, "r": 99}},
 	} {
 		if f, pass := cfg.clean(c.kind, c.in); pass {
 			t.Errorf("clean(%s, %v) passed: %v", c.kind, c.in, f)
@@ -131,5 +140,15 @@ func TestRotGuard(t *testing.T) {
 	cfg.appOfArgo("rotguard-newapp", "rotguard-newapp")
 	if all() != before+1 {
 		t.Fatal("an Argo app in an unknown namespace must count as unmapped")
+	}
+}
+
+// TestAnnexClean: a tent frame keeps exactly app, host, q, r (and gone): never a count or anything else.
+func TestAnnexClean(t *testing.T) {
+	cfg, _ := loadConfig(configYAML)
+	f, ok := cfg.clean("world:annex", map[string]any{"app": "wird", "host": "h2", "q": 2, "r": -1, "gone": true,
+		"n": 3, "pods": 2, "count": 1, "node": "k8s-cp-02", "role": "tent"})
+	if !ok || fmt.Sprint(f) != "map[app:wird gone:true host:h2 q:2 r:-1]" {
+		t.Fatalf("clean: %v %v", f, ok)
 	}
 }

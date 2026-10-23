@@ -173,10 +173,11 @@ type State struct {
 	Plots    []Plot            `json:"plots"`    // R7: town buildings (world:plot), one per app, ≤ plotsMax; gone removes
 	Quorum   []string          `json:"quorum"`   // R7.1: hosts whose PVE node is in quorum (ev quorum); null = not known yet
 	Machines map[string]string `json:"machines"` // R8: probed machine -> up|down (ev machine, debounced); absent = not known yet
+	Annexes  []Annex           `json:"annexes"`  // R8 C: tents (world:annex), one per app@host, ≤ annexesMax; gone removes
 }
 
 func newState() State {
-	return State{Alerts: []Alert{}, Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}, Marks: []Mark{}, Plots: []Plot{}, Machines: map[string]string{}}
+	return State{Alerts: []Alert{}, Health: map[string]string{}, Replicas: map[string]int{}, Builds: map[string]string{}, Marks: []Mark{}, Plots: []Plot{}, Machines: map[string]string{}, Annexes: []Annex{}}
 }
 
 // Fire broadcasts ev alert.fire{fp, sev, layer, startsAt}; the hub tap adds it to hello.state.alerts (replacing the
@@ -248,6 +249,15 @@ func (s *State) apply(f frameF, raw []byte) {
 			if !f.Gone {
 				s.Marks = append(s.Marks, m)
 				s.Marks = s.Marks[max(0, len(s.Marks)-marksMax):]
+			}
+		}
+	case "world:annex": // R8 C (annexes.go): replaces the app@host tent, gone removes it
+		var x Annex
+		if json.Unmarshal(raw, &x) == nil {
+			s.Annexes = slices.DeleteFunc(s.Annexes, func(y Annex) bool { return y.App == x.App && y.Host == x.Host })
+			if !f.Gone {
+				s.Annexes = append(s.Annexes, x)
+				s.Annexes = s.Annexes[max(0, len(s.Annexes)-annexesMax):]
 			}
 		}
 	case "world:plot": // R7 (plots.go): replaces the app's plot, gone removes it

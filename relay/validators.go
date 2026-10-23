@@ -59,6 +59,7 @@ type Place struct {
 	Handle string         // its public name: the moderated handle when it opted in (named), else "a visitor"
 	Marks  []Mark         // the active marks, oldest first (a copy)
 	Plots  []Plot         // R7: the town plots (a copy): a plant never goes on a building
+	Annex  []Annex        // R8 C: the tents (a copy): nor on a tent
 	Now    time.Time
 	Evict  string // set by Validate: the id of an active mark that gives way to this one (R7.1: a full island)
 }
@@ -227,7 +228,7 @@ func (a *App) place(c *Client, ref, toy string, pose map[string]any, named bool,
 		h = x
 	}
 	a.mu.Lock()
-	p := &Place{Pose: pose, Sub: c.Sub, Handle: h, Marks: slices.Clone(a.State.Marks), Plots: slices.Clone(a.State.Plots), Now: now}
+	p := &Place{Pose: pose, Sub: c.Sub, Handle: h, Marks: slices.Clone(a.State.Marks), Plots: slices.Clone(a.State.Plots), Annex: slices.Clone(a.State.Annexes), Now: now}
 	a.mu.Unlock()
 	out, w, why := runValidate(toy, t, p)
 	if why != "" {

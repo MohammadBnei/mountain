@@ -212,6 +212,7 @@ func init() {
 		ghEvery = promEvery
 		buildWindow = 100 * 365 * 24 * time.Hour            // fixture run timestamps are static: every queued/in_progress run is in flight
 		machineHold, machineGone = 3*promEvery, 3*promEvery // R8: a machine's state and absence show within a fixture run
+		annexHold = 3 * promEvery                           // R8 C: a tent shows within a fixture run
 		afterPoll = func() { f.playMarks(); f.advance() }   // one clock: the poll ticker; each step is seen by exactly one poll
 		return u, u, nil
 	}
