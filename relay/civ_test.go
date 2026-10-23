@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // TestCalm: State.Calm, kept by the fold alone: a warning or critical alert or a Degraded/Missing app clears it;
@@ -41,6 +43,16 @@ func TestCalm(t *testing.T) {
 	if s.Calm != "2026-10-24" {
 		t.Fatalf("a calm frame keeps the start: %q", s.Calm)
 	}
+	s.apply(frameF{T: "ev", Kind: "argo.health", App: "wird", Status: "Missing", TS: day(27)}, nil)
+	s.apply(frameF{T: "ev", Kind: "app.gone", App: "wird"}, nil) // ts 0 (a frame with no time): no day to start from
+	if s.Calm != "" {
+		t.Fatalf("a frame with no time starts no calm: %q", s.Calm)
+	}
+	s.apply(frameF{T: "ev", Kind: "argo.health", App: "wird", Status: "Missing", TS: day(27)}, nil)
+	s.apply(frameF{T: "ev", Kind: "app.gone", App: "wird", TS: day(28)}, nil)
+	if s.Calm != "2026-10-28" {
+		t.Fatalf("the troubled app gone ends the trouble: %q", s.Calm)
+	}
 }
 
 // TestTechs: the ADR listing → numbers only (count, highest); other files, product slugs never leave; an unchanged
@@ -48,7 +60,7 @@ func TestCalm(t *testing.T) {
 func TestTechs(t *testing.T) {
 	a, c := testApp(t)
 	list := `[{"name":"0001-ingress-traefik.md"},{"name":"0064-mountain-town-roles.md"},{"name":"0065-mountain-behind-forwardauth.md"},{"name":"README.md"},{"name":"template.md"}]`
-	fail := false
+	fail, n304 := false, 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if fail {
 			http.Error(w, "nope", http.StatusNotFound)
@@ -57,6 +69,12 @@ func TestTechs(t *testing.T) {
 		if r.URL.Path != "/repos/MohammadBnei/infra-bootstrap/contents/docs/adr" {
 			t.Errorf("path %s", r.URL.Path)
 		}
+		if r.Header.Get("If-None-Match") == `"adr1"` { // an unchanged listing: the cached body, no frame
+			n304++
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("ETag", `"adr1"`)
 		w.Write([]byte(list))
 	}))
 	defer srv.Close()
@@ -75,8 +93,8 @@ func TestTechs(t *testing.T) {
 		}
 	}
 	s.techs(context.Background(), o)
-	if f := drain(c); len(f) != 0 {
-		t.Fatalf("unchanged listing sent %v", f)
+	if f := drain(c); len(f) != 0 || n304 != 1 || a.State.Tech != (Tech{3, 65}) {
+		t.Fatalf("unchanged listing (304 %d) sent %v, tech %v", n304, f, a.State.Tech)
 	}
 	fail = true
 	s.techs(context.Background(), o)
@@ -94,11 +112,41 @@ func TestDBCivRestore(t *testing.T) {
 	o.Ev("argo.sync", map[string]any{"app": "wird", "ok": true})
 	a.store.Close(5 * time.Second)
 	b := storedApp(t, dsn)
-	defer b.store.Close(time.Second)
 	if b.snap(b.Day).Started != utcDay(time.Now()) {
 		t.Fatalf("started: %q", b.snap(b.Day).Started)
 	}
-	if b.State.Calm == "" {
-		t.Fatal("a calm town restored with no calm day")
+	if b.State.Calm != utcDay(time.Now()) {
+		t.Fatalf("the first boot starts calm: %q", b.State.Calm)
+	}
+	b.store.Close(5 * time.Second)
+
+	// a snapshot from before R9 (no calm key) after a history: the seed is the last day the trouble moved (the
+	// warning's resolve, wird's recovery), not an info alert, not a Progressing → Healthy, never before day one
+	ctx := context.Background()
+	c, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close(ctx)
+	ev := func(id, day, kind, public string) {
+		if _, err := c.Exec(ctx, `INSERT INTO events (id, ts, day, kind, public) VALUES ($1, $2::date, $2::date, $3, $4)`, id, day, kind, public); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.Exec(ctx, `UPDATE town_epoch SET started = '2026-09-01'`)
+	ev("e1", "2026-10-05", "alert.fire", `{"sev":"warning","fp":"b"}`)
+	ev("e2", "2026-10-06", "argo.health", `{"app":"wird","status":"Degraded"}`)
+	ev("e3", "2026-10-07", "alert.resolve", `{"sev":"warning","fp":"b"}`)
+	ev("e4", "2026-10-08", "argo.health", `{"app":"wird","status":"Healthy"}`)
+	ev("e5", "2026-10-11", "argo.health", `{"app":"mountain","status":"Progressing"}`)
+	ev("e6", "2026-10-12", "argo.health", `{"app":"mountain","status":"Healthy"}`)
+	ev("e7", "2026-10-15", "alert.fire", `{"sev":"info","fp":"c"}`)
+	if _, err := c.Exec(ctx, `UPDATE snapshots SET state = '{}', seq = nextval('frame_seq') WHERE seed = $1`, townEpoch); err != nil { // after the events
+		t.Fatal(err)
+	}
+	d := storedApp(t, dsn)
+	defer d.store.Close(time.Second)
+	if d.State.Calm != "2026-10-08" {
+		t.Fatalf("calm seeded on %q, want 2026-10-08", d.State.Calm)
 	}
 }

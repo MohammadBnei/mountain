@@ -490,7 +490,7 @@
    "additionalProperties": false
   },
   {
-   "description": "R8: a probed machine's state (relay machines.go), sent only after it has held 10 minutes; app is a machine's role key.",
+   "description": "R9: infra-bootstrap's ADRs as numbers only (relay civ.go): how many, and the highest number; titles never leave the relay.",
    "properties": {
     "t": {
      "const": "ev"

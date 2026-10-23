@@ -79,7 +79,8 @@ const TENTS = `(() => {
 // sync). Levels wait for goals (plan/09-play.md).
 const CIV = `(() => {
   const w = __town.world;
-  __town.inject({ t: 'ev', id: 'civtech', ts: Date.now(), kind: 'tech', count: 65, top: 65 });
+  __town.inject({ t: 'ev', id: 'civtech', ts: Date.now(), kind: 'tech', count: 65, top: 65 }); // the baseline
+  __town.inject({ t: 'ev', id: 'civtech2', ts: Date.now(), kind: 'tech', count: 66, top: 66 }); // a discovery: the herald calls it
   w.state.alerts = []; w.state.calm = new Date(Date.now() - 9 * 864e5).toISOString().slice(0, 10); w.emit('state', w.state);
 })()`;
 const CIV_STEADY = `(() => { // the same town, set quietly

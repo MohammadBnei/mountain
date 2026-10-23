@@ -58,6 +58,8 @@ async function start() {
       ? 'Impossible de joindre la ville pour l’instant, nouvel essai… (trop d’onglets ouverts sur ce réseau ?)'
       : 'Can’t reach the town yet, retrying… (too many tabs open on this network?)';
   }, 8000);
+  let started = null; // R9: the town's first day (hello.snapshot.started), for the turn counter; set before the first
+  world.on('hello', (h) => { started = h.snapshot?.started || null; }); // hello lands (world.loaded follows its emit)
   await world.loaded;
   // R8 build guard: a hello from another build means a deploy happened while this page was open (a reconnect after
   // the relay restarted). Its town may not be the one this code draws: reload once onto the current index.
@@ -259,9 +261,11 @@ async function start() {
       const top = `ADR-${String(s.tech.top).padStart(4, '0')}`;
       card.querySelector('.kicker').textContent = F ? 'civilisation' : 'civilization';
       card.querySelector('h2').textContent = F ? 'Technologies' : 'Technologies';
-      card.querySelector('.desc').textContent = F
-        ? `Chaque décision d'architecture prise pour le cluster est une technologie découverte : ${s.tech.count} à ce jour, la dernière est ${top}.`
-        : `Every architecture decision recorded for the cluster is a technology discovered: ${s.tech.count} so far, the latest is ${top}.`;
+      card.querySelector('.desc').textContent = !s.tech.count // a day from before R9, or not listed yet
+        ? (F ? 'Chaque décision d\'architecture prise pour le cluster est une technologie découverte. Aucune n\'est encore connue ici.' : 'Every architecture decision recorded for the cluster is a technology discovered. None is known here yet.')
+        : F
+          ? `Chaque décision d'architecture prise pour le cluster est une technologie découverte : ${s.tech.count} à ce jour, la dernière est ${top}.`
+          : `Every architecture decision recorded for the cluster is a technology discovered: ${s.tech.count} so far, the latest is ${top}.`;
       card.querySelector('.state').replaceChildren(word('info', F ? 'sources : les ADR d\'infra-bootstrap' : 'source: infra-bootstrap ADRs'));
       return;
     }
@@ -292,10 +296,8 @@ async function start() {
     const dl = document.createElement('dl');
     dl.className = 'guide';
     for (const [k, v] of rows) dl.append(Object.assign(document.createElement('dt'), { textContent: k }), Object.assign(document.createElement('dd'), { textContent: v }));
-    card.querySelector('.state').replaceChildren(dl, ...(g.on ? [word('ok', F ? `âge d'or depuis ${g.days} jours` : `golden age for ${g.days} days`)] : []));
+    card.querySelector('.state').replaceChildren(dl, ...(g.on ? [word('ok', F ? `âge d'or, jour ${g.days}` : `golden age, day ${g.days}`)] : []));
   }
-  let started = null; // R9: the town's first day (hello.snapshot.started), for the turn counter
-  world.on('hello', (h) => { started = h.snapshot?.started || null; });
   const techBtn = Object.assign(document.createElement('button'), { type: 'button', onclick: () => openInfo('tech') });
   const guideBtn = Object.assign(document.createElement('button'), { type: 'button', onclick: () => openInfo('guide') });
   const line = document.getElementById('line'), facts = document.getElementById('facts'), staleEl = document.getElementById('stale');

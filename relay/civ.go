@@ -26,19 +26,40 @@ type Tech struct {
 	Top   int `json:"top"`
 }
 
-// calmSeed is the last day something troubled the town in the stored events (an alert fired or resolved, an app
-// went Degraded or Missing), else the town's first day: the restore seed of State.Calm when the town is calm now.
-func (s *Store) calmSeed(ctx context.Context) (string, error) {
-	var d *time.Time
-	err := s.pool.QueryRow(ctx, `SELECT max(day) FROM events WHERE kind IN ('alert.fire', 'alert.resolve')
-		OR (kind = 'argo.health' AND public->>'status' IN ('Degraded', 'Missing'))`).Scan(&d)
+// calmSeed is the last day the town's trouble moved in the stored events before day `before` (nil = all): a warning
+// or critical alert fired or resolved, an app recovered from Degraded or Missing, or an app went. Never before the
+// town's first day. It seeds State.Calm for a snapshot written before R9, when the town is calm at that snapshot.
+// It errs late, never early: a golden age is never shown sooner than State.apply would have shown it.
+func (s *Store) calmSeed(ctx context.Context, before *string) (string, error) {
+	var b any
+	if before != nil {
+		b = *before
+	}
+	var d time.Time
+	err := s.pool.QueryRow(ctx, `WITH ev AS (SELECT seq, day, kind, public FROM events WHERE $1::date IS NULL OR day < $1::date),
+		h AS (SELECT day, public->>'status' AS st, lag(public->>'status') OVER (PARTITION BY public->>'app' ORDER BY seq) AS prev
+			FROM ev WHERE kind = 'argo.health')
+		SELECT greatest((SELECT started FROM town_epoch), max(d)) FROM (
+			SELECT day AS d FROM ev WHERE kind IN ('alert.fire', 'alert.resolve') AND public->>'sev' IN ('warning', 'critical')
+			UNION ALL SELECT day FROM h WHERE prev IN ('Degraded', 'Missing') AND st NOT IN ('Degraded', 'Missing')
+			UNION ALL SELECT day FROM ev WHERE kind = 'app.gone') x`, b).Scan(&d)
 	if err != nil {
 		return "", err
 	}
-	if d == nil {
-		return s.started(ctx)
-	}
 	return d.Format(time.DateOnly), nil
+}
+
+// seedCalm gives a snapshot written before R9 (no calm key) its calm day, before its later frames are folded on it.
+func (a *App) seedCalm(ctx context.Context, r *dbSnap, before *string) {
+	if r.calmKnown || r.state.troubled() {
+		return
+	}
+	d, err := a.store.calmSeed(ctx, before)
+	if err != nil {
+		log.Printf("relay: calm seed: %v", err)
+		return
+	}
+	r.state.Calm = d
 }
 
 // troubled: a warning or critical alert fires, or an app is Degraded or Missing.

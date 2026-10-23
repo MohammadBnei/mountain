@@ -147,6 +147,7 @@ func (a *App) buildReplay(ctx context.Context, day string) ([]byte, error) {
 	}
 	st := newState()
 	if r != nil {
+		a.seedCalm(ctx, r, &day) // R9: as restore does, so a replay and live agree on the golden age
 		st = r.state
 		fold(&st, r.frames)
 	}

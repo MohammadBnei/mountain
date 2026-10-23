@@ -7,7 +7,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { plotXZ } from '../layout.js';
 import { decree } from '../civ.js';
 
-const SAY = 6, STALE = 30;
+const SAY = 6, STALE = 30, SINK = 0.5; // s, s; islands.js: a down island sinks this far
+const clock = () => performance.now() / 1000; // wall time: a decree goes stale while the tab is hidden too
 
 export default async function build({ THREE, kit, world, apps, lang = () => 'en' }) {
   const root = new THREE.Group();
@@ -33,6 +34,7 @@ export default async function build({ THREE, kit, world, apps, lang = () => 'en'
     if (world.replay || !host) return;
     const text = decree(kind, args, fr());
     const cur = at[host];
+    now = clock();
     if (cur && now - cur.t0 < SAY) cur.next = { text, t: now };
     else at[host] = { text, t0: now };
     if (live) live.textContent = text;
@@ -40,14 +42,17 @@ export default async function build({ THREE, kit, world, apps, lang = () => 'en'
   world.on('ev:argo.sync', (f) => { if (f.ok) call(hostOf(f.app), 'sync', { name: nameOf(f.app) }); });
   world.on('ev:gitops.commit', () => call(capital(), 'laws'));
   let top = null; // the highest ADR the page knows: a higher one is a discovery
-  world.on('hello', () => { top = world.state.tech?.top ?? null; for (const h of Object.keys(at)) delete at[h]; });
+  const baseline = () => (world.state.tech?.count ? world.state.tech.top : null); // no ADR known yet (a zero tech): no baseline
+  top = baseline(); // the first hello landed before this object was built
+  world.on('hello', () => { top = baseline(); for (const h of Object.keys(at)) delete at[h]; });
   world.on('ev:tech', (f) => { if (top != null && f.top > top) call(capital(), 'tech', { n: f.top }); top = f.top; });
 
   let notes = [];
   return {
     root,
     update(dt, t) {
-      now = t;
+      now = clock();
+      if (world.replay) for (const h of Object.keys(at)) delete at[h]; // a scrub: no live decree over a past day
       notes = [];
       let n = 0;
       for (const [host, cur] of Object.entries(at)) {
@@ -57,7 +62,7 @@ export default async function build({ THREE, kit, world, apps, lang = () => 'en'
         }
         const [cx, cz] = plotXZ(world.town, host, 0, 0), x = cx - 1.25, z = cz - 0.4;
         const k = Math.min(1, (now - at[host].t0) * 4), bob = Math.abs(Math.sin(now * 5)) * 0.05;
-        M.compose(P.set(x, bob, z), Q.setFromEuler(E.set(0, Math.PI * 0.25, 0)), S.set(k, k, k));
+        M.compose(P.set(x, bob - (world.ready[host] === false ? SINK : 0), z), Q.setFromEuler(E.set(0, Math.PI * 0.25, 0)), S.set(k, k, k));
         fig.setMatrixAt(n++, M);
         notes.push({ key: `herald@${host}`, host, x, y: 1.0, z, text: at[host].text, down: world.ready[host] === false });
       }

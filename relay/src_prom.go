@@ -382,6 +382,7 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 	maps.DeleteFunc(health, func(_, st string) bool { return !healthOK[st] })
 	p.a.mu.Lock()
 	p.a.State.Health, p.a.State.Replicas = health, maps.Clone(p.repl)
+	p.a.State.calm(now.UnixMilli()) // R9: the quiet values keep calm true too (a change while the relay was down)
 	p.a.mu.Unlock()
 
 	// nodes -> hosts: ready = every mapped node Ready; alloc = share of cluster CPU; load = mean CPU use.
