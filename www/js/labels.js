@@ -58,7 +58,7 @@ export function createLabels({ THREE, layer, apps, lang }) {
         el.classList.toggle('down', !!p.down || !!p.off);
         el.classList.toggle('gone', !!p.ruinAt);
         if (a.group === 'machine' && !machines) { el.hidden = true; continue; } // R8: machines are named up close only
-        v.set(p.x, (p.ruinAt ? 0.5 : (p.height ?? p.k.height)) + 0.35 + (p.down ? -SINK : 0), p.z);
+        v.set(p.x, (p.ruinAt ? 0.5 : p.k.height) + 0.35 + (p.down ? -SINK : 0), p.z);
         const d = v.distanceTo(camera.position);
         v.project(camera);
         if (v.z >= 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) { el.hidden = true; continue; }
@@ -72,7 +72,7 @@ export function createLabels({ THREE, layer, apps, lang }) {
         if (el.textContent !== text) { el.textContent = text; el._w = 0; }
         el.style.setProperty('--wire', `var(--wire-${a.wire || 'app'})`);
         el.classList.toggle('down', !!x.down);
-        v.set(x.x, (x.height ?? x.k.height) + 0.3 + (x.down ? -SINK : 0), x.z);
+        v.set(x.x, x.k.height + 0.3 + (x.down ? -SINK : 0), x.z);
         const d = v.distanceTo(camera.position);
         v.project(camera);
         if (v.z >= 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) { el.hidden = true; continue; }

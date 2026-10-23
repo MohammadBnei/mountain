@@ -123,10 +123,7 @@ Rot guard:
 - Restore prunes by geometry only; replica buckets were coarsened with them (C1, migration 006).
 
 ## Civ (R9, `relay/civ.go`)
-- **Levels**: the prom source keeps each app's successful `argo.sync` times for 30 days (`activityWindow`), seeded at
-  boot from the stored events, so a restart neither resets nor inflates them (memory-only: counted from boot). Level =
-  1, 2 from 4 syncs, 3 from 12 (`levelAt`). A change sends `ev level {app, level}`; `State.Levels` holds the levels
-  above 1. Machines never sync, so they stay 1; `app.gone` drops the entry; restore prunes keys no longer configured.
+- **Levels**: none. They will come from goals reached (09-play), not from sync activity.
 - **Technologies**: each GitHub poll lists `docs/adr` on infra-bootstrap (a conditional request: an unchanged listing
   is a cached 304) and counts the `NNNN-*.md` files. Only `{count, top}` leaves the relay (`ev tech`, `State.Tech`):
   file names name products. A failure is logged once, never fatal.
@@ -151,7 +148,6 @@ Rot guard:
 | `gitops.commit` | `n` |
 | `adr.merge` | `day`, `title?` |
 | `replicas` | `app`, `bucket` |
-| `level` (R9) | `app`, `level` (1..3) |
 | `tech` (R9) | `count`, `top` (numbers only) |
 | `app.gone` | `app` |
 

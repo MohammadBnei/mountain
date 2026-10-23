@@ -8,55 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
-
-func evsOf(frames []map[string]any, kind string) (out []string) {
-	for _, f := range frames {
-		if f["t"] == "ev" && f["kind"] == kind {
-			out = append(out, fmt.Sprint(f["app"], ":", f["level"]))
-		}
-	}
-	return
-}
-
-// TestLevels: a building grows with its successful syncs of the last 30 days (1 → 2 at levelAt[0], 3 at
-// levelAt[1]) and shrinks back as they age out; machines never level; failed syncs do not count.
-func TestLevels(t *testing.T) {
-	a, c := testApp(t)
-	o, ac, now := &Out{app: a, name: "prom"}, newActivity(), time.Unix(1_800_000_000, 0)
-	for i := 0; i < levelAt[0]-1; i++ {
-		ac.levels(a, o, []string{"wird"}, now)
-	}
-	if got := evsOf(drain(c), "level"); len(got) != 0 {
-		t.Fatalf("below levelAt[0]: %v", got)
-	}
-	ac.levels(a, o, []string{"wird", "keep-h1"}, now)
-	if got := evsOf(drain(c), "level"); fmt.Sprint(got) != "[wird:2]" || a.State.Levels["wird"] != 2 {
-		t.Fatalf("level 2: %v %v", got, a.State.Levels)
-	}
-	for i := levelAt[0]; i < levelAt[1]; i++ {
-		ac.levels(a, o, []string{"wird"}, now.Add(time.Hour))
-	}
-	if got := evsOf(drain(c), "level"); fmt.Sprint(got) != "[wird:3]" {
-		t.Fatalf("level 3: %v", got)
-	}
-	ac.levels(a, o, nil, now.Add(activityWindow+time.Minute)) // the first 4 aged out: 8 left
-	if got := evsOf(drain(c), "level"); fmt.Sprint(got) != "[wird:2]" {
-		t.Fatalf("decay to 2: %v", got)
-	}
-	ac.levels(a, o, nil, now.Add(activityWindow+2*time.Hour)) // all aged out
-	if got := evsOf(drain(c), "level"); fmt.Sprint(got) != "[wird:1]" || len(a.State.Levels) != 0 {
-		t.Fatalf("decay to 1: %v %v", got, a.State.Levels)
-	}
-	for i := 0; i < 20; i++ {
-		ac.levels(a, o, nil, now.Add(activityWindow+3*time.Hour)) // steady: no frame
-	}
-	if got := evsOf(drain(c), "level"); len(got) != 0 {
-		t.Fatalf("steady state sent %v", got)
-	}
-}
 
 // TestCalm: State.Calm, kept by the fold alone: a warning or critical alert or a Degraded/Missing app clears it;
 // calm again starts it on that frame's day; info alerts and Progressing do not trouble the town.
@@ -133,17 +85,13 @@ func TestTechs(t *testing.T) {
 	}
 }
 
-// TestDBCivRestore: levels are seeded from the stored syncs after a restart (no reset); calm is seeded from the
-// stored events when the snapshot has none; hello.snapshot.started is the town's first day.
+// TestDBCivRestore: calm is seeded from the stored events when the snapshot has none; hello.snapshot.started is the
+// town's first day.
 func TestDBCivRestore(t *testing.T) {
 	dsn := testDSN(t)
-	ctx := context.Background()
 	a := storedApp(t, dsn)
 	o := &Out{app: a, name: "prom"}
-	for i := 0; i < levelAt[0]; i++ {
-		o.Ev("argo.sync", map[string]any{"app": "wird", "ok": true})
-	}
-	o.Ev("argo.sync", map[string]any{"app": "mountain", "ok": false})
+	o.Ev("argo.sync", map[string]any{"app": "wird", "ok": true})
 	a.store.Close(5 * time.Second)
 	b := storedApp(t, dsn)
 	defer b.store.Close(time.Second)
@@ -152,17 +100,5 @@ func TestDBCivRestore(t *testing.T) {
 	}
 	if b.State.Calm == "" {
 		t.Fatal("a calm town restored with no calm day")
-	}
-	ac, ob := newActivity(), &Out{app: b, name: "prom"}
-	ac.levels(b, ob, nil, time.Now())
-	if b.State.Levels["wird"] != 2 || b.State.Levels["mountain"] != 0 {
-		t.Fatalf("levels after a restart: %v", b.State.Levels)
-	}
-	c, _ := pgx.Connect(ctx, dsn)
-	defer c.Close(ctx)
-	var n int
-	c.QueryRow(ctx, "SELECT count(*) FROM events WHERE kind = 'level'").Scan(&n)
-	if n != 1 {
-		t.Fatalf("level events stored: %d", n)
 	}
 }

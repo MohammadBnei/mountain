@@ -95,7 +95,6 @@ type promSource struct {
 	quorum    string
 	base      map[string]float64 // app -> rps baseline (30 min EWMA); keyed by allowlist, bounded
 	plots     *placer            // R7 town plots (plots.go)
-	activity  *activity          // R9 levels (civ.go)
 	machines  *machineWatch      // R8 machines (machines.go)
 	optWarned map[string]bool    // optionalQ already logged as failing
 }
@@ -108,7 +107,7 @@ type counter struct {
 func newProm(a *App) *promSource {
 	return &promSource{a: a, url: strings.TrimRight(a.Opts.PromURL, "/"), hc: &http.Client{Timeout: 10 * time.Second},
 		ctr: map[string]counter{}, health: map[string]string{}, seen: map[string]bool{}, gone: map[string]time.Time{},
-		crash: map[string]bool{}, repl: map[string]int{}, ready: map[string]bool{}, base: map[string]float64{}, plots: newPlacer(), activity: newActivity(), machines: newMachineWatch(), optWarned: map[string]bool{}}
+		crash: map[string]bool{}, repl: map[string]int{}, ready: map[string]bool{}, base: map[string]float64{}, plots: newPlacer(), machines: newMachineWatch(), optWarned: map[string]bool{}}
 }
 
 func (p *promSource) Name() string { return "prom" }
@@ -280,14 +279,9 @@ func (p *promSource) poll(ctx context.Context, o *Out, now time.Time) error {
 			}
 		}
 	}
-	var synced []string
 	for _, s := range syncs { // the town drops the building in on ok, flies a red flag otherwise
 		o.Ev("argo.sync", map[string]any{"app": s.app, "ok": s.ok})
-		if s.ok {
-			synced = append(synced, s.app)
-		}
 	}
-	p.activity.levels(p.a, o, synced, now) // R9: buildings grow with their successful syncs
 
 	// argo.health + app.gone (absent 10 min while the controller is up; an empty answer is no answer).
 	present := map[string]bool{}

@@ -1,7 +1,6 @@
 // R9 Civ: the herald. A figure at an island's square calls out a decree for 6 s when something lands live: an app's
 // successful sync (on its island), new gitops commits ("laws", at the crane yard's island: ArgoCD's), a new ADR
-// ("technology", there too), a building's level-up (on its island). Never during a replay (world.step plays a past
-// day's frames fast). One decree per island at a time, one waiting (the newest wins), none older than 30 s.
+// ("technology", there too). Never during a replay (world.step plays a past day's frames fast). One decree per island at a time, one waiting (the newest wins), none older than 30 s.
 // The words are drawn by labels.js (notes()), placed first so building names give way; a polite live region repeats
 // them for screen readers.
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -43,9 +42,6 @@ export default async function build({ THREE, kit, world, apps, lang = () => 'en'
   let top = null; // the highest ADR the page knows: a higher one is a discovery
   world.on('hello', () => { top = world.state.tech?.top ?? null; for (const h of Object.keys(at)) delete at[h]; });
   world.on('ev:tech', (f) => { if (top != null && f.top > top) call(capital(), 'tech', { n: f.top }); top = f.top; });
-  let levels = {};
-  world.on('hello', () => { levels = { ...world.state.levels }; });
-  world.on('ev:level', (f) => { if (f.level > (levels[f.app] || 1)) call(hostOf(f.app), 'level', { name: nameOf(f.app), level: f.level }); levels = { ...world.state.levels }; });
 
   let notes = [];
   return {

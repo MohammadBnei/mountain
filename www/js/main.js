@@ -8,7 +8,7 @@ import { createWorld } from './world.js';
 import { connect, gateLapsed } from './socket.js';
 import { sun as sunAt, now as clock } from './sun.js';
 import { createLabels } from './labels.js';
-import { goldenAge, turnOf, GOLDEN_DAYS, LEVEL_AT } from './civ.js';
+import { goldenAge, turnOf, GOLDEN_DAYS } from './civ.js';
 import { createToys } from './toys.js';
 
 const canvas = document.getElementById('c');
@@ -271,7 +271,6 @@ async function start() {
     const rows = F ? [
       ['Îles', 'les trois hôtes Proxmox ; grise et enfoncée : hôte hors ligne (catastrophe)'],
       ['Bâtiments', 'une application ou un service, sur l\'hôte où tournent la plupart de ses pods ; les services de la plateforme sont les merveilles'],
-      ['Niveaux', `selon ses déploiements réussis sur 30 jours : niveau 2 dès ${LEVEL_AT[0]}, niveau 3 dès ${LEVEL_AT[1]}`],
       ['Copies et bannières', 'l\'application tourne aussi sur cette île (colonie)'],
       ['Échafaudage', 'une construction en cours (production)'],
       ['Feux', 'une alerte en cours (barbares)'],
@@ -282,7 +281,6 @@ async function start() {
     ] : [
       ['Islands', 'the three Proxmox hosts; grey and sunk: a host down (disaster)'],
       ['Buildings', 'an app or a service, on the host running most of its pods; the platform services are the wonders'],
-      ['Levels', `from its successful deploys over 30 days: level 2 from ${LEVEL_AT[0]}, level 3 from ${LEVEL_AT[1]}`],
       ['Copies and banners', 'the app also runs on that island (a settlement)'],
       ['Scaffolding', 'a build in progress (production)'],
       ['Fires', 'an alert firing (barbarians)'],
@@ -419,6 +417,6 @@ async function start() {
       if (is) return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5), 0.01);
       closeCard(); flyTo(overview(), 0.01);
     },
-    info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length, annexes: buildings.annexes().length, copies: buildings.copies(), improving: buildings.improving(), heralds: herald.notes().length, cam: +camera.position.distanceTo(controls.target).toFixed(1) }),
+    info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length, annexes: buildings.annexes().length, copies: buildings.copies(), heralds: herald.notes().length, cam: +camera.position.distanceTo(controls.target).toFixed(1) }),
   };
 }

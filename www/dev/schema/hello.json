@@ -71,10 +71,6 @@
           "description": "R8 C: the tents, world:annex payloads, one per app@host (a frame replaces it; gone removes it), ≤ 48. Absent = a snapshot from before R8 deploy C.",
           "type": "array", "maxItems": 48, "items": { "$ref": "world.json#/$defs/annex" }
         },
-        "levels": {
-          "description": "R9: app -> its building's level 2..3 from its successful syncs of the last 30 days (ev level); an app absent here is level 1. Absent = a snapshot from before R9.",
-          "type": "object", "maxProperties": 64, "propertyNames": { "$ref": "world.json#/$defs/app" }, "additionalProperties": { "type": "integer", "minimum": 2, "maximum": 3 }
-        },
         "tech": {
           "description": "R9: infra-bootstrap's ADRs as numbers only (ev tech): how many, the highest number.",
           "type": "object", "required": ["count", "top"], "additionalProperties": false,

@@ -128,22 +128,19 @@ try {
       note(`tap: ${mover} → "${name0}", moved to h3 → ${name1 ? `"${name1}"` : 'NO CARD'}`);
       if (!name1) fail(`tap: ${mover} moved to h3 can no longer be tapped`);
     }
-    if (name === 'desktop' || name === 'phone-low') { // R9 Civ worst case, on both tiers: every app at level 3, the golden
-      // age's bunting, a herald on every island; the tents and alerts below then stack on top of it
-      const civ = await page.evalJSON(`(() => { const w = __town.world, m = ${JSON.stringify(MACHINES.map((x) => x.key))}, apps = [...new Set(w.state.plots.filter((p) => !p.ruinAt && !m.includes(p.app)).map((p) => p.app))];
-        for (const app of apps) __town.inject({ t: 'ev', id: 'gl' + app, ts: Date.now(), kind: 'level', app, level: 3 });
+    if (name === 'desktop' || name === 'phone-low') { // R9 Civ worst case, on both tiers: the golden age's bunting, a herald
+      // on every island; the tents and alerts below then stack on top of it
+      const civ = await page.evalJSON(`(() => { const w = __town.world, m = ${JSON.stringify(MACHINES.map((x) => x.key))};
         __town.inject({ t: 'ev', id: 'gtech', ts: Date.now(), kind: 'tech', count: 99, top: 99 });
         w.state.alerts = []; w.state.calm = new Date(Date.now() - 9 * 864e5).toISOString().slice(0, 10); w.emit('state', w.state);
         const one = {}; for (const p of w.state.plots) if (!p.ruinAt && !m.includes(p.app)) one[p.host] ??= p.app;
         for (const app of Object.values(one)) __town.inject({ t: 'ev', id: 'gs' + app, ts: Date.now(), kind: 'argo.sync', app, ok: true });
-        __town.fly(''); return { apps: apps.length, islands: Object.keys(one).length }; })()`);
+        __town.fly(''); return { islands: Object.keys(one).length }; })()`);
       await sleep(1000);
       const ci = await page.evalJSON('__town.info()');
-      note(`civ ×${civ.apps} at level 3, ${civ.islands} heralds: ${JSON.stringify(ci)}`);
+      note(`civ, ${civ.islands} heralds: ${JSON.stringify(ci)}`);
       if (ci.heralds < civ.islands || ci.heralds > 3) fail(`civ: ${ci.heralds} heralds called for ${civ.islands} islands`); // a fixture sync may call on another
       if (ci.draws > 220 || ci.tris > TRIS) fail(`civ: over the page budget (${ci.draws} draws, ${ci.tris} tris)`);
-      const calm = await waitFor(page, `__town.info().improving === 0`, 20000); // the level-up moment ends (page time, slow GL)
-      if (!calm) fail('civ: the level-up scaffolds never came down');
       const gold = await page.evalJSON(`document.getElementById('facts').textContent`);
       if (!/golden age/.test(gold)) fail(`civ: no golden-age chip in "${gold}"`);
     }

@@ -72,7 +72,7 @@ building (it is an LXC). The owner's answers, one question at a time, are the R8
 | Deploy C0 | The gate, in infra-bootstrap (ADR-0065): `mountain-gate` forwardAuth, invitation-only enrollment | PR open; the owner merges, then reviews `mountain-visitors` |
 | Deploy C1 | The gate ref, automatic relay sign-in, the expiry reload, private assets, coarse replicas + migration 006 | Merged (PR #25, `9d82f82`, 2026-10-23), image `9d82f8224ecc` deployed. The gate holds only after the authentik worker restart; live checks are the owner's |
 | Deploy C2 | Annexes: a copy of the app's building + banner, zoom levels | Merged (PR #26, `bea87d4`, 2026-10-23) during a power outage; deploys when the cluster and its runner are back |
-| Civ (R9) | Levels from 30-day sync activity, the herald, technologies, golden age bunting, turns, a guide (00 Civ row) | Built locally on C2 (relay `3a969fc`, page `42937cd`); styleboard **signed off by the owner** (2026-10-23). PR after C2 is live |
+| Civ (R9) | The herald, technologies, golden age bunting, turns, a guide (00 Civ row); levels taken out until goals exist (09-play) | Styleboard **signed off by the owner** (2026-10-23); PR open after C2 merged |
 | Engine | Measure (shadow shapes, walker shadows, simplification test, gate breakdown), then BatchedMesh | After Civ (its worst case fits as is) |
 | Play (research) | Make the town playable with fleet agents: owner interview, architecture, doubt cycle (`09-play.md`) | Research done 2026-10-23; fleet + infra ADRs next, bridge and an interim queue in parallel |
 | Later | **The sea** (owner, 2026-10-23): water between the islands, with waves | After Deploy C; its own plan |

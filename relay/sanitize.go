@@ -129,7 +129,6 @@ const (
 	fProbed        // R8: a probed machine's key (config.yaml machine with probe)
 	fUpDown        // R8: up|down
 	fWork          // R8 C: an allowlisted app key that is not a machine (a tent's app)
-	fLevel         // R9: a building level 1..3 (civ.go levelOf)
 )
 
 // spec: frame kind -> field -> type. Every field is required, except a "name?" field, which is left out when
@@ -143,7 +142,6 @@ var spec = map[string]map[string]int{
 	"ev:replicas":      {"app": fApp, "bucket": fBucket},
 	"ev:app.gone":      {"app": fApp},
 	"ev:machine":       {"app": fProbed, "state": fUpDown}, // R8: a probed machine's state, debounced (machines.go)
-	"ev:level":         {"app": fWork, "level": fLevel},    // R9 (civ.go): a building's level from its activity
 	"ev:tech":          {"count": fNat, "top": fNat},       // R9: infra-bootstrap's ADRs, numbers only
 	"ev:alert.fire":    {"fp": fFP, "sev": fSev, "layer": fLayer, "startsAt": fNat, "host?": fHost, "app?": fApp},
 	"ev:alert.resolve": {"fp": fFP, "sev": fSev, "layer": fLayer, "durS": fNat, "host?": fHost, "app?": fApp},
@@ -269,9 +267,6 @@ func (c *Config) valid(typ int, v any) bool {
 		return ok && c.machine(s) && c.Apps[s].Probe != ""
 	case fUpDown:
 		return v == "up" || v == "down"
-	case fLevel:
-		n, ok := v.(int)
-		return ok && n >= 1 && n <= 3
 	case fWork:
 		s, ok := v.(string)
 		_, in := c.Apps[s]

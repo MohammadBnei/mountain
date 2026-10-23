@@ -90,9 +90,7 @@ func TestSanitizeCorpus(t *testing.T) {
 		{"ev:adr.merge", map[string]any{"day": "2026-10-15T10:00:00Z"}},
 		{"ev:adr.merge", map[string]any{"title": "ADR-0058"}},
 		// R8 C tents: a machine, an unknown host or a missing coordinate never pass
-		// R9: a level out of 1..3, a machine's level, a negative ADR count
-		{"ev:level", map[string]any{"app": "wird", "level": 4}},
-		{"ev:level", map[string]any{"app": "keep-h1", "level": 2}},
+		// R9: a negative ADR count
 		{"ev:tech", map[string]any{"count": -1, "top": 65}},
 		{"world:annex", map[string]any{"app": "granary", "host": "h1", "q": 1, "r": 0}},
 		{"world:annex", map[string]any{"app": "keep-h1", "host": "h2", "q": 1, "r": 0}},

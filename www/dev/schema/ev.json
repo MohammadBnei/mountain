@@ -504,42 +504,6 @@
      "minimum": 0
     },
     "kind": {
-     "const": "level"
-    },
-    "app": {
-     "$ref": "#/$defs/app"
-    },
-    "level": {
-     "type": "integer",
-     "minimum": 1,
-     "maximum": 3
-    }
-   },
-   "required": [
-    "t",
-    "id",
-    "ts",
-    "kind",
-    "app",
-    "level"
-   ],
-   "additionalProperties": false
-  },
-  {
-   "description": "R8: a probed machine's state (relay machines.go), sent only after it has held 10 minutes; app is a machine's role key.",
-   "properties": {
-    "t": {
-     "const": "ev"
-    },
-    "id": {
-     "type": "string",
-     "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
-    },
-    "ts": {
-     "type": "integer",
-     "minimum": 0
-    },
-    "kind": {
      "const": "tech"
     },
     "count": {

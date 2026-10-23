@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
-	"maps"
 	"path"
 	"slices"
 	"time"
@@ -448,15 +447,8 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 	if st.Annexes == nil { // a snapshot from before R8 deploy C
 		st.Annexes = []Annex{}
 	}
-	// R9 (civ.go): levels of configured non-machine apps only; calm seeded from the stored events when the town is
-	// calm now and no snapshot carried it (one from before R9)
-	if st.Levels == nil {
-		st.Levels = map[string]int{}
-	}
-	maps.DeleteFunc(st.Levels, func(app string, l int) bool {
-		_, ok := a.Cfg.Apps[app]
-		return !ok || a.Cfg.machine(app) || l < 2 || l > 3
-	})
+	// R9 (civ.go): calm seeded from the stored events when the town is calm now and no snapshot carried it (one from
+	// before R9)
 	if st.Calm == "" && !st.troubled() {
 		if d, err := a.store.calmSeed(ctx); err == nil {
 			st.Calm = d
