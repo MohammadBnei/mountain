@@ -310,7 +310,8 @@ export default async function build({ THREE, kit, world, apps }) {
         }
         if (nB < N) { // the banner where a main building has its lamp: front right
           const bx = x.x + Math.cos(x.yaw) * 0.5 * width + Math.sin(x.yaw) * 0.5 * width, bz = x.z - Math.sin(x.yaw) * 0.5 * width + Math.cos(x.yaw) * 0.5 * width;
-          M.compose(P.set(bx, dy - (x.down ? SINK : 0), bz), Q.setFromEuler(E.set(0, x.yaw, 0)), S.set(1, 1, 1));
+          const bs = near ? 1 : 2.2; // standing alone (the overview), the banner is the copy: bigger
+          M.compose(P.set(near ? bx : x.x, dy - (x.down ? SINK : 0), near ? bz : x.z), Q.setFromEuler(E.set(0, x.yaw, 0)), S.set(bs, bs, bs));
           bannerPole.setMatrixAt(nB, M);
           bannerCloth.setMatrixAt(nB, M);
           bannerPole.setColorAt(nB, x.down ? grey : C.setScalar(1));
