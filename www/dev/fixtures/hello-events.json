@@ -201,6 +201,11 @@
    "kind": "machine",
    "app": "mill",
    "state": "down"
+  },
+  {
+   "kind": "tech",
+   "count": 64,
+   "top": 65
   }
  ]
 }

@@ -358,6 +358,7 @@ func (a *App) attach(ctx context.Context, dsn string, ro bool) {
 	SourceLastSuccess.Set("db", float64(time.Now().Unix())) // memory-only: never refreshed, ages into MountainSourceStale
 	if dsn == "" {
 		log.Printf("relay: DATABASE_URL unset: memory-only, the world is lost on restart")
+		a.State.Calm = utcDay(time.Now()) // R9: nothing known before the boot
 		return
 	}
 	s, err := openStore(ctx, dsn)
@@ -366,6 +367,8 @@ func (a *App) attach(ctx context.Context, dsn string, ro bool) {
 		if err = a.restore(ctx, ro); err != nil {
 			a.store = nil
 			s.Close(time.Second) // nothing queued yet: restore failed before any write
+		} else if d, e := s.started(ctx); e == nil {
+			a.started = d // R9: the turn counter's day one
 		}
 	}
 	if err != nil {
@@ -443,6 +446,13 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 	})
 	if st.Annexes == nil { // a snapshot from before R8 deploy C
 		st.Annexes = []Annex{}
+	}
+	// R9 (civ.go): calm seeded from the stored events when the town is calm now and no snapshot carried it (one from
+	// before R9)
+	if st.Calm == "" && !st.troubled() {
+		if d, err := a.store.calmSeed(ctx); err == nil {
+			st.Calm = d
+		}
 	}
 	st.Annexes = st.Annexes[max(0, len(st.Annexes)-annexesMax):]
 	ids := make([]string, len(st.Marks))

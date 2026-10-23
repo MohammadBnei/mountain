@@ -128,6 +128,22 @@ try {
       note(`tap: ${mover} → "${name0}", moved to h3 → ${name1 ? `"${name1}"` : 'NO CARD'}`);
       if (!name1) fail(`tap: ${mover} moved to h3 can no longer be tapped`);
     }
+    if (name === 'desktop' || name === 'phone-low') { // R9 Civ worst case, on both tiers: the golden age's bunting, a herald
+      // on every island; the tents and alerts below then stack on top of it
+      const civ = await page.evalJSON(`(() => { const w = __town.world, m = ${JSON.stringify(MACHINES.map((x) => x.key))};
+        __town.inject({ t: 'ev', id: 'gtech', ts: Date.now(), kind: 'tech', count: 99, top: 99 });
+        w.state.alerts = []; w.state.calm = new Date(Date.now() - 9 * 864e5).toISOString().slice(0, 10); w.emit('state', w.state);
+        const one = {}; for (const p of w.state.plots) if (!p.ruinAt && !m.includes(p.app)) one[p.host] ??= p.app;
+        for (const app of Object.values(one)) __town.inject({ t: 'ev', id: 'gs' + app, ts: Date.now(), kind: 'argo.sync', app, ok: true });
+        __town.fly(''); return { islands: Object.keys(one).length }; })()`);
+      await sleep(1000);
+      const ci = await page.evalJSON('__town.info()');
+      note(`civ, ${civ.islands} heralds: ${JSON.stringify(ci)}`);
+      if (ci.heralds < civ.islands || ci.heralds > 3) fail(`civ: ${ci.heralds} heralds called for ${civ.islands} islands`); // a fixture sync may call on another
+      if (ci.draws > 220 || ci.tris > TRIS) fail(`civ: over the page budget (${ci.draws} draws, ${ci.tris} tris)`);
+      const gold = await page.evalJSON(`document.getElementById('facts').textContent`);
+      if (!/golden age/.test(gold)) fail(`civ: no golden-age chip in "${gold}"`);
+    }
     if (name === 'desktop' || name === 'phone-low') { // R8 C: every app's tents on both tiers (≤ 32), all drawn, and the alerts below on top
       const n = await page.evalJSON(`(() => { const w = __town.world, m = ${JSON.stringify(MACHINES.map((x) => x.key))}, taken = new Set(
           w.state.plots.map((p) => p.host + ',' + p.q + ',' + p.r).concat(w.state.marks.map((k) => 'h' + k.pose.h + ',' + k.pose.q + ',' + k.pose.r)));
@@ -170,7 +186,9 @@ try {
             const v = new THREE.Vector3(x.x, x.k.height * 0.4, x.z).project(T.camera), r = T.renderer.domElement.getBoundingClientRect();
             const rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2(v.x, v.y), T.camera);
             const hit = rc.intersectObjects(T.buildings.pickables(), false)[0];
-            return hit && T.buildings.annexOf(hit)?.key === x.key ? { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height } : null; })()`);
+            return hit && T.buildings.annexOf(hit)?.key === x.key ? { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }
+              : { miss: hit ? (T.buildings.annexOf(hit)?.key || T.buildings.plotOf(hit)?.app || hit.object.name || 'mesh') : 'nothing', copies: T.buildings.copies(), focus: [T.controls.target.x.toFixed(1), T.controls.target.z.toFixed(1)], at: [x.x.toFixed(1), x.z.toFixed(1)] }; })()`);
+          if (pt?.miss) { note(`tent tap: ${t0.key} hidden by ${JSON.stringify(pt)}`); pt = null; }
         }
         if (!pt) fail('tent tap: no tent in clear view');
         else for (const type of ['mousePressed', 'mouseReleased']) await page.s('Input.dispatchMouseEvent', { type, x: pt.x, y: pt.y, button: 'left', clickCount: 1 });

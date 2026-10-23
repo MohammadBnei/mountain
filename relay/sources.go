@@ -174,6 +174,8 @@ type State struct {
 	Quorum   []string          `json:"quorum"`   // R7.1: hosts whose PVE node is in quorum (ev quorum); null = not known yet
 	Machines map[string]string `json:"machines"` // R8: probed machine -> up|down (ev machine, debounced); absent = not known yet
 	Annexes  []Annex           `json:"annexes"`  // R8 C: tents (world:annex), one per app@host, ≤ annexesMax; gone removes
+	Tech     Tech              `json:"tech"`     // R9: infra-bootstrap's ADRs, count and highest number (ev tech)
+	Calm     string            `json:"calm"`     // R9: the day since which no warning/critical alert fires and no app is Degraded/Missing; "" = not calm
 }
 
 func newState() State {
@@ -208,7 +210,7 @@ func (o *Out) Resolve(a Alert, durS int) string {
 type frameF struct {
 	T, Kind, ID, FP, Sev, Layer, App, Host, Status, State string
 	StartsAt, TS                                          int64
-	Bucket                                                int
+	Bucket, Count, Top                                    int
 	Gone                                                  bool
 	Up                                                    []string
 }
@@ -218,12 +220,17 @@ func (s *State) apply(f frameF, raw []byte) {
 	switch f.T + ":" + f.Kind {
 	case "ev:alert.fire":
 		s.Alerts = append(slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == f.FP }), Alert{FP: f.FP, Sev: f.Sev, Layer: f.Layer, StartsAt: f.StartsAt, Host: f.Host, App: f.App})
+		s.calm(f.TS)
 	case "ev:alert.resolve":
 		s.Alerts = slices.DeleteFunc(s.Alerts, func(x Alert) bool { return x.FP == f.FP })
+		s.calm(f.TS)
 	case "ev:quorum":
 		s.Quorum = append([]string{}, f.Up...)
 	case "ev:argo.health":
 		s.Health[f.App] = f.Status
+		s.calm(f.TS)
+	case "ev:tech":
+		s.Tech = Tech{Count: f.Count, Top: f.Top}
 	case "ev:replicas":
 		s.Replicas[f.App] = f.Bucket
 	case "ev:app.gone":
@@ -231,6 +238,7 @@ func (s *State) apply(f frameF, raw []byte) {
 		delete(s.Replicas, f.App)
 		delete(s.Builds, f.App)
 		delete(s.Machines, f.App)
+		s.calm(f.TS)
 	case "ev:machine":
 		if s.Machines == nil { // a snapshot from before R8 deploy B
 			s.Machines = map[string]string{}

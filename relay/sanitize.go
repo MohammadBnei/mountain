@@ -142,6 +142,7 @@ var spec = map[string]map[string]int{
 	"ev:replicas":      {"app": fApp, "bucket": fBucket},
 	"ev:app.gone":      {"app": fApp},
 	"ev:machine":       {"app": fProbed, "state": fUpDown}, // R8: a probed machine's state, debounced (machines.go)
+	"ev:tech":          {"count": fNat, "top": fNat},       // R9: infra-bootstrap's ADRs, numbers only
 	"ev:alert.fire":    {"fp": fFP, "sev": fSev, "layer": fLayer, "startsAt": fNat, "host?": fHost, "app?": fApp},
 	"ev:alert.resolve": {"fp": fFP, "sev": fSev, "layer": fLayer, "durS": fNat, "host?": fHost, "app?": fApp},
 	// the src_github events (W3c)

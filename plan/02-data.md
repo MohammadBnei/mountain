@@ -122,6 +122,16 @@ Rot guard:
   placed again in the same poll); a plant is refused on a tent (`plot`).
 - Restore prunes by geometry only; replica buckets were coarsened with them (C1, migration 006).
 
+## Civ (R9, `relay/civ.go`)
+- **Levels**: none. They will come from goals reached (09-play), not from sync activity.
+- **Technologies**: each GitHub poll lists `docs/adr` on infra-bootstrap (a conditional request: an unchanged listing
+  is a cached 304) and counts the `NNNN-*.md` files. Only `{count, top}` leaves the relay (`ev tech`, `State.Tech`):
+  file names name products. A failure is logged once, never fatal.
+- **Calm**: `State.Calm` is the day since which no warning or critical alert fires and no app is Degraded or Missing
+  (`""` = not calm). `State.apply` keeps it on every alert and health frame and on `app.gone`, so a reload and a replay
+  agree (`world.js` mirrors it). Restore seeds it from the last troubling stored event, else the town's first day.
+- **Turns**: `hello.snapshot.started` is the town's first stored day; the page counts the days since.
+
 ## Event enum (FROZEN)
 `Ev{id (ULID), ts, kind, …}`:
 
@@ -138,6 +148,7 @@ Rot guard:
 | `gitops.commit` | `n` |
 | `adr.merge` | `day`, `title?` |
 | `replicas` | `app`, `bucket` |
+| `tech` (R9) | `count`, `top` (numbers only) |
 | `app.gone` | `app` |
 
 `fp` = a salted hash. **The salt is never rotated**: restored alerts and history link to it.
