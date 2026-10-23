@@ -199,6 +199,28 @@ const dp = readFileSync(new URL('../../scripts/devpod.sh', import.meta.url), 'ut
 ok(/name: MOUNTAIN_FP_SALT, value: \S+/.test(dp), 'devpod: pod env sets MOUNTAIN_FP_SALT (else src_alerts drops every alert)');
 ok(/while :; do \$K port-forward [^;]*\|\|/.test(dp), 'devpod: port-forward is looped and its failure tolerated under set -e (a push restart kills it)');
 
+// ---- R9 Civ: the calm fold mirrors relay State.apply (civ_test.go TestCalm); the golden age and turns (civ.js) ----
+{
+  const { goldenAge, turnOf, GOLDEN_DAYS } = await import('../js/civ.js');
+  const w = createWorld();
+  w.applyHello({ ...hello, state: { ...hello.state, alerts: [], health: {}, calm: '' } });
+  const at = (d) => Date.UTC(2026, 9, d, 12);
+  const f = (x) => w.applyFrame({ t: 'ev', id: `c${Math.random()}`, ...x });
+  f({ kind: 'argo.health', app: 'wird', status: 'Healthy', ts: at(20) });
+  ok(w.state.calm === '2026-10-20', 'calm: a calm frame starts it on its UTC day');
+  f({ kind: 'alert.fire', fp: '0000000000000001', sev: 'info', layer: 'apps', startsAt: 1, ts: at(21) });
+  f({ kind: 'argo.health', app: 'wird', status: 'Progressing', ts: at(21) });
+  ok(w.state.calm === '2026-10-20', 'calm: info alerts and Progressing do not trouble the town');
+  f({ kind: 'argo.health', app: 'wird', status: 'Missing', ts: at(22) });
+  ok(w.state.calm === '', 'calm: a Missing app ends it');
+  f({ kind: 'app.gone', app: 'wird', ts: at(24) });
+  ok(w.state.calm === '2026-10-24', 'calm: the troubled app gone ends the trouble');
+  const day = (iso) => ({ state: { calm: '2026-10-10' }, replay: { day: iso } });
+  ok(!goldenAge(day('2026-10-17')).on && goldenAge(day('2026-10-18')).on && goldenAge(day('2026-10-18')).days === 1,
+    `golden age after ${GOLDEN_DAYS} whole calm days (calm's own day never counts), its own day 1 first`);
+  ok(turnOf({ replay: { day: '2026-10-20' } }, '2026-10-20') === 1 && turnOf({ replay: { day: '2026-10-23' } }, '2026-10-20') === 4 && turnOf({}, null) === null, 'turns: day one = 1; no start day, no turn');
+}
+
 // ---- sun.js: the real Paris sun (the sky, and the plant toy's preview; relay/sun.go is pinned to the same vectors) ----
 const at = (iso) => sun(Date.parse(iso));
 ok(Math.abs(at('2026-06-21T11:52:00Z').elev - 64.6) < 0.3 && Math.abs(at('2026-12-21T11:52:00Z').elev - 17.7) < 0.3, 'sun: solstice noon elevations over Paris (64.6°, 17.7°)');

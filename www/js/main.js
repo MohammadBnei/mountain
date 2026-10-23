@@ -8,6 +8,7 @@ import { createWorld } from './world.js';
 import { connect, gateLapsed } from './socket.js';
 import { sun as sunAt, now as clock } from './sun.js';
 import { createLabels } from './labels.js';
+import { goldenAge, turnOf, GOLDEN_DAYS } from './civ.js';
 import { createToys } from './toys.js';
 
 const canvas = document.getElementById('c');
@@ -57,6 +58,8 @@ async function start() {
       ? 'Impossible de joindre la ville pour l’instant, nouvel essai… (trop d’onglets ouverts sur ce réseau ?)'
       : 'Can’t reach the town yet, retrying… (too many tabs open on this network?)';
   }, 8000);
+  let started = null; // R9: the town's first day (hello.snapshot.started), for the turn counter; set before the first
+  world.on('hello', (h) => { started = h.snapshot?.started || null; }); // hello lands (world.loaded follows its emit)
   await world.loaded;
   // R8 build guard: a hello from another build means a deploy happened while this page was open (a reconnect after
   // the relay restarted). Its town may not be the one this code draws: reload once onto the current index.
@@ -87,10 +90,10 @@ async function start() {
   Object.assign(controls, { enableDamping: true, dampingFactor: 0.08, minDistance: 6, maxDistance: 120, maxPolarAngle: 1.35, screenSpacePanning: false });
 
   // ---- the town
-  const ctx = { THREE, kit, world, apps };
-  const [islands, bridges, buildings, marks, people] = await Promise.all(['islands', 'bridges', 'buildings', 'marks', 'people']
+  const ctx = { THREE, kit, world, apps, lang };
+  const [islands, bridges, buildings, marks, people, herald, bunting] = await Promise.all(['islands', 'bridges', 'buildings', 'marks', 'people', 'herald', 'bunting']
     .map(async (n) => (await import(`./objects/${n}.js`)).default(ctx)));
-  for (const o of [islands, bridges, buildings, marks, people]) scene.add(o.root);
+  for (const o of [islands, bridges, buildings, marks, people, herald, bunting]) scene.add(o.root);
   const labels = createLabels({ THREE, layer: document.getElementById('labels'), apps, lang });
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -203,10 +206,11 @@ async function start() {
 
   // ---- card + panel
   const card = document.getElementById('card'), fr = () => lang() === 'fr';
-  let carded = null, cardedAt = null; // cardedAt: the island of the tent that opened the card (R8 C), listed first
-  function openCard(p, at = null) { carded = p.app; cardedAt = at; card.hidden = false; fillCard(); }
+  let carded = null, cardedAt = null, info = null; // cardedAt: the island of the tent that opened the card (R8 C), listed first; info: an R9 card (tech | guide)
+  function openCard(p, at = null) { carded = p.app; cardedAt = at; info = null; card.hidden = false; fillCard(); }
+  function openInfo(kind) { carded = null; info = kind; card.hidden = false; fillInfo(); }
   world.on('names', () => { if (carded) fillCard(); }); // R8: an admin's names arrive (or leave) with /auth/me
-  function closeCard() { carded = null; card.hidden = true; }
+  function closeCard() { carded = null; info = null; card.hidden = true; }
   document.getElementById('cardclose').onclick = closeCard;
   // Status always comes with a word (Ukubi): the colour only repeats it.
   const healthText = { Healthy: ['running', 'en marche', 'ok'], Progressing: ['deploying', 'en déploiement', 'warn'], Degraded: ['degraded', 'dégradé', 'bad'],
@@ -247,13 +251,63 @@ async function start() {
     go.hidden = !a.url || !!p.ruinAt;
     if (a.url) { go.href = a.url; go.textContent = `${F ? 'Ouvrir' : 'Open'} ${a.name}`; }
   }
+  // R9 Civ cards: the technologies (infra-bootstrap's ADRs, numbers only) and the guide (what the town's signs mean)
+  function fillInfo() {
+    const F = fr(), s = world.state, g = goldenAge(world);
+    card.style.setProperty('--wire', 'var(--wire-data)');
+    card.querySelector('.realname').hidden = true;
+    card.querySelector('.go').hidden = true;
+    if (info === 'tech') {
+      const top = `ADR-${String(s.tech.top).padStart(4, '0')}`;
+      card.querySelector('.kicker').textContent = F ? 'civilisation' : 'civilization';
+      card.querySelector('h2').textContent = F ? 'Technologies' : 'Technologies';
+      card.querySelector('.desc').textContent = !s.tech.count // a day from before R9, or not listed yet
+        ? (F ? 'Chaque décision d\'architecture prise pour le cluster est une technologie découverte. Aucune n\'est encore connue ici.' : 'Every architecture decision recorded for the cluster is a technology discovered. None is known here yet.')
+        : F
+          ? `Chaque décision d'architecture prise pour le cluster est une technologie découverte : ${s.tech.count} à ce jour, la dernière est ${top}.`
+          : `Every architecture decision recorded for the cluster is a technology discovered: ${s.tech.count} so far, the latest is ${top}.`;
+      card.querySelector('.state').replaceChildren(word('info', F ? 'sources : les ADR d\'infra-bootstrap' : 'source: infra-bootstrap ADRs'));
+      return;
+    }
+    card.querySelector('.kicker').textContent = F ? 'civilopédie' : 'civilopedia';
+    card.querySelector('h2').textContent = F ? 'Comment lire la ville' : 'How to read the town';
+    card.querySelector('.desc').textContent = '';
+    const rows = F ? [
+      ['Îles', 'les trois hôtes Proxmox ; grise et enfoncée : hôte hors ligne (catastrophe)'],
+      ['Bâtiments', 'une application ou un service, sur l\'hôte où tournent la plupart de ses pods ; les services de la plateforme sont les merveilles'],
+      ['Copies et bannières', 'l\'application tourne aussi sur cette île (colonie)'],
+      ['Échafaudage', 'une construction en cours (production)'],
+      ['Feux', 'une alerte en cours (barbares)'],
+      ['Fumée', 'une application dégradée (agitation)'],
+      ['Héraut', 'un déploiement, de nouvelles lois (commits gitops), une technologie (ADR)'],
+      ['Âge d\'or', `aucune alerte Alertmanager d'avertissement ou critique et aucune application dégradée depuis ${GOLDEN_DAYS} jours`],
+      ['Tour', 'le nombre de jours depuis la naissance de la ville'],
+    ] : [
+      ['Islands', 'the three Proxmox hosts; grey and sunk: a host down (disaster)'],
+      ['Buildings', 'an app or a service, on the host running most of its pods; the platform services are the wonders'],
+      ['Copies and banners', 'the app also runs on that island (a settlement)'],
+      ['Scaffolding', 'a build in progress (production)'],
+      ['Fires', 'an alert firing (barbarians)'],
+      ['Smoke', 'a degraded app (unrest)'],
+      ['The herald', 'a deploy, new laws (gitops commits), a technology (an ADR)'],
+      ['Golden age', `no warning or critical Alertmanager alert and no degraded app for ${GOLDEN_DAYS} days`],
+      ['Turn', 'the number of days since the town began'],
+    ];
+    const dl = document.createElement('dl');
+    dl.className = 'guide';
+    for (const [k, v] of rows) dl.append(Object.assign(document.createElement('dt'), { textContent: k }), Object.assign(document.createElement('dd'), { textContent: v }));
+    card.querySelector('.state').replaceChildren(dl, ...(g.on ? [word('ok', F ? `âge d'or, jour ${g.days}` : `golden age, day ${g.days}`)] : []));
+  }
+  const techBtn = Object.assign(document.createElement('button'), { type: 'button', onclick: () => openInfo('tech') });
+  const guideBtn = Object.assign(document.createElement('button'), { type: 'button', onclick: () => openInfo('guide') });
   const line = document.getElementById('line'), facts = document.getElementById('facts'), staleEl = document.getElementById('stale');
   const led = Object.assign(document.createElement('button'), { type: 'button' }), ledText = document.createElement('span');
   led.append(Object.assign(document.createElement('span'), { className: 'led' }), ledText);
   led.onclick = () => world.state.alerts[0] && goAlert(world.state.alerts[0]);
   function fillPanel() {
     const F = fr(), s = world.state, n = s.plots.filter((p) => !p.ruinAt).length;
-    line.textContent = F ? `Le cluster ukubi en direct : ${n} bâtiments sur 3 îles.` : `The ukubi cluster, live: ${n} buildings on 3 islands.`;
+    const turn = turnOf(world, started), g = goldenAge(world);
+    line.textContent = (turn ? (F ? `Tour ${turn} · ` : `Turn ${turn} · `) : '') + (F ? `Le cluster ukubi en direct : ${n} bâtiments sur 3 îles.` : `The ukubi cluster, live: ${n} buildings on 3 islands.`);
     const parts = world.town.islands.map((i) => world.ready[i.host] === false ? word('bad', `${i.host} ${F ? 'hors ligne' : 'down'}`) : word('ok', `${i.host} ${F ? 'en ligne' : 'up'}`));
     const off = Object.entries(s.machines || {}).filter(([app, st]) => st === 'down' && s.plots.some((p) => p.app === app && !p.ruinAt)).length;
     if (off) parts.push(word('bad', F ? `${off} machine${off > 1 ? 's' : ''} injoignable${off > 1 ? 's' : ''}` : `${off} machine${off > 1 ? 's' : ''} not answering`));
@@ -262,10 +316,15 @@ async function start() {
       ledText.textContent = F ? `${al} alerte${al > 1 ? 's' : ''}` : `${al} alert${al > 1 ? 's' : ''}`;
       parts.push(led);
     }
+    if (g.on) parts.push(word('gold', F ? `âge d'or · jour ${g.days}` : `golden age · day ${g.days}`)); // R9
+    if (s.tech?.count) { techBtn.textContent = F ? `${s.tech.count} technologies` : `${s.tech.count} technologies`; parts.push(techBtn); }
+    guideBtn.textContent = F ? 'guide' : 'guide';
+    parts.push(guideBtn);
     facts.replaceChildren(...parts);
     staleEl.hidden = world.stale == null;
     if (world.stale != null) staleEl.textContent = `${F ? 'Figé depuis' : 'Stale since'} ${new Date(world.stale).toLocaleTimeString(F ? 'fr' : 'en', { hour: '2-digit', minute: '2-digit' })}`;
     if (carded) fillCard();
+    if (info) fillInfo();
   }
   function goAlert(al) {
     const p = al.app && buildings.plots().find((x) => x.app === al.app);
@@ -331,6 +390,7 @@ async function start() {
     controls.update();
     { const d = camera.position.distanceTo(controls.target); scene.fog.near = d + 25 + 200 * night; scene.fog.far = d + 110 + 400 * night; }
     islands.update(); bridges.update(dt, night); marks.update(night);
+    herald.update(dt, t); bunting.update(dt, t, night); // R9 Civ
     buildings.update(dt, t, night, home && !moved && !fly ? null : controls.target); // R8 C: annex copies by zoom level
     people.update(t);
     toys.tick();
@@ -340,6 +400,7 @@ async function start() {
       chips: w < 600 && home && !moved && !fly ? islands.islands : null, // the phone's overview: one chip per island
       machines: !(home && !moved), // R8: machine names only once the camera leaves the overview
       tents: buildings.annexes(), // R8 C: named with the machines, once the camera leaves the overview
+      notes: herald.notes(), // R9: the herald's decree, placed first
     });
     renderer.render(scene, camera);
   });
@@ -358,6 +419,6 @@ async function start() {
       if (is) return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5), 0.01);
       closeCard(); flyTo(overview(), 0.01);
     },
-    info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length, annexes: buildings.annexes().length, copies: buildings.copies(), cam: +camera.position.distanceTo(controls.target).toFixed(1) }),
+    info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length, annexes: buildings.annexes().length, copies: buildings.copies(), heralds: herald.notes().length, cam: +camera.position.distanceTo(controls.target).toFixed(1) }),
   };
 }

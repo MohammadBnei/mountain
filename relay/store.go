@@ -266,6 +266,8 @@ type dbSnap struct {
 	metrics Metrics
 	frames  []json.RawMessage
 	r7      bool // the snapshot was written before R8 (migration 005 town_r8): its plots are re-placed by family
+
+	calmKnown bool // R9: the snapshot carries a calm key (a snapshot from before R9 does not: civ.go seedCalm)
 }
 
 // load returns the latest town snapshot (before day `before`, if not nil) and the frames after it (also before
@@ -290,6 +292,12 @@ func (s *Store) load(ctx context.Context, before *string) (*dbSnap, error) {
 	}
 	if err := json.Unmarshal(st, &r.state); err != nil {
 		return nil, fmt.Errorf("snapshot seq %d state: %w", seq, err)
+	}
+	var keys struct {
+		Calm *string `json:"calm"`
+	}
+	if json.Unmarshal(st, &keys) == nil {
+		r.calmKnown = keys.Calm != nil
 	}
 	if err := json.Unmarshal(mt, &r.metrics); err != nil {
 		return nil, fmt.Errorf("snapshot seq %d metrics: %w", seq, err)
@@ -358,6 +366,7 @@ func (a *App) attach(ctx context.Context, dsn string, ro bool) {
 	SourceLastSuccess.Set("db", float64(time.Now().Unix())) // memory-only: never refreshed, ages into MountainSourceStale
 	if dsn == "" {
 		log.Printf("relay: DATABASE_URL unset: memory-only, the world is lost on restart")
+		a.State.Calm = utcDay(time.Now()) // R9: nothing known before the boot
 		return
 	}
 	s, err := openStore(ctx, dsn)
@@ -366,10 +375,15 @@ func (a *App) attach(ctx context.Context, dsn string, ro bool) {
 		if err = a.restore(ctx, ro); err != nil {
 			a.store = nil
 			s.Close(time.Second) // nothing queued yet: restore failed before any write
+		} else if d, e := s.started(ctx); e == nil {
+			a.started = d // R9: the turn counter's day one
+		} else {
+			log.Printf("relay: town start day: %v", e)
 		}
 	}
 	if err != nil {
 		log.Printf("relay: database unusable, memory-only until restart: %v", err)
+		a.State.Calm = utcDay(time.Now()) // R9: as memory-only (nothing known before the boot)
 	}
 }
 
@@ -389,11 +403,15 @@ func (a *App) restore(ctx context.Context, ro bool) error {
 		visits.Lock()
 		visits.at = recent
 		visits.Unlock()
+		a.mu.Lock()
+		a.State.Calm = utcDay(time.Now()) // R9: the town's first day starts calm (no trouble known before it)
+		a.mu.Unlock()
 		if !ro {
 			a.snapshot(time.Now())
 		}
 		return nil
 	}
+	a.seedCalm(ctx, r, nil) // R9: before the frames, which keep it from there (State.apply)
 	st := r.state
 	since := fold(&st, r.frames)
 	st.Marks = slices.DeleteFunc(st.Marks, func(m Mark) bool { return mountainToys[m.Mark] }) // R7: their toys are gone

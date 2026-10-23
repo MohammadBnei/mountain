@@ -13,7 +13,8 @@
       "type": "object", "required": ["day", "epoch"], "additionalProperties": false,
       "properties": {
         "day": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-        "epoch": { "const": 2 }
+        "epoch": { "const": 2 },
+        "started": { "description": "R9: the town's first day (the page's turn counter); absent memory-only", "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
       }
     },
     "deltas": { "type": "array", "items": { "type": "object", "required": ["t"], "properties": { "t": { "enum": ["ev", "world"] } } } },
@@ -69,6 +70,15 @@
         "annexes": {
           "description": "R8 C: the tents, world:annex payloads, one per app@host (a frame replaces it; gone removes it), ≤ 48. Absent = a snapshot from before R8 deploy C.",
           "type": "array", "maxItems": 48, "items": { "$ref": "world.json#/$defs/annex" }
+        },
+        "tech": {
+          "description": "R9: infra-bootstrap's ADRs as numbers only (ev tech): how many, the highest number.",
+          "type": "object", "required": ["count", "top"], "additionalProperties": false,
+          "properties": { "count": { "type": "integer", "minimum": 0 }, "top": { "type": "integer", "minimum": 0 } }
+        },
+        "calm": {
+          "description": "R9: the day since which no warning or critical Alertmanager alert fires and no app is Degraded or Missing; empty = not calm.",
+          "type": "string", "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$"
         }
       }
     },

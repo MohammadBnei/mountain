@@ -169,6 +169,7 @@ func TestDBTownEpoch(t *testing.T) {
 	if first, err := a.store.started(ctx); err != nil || first != utcDay(time.Now()) {
 		t.Fatalf("town_epoch: %q %v", first, err)
 	}
+	a.store.flush(5 * time.Second) // the first boot's snapshot is written asynchronously: let it land before loading
 	// a mountain row written after 004 (a reverted image, say) is not the town's
 	c.Exec(ctx, `INSERT INTO snapshots (day, seq, ts, seed, land, state, metrics) VALUES ('2026-10-19', nextval('frame_seq'), now(), 1, '\x00', '{"alerts":[{"fp":"0123456789abcdef","sev":"info","layer":"apps","startsAt":1}]}', '{}')`)
 	if r, err := a.store.load(ctx, nil); err != nil || r == nil || len(r.state.Alerts) != 0 {

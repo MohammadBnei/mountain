@@ -61,6 +61,7 @@ type ghSource struct {
 	pauseUntil time.Time                  // rate limit: no request before this
 	lastErr    string
 	logged     map[string]bool // repos already logged as unreachable
+	techErr    string          // R9: the last technologies error logged (civ.go techs)
 }
 
 func newGitHub(a *App) *ghSource {
@@ -91,6 +92,9 @@ func (s *ghSource) poll(ctx context.Context, out *Out, now time.Time) {
 	err := s.runs(ctx, out, now)
 	if err == nil {
 		err = s.commits(ctx, out)
+	}
+	if err == nil {
+		s.techs(ctx, out) // R9 (civ.go): not fatal
 	}
 	if err != nil {
 		if msg := err.Error(); msg != s.lastErr {
