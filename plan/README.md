@@ -72,8 +72,8 @@ building (it is an LXC). The owner's answers, one question at a time, are the R8
 | Deploy C0 | The gate, in infra-bootstrap (ADR-0065): `mountain-gate` forwardAuth, invitation-only enrollment | PR open; the owner merges, then reviews `mountain-visitors` |
 | Deploy C1 | The gate ref, automatic relay sign-in, the expiry reload, private assets, coarse replicas + migration 006 | After C0 is live and the group reviewed. Live checks are the owner's from here |
 | Deploy C2 | Annexes: a copy of the app's building + banner, zoom levels | Built; styleboard to the owner. PR after C1 is live |
-| Engine | Measure (shadow shapes, walker shadows, simplification test, gate breakdown, Civ worst case), then BatchedMesh | After C2 |
-| Civ | Building tiers from replicas, the herald, a technologies panel (owner, 2026-10-23) | After the engine; its own plan |
+| Civ (R9) | Levels from 30-day sync activity, the herald, technologies, golden age bunting, turns, a guide (00 Civ row) | Built locally on C2 (relay `3a969fc`, page `42937cd`); styleboard to the owner. PR after C2 is live |
+| Engine | Measure (shadow shapes, walker shadows, simplification test, gate breakdown), then BatchedMesh | After Civ (its worst case fits as is) |
 | Later | **The sea** (owner, 2026-10-23): water between the islands, with waves | After Deploy C; its own plan |
 
 **Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads
