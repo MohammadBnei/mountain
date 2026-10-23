@@ -217,7 +217,7 @@ try {
       ws.onerror = () => j(new Error('ws error'));
       setTimeout(() => { ws.close(); r(got); }, 20000);
     }).catch((e) => { fail(`selftest: /ws ${e.message}`); return []; });
-    const all = frames.join('\n').toLowerCase();
+    const all = frames.join('\n').toLowerCase().replace(/"id": ?"[0-9a-z]{26}"/g, '"id":""'); // a random ULID can spell a leak word
     // R7.1: no product name of a platform service either (the wire carries role keys: gate, guardhouse, warehouse, …)
     // R8: no machine identity (names, probes and nodes from config.yaml), no machine word or port, no IPv4 at all
     for (const leak of ['10.0.3', '10.233', 'k8s-', 'bnei.lan', 'traefik', 'authentik', 'argocd', 'grafana', 'prometheus', 'infisical',
