@@ -1,0 +1,527 @@
+{
+ "alerts": [
+  {
+   "fp": "a1",
+   "labels": {
+    "alertname": "KubeDeploymentReplicasMismatch",
+    "namespace": "wird",
+    "severity": "warning"
+   },
+   "name": "KubeDeploymentReplicasMismatch",
+   "node": "app:wird-adminweb",
+   "realm": "apps",
+   "severity": "warning",
+   "startsAt": 1792850000000,
+   "summary": "Deployment has not matched the expected number of replicas."
+  },
+  {
+   "fp": "a2",
+   "labels": {
+    "alertname": "KubeNodeNotReady",
+    "node": "k8s-worker-02",
+    "severity": "critical"
+   },
+   "name": "KubeNodeNotReady",
+   "node": "vm:k8s-worker-02",
+   "realm": "infra",
+   "severity": "critical",
+   "startsAt": 1792854000000,
+   "summary": "k8s-worker-02 has been unready for more than 15 minutes."
+  },
+  {
+   "fp": "a3",
+   "labels": {
+    "alertname": "ProbeFailed",
+    "severity": "warning",
+    "target": "guest-mill"
+   },
+   "name": "ProbeFailed",
+   "node": "ct:hermesagent",
+   "realm": "fleet",
+   "severity": "warning",
+   "startsAt": 1792855000000,
+   "summary": "hermes dashboard does not answer."
+  }
+ ],
+ "apps": {
+  "app:agent-fleet-core": {
+   "health": "Healthy",
+   "rps": 1.85,
+   "sync": "Synced"
+  },
+  "app:agent-vault": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:argocd": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:bootstrap": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:dream-analyst": {
+   "health": "Healthy",
+   "rps": 0.92,
+   "sync": "Synced"
+  },
+  "app:drop": {
+   "health": "Healthy",
+   "rps": 4.42,
+   "sync": "Synced"
+  },
+  "app:editable-blog": {
+   "health": "Healthy",
+   "rps": 6.11,
+   "sync": "Synced"
+  },
+  "app:ente-museum": {
+   "health": "Healthy",
+   "rps": 5.23,
+   "sync": "Synced"
+  },
+  "app:ente-web": {
+   "health": "Progressing",
+   "rps": 1.13,
+   "sync": "OutOfSync"
+  },
+  "app:has-journal": {
+   "health": "Healthy",
+   "rps": 9.93,
+   "sync": "Synced"
+  },
+  "app:hq": {
+   "health": "Healthy",
+   "rps": 2.72,
+   "sync": "Synced"
+  },
+  "app:mountain": {
+   "health": "Healthy",
+   "rps": 11.38,
+   "sync": "Synced"
+  },
+  "app:netbird": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:netbird-dashboard": {
+   "health": "Healthy",
+   "rps": 4.79,
+   "sync": "Synced"
+  },
+  "app:pgweb": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:pi-lab": {
+   "health": "Healthy",
+   "rps": 10.31,
+   "sync": "Synced"
+  },
+  "app:platform-actions-runner": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-alloy": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-authentik": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-blackbox-exporter": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-csi-driver-nfs": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-grafana": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-infisical": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-infisical-operator": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-local-path-provisioner": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-loki": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-longhorn": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-metrics-server": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-nvidia-device-plugin": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-prometheus": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-provisioner": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-thot": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:platform-traefik": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:redirectors": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:searxng": {
+   "health": "Healthy",
+   "rps": 1.77,
+   "sync": "Synced"
+  },
+  "app:silverbullet": {
+   "health": "Healthy",
+   "rps": 3.74,
+   "sync": "Synced"
+  },
+  "app:ukubi-bridge": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  },
+  "app:ukubi-stt": {
+   "health": "Healthy",
+   "rps": 7.0,
+   "sync": "Synced"
+  },
+  "app:vos-monolith": {
+   "health": "Healthy",
+   "rps": 4.5,
+   "sync": "Synced"
+  },
+  "app:vos-monolith-dev": {
+   "health": "Healthy",
+   "rps": 0.8,
+   "sync": "Synced"
+  },
+  "app:wedding-2026": {
+   "health": "Healthy",
+   "rps": 2.51,
+   "sync": "Synced"
+  },
+  "app:wird": {
+   "health": "Healthy",
+   "rps": 5.16,
+   "sync": "Synced"
+  },
+  "app:wird-adminweb": {
+   "health": "Degraded",
+   "rps": 7.05,
+   "sync": "Synced"
+  },
+  "app:zot": {
+   "health": "Healthy",
+   "rps": 0,
+   "sync": "Synced"
+  }
+ },
+ "at": 1792857600000,
+ "events": [
+  {
+   "id": 1,
+   "kind": "alert.fire",
+   "node": "vm:k8s-worker-02",
+   "t": "ev",
+   "text": "KubeNodeNotReady (critical)",
+   "ts": 1792854000000
+  },
+  {
+   "id": 2,
+   "kind": "probe",
+   "node": "ct:hermesagent",
+   "t": "ev",
+   "text": "hermesagent stopped answering",
+   "ts": 1792855000000
+  },
+  {
+   "id": 3,
+   "kind": "health",
+   "node": "app:wird-adminweb",
+   "t": "ev",
+   "text": "wird-adminweb: Healthy \u2192 Degraded",
+   "ts": 1792856000000
+  }
+ ],
+ "land": {
+  "capacity": {
+   "cpu": 40,
+   "disk": 2000000000000.0,
+   "mem": 160000000000.0
+  },
+  "ns": {
+   "actions-runner": {
+    "cpu": 1.138,
+    "disk": 0,
+    "mem": 1833613631
+   },
+   "agent-fleet": {
+    "cpu": 1.75,
+    "disk": 0,
+    "mem": 1502374239
+   },
+   "agent-vault": {
+    "cpu": 1.318,
+    "disk": 0,
+    "mem": 5257068099
+   },
+   "argocd": {
+    "cpu": 0.727,
+    "disk": 33449825743,
+    "mem": 5882040343
+   },
+   "authentik": {
+    "cpu": 1.895,
+    "disk": 3136580564,
+    "mem": 954307981
+   },
+   "default": {
+    "cpu": 1.674,
+    "disk": 0,
+    "mem": 4599196654
+   },
+   "dream-analyst": {
+    "cpu": 2.19,
+    "disk": 0,
+    "mem": 1916797701
+   },
+   "drop": {
+    "cpu": 1.49,
+    "disk": 67197422441,
+    "mem": 3500376465
+   },
+   "editable-blog": {
+    "cpu": 2.362,
+    "disk": 0,
+    "mem": 2870885108
+   },
+   "ente": {
+    "cpu": 0.161,
+    "disk": 0,
+    "mem": 4223877527
+   },
+   "has-journal": {
+    "cpu": 2.483,
+    "disk": 30863315396,
+    "mem": 4940452480
+   },
+   "hq": {
+    "cpu": 1.675,
+    "disk": 13443870313,
+    "mem": 184249422
+   },
+   "infisical": {
+    "cpu": 0.302,
+    "disk": 0,
+    "mem": 400778795
+   },
+   "kube-system": {
+    "cpu": 0.332,
+    "disk": 69713757930,
+    "mem": 1523308260
+   },
+   "local-path-storage": {
+    "cpu": 0.211,
+    "disk": 0,
+    "mem": 2722665036
+   },
+   "longhorn-system": {
+    "cpu": 2.21,
+    "disk": 0,
+    "mem": 4924715035
+   },
+   "lost-ns": {
+    "cpu": 0.703,
+    "disk": 70735426176,
+    "mem": 2521014277
+   },
+   "monitoring": {
+    "cpu": 2.395,
+    "disk": 18556549346,
+    "mem": 947979389
+   },
+   "mountain": {
+    "cpu": 0.591,
+    "disk": 0,
+    "mem": 2935528246
+   },
+   "netbird": {
+    "cpu": 0.664,
+    "disk": 29540285832,
+    "mem": 74356940
+   },
+   "pgweb": {
+    "cpu": 1.42,
+    "disk": 0,
+    "mem": 5720932657
+   },
+   "pi-lab": {
+    "cpu": 1.294,
+    "disk": 0,
+    "mem": 3724676859
+   },
+   "searxng": {
+    "cpu": 0.144,
+    "disk": 0,
+    "mem": 5402221410
+   },
+   "silverbullet": {
+    "cpu": 2.188,
+    "disk": 31918306586,
+    "mem": 4797345071
+   },
+   "thot": {
+    "cpu": 0.268,
+    "disk": 5387809267,
+    "mem": 3824022916
+   },
+   "traefik": {
+    "cpu": 0.53,
+    "disk": 4206048311,
+    "mem": 1015703967
+   },
+   "ukubi-bridge": {
+    "cpu": 0.011,
+    "disk": 29088793763,
+    "mem": 950026347
+   },
+   "ukubi-stt": {
+    "cpu": 0.073,
+    "disk": 0,
+    "mem": 5252277645
+   },
+   "vos": {
+    "cpu": 0.38,
+    "disk": 29133075162,
+    "mem": 1550933652
+   },
+   "vos-dev": {
+    "cpu": 0.316,
+    "disk": 0,
+    "mem": 5101174713
+   },
+   "wedding-2026": {
+    "cpu": 1.17,
+    "disk": 8175009340,
+    "mem": 2928816206
+   },
+   "wird": {
+    "cpu": 0.863,
+    "disk": 0,
+    "mem": 1625303506
+   },
+   "zot": {
+    "cpu": 0.412,
+    "disk": 0,
+    "mem": 187419540
+   }
+  },
+  "realms": {
+   "apps": {
+    "cpu": 0.324,
+    "disk": 0.041,
+    "mem": 0.214
+   },
+   "events": {
+    "cpu": 0.0,
+    "disk": 0.015,
+    "mem": 0.006
+   },
+   "fleet": {
+    "cpu": 0.05,
+    "disk": 0.003,
+    "mem": 0.033
+   },
+   "identity": {
+    "cpu": 0.104,
+    "disk": 0.016,
+    "mem": 0.042
+   },
+   "infra": {
+    "cpu": 0.097,
+    "disk": 0.035,
+    "mem": 0.069
+   },
+   "platform": {
+    "cpu": 0.289,
+    "disk": 0.078,
+    "mem": 0.219
+   },
+   "unattributed": {
+    "cpu": 0.018,
+    "disk": 0.035,
+    "mem": 0.016
+   }
+  }
+ },
+ "probes": {
+  "ct:build-runner": true,
+  "ct:garage-storage": true,
+  "ct:hermesagent": false,
+  "host:bnei": true,
+  "host:ex-laptop": true,
+  "host:server1": true,
+  "vm:nfs-storage": true,
+  "vm:pg-etcd-witness": true,
+  "vm:pg01": true,
+  "vm:pg02": true
+ },
+ "ready": {
+  "vm:k8s-cp-01": true,
+  "vm:k8s-cp-02": true,
+  "vm:k8s-cp-03": true,
+  "vm:k8s-worker-01": true,
+  "vm:k8s-worker-02": false
+ },
+ "stale": {},
+ "t": "live"
+}

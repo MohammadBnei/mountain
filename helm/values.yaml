@@ -2,7 +2,7 @@
 # infra-bootstrap gitops/apps/registry.yaml (`valuesPath: [helm/values.yaml]`, W1a lane D),
 # which also sets ingress.hostname: mountain.bnei.dev. Modelled on hq app/helm/values.yaml.
 
-# One relay owns the world (06): never two writers, never a rolling overlap.
+# One atlas (R10 A2, plan/10): one projector and one poll, never two writers, never a rolling overlap.
 replicaCount: 1
 strategy:
   type: Recreate
@@ -25,15 +25,16 @@ service:
     - name: metrics
       port: 9090
 
-# Gated (R8 deploy C1, infra-bootstrap ADR-0065): the whole site sits behind
-# authentik forwardAuth, Middleware/mountain-forwardauth (namespace default,
-# declared in infra-bootstrap with its `mountain-gate` provider: platform-admins
-# and invited mountain-visitors). The chart appends it after the baseline
-# (origin lock, rate limit, headers), which stays on (ADR-0053 Decision 5). The
-# relay trusts no forwarded header; its own OIDC sign-in still carries the
-# roles. Revert this ref before infra-bootstrap's Middleware, or the route
-# errors (404). CSP is set by the Go relay, where a test pins it. Traefik
-# overwrites the backend's Referrer-Policy, so it is set here to match.
+# Gated (infra-bootstrap ADR-0065): the whole site sits behind authentik
+# forwardAuth, Middleware/mountain-forwardauth (namespace default, declared in
+# infra-bootstrap with its `mountain-gate` provider: platform-admins only since
+# R10). The chart appends it after the baseline (origin lock, rate limit,
+# headers), which stays on (ADR-0053 Decision 5). atlas trusts no forwarded
+# header: its own OIDC sign-in admits platform-admins only and every route but
+# /healthz and /auth/* refuses anyone else (cmd/atlas, deny by default). Revert
+# this ref before infra-bootstrap's Middleware, or the route errors (404). CSP
+# is set by atlas, where a test pins it. Traefik overwrites the backend's
+# Referrer-Policy, so it is set here to match.
 ingress:
   middlewares:
     - name: mountain-forwardauth
@@ -43,51 +44,53 @@ ingress:
       referrerPolicy: no-referrer
 
 # DATABASE_URL (mountaindb on pg-proxmox, direct :5432), rendered by infra-bootstrap
-# gitops/bootstrap/mountain-secret.yaml. optional: a missing Secret starts the relay
-# memory-only (logged) instead of CreateContainerConfigError; the alarm is
-# mountain_source_last_success{source="db"} ageing into MountainSourceStale.
+# gitops/bootstrap/mountain-secret.yaml: the projection history (cmd/atlas/migrations,
+# its own series; the first one drops the town's tables). optional: a missing Secret
+# starts atlas memory-only (the latest projection, no history; logged) instead of
+# CreateContainerConfigError; the alarm is mountain_source_last_success{source="db"}
+# ageing into MountainSourceStale.
 envFrom:
   - secretRef:
       name: mountain-config
       optional: true
-  # Detail mode (08): MOUNTAIN_OIDC_ISSUER, MOUNTAIN_OIDC_CLIENT_ID, MOUNTAIN_OIDC_CLIENT_SECRET,
+  # Sign-in: MOUNTAIN_OIDC_ISSUER, MOUNTAIN_OIDC_CLIENT_ID, MOUNTAIN_OIDC_CLIENT_SECRET,
   # MOUNTAIN_SESSION_KEY, rendered by infra-bootstrap gitops/bootstrap/mountain-oidc-secret.yaml.
-  # optional: without it the relay starts with detail mode off (logged), everyone views.
+  # optional: without it atlas starts and refuses every route but /healthz (logged).
   # Env is bound at start: restart the pod after a rotation.
   - secretRef:
       name: mountain-oidc
       optional: true
 
-# Alert fp salt (02: never rotated: a re-fire keeps its fp across relay restarts): key MOUNTAIN_FP_SALT in
-# Infisical mountain-8c-cz, synced to the Secret mountain-infisical and loaded
-# verbatim via envFrom. Without the key the relay boots and drops alerts (fail closed).
-# MOUNTAIN_GITHUB_TOKEN (same project, optional): fine-grained read-only PAT for src_github.
-# Unset = builds / gitops commits / ADR merges off, logged once, no stale alarm.
-# VISITORS_ENABLED (same project, optional; W4 kill switch, 06): "false" hides the plant toolbar and
-# rejects marks. It must flip WITHOUT a restart, so autoReload is off (the operator would otherwise
-# roll the pod on every change of this Secret): the key is also mounted as a file below, which the
-# kubelet refreshes in place, and the relay re-reads it every 10 s (Infisical resync 60 s + kubelet
-# sync ≈ 1–2 min end to end). Missing key = enabled, live too (the mounted file goes away). The env
-# copies (envFrom) are bound at start: after rotating MOUNTAIN_GITHUB_TOKEN (or adding a key), restart
-# the pod by hand.
+# MOUNTAIN_GITHUB_TOKEN (Infisical mountain-8c-cz, synced to the Secret mountain-infisical
+# and loaded verbatim via envFrom): the read-only token atlas polls the repos with (contents
+# + metadata read on infra-bootstrap and the realms.yaml sources; a repo it cannot read is
+# left out and logged). Unset = no poll: atlas serves the stored projection only. A5's
+# ukubi-atlas App replaces it. Env is bound at start: restart the pod after a rotation.
+# MOUNTAIN_FP_SALT and VISITORS_ENABLED were the town's; atlas reads neither.
 infisical:
   enabled: true
   projectSlug: mountain-8c-cz
   envSlug: dev
   autoReload: false
 
+# The repo trees atlas reads (fetch.go): a cache, never state, so an emptyDir with a
+# size limit (plan/10 Security, Runtime). The root filesystem stays read-only.
 extraVolumes:
-  - name: flags
-    secret:
-      secretName: mountain-infisical
-      optional: true
-      items:
-        - key: VISITORS_ENABLED
-          path: VISITORS_ENABLED
+  - name: cache
+    emptyDir:
+      sizeLimit: 2Gi
 extraVolumeMounts:
-  - name: flags
-    mountPath: /etc/mountain/flags
-    readOnly: true
+  - name: cache
+    mountPath: /var/cache/atlas
+
+# Explicit, because the chart's LimitRange default (512Mi) is below what a round
+# needs: five unpacked trees and the extractors' graph (plan/10 Security, Runtime).
+resources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    memory: 1536Mi
 
 livenessProbe:
   enabled: true
@@ -96,8 +99,8 @@ readinessProbe:
   enabled: true
   path: /healthz
 
-# distroless static:nonroot runs as 65532. Nothing writes to disk: state lives in
-# Postgres (DATABASE_URL above).
+# distroless static:nonroot runs as 65532. Nothing writes to disk but the cache
+# above: state lives in Postgres (DATABASE_URL above).
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 65532
@@ -112,7 +115,7 @@ securityContext:
 
 # common-app-chart has no ServiceMonitor or PrometheusRule template; Prometheus'
 # serviceMonitorSelectorNilUsesHelmValues is false and ruleSelector is {}, so both
-# are picked up (same pattern as platform/values/zot, netbird). Rules (06): all
+# are picked up (same pattern as platform/values/zot, netbird). Rules: all
 # severity notice -> Discord (the default route). Never warning|critical (routed to
 # thot) and never info: the chart's InfoInhibitor inhibits every severity="info"
 # alert whose namespace has no warning, so info never reaches Discord. Unit test:
@@ -147,19 +150,20 @@ extraManifests:
       groups:
         - name: mountain
           rules:
-            # A source that never succeeds ages from relay start (the relay seeds the gauge).
+            # A source that never succeeds ages from start (atlas seeds the gauge): prom, alerts, github and
+            # projection (only while the repo poll runs) and db.
             - alert: MountainSourceStale
               expr: time() - max by (source) (mountain_source_last_success{namespace="{{ .Release.Namespace }}"}) > 180
               for: 2m
               labels:
                 severity: notice
               annotations:
-                summary: "mountain: a relay source has not polled successfully for 5 min"
+                summary: "mountain: an atlas source has not succeeded for 5 min"
                 description: >-
-                  prom/alerts: the live page shows "stale since"; the relay keeps serving
-                  the last town. db: the page stays live, but frames and
-                  snapshots are not stored (restart survival, scrub); unset DATABASE_URL
-                  (memory-only) looks the same. Check the relay logs for the source label.
+                  prom/alerts: the map says the source is not answering and keeps its last answer. github/projection:
+                  the map keeps its last projection; the log says whether GitHub refused the token or a round was
+                  refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only)
+                  looks the same. Check the atlas log for the source label.
             - alert: MountainTokenExpiring
               expr: min(mountain_github_token_days_left{namespace="{{ .Release.Namespace }}"}) < 14
               for: 1h
@@ -167,25 +171,15 @@ extraManifests:
                 severity: notice
               annotations:
                 summary: "mountain: the GitHub token expires in under 14 days"
-                description: Rotate the token in Infisical (mountain-8c-cz) before the builds (scaffolds) go dark.
-            - alert: MountainUnmapped
-              expr: max by (kind) (mountain_unmapped_total{namespace="{{ .Release.Namespace }}"}) > 0
-              for: 30m
+                description: Rotate the token in Infisical (mountain-8c-cz) before the repo poll stops; the map then keeps its last projection.
+            # A component the repos now have that realms.yaml does not place: it shows as drift, not on an island.
+            - alert: MountainUnassigned
+              expr: max(mountain_drift{namespace="{{ .Release.Namespace }}", kind="unassigned"}) > 0
+              for: 1h
               labels:
                 severity: notice
               annotations:
-                summary: "mountain: series dropped for lack of a relay/config.yaml map entry"
+                summary: "mountain: a component is not in realms.yaml"
                 description: >-
-                  A new app, node, repo or namespace is not in relay/config.yaml, so it is
-                  missing from the town. Add it to the static maps (02 rot guard).
-            # R7.1: an empty town alerts nowhere else (the pods query is optional: it never marks prom stale)
-            - alert: MountainTownEmpty
-              expr: max(mountain_plots{namespace="{{ .Release.Namespace }}"}) == 0
-              for: 15m
-              labels:
-                severity: notice
-              annotations:
-                summary: "mountain: the town has no building"
-                description: >-
-                  mountain_plots has been 0 for 15 min: the page shows empty islands. Check the relay log for
-                  "optional query pods failed" and mountain_query_failed_total{query="pods"}.
+                  The latest projection holds a component internal/realms/realms.yaml does not place, so it is on no
+                  island. Add it there (the map's drift list names it).

@@ -3,25 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ukubi · live town</title>
-<meta name="description" content="The ukubi cluster as a live town: every app and service is a building on the host it runs on.">
+<title>ukubi atlas</title>
+<meta name="description" content="The ukubi system as a map: realms, their parts, the routes between them, live.">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 <script type="importmap">{"imports":{"three":"./vendor/build/three.module.js","three/addons/":"./vendor/examples/jsm/"}}</script>
 <script type="module" src="./js/main.js"></script>
 </head>
 <body>
-<canvas id="c"></canvas>
+<header id="top">
+<div id="where"><p id="level" class="kicker">L0 · MAP</p><nav id="crumbs" aria-label="Breadcrumb"></nav></div>
+<div class="seg" role="group" aria-label="Level"><button id="level-0" type="button" aria-pressed="true">Map</button><button id="level-1" type="button" aria-pressed="false">Trade routes</button></div>
+<div class="seg" role="group" aria-label="Lens"><button id="lens-structure" type="button" aria-pressed="true">Structure</button><button id="lens-land" type="button" aria-pressed="false">Land lens</button></div>
+<label id="find">Search<input id="search" type="search" autocomplete="off" placeholder="core, wird, ADR-0065…"></label>
+<button id="last" type="button" disabled>Last event · L</button>
+<form id="signout" method="post" action="/auth/logout" hidden><span id="who"></span><button type="submit">Sign out</button></form>
+</header>
+<div id="results" hidden></div>
+<main>
+<div id="stage">
+<canvas id="c" aria-label="The system map. Every view has a list in the panel."></canvas>
 <div id="labels" aria-hidden="true"></div>
-<p id="stale" role="status" hidden></p>
-<p id="loader">Building the town…</p>
-<div id="dock">
-<div id="card" hidden><button id="cardclose" type="button" aria-label="Close"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button><p class="kicker"></p><h2></h2><p class="realname" hidden></p><p class="desc"></p><p class="state"></p><a class="go" target="_blank" rel="noopener" hidden></a></div>
-<section id="panel"><p id="line"></p><p id="facts"></p><p id="credit">3D models: KayKit (CC0), repainted. Rendering: three.js (MIT).</p></section>
-<p id="toystatus" role="status" hidden></p>
-<p id="heraldlive" class="sr" role="status" aria-live="polite"></p>
-<div id="bar"><button id="overview" type="button" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7l7-4 7 4v6l-7 4-7-4z M3 7l7 4 7-4 M10 11v6"/></svg><span>Whole town</span></button><button id="plant" type="button" aria-pressed="false" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 17V9 M10 9c0-3 2-5 5-5 0 3-2 5-5 5z M10 12c0-2-2-4-5-4 0 2 2 4 5 4z M5 17h10"/></svg><span>Plant</span></button><button id="erase" type="button" aria-pressed="false" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12 M8 6V4h4v2 M6 6l1 11h6l1-11"/></svg><span>Remove</span></button><a id="signin" hidden>Sign in</a></div>
+<p id="loader">Reading the system…</p>
+<p id="fallback" hidden>This page draws the system in 3D and needs WebGL2.</p>
+<div id="minimap"></div>
 </div>
-<p id="fallback" hidden>This page draws the cluster as a 3D town and needs WebGL2.</p>
+<aside id="panel"></aside>
+</main>
+<p id="status" role="status"></p>
 </body>
 </html>

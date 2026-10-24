@@ -5,23 +5,23 @@ evaluation_interval: 15s
 tests:
   - interval: 15s
     input_series:
-      # prom polls fine (gauge follows the clock); alerts never succeeded: seeded at start (t=0) and stuck
+      # prom polls fine (the gauge follows the clock); alerts never succeeded: seeded at start (t=0) and stuck
       - series: 'mountain_source_last_success{namespace="mountain", source="prom"}'
         values: '0+15x40'
       - series: 'mountain_source_last_success{namespace="mountain", source="alerts"}'
         values: '0+0x40'
-      # db in memory-only mode (DATABASE_URL unset): seeded at start, never refreshed
+      # memory-only (DATABASE_URL unset): seeded at start, never refreshed
       - series: 'mountain_source_last_success{namespace="mountain", source="db"}'
         values: '0+0x40'
       - series: 'mountain_github_token_days_left{namespace="mountain"}'
         values: '13x300'
-      - series: 'mountain_unmapped_total{namespace="mountain", kind="app"}'
-        values: '0x60 1x200'
-      - series: 'mountain_unmapped_total{namespace="other", kind="node"}'
-        values: '5x300'
-      # the town: 12 buildings, then an empty town from 10m (a broken pods query after a fresh start)
-      - series: 'mountain_plots{namespace="mountain"}'
-        values: '12x40 0x200'
+      # a component appears that realms.yaml does not place (after 10 min); another namespace's never counts
+      - series: 'mountain_drift{namespace="mountain", kind="unassigned"}'
+        values: '0x40 1x300'
+      - series: 'mountain_drift{namespace="mountain", kind="unresolved"}'
+        values: '11x340'
+      - series: 'mountain_drift{namespace="other", kind="unassigned"}'
+        values: '5x340'
     alert_rule_test:
       - eval_time: 4m
         alertname: MountainSourceStale
@@ -31,12 +31,12 @@ tests:
         exp_alerts:
           - exp_labels: { severity: notice, source: alerts }
             exp_annotations:
-              summary: "mountain: a relay source has not polled successfully for 5 min"
-              description: 'prom/alerts: the live page shows "stale since"; the relay keeps serving the last town. db: the page stays live, but frames and snapshots are not stored (restart survival, scrub); unset DATABASE_URL (memory-only) looks the same. Check the relay logs for the source label.'
+              summary: "mountain: an atlas source has not succeeded for 5 min"
+              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. github/projection: the map keeps its last projection; the log says whether GitHub refused the token or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
           - exp_labels: { severity: notice, source: db }
             exp_annotations:
-              summary: "mountain: a relay source has not polled successfully for 5 min"
-              description: 'prom/alerts: the live page shows "stale since"; the relay keeps serving the last town. db: the page stays live, but frames and snapshots are not stored (restart survival, scrub); unset DATABASE_URL (memory-only) looks the same. Check the relay logs for the source label.'
+              summary: "mountain: an atlas source has not succeeded for 5 min"
+              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. github/projection: the map keeps its last projection; the log says whether GitHub refused the token or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
       - eval_time: 50m
         alertname: MountainTokenExpiring
         exp_alerts: []
@@ -46,26 +46,14 @@ tests:
           - exp_labels: { severity: notice }
             exp_annotations:
               summary: "mountain: the GitHub token expires in under 14 days"
-              description: Rotate the token in Infisical (mountain-8c-cz) before the builds (scaffolds) go dark.
-      - eval_time: 40m
-        alertname: MountainUnmapped
+              description: Rotate the token in Infisical (mountain-8c-cz) before the repo poll stops; the map then keeps its last projection.
+      - eval_time: 65m
+        alertname: MountainUnassigned
         exp_alerts: []
-      - eval_time: 46m
-        alertname: MountainUnmapped
-        exp_alerts:
-          - exp_labels: { severity: notice, kind: app }
-            exp_annotations:
-              summary: "mountain: series dropped for lack of a relay/config.yaml map entry"
-              description: A new app, node, repo or namespace is not in relay/config.yaml, so it is missing from the town. Add it to the static maps (02 rot guard).
-      - eval_time: 24m
-        alertname: MountainTownEmpty
-        exp_alerts: []
-      - eval_time: 26m
-        alertname: MountainTownEmpty
+      - eval_time: 71m
+        alertname: MountainUnassigned
         exp_alerts:
           - exp_labels: { severity: notice }
             exp_annotations:
-              summary: "mountain: the town has no building"
-              description: >-
-                mountain_plots has been 0 for 15 min: the page shows empty islands. Check the relay log for
-                "optional query pods failed" and mountain_query_failed_total{query="pods"}.
+              summary: "mountain: a component is not in realms.yaml"
+              description: The latest projection holds a component internal/realms/realms.yaml does not place, so it is on no island. Add it there (the map's drift list names it).
