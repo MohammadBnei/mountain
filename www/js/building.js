@@ -95,6 +95,16 @@ export function createBuilding({ model, id, cards, flat }) {
     },
     focus,
     get focused() { return focused?.key || null; },
+    /**
+     * update puts a live frame's cards on the same walls, in place: the scene, the focus and the camera stay. False
+     * when the set of cards changed (one more alert card, one fewer): the caller rebuilds the building then.
+     */
+    update(next) {
+      next = next.slice(0, MAX_CARDS);
+      if (next.length !== items.length || next.some((c, i) => c.key !== items[i].key)) return false;
+      if (!flat) next.forEach((c, i) => items[i].obj.element.replaceChildren(...c.el.childNodes));
+      return true;
+    },
     /** where a card's wall stands (the gate clicks it) */
     standAt(key) { return items.find((x) => x.key === key)?.stand.position.clone() || null; },
     paint() {},

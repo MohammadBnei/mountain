@@ -189,6 +189,13 @@ try {
       const focus = await page.evalJSON(`({ f: __atlas.focused(), auto: [...document.querySelectorAll('#css3d .card3d')].filter((c) => c.style.pointerEvents === 'auto').map((c) => c.dataset.card) })`);
       note(`building: card focus → ${JSON.stringify(focus)}`);
       if (focus.f !== 'governs' || focus.auto.join() !== 'governs') fail(`building: focusing the governs card: ${JSON.stringify(focus)}`);
+      // a live frame refreshes the cards on the same walls: the focused card's element and the focus survive it
+      await page.evalJSON(`(globalThis.__card = document.querySelector('#css3d .card3d[data-card="governs"]'),
+        fetch('/dev/fixtures/live.json').then((r) => r.json()).then((l) => { l.t = 'live'; __atlas.inject(l); return true; }))`);
+      await sleep(300);
+      const kept = await page.evalJSON(`!!globalThis.__card && globalThis.__card === document.querySelector('#css3d .card3d[data-card="governs"]') && globalThis.__card.isConnected && __atlas.focused() === 'governs' && globalThis.__card.textContent.length > 0`);
+      note(`building: live frame → walls kept ${kept}`);
+      if (!kept) fail('building: a live frame rebuilt the walls (or lost the focus) instead of refreshing its cards in place');
       await key('Escape', 'Escape', 27);
       await sleep(400);
       if (await page.evalJSON(`__atlas.focused()`)) fail('building: Escape did not unfocus the card first');

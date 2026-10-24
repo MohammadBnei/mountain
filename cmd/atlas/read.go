@@ -122,7 +122,7 @@ func redact(s string, n *int) string {
 	})
 	s = userinfo.ReplaceAllStringFunc(s, func(m string) string {
 		sub := userinfo.FindStringSubmatch(m)
-		if strings.HasPrefix(sub[2], "$") || strings.HasPrefix(sub[2], "{") || strings.HasPrefix(sub[2], "<") { // a reference, not a value
+		if strings.HasPrefix(sub[2], "$") || strings.HasPrefix(sub[2], "{") || strings.HasPrefix(sub[2], "<") || strings.HasPrefix(sub[2], "[redacted]") { // a reference, not a value; or hidden already
 			return m
 		}
 		*n++
@@ -140,7 +140,7 @@ func redact(s string, n *int) string {
 // literal: a value after a secret's key that reads as one, not as prose or a pointer to one: not a path (/run/…), not
 // a label ending in ":" ("token: cloudflare: failed…"), not a lower-case word ("password: infeasible to crack").
 func literal(v string) bool {
-	if strings.HasPrefix(v, "/") || strings.HasSuffix(v, ":") {
+	if strings.HasPrefix(v, "/") || strings.HasSuffix(v, ":") || strings.HasPrefix(v, "[redacted]") { // [redacted]: hidden already, counted once
 		return false
 	}
 	for _, r := range v {
@@ -229,6 +229,21 @@ func (r *repoSet) get(name string) (extract.Repo, bool) {
 	return x, ok
 }
 
+// exists: repo-relative p is a regular file in the tree atlas holds for repo.
+func (r *repoSet) exists(repo, p string) bool {
+	x, ok := r.get(repo)
+	if !ok {
+		return false
+	}
+	root, err := os.OpenRoot(x.Dir)
+	if err != nil {
+		return false
+	}
+	defer root.Close()
+	fi, err := root.Lstat(filepath.FromSlash(p))
+	return err == nil && fi.Mode().IsRegular()
+}
+
 var (
 	errNotText = errors.New("not a text file")
 	errTooBig  = errors.New("larger than the reader reads")
@@ -272,8 +287,14 @@ func langOf(p string) string {
 	return langs[strings.ToLower(path.Ext(p))]
 }
 
-// render turns a file into a Doc. repos is the set of repos a link may point into.
+// render turns a file into a Doc. inAtlas says whether atlas holds a repo a link may point into.
 func render(repo, p, sha string, b []byte, inAtlas func(string) bool) Doc {
+	return renderIn(repo, p, sha, b, inAtlas, nil)
+}
+
+// renderIn is render with exists (repo, path → a file atlas holds), which places a GitHub link's ref when the ref has
+// a slash in it (blob/feat/x/docs/a.md: which segments are the branch is only known by which path exists).
+func renderIn(repo, p, sha string, b []byte, inAtlas func(string) bool, exists func(repo, p string) bool) Doc {
 	d := Doc{Repo: repo, Path: p, SHA: sha}
 	ext := strings.ToLower(path.Ext(p))
 	if ext != ".md" && ext != ".markdown" || !mdSafe(b) {
@@ -285,7 +306,7 @@ func render(repo, p, sha string, b []byte, inAtlas func(string) bool) Doc {
 	d.Kind = "md"
 	md := goldmark.New(goldmark.WithExtensions(extension.Table, extension.Strikethrough))
 	doc := md.Parser().Parse(text.NewReader(b))
-	r := &mdWalker{src: b, repo: repo, dir: path.Dir(p), inAtlas: inAtlas, n: &d.Redacted}
+	r := &mdWalker{src: b, repo: repo, dir: path.Dir(p), inAtlas: inAtlas, exists: exists, n: &d.Redacted}
 	d.Blocks = r.blocks(doc)
 	return d
 }
@@ -329,6 +350,7 @@ type mdWalker struct {
 	repo    string
 	dir     string
 	inAtlas func(string) bool
+	exists  func(repo, p string) bool // nil: a ref is one segment
 	n       *int
 	depth   int
 }
@@ -502,7 +524,7 @@ func plain(in []Inline) string {
 }
 
 var (
-	ghBlob = regexp.MustCompile(`^(?i:github\.com)/(?i:MohammadBnei)/([A-Za-z0-9._-]+)/(?:blob|tree)/[^/]+/(.+)$`)
+	ghBlob = regexp.MustCompile(`^(?i:github\.com)/(?i:MohammadBnei)/([A-Za-z0-9._-]+)/(?:blob|tree)/(.+)$`) // <ref>/<path>, the ref maybe with slashes
 	// docPath is the character set the page's router takes in an L4 path (router.js PATH): a doc link outside it would
 	// open the map instead of the file, so it stays text.
 	docPath = regexp.MustCompile(`^[A-Za-z0-9._@+,=~ /-]+$`)
@@ -521,7 +543,7 @@ func (w *mdWalker) link(dest string, in []Inline) Inline {
 			return Inline{T: "em", In: in}
 		}
 		if m := ghBlob.FindStringSubmatch(u.Host + u.Path); m != nil && w.inAtlas(m[1]) {
-			if p := cleanRel(m[2]); p != "" && docPath.MatchString(p) {
+			if p := w.refPath(m[1], m[2]); p != "" && docPath.MatchString(p) {
 				return Inline{T: "link", Doc: m[1] + "/" + p, In: in}
 			}
 		}
@@ -536,6 +558,23 @@ func (w *mdWalker) link(dest string, in []Inline) Inline {
 		}
 	}
 	return Inline{T: "em", In: in} // a link atlas will not follow keeps its words
+}
+
+// refPath splits <ref>/<path> at the first split whose path atlas holds (main/docs/a.md, feat/x/docs/a.md); with no
+// such path, or nothing to check against, the ref is the first segment.
+func (w *mdWalker) refPath(repo, rest string) string {
+	segs := strings.Split(rest, "/")
+	if w.exists != nil {
+		for k := 1; k < len(segs) && k <= 4; k++ { // a branch name of at most four segments
+			if p := cleanRel(strings.Join(segs[k:], "/")); p != "" && w.exists(repo, p) {
+				return p
+			}
+		}
+	}
+	if len(segs) < 2 {
+		return ""
+	}
+	return cleanRel(strings.Join(segs[1:], "/"))
 }
 
 // hrefSecret: the URL holds something redaction would hide (userinfo, a secret-named query key, a known token shape).
@@ -602,7 +641,7 @@ func serveRead(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		}
-		d := render(repo, p, rp.SHA, b, func(name string) bool { _, ok := app.Files.get(name); return ok })
+		d := renderIn(repo, p, rp.SHA, b, func(name string) bool { _, ok := app.Files.get(name); return ok }, app.Files.exists)
 		<-readSlots
 		out = mustJSON(d)
 		reads.put(key, out)

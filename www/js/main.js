@@ -336,7 +336,8 @@ async function start() {
     } else return;
     paintLast();
     if (view.level === 4) return paintStatus(); // the reader stays still
-    if (view.level === 3) mountFor(view, true); // the wall cards carry live facts: rebuilt in place, the camera stays
+    // the wall cards carry live facts: refreshed in place, the building rebuilt (camera kept) only when its cards changed
+    if (view.level === 3 && !mounted.mod?.update?.(buildingCards(model, live, events, view))) mountFor(view, true);
     const pane = $('panel'), y = pane.scrollTop;
     pane.replaceChildren(panel(model, live, view, { events, focused: mounted.mod?.focused }));
     pane.scrollTop = y;

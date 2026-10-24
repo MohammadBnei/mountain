@@ -153,6 +153,26 @@ func TestRenderBounds(t *testing.T) {
 	}
 }
 
+// TestRedactCountsOnce: a value hidden by its shape is not hidden (and counted) again by its key.
+func TestRedactCountsOnce(t *testing.T) {
+	n := 0
+	if got := redact("token: ghp_abcdefghijklmnopqrstuvwxyz0123456789 and postgres://u:[redacted]@h/db", &n); n != 1 || !strings.HasPrefix(got, "token: [redacted] and") {
+		t.Errorf("%d redactions: %q", n, got)
+	}
+}
+
+// TestRefWithSlash: a GitHub link on a branch named with a slash lands on the file atlas holds; without one, the
+// ref is the first segment.
+func TestRefWithSlash(t *testing.T) {
+	held := map[string]bool{"docs/a.md": true}
+	exists := func(repo, p string) bool { return repo == "agent-fleet" && held[p] }
+	md := "[x](https://github.com/MohammadBnei/agent-fleet/blob/feat/new-thing/docs/a.md) [y](https://github.com/MohammadBnei/agent-fleet/tree/main/docs/b.md)\n"
+	all := string(mustJSON(renderIn("infra-bootstrap", "x.md", "s", []byte(md), func(r string) bool { return r == "agent-fleet" }, exists)))
+	if !strings.Contains(all, `"doc":"agent-fleet/docs/a.md"`) || !strings.Contains(all, `"doc":"agent-fleet/docs/b.md"`) {
+		t.Errorf("refs: %s", all)
+	}
+}
+
 // TestRead: the endpoint reads a file of a held checkout at its sha; it refuses paths that leave the checkout,
 // symlinks, binaries and repos atlas does not hold.
 func TestRead(t *testing.T) {
