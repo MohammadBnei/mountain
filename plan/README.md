@@ -6,6 +6,8 @@
 > style/) and code.
 > **Revision 8, 2026-10-22.** The town grows up: islands sized by their hosts, a building typology, then the machines
 > and the annexes (00 R8 rows).
+> **Revision 10, 2026-10-24.** atlas: admins only, the town rebuilt as realm islands, the relay absorbed into a
+> CQRS projector (00 R10 rows, `10-understanding.md`). Design only so far.
 
 ## Context
 mountain.bnei.dev draws the ukubi cluster live. Since R7 it is a **town** built from pi-lab's clay kit
@@ -74,7 +76,8 @@ building (it is an LXC). The owner's answers, one question at a time, are the R8
 | Deploy C2 | Annexes: a copy of the app's building + banner, zoom levels | Merged (PR #26, `bea87d4`, 2026-10-23) during a power outage; deploys when the cluster and its runner are back |
 | Civ (R9) | The herald, technologies, golden age bunting, turns, a guide (00 Civ row); levels taken out until goals exist (09-play) | Styleboard **signed off by the owner** (2026-10-23); PR open after C2 merged |
 | Engine | Measure (shadow shapes, walker shadows, simplification test, gate breakdown), then BatchedMesh | After Civ (its worst case fits as is) |
-| Play (research) | Make the town playable with fleet agents: owner interview, architecture, doubt cycle (`09-play.md`) | Research done 2026-10-23; fleet + infra ADRs next, bridge and an interim queue in parallel |
+| Play (research) | Make the town playable with fleet agents: owner interview, architecture, doubt cycle (`09-play.md`) | **Parked** 2026-10-24 (admins only, R10) |
+| Atlas (R10) | The system understanding surface: realm islands, a 5-step ladder, a CQRS projector over the repos and live data, admins only (`10-understanding.md`). Joint with agent-kit | Design done 2026-10-24 (A0); A1 next after the owner signs off on the styleboard |
 | Later | **The sea** (owner, 2026-10-23): water between the islands, with waves | After Deploy C; its own plan |
 
 **Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads
@@ -92,6 +95,8 @@ every later deploy reloads such tabs by itself.
 | `06-relay.md` | Go relay: endpoints, town geometry, WS protocol, security, self-observability |
 | `07-infra.md` | infra-bootstrap PRs and ADRs, each with its owner |
 | `08-auth.md` | Detail mode, visitor enrollment hardening, moderation |
+| `09-play.md` | Playing the town (research, parked in R10) |
+| `10-understanding.md` | atlas: the system understanding surface (R10 design) |
 | `adr-0056-amendment.md` | The R7 draft for infra-bootstrap, landed as ADR-0064 (R8) |
 
 ## R7 phases

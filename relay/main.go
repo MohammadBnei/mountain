@@ -1,6 +1,7 @@
 // Command relay serves mountain.bnei.dev: the embedded www/, /ws, and :9090 metrics (06-relay).
 //
 //	relay [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--dev] [--source live|fixture:<file>] [--config file]
+//	relay atlas-project --repos <dir> [--dsn …]   (atlas.go)
 //	relay dump-hello [--day YYYY-MM-DD] [--events file.json] [--out www/dev/fixtures/hello.json|-]
 //
 // Env: MOUNTAIN_FP_SALT (alert fp salt), DATABASE_URL (Postgres; empty = memory-only, store.go),
@@ -225,6 +226,12 @@ func (a *App) snap(day string) Snapshot {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	if len(os.Args) > 1 && os.Args[1] == "atlas-project" { // R10 A1 (atlas.go)
+		if err := atlasProject(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "dump-hello" {
 		if err := dumpHello(os.Args[2:]); err != nil {
 			log.Fatal(err)

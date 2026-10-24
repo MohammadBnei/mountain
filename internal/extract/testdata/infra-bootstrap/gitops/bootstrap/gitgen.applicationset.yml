@@ -1,0 +1,12 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gitgen
+spec:
+  generators:
+  - git:
+      repoURL: git@github.com:MohammadBnei/infra-bootstrap.git
+      directories: [{path: apps/*}]
+  template:
+    metadata:
+      name: '{{.path.basename}}'
