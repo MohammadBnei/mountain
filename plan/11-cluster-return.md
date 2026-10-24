@@ -5,8 +5,17 @@ down has never run. This file is the whole list of what to do when it returns, i
 show. Steps marked **you** are yours (the cluster, Infisical, pigsty, authentik); the rest are mine (I write the PRs and
 check them) once you tell me the cluster is up.
 
-The other session ("Fleet and infra assessment") keeps its own list for agent-fleet and ukubi-bridge releases; its steps
-are folded in under step 3 as they arrive.
+This file covers both sessions' work: mine (mountain/atlas, the bridge's I-steps and B1b) and the other session's
+("Fleet and infra assessment": the agent-fleet and ukubi-bridge releases), which it read and confirmed on 2026-10-24.
+"Me" in step 3 means that session; everywhere else it means this one.
+
+**The order at a glance** (hard constraints in bold; everything else may run in parallel):
+1. Platform up (1), then free the build box (3.0).
+2. mountain build (3, after 4 if you can), ADR-0067 restart (2), atlas checks (5): independent of the rest.
+3. **Pigsty role and DB → 3a (bridge deploy) → I2 → B1b**.
+4. **3b (agent-fleet 6.25.0) → B1b** (core 6.24.0 has no bridge client, so restarting it means nothing before 3b), and
+   3b → I1 if one firing alert must give one proposal from the first alert (the dedup ships in 6.25.0).
+5. I3 last, then 3e after 3b.
 
 ## 1. The platform is up (you)
 - [ ] The 5 k8s nodes are `Ready`: `kubectl get nodes`.
@@ -58,6 +67,16 @@ From the other session (it runs 3a, 3b and 3e; you click Run where it can't):
         - warming one repo session reaches a PR (the golden path);
         - the dispatcher is idle (`bridge.yaml` lists no definition).
       - Rollback: migrate down to 21 recreates `scheduled_audits` empty; nothing reads it.
+      - Live checks after 3b (you look or warm, the other session reads the logs with you):
+        - a. The Grafana panels "Sessions by live state" and "Warm headroom" render with no `pending` series (#321
+          renamed them).
+        - b. Sessions whose pods died during the outage are reconciled within about 60 s: `SELECT id, pod_phase FROM
+          sessions WHERE archived_at IS NULL` (through core's DB access) shows none in a live phase without a pod.
+        - c. The golden path above proves more than core: the provisioner's 5-min owner-vault refresh re-minting the 1 h
+          App token (every pre-outage token has expired), Agent Vault back on its longhorn SQLite, and the sidecar's
+          egress router. **A 401/403 on push: look at the provisioner's vault refresh first.**
+        - d. Optional: warm one definition session (`opus-workspace`) to check the vault proxy and the definition
+          pods' `CiliumNetworkPolicy` egress.
 - [ ] **3c. hq #2**: nothing to re-run (docs only, no `app/**`). Check that no hq run is left queued.
 - [ ] **3d. infra-bootstrap #365**: nothing to re-run (docs, plus one YAML comment ArgoCD applies as a no-op).
 - [ ] **3e. After 3b** (the other session, a small PR): bump infra-bootstrap's `agent-fleet` submodule to the new tag.
@@ -89,16 +108,17 @@ From the other session (it runs 3a, 3b and 3e; you click Run where it can't):
 - [ ] **you:** (before 3a) the bridge's Pigsty role and database (`docs/secrets.md`: "not yet created"), from the hub
       (`docs/runbook-k9s-ops-hub.md`): `./pgsql-user.yml -l pg-proxmox -e username=dbuser_bridge`, then
       `./pgsql-db.yml -l pg-proxmox -e dbname=bridge`. The bridge pod then goes `Ready`.
-- [ ] **I1** (me, a PR): alerts also go to the bridge. The token rides the existing `alertmanager-thot-token` Secret (a
+- [ ] **I1** (me, a PR; after 3b for one proposal per alert from the first): alerts also go to the bridge. The token rides the existing `alertmanager-thot-token` Secret (a
       new Secret's missing mount would block Alertmanager and Grafana from starting); a second `webhook_configs` entry
       in receiver `thot`, `send_resolved: true`; Grafana posts to `/webhook/grafana`. Check: one firing alert gives one
       proposal, whichever path lands first.
 - [ ] **you:** check no `bridge-*` user exists in authentik, then create `BRIDGE_CORE_APP_PASSWORD` in Infisical.
-- [ ] **I2** (me, a PR): the authentik provider (`client_id: ukubi-bridge-api`), the `bridge-core` service account,
+- [ ] **I2** (me, a PR; after 3a): the authentik provider (`client_id: ukubi-bridge-api`), the `bridge-core` service account,
       the reserved game/push accounts (no token), the reserved name prefixes in every enrollment flow, username
       changes off. Checked first against the pinned authentik image locally, then a real token decoded live.
 - [ ] ~~M1~~ (the relay's handle check): gone with the relay; atlas has no handles. Nothing to do.
-- [ ] **B1b** (me, a PR): pin the live signing cert in the bridge, then restart core. ADR-0066 §1 gets its one-line
+- [ ] **B1b** (me, a PR; **after 3a, 3b and I2**): pin the live signing cert in the bridge, then restart core (6.25.0,
+      which reads the `bridge-core` Secret I2 delivers). ADR-0066 §1 gets its one-line
       amendment (the pinned cert is the trust anchor).
 - [ ] **I3** (me, a PR): remove the `BRIDGE_CLIENTS` template line, then **you** delete `BRIDGE_CLIENTS` and
       `BRIDGE_CORE_TOKEN` from Infisical.
@@ -111,6 +131,17 @@ From the other session (it runs 3a, 3b and 3e; you click Run where it can't):
 - [ ] B0 (ukubi-bridge's release workflow) no longer waits on the release App, deferred to Track 4 (owner,
       2026-10-24): main pushes stay on `GITHUB_TOKEN` in push-to-main jobs, built the way agent-fleet's `docker.yml`
       is. Code, not a cluster step.
+
+## 8. Owner, not tied to the cluster (any time)
+- [ ] **Before 2026-10-28:** revoke `UKUBI_BOT_GH_PAT` at GitHub, then delete it from Infisical (also in step 3).
+- [ ] Create the public `agent-kit` repo and install the Claude, `ukubi-fleet` and `ukubi-bridge` Apps on it: that
+      starts the other session's Track 2.
+- [ ] agent-fleet and ukubi-bridge, Settings → Actions: "Workflow permissions" read-only, and "Allow GitHub Actions to
+      create and approve pull requests" off. The workflows declare their own permissions; this covers a future job
+      without a block.
+- [ ] infra-bootstrap `protect-main`: switch the admin bypass to pull-request-only, or correct the VISION line. #365
+      merged on the admin bypass with zero reviews.
+- [ ] Optional: the "now" rulesets (no delete or force-push on main, immutable agent-fleet tags, no numeric branches).
 
 ## After all that
 A4 (Hubble metrics, the ServiceMonitor, the Alloy traces Deployment, OTEL in atlas and the bridge) needs the cluster
