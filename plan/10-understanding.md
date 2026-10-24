@@ -210,7 +210,7 @@ drawn red. That mismatch is drift, and often the most useful thing to see.
   (`infra-bootstrap/gitops/bootstrap/argocd-application.yaml:159-169`, a documented low-stakes exception).
 
 ## Joint section: agent-kit (signed by the "Fleet and infra assessment" session)
-> Draft of the agreement. The shape is owned by agent-kit; when that repo exists, its `schema/` becomes the source and
+> Signed by that session on 2026-10-24 (with four corrections, folded in). The shape is owned by agent-kit; when that repo exists, its `schema/` becomes the source and
 > this section pins its sha. Nothing in atlas assumes it before it is signed.
 
 - **The surface is one model with two halves.** atlas shows what the system *is* and how it flows. agent-kit shows
@@ -219,12 +219,12 @@ drawn red. That mismatch is drift, and often the most useful thing to see.
   - Agent definitions and sessions are **units**: troops at L0, workers at L2.
   - Skills and packs are their **abilities**, shown at L3.
   - A unit card reads two sources: the persona at agent-kit's sha and the authority at agent-fleet's sha.
-  - Each runtime's `.claude/rules/00-runtime.md` names the agent-kit sha it runs, so skill drift per runtime shows.
+  - Each runtime's `.claude/rules/99-runtime.md` (it sorts last, so the runtime facts win over the `20-*` packs; on laptops, `~/.claude/rules/99-runtime.md`) names the agent-kit sha it runs, so skill drift per runtime shows.
 - **Process stages are a city's build queue.** The fixed enum: ideation, design, interview, doubt-design, architect,
   doubt-architect, plan, doubt-plan, sync, implement, quality, live-qa, pr, review, merge, deploy-watch,
   post-deploy-qa.
 - **`process.yaml` maps onto atlas nodes:**
-  - nodes: `stage:<id>`, `skill:<path>`, `pack:<id>`, `def:<repo>/<name>`;
+  - nodes: `stage:<id>`, `skill:agent-kit/<id>`, `pack:agent-fleet/<id>`, `def:agent-fleet/<name>` (the one `kind:qualified-name` form);
   - edges: stage→skill (uses), definition→skill (has), definition→stage (runs), skill→pack (shipped-in).
 - **Evidence** `{work_id, stage, result: pass|fail|skipped|waiting, sha, runtime, at}`.
   - **Before a PR:** bridge events under `dev.bnei.process.`, published by core and read only by atlas's client.
@@ -248,7 +248,7 @@ drawn red. That mismatch is drift, and often the most useful thing to see.
   - `Agent-Definition: <name>@<sha>` on definition pods.
   - `Agent-Kit: <sha>` once vendored.
   - No model ids and no URLs. mountain's own rule (no AI trailer) is unchanged until the owner says otherwise.
-- **Drift atlas shows for the process:** a merged PR with no `process/review`, and skill drift per runtime.
+- **Drift atlas shows for the process:** a PR merged with neither `process/review` nor an approving human review (laptop PRs keep human review: a laptop's `gh` user can't post `process/*` checks, and laptop work isn't in the ledger), and skill drift per runtime.
 - **atlas's bridge client:** `bridge-atlas` (ADR-0066 service account) subscribes to `dev.bnei.github.pull_request.`
   on `github/`, and to `dev.bnei.process.` once that lands.
 
