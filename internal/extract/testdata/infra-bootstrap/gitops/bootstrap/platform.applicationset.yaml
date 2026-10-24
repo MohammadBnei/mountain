@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform
+spec:
+  generators:
+  - list:
+      elements:
+      - name: authentik
+        namespace: authentik
+        syncWave: "1"
+        chartRepoURL: https://charts.goauthentik.io
+        chartRevision: "2026.8.4" # a comment yaml drops
+        chartName: authentik
+        valuesPath: gitops/platform/values/authentik/values.yaml
+  template:
+    metadata:
+      name: 'platform-{{.name}}'
+    spec:
+      sources:
+      - repoURL: '{{.chartRepoURL}}'
+        chart: '{{.chartName}}'
+        targetRevision: '{{.chartRevision}}'
+      - repoURL: git@github.com:MohammadBnei/infra-bootstrap.git
+        targetRevision: main
+        ref: values
+      destination:
+        namespace: '{{.namespace}}'

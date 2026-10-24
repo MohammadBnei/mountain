@@ -1,0 +1,111 @@
+# atlas's curated map (plan/10-understanding.md "Realms are curated"). Nothing in the repos carries a realm, so this
+# file says it, plainly. Every component atlas extracts must be listed here: one that isn't becomes an "unassigned"
+# drift node, and internal/extract's tests fail on it. It moves into the service registry once one exists.
+
+# The seven realms, in L0 order.
+realms: [infra, platform, data, identity, events, fleet, apps]
+
+# Proxmox hosts (the land) and their island labels.
+hosts:
+  bnei: h1
+  server1: h2
+  ex-laptop: h3
+
+# terraform var.pve_node_name: its value lives in the uncommitted tfvars (terraform/variables.tf, "likely bnei").
+pveNodeName: bnei
+
+# k8s VM -> Proxmox host. terraform's real k8s_nodes map is in the uncommitted tfvars, and the committed
+# inventory/ukubi/hosts.yaml names the nodes but not their host. Same buckets as mountain's relay/config.yaml nodes.
+k8sPlacement:
+  k8s-cp-01: bnei
+  k8s-worker-01: bnei
+  k8s-cp-02: server1
+  k8s-worker-02: server1
+  k8s-cp-03: ex-laptop
+
+# Where a repo with no docs/adr of its own sends a bare "ADR-NNNN".
+adrHome:
+  mountain: infra-bootstrap
+  ukubi-bridge: infra-bootstrap
+
+# Components: id -> realm and group (the L1 fold key). paths (repo-relative prefixes, "<repo>/<prefix>") attach the
+# ADR citations found under them to this component (governs edges); a citation under no listed path goes to its repo.
+components:
+  # Infra
+  host:bnei: { realm: infra, group: hosts }
+  host:server1: { realm: infra, group: hosts }
+  host:ex-laptop: { realm: infra, group: hosts }
+  vm:k8s-cp-01: { realm: infra, group: nodes }
+  vm:k8s-cp-02: { realm: infra, group: nodes }
+  vm:k8s-cp-03: { realm: infra, group: nodes }
+  vm:k8s-worker-01: { realm: infra, group: nodes }
+  vm:k8s-worker-02: { realm: infra, group: nodes }
+  vm:nfs-storage: { realm: infra, group: storage }
+  app:platform-longhorn: { realm: infra, group: storage }
+  app:platform-local-path-provisioner: { realm: infra, group: storage }
+  app:platform-csi-driver-nfs: { realm: infra, group: storage }
+  app:platform-nvidia-device-plugin: { realm: infra, group: gpu }
+  ct:build-runner: { realm: infra, group: build }
+  app:platform-actions-runner: { realm: infra, group: build }
+
+  # Platform
+  app:argocd: { realm: platform, group: delivery }
+  app:bootstrap: { realm: platform, group: delivery }
+  app:zot: { realm: platform, group: delivery }
+  app:platform-traefik: { realm: platform, group: edge }
+  app:redirectors: { realm: platform, group: edge }
+  app:platform-prometheus: { realm: platform, group: observability }
+  app:platform-grafana: { realm: platform, group: observability }
+  app:platform-loki: { realm: platform, group: observability }
+  app:platform-alloy: { realm: platform, group: observability }
+  app:platform-blackbox-exporter: { realm: platform, group: observability }
+  app:platform-metrics-server: { realm: platform, group: observability }
+  app:mountain: { realm: platform, group: observability, paths: [mountain/] }
+  app:searxng: { realm: platform, group: tools }
+  app:pgweb: { realm: platform, group: tools }
+  app:silverbullet: { realm: platform, group: tools }
+  app:drop: { realm: platform, group: tools }
+
+  # Data
+  vm:pg01: { realm: data, group: postgres }
+  vm:pg02: { realm: data, group: postgres }
+  vm:pg-etcd-witness: { realm: data, group: postgres }
+  ct:garage-storage: { realm: data, group: s3 }
+
+  # Identity
+  app:platform-authentik: { realm: identity, group: authentik }
+  app:platform-infisical: { realm: identity, group: secrets }
+  app:platform-infisical-operator: { realm: identity, group: secrets }
+  app:agent-vault: { realm: identity, group: secrets }
+  app:netbird: { realm: identity, group: mesh }
+  app:netbird-dashboard: { realm: identity, group: mesh }
+
+  # Events
+  app:ukubi-bridge: { realm: events, group: bridge, paths: [ukubi-bridge/] }
+
+  # Fleet
+  app:agent-fleet-core: { realm: fleet, group: control }
+  app:platform-provisioner: { realm: fleet, group: control }
+  app:platform-thot: { realm: fleet, group: cluster-access }
+  ct:hermesagent: { realm: fleet, group: hermes }
+  svc:agent-fleet/core: { realm: fleet, group: control, parent: app:agent-fleet-core, paths: [agent-fleet/core/] }
+  svc:agent-fleet/provisioner: { realm: fleet, group: control, parent: app:platform-provisioner, paths: [agent-fleet/provisioner/] }
+  svc:agent-fleet/sidecar: { realm: fleet, group: session-pod, paths: [agent-fleet/sidecar/] }
+  svc:agent-fleet/worker: { realm: fleet, group: session-pod, paths: [agent-fleet/worker/] }
+  svc:agent-fleet/executor: { realm: fleet, group: cluster-access, paths: [agent-fleet/executor/] }
+  svc:agent-fleet/dashboard: { realm: fleet, group: control, parent: app:agent-fleet-core, paths: [agent-fleet/dashboard/] }
+
+  # Apps
+  app:editable-blog: { realm: apps, group: sites }
+  app:wedding-2026: { realm: apps, group: sites }
+  app:pi-lab: { realm: apps, group: sites, paths: [pi-lab/] }
+  app:hq: { realm: apps, group: sites }
+  app:dream-analyst: { realm: apps, group: products }
+  app:vos-monolith: { realm: apps, group: products }
+  app:vos-monolith-dev: { realm: apps, group: products }
+  app:wird: { realm: apps, group: products }
+  app:wird-adminweb: { realm: apps, group: products }
+  app:has-journal: { realm: apps, group: products }
+  app:ente-museum: { realm: apps, group: products }
+  app:ente-web: { realm: apps, group: products }
+  app:ukubi-stt: { realm: apps, group: ai }

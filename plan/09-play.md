@@ -60,7 +60,7 @@ something real. Game state is real data too (orders, answers, goals), but it is 
   unlocks are **parked** for a later session.
 - **Exploring:**
   - a building's story;
-  - ask a scout (waits on the fleet's headless invoke, ADR-0070);
+  - ask a scout (waits on the fleet's headless invoke, agent-fleet ADR-0070);
   - live internals for players;
   - agent memory. The fleet journal is never shown to watchers, and only through a scoped read.
 

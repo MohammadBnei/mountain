@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+  - list:
+      elements:
+      - name: wird
+        namespace: wird
+        syncWave: "10"
+        repoURL: https://github.com/MohammadBnei/wird.git
+        valuesPath: [helm/values.yaml]
+        targetRevision: main
+        hostname: wird.bnei.dev
+      - name: vos-monolith-dev
+        namespace: vos-dev
+        syncWave: "10"
+        repoURL: https://github.com/MohammadBnei/vos-monolith.git
+        valuesPath: [back/helm/values.yaml, back/helm/values-dev.yaml]
+        targetRevision: dev
+        hostname: dev.api.other.com
+      - name: ghost
+        namespace: ghost
+        repoURL: git@github.com:MohammadBnei/ghost.git
+        valuesPath: [helm/values.yaml]
+        targetRevision: main
+        hostname: ""
+  template:
+    metadata:
+      name: '{{.name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{.syncWave}}'
+    spec:
+      sources:
+      - repoURL: git@github.com:MohammadBnei/infra-bootstrap.git
+        path: gitops/platform/common-app-chart
+        targetRevision: main
+        helm:
+          valueFiles:
+          - $values/{{ index .valuesPath 0 }}
+      - repoURL: '{{.repoURL}}'
+        targetRevision: '{{.targetRevision}}'
+        ref: values
+      destination:
+        namespace: '{{.namespace}}'

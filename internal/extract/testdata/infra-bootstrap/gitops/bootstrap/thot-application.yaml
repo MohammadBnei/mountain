@@ -1,0 +1,12 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-thot
+  namespace: argocd
+spec:
+  source:
+    repoURL: git@github.com:MohammadBnei/infra-bootstrap.git
+    targetRevision: main
+    path: gitops/platform/thot
+  destination:
+    namespace: thot

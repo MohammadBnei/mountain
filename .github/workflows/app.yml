@@ -18,6 +18,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'internal/**'
       - 'relay/**'
       - 'www/**'
       - 'embed.go'

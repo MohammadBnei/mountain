@@ -1,0 +1,15 @@
+# the registry: a bare list
+- name: wird
+  namespace: wird
+  syncWave: "10"
+  repoURL: https://github.com/MohammadBnei/wird.git
+  valuesPath: [helm/values.yaml]
+  targetRevision: main
+  hostname: wird.bnei.dev
+- name: vos-monolith-dev
+  namespace: vos-dev
+  syncWave: "10"
+  repoURL: https://github.com/MohammadBnei/vos-monolith.git
+  valuesPath: [back/helm/values.yaml, back/helm/values-dev.yaml]
+  targetRevision: dev
+  hostname: dev.api.example.com

@@ -57,7 +57,7 @@ Real counts it has to hold: 15 registry apps, about 22 platform services, 6 flee
 services, and 67 + 79 + 21 ADRs.
 
 **Age of Empires helpers.**
-- **Waiting on you**: a counter of sessions blocked on a person and open proposals, from ADR-0078's
+- **Waiting on you**: a counter of sessions blocked on a person and open proposals, from agent-fleet ADR-0078's
   `session.waiting`. A key jumps through them.
 - **Last event**: one key flies to it, at the deepest level where its node stands alone. If it is folded, its
   parent opens with the group expanded.
@@ -198,7 +198,7 @@ drawn red. That mismatch is drift, and often the most useful thing to see.
   `actions:read` replaces the PAT's build reads.
   - It is installed on an explicit repo list, never "all".
   - The key is a mounted file, and only the 1 h installation token is kept in memory.
-  - `ukubi-fleet` is never used (ADR-0075 reserves it for agents).
+  - `ukubi-fleet` is never used (agent-fleet ADR-0075 reserves it for agents).
   - The relay's PAT stays as a fallback until a release proves the App path, then it and `MountainTokenExpiring` go.
 - **Runtime.**
   - go-git with on-disk storage (the image is distroless, with no git binary);
@@ -230,7 +230,7 @@ drawn red. That mismatch is drift, and often the most useful thing to see.
   - **Before a PR:** bridge events under `dev.bnei.process.`, published by core and read only by atlas's client.
     Never under `dev.bnei.agent.`, which the dispatcher reads (`agent-fleet/core/internal/dispatch/dispatch.go`).
   - **On a PR:** check runs `process/<stage>`, posted only by a verifier App `ukubi-gate` whose key core holds
-    (never minted into pods). Verdicts follow ADR-0079's ledger, with the rule that a session that wrote a commit on
+    (never minted into pods). Verdicts follow agent-fleet ADR-0079's ledger, with the rule that a session that wrote a commit on
     the PR can't review it. The bridge ingests `check_run.completed` filtered by `app.id`, under
     `dev.bnei.process.check`, with an ADR-0060 amendment.
   - **Per-repo table:** each repo is recorded as a **gate** (a ruleset is possible) or a **signal** (a private repo on
@@ -238,7 +238,7 @@ drawn red. That mismatch is drift, and often the most useful thing to see.
     joins the infra repos under the `process/*` rules, with gitleaks in its CI. Until `ukubi-gate` exists, only the
     rulesets that need no checks apply.
 - **Commit trailers label commits per unit.** atlas reads them with `git interpret-trailers --parse`. They are claims,
-  never evidence: evidence stays with the ADR-0079 ledger and `ukubi-gate`.
+  never evidence: evidence stays with the agent-fleet ADR-0079 ledger and `ukubi-gate`.
   - `Co-Authored-By: <agent> <noreply@bnei.dev>`, where the agent is one of:
     - `ukubi-claude-<host>` for laptops;
     - `ukubi-claude-cloud` for claude.ai/code;
