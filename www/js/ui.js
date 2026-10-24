@@ -1,7 +1,8 @@
 // The page around the map: the breadcrumb, the panel (a list per view, a card per node), search results, the minimap
 // and the status line. Built with createElement and textContent only: nothing from the graph is ever parsed as HTML.
-import { REALMS, REALM, OUTSIDE, KIND, MAX_GROUPS, label, nameOf, groupOf, governs, fold, routes, use, namespaces, health, alertsOn, sourceURL, TRADE } from './model.js';
+import { REALMS, REALM, OUTSIDE, KIND, MAX_GROUPS, label, nameOf, groupOf, governs, fold, routes, use, namespaces, health, alertsOn, sourceURL, TRADE, workedTiles, realmGoverns, docOf, adrOfDoc } from './model.js';
 import { format } from './router.js';
+import { MAX_CARDS } from './geometry.js';
 
 /** el builds an element: el('a', {href, class}, 'text', child…). Attributes are set as properties or attributes. */
 export function el(tag, attrs = {}, ...kids) {
@@ -12,7 +13,7 @@ export function el(tag, attrs = {}, ...kids) {
     else if (k === 'on') for (const [ev, f] of Object.entries(v)) e.addEventListener(ev, f);
     else e.setAttribute(k, v === true ? '' : String(v));
   }
-  for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  for (const k of kids.flat(Infinity)) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
   return e;
 }
 
@@ -24,21 +25,25 @@ const link = (v, ...kids) => el('a', { href: format(v), class: 'nav' }, ...kids)
 const dot = (state) => el('span', { class: `dot ${state}`, 'aria-hidden': 'true' });
 const ago = (ms) => { const s = Math.max(0, Math.round((Date.now() - ms) / 1000)); return s < 90 ? `${s} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
 
-/** crumbs is the breadcrumb for a view: ukubi › realm › group › node. */
+/** crumbs is the breadcrumb for a view: ukubi › realm › group › node (› file). */
 export function crumbs(m, v) {
   const out = [link({ level: 0, lens: v.lens }, 'ukubi')];
   if (v.level === 1 && !v.realm) out.push(link({ level: 1, lens: v.lens }, 'trade routes'));
-  if (v.realm) out.push(link({ level: 1, realm: v.realm, lens: v.lens }, REALM[v.realm].label));
-  if (v.group) out.push(link({ ...v, sel: null }, v.group));
-  if (v.sel) out.push(el('span', { class: 'here' }, label(m.nodes.get(v.sel)) || v.sel));
+  const id = v.level === 3 ? v.id : v.level === 4 ? v.from : null, g = id && groupOf(m, id);
+  const realm = v.realm || g?.realm, group = v.group || g?.group;
+  if (realm) out.push(link({ level: 2, realm, lens: v.lens }, REALM[realm].label));
+  if (group) out.push(link({ level: 2, realm, group, lens: v.lens }, group));
+  if (id) out.push(v.level === 3 ? el('span', { class: 'here' }, label(m.nodes.get(id)) || id) : link({ level: 3, id, lens: v.lens }, label(m.nodes.get(id)) || id));
+  if (v.level === 4) out.push(el('span', { class: 'here' }, v.doc.path.split('/').pop()));
+  else if (v.sel) out.push(el('span', { class: 'here' }, label(m.nodes.get(v.sel)) || v.sel));
   const nav = el('ol', { class: 'crumbs' });
   out.forEach((c, i) => nav.append(el('li', {}, i ? el('span', { class: 'sep', 'aria-hidden': 'true' }, '›') : null, c)));
   return nav;
 }
 
 function liveFacts(m, live, ids) {
-  const u = use(live, namespaces(m, ids)), facts = [];
-  if (!live?.land?.capacity?.cpu) return facts;
+  const nss = namespaces(m, ids), u = use(live, nss), facts = [];
+  if (!live?.land?.capacity?.cpu || !nss.length) return facts; // nothing deploys into a namespace: nothing to measure
   facts.push(`cpu ${cores(u.cpu)} (${pct(u.share.cpu)})`, `ram ${bytes(u.mem)} (${pct(u.share.mem)})`);
   if (u.disk) facts.push(`disk ${bytes(u.disk)} (${pct(u.share.disk)})`);
   return facts;
@@ -112,6 +117,7 @@ function empirePanel(m, live, v) {
   }));
   return el('div', {}, el('h2', {}, REALM[v.realm].label),
     el('p', { class: 'meta' }, `${realm.groups.size} groups · ${realm.count} parts`, realm.groups.size > MAX_GROUPS ? ` · over the ${MAX_GROUPS}-group load rule: realms.yaml should split it` : ''),
+    el('p', {}, el('a', { href: format({ level: 2, realm: v.realm, lens: v.lens }), class: 'primary' }, `Enter ${REALM[v.realm].label}`)),
     groups, alertList(alertsOn(m, live, { realm: v.realm })), el('h3', {}, `Routes in and out (${rs.length})`), routeItems);
 }
 
@@ -150,6 +156,9 @@ function card(m, live, v) {
     a?.rps ? el('p', { class: 'meta' }, `${rps(a.rps)} req/s through Traefik`) : null,
     n.kind === 'app' ? el('p', { class: 'meta' }, liveFacts(m, live, [n.id]).join(' · ') || null, n.attrs?.namespace ? ` (namespace ${n.attrs.namespace})` : '') : null,
     attrs.length ? el('dl', {}, attrs.flatMap(([k, val]) => [el('dt', {}, k), el('dd', { class: 'mono' }, val)])) : null,
+    el('p', { class: 'actions' },
+      g ? el('a', { href: format({ level: 3, id: n.id, lens: v.lens }), class: 'primary' }, `Enter ${nameOf(n.id)}`) : null,
+      docOf(n) ? el('a', { href: format({ level: 4, doc: docOf(n), from: g ? n.id : null, lens: v.lens }) }, n.kind === 'adr' ? 'Read it' : 'Read the file') : null),
     url ? el('p', {}, el('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, `${n.source.repo}${n.source.path ? '/' + n.source.path : ''}`), n.source.sha ? el('span', { class: 'mono faint' }, ` @${n.source.sha.slice(0, 12)}`) : null) : null,
     alertList(alertsOn(m, live, { id: n.id })),
     gov.length ? el('section', {}, el('h3', {}, `Governed by ${gov.length} ADRs`),
@@ -160,14 +169,80 @@ function card(m, live, v) {
 
 function nodeLink(m, v, id) {
   const n = m.nodes.get(id), g = groupOf(m, id);
-  const to = g ? { level: 1, realm: g.realm, group: g.group, sel: id, lens: v.lens } : { ...v, sel: id };
+  // a placed part opens in its city; anything else (an ADR, a repo, a hostname) as a card where the reader stands
+  const to = g ? { level: 2, realm: g.realm, group: g.group, sel: id, lens: v.lens } : v.level >= 3 ? { level: 0, sel: id, lens: v.lens } : { ...v, sel: id };
   return link(to, label(n) || id);
 }
 
-/** panel is the side panel's content for a view. */
-export function panel(m, live, v) {
+/** L2: the city's panel (plan/10 styleboard "L2 city"): districts, the ADRs governing the realm, its share of each
+ *  host, its declared routes. The build queue and troops wait for agent-kit and the bridge client (A5): no source yet. */
+function cityPanel(m, live, v) {
+  const realm = m.realms[v.realm], gov = realmGoverns(m, v.realm).slice(0, 8), tiles = workedTiles(m, live, v.realm);
+  const rs = routes(m, live).filter((r) => r.from.startsWith(v.realm + '/') || r.to.startsWith(v.realm + '/'));
+  const short = (id) => { const n = m.nodes.get(id); return `${n?.attrs?.repo || ''} ${n?.attrs?.number || nameOf(id)}`.trim(); };
+  return el('div', {}, el('p', { class: 'kicker' }, 'L2 · City'), el('h2', {}, REALM[v.realm].label),
+    el('p', { class: 'meta' }, `${realm.groups.size} districts · ${realm.count} parts. Height: the ADR citations that govern a building; colour: its health${v.lens === 'land' ? ' (land lens: its share of the cluster)' : ''}.`),
+    el('ul', { class: 'list' }, [...realm.groups.values()].map((g) => {
+      const c = stateCount(m, live, g.members);
+      return el('li', {}, link({ ...v, group: g.id, sel: null }, el('b', {}, g.id), el('span', { class: 'meta' }, `${g.members.length} parts`, c.down ? ` · ${c.down} down` : '', c.degraded ? ` · ${c.degraded} degraded` : '')));
+    })),
+    gov.length ? el('section', {}, el('h3', {}, 'Governed by · most-cited ADRs'), el('p', { class: 'chips' }, gov.map((x) => link({ ...v, sel: x.id }, `${short(x.id)} · ${x.count}`)))) : null,
+    el('section', {}, el('h3', {}, 'Worked tiles · share of each host'),
+      tiles.length ? el('ul', { class: 'list' }, tiles.map((t) => el('li', {}, el('b', {}, nameOf(t.host)),
+        el('span', { class: 'meta mono' }, `cpu ${pct(t.capCpu ? t.cpu / t.capCpu : null)} · ram ${pct(t.capMem ? t.mem / t.capMem : null)}`))))
+        : el('p', { class: 'meta' }, live?.land ? 'None of its pods run in the cluster.' : 'No live data yet.')),
+    rs.length ? el('section', {}, el('h3', {}, `Routes · declared (${rs.length})`), el('ul', { class: 'list' }, rs.map((r) => el('li', {}, el('span', {}, endpointName(r.from), ' → ', endpointName(r.to)), el('span', { class: 'meta' }, `${TRADE[r.kind]} · ${r.count}`))))) : null,
+    el('p', { class: 'meta' }, 'Build queue (process stages) and troops (live sessions) arrive with agent-kit and the bridge client.'),
+    alertList(alertsOn(m, live, { realm: v.realm })));
+}
+
+/** L3: a building's cards (≤ MAX_CARDS), each a {key, title, el}: on its walls in CSS3D, flat in the panel on narrow screens.
+ *  events: the live events (the "Last events" card). */
+export function buildingCards(m, live, events, v) {
+  const n = m.nodes.get(v.id);
+  if (!n) return [];
+  const g = groupOf(m, n.id), h = health(m, live, n.id), a = live?.apps?.[n.id], cards = [];
+  const card = (key, title, ...body) => cards.push({ key, title, el: el('article', { class: 'bcard', 'data-card': key }, el('h3', {}, title), ...body) });
+  const attrs = Object.entries(n.attrs || {});
+  card('facts', 'Facts', el('p', {}, KIND[n.kind] || n.kind, g ? ` · ${REALM[g.realm].label} › ${g.group}` : ''),
+    attrs.length ? el('dl', {}, attrs.flatMap(([k, val]) => [el('dt', {}, k), el('dd', { class: 'mono' }, val)])) : null,
+    docOf(n) ? el('p', {}, 'Read at ', link({ level: 4, doc: docOf(n), from: n.id, lens: v.lens }, `${n.source.repo}/${n.source.path}`), n.source.sha ? el('span', { class: 'mono faint' }, ` @${n.source.sha.slice(0, 12)}`) : null) : null);
+  card('live', 'Live', el('p', {}, dot(h.state), ' ', h.why), a?.rps ? el('p', { class: 'mono' }, `${rps(a.rps)} req/s through Traefik`) : null,
+    ...liveFacts(m, live, [n.id]).map((f) => el('p', { class: 'mono' }, f)));
+  const trade = (list, dir) => list.filter((e) => TRADE[e.kind]).map((e) => el('li', {}, `${TRADE[e.kind]} ${dir === 'out' ? '→' : '←'} `, nodeLink(m, v, dir === 'out' ? e.to : e.from)));
+  const ins = trade(m.inn.get(n.id) || [], 'in'), outs = trade(m.out.get(n.id) || [], 'out');
+  if (ins.length + outs.length) card('routes', 'Routes', el('ul', { class: 'list' }, ins.slice(0, 8), outs.slice(0, 8)));
+  const gov = governs(m, n.id);
+  if (gov.length) card('governs', `Governed by · ${gov.length}`, el('ul', { class: 'list' }, gov.slice(0, 6).map((x) => {
+    const adr = m.nodes.get(x.id), doc = docOf(adr);
+    return el('li', {}, doc ? link({ level: 4, doc, from: n.id, lens: v.lens }, label(adr)) : label(adr), el('span', { class: 'meta' }, ` ${x.count}×`));
+  })));
+  const firing = alertsOn(m, live, { id: n.id });
+  if (firing.length) card('alerts', `Firing · ${firing.length}`, el('ul', { class: 'list' }, firing.slice(0, 5).map((x) => el('li', { class: x.severity }, el('b', {}, x.name), ' ', x.summary || ''))));
+  const evs = (events || []).filter((e) => e.node === n.id).slice(-5).reverse();
+  if (evs.length) card('events', 'Last events', el('ul', { class: 'list' }, evs.map((e) => el('li', {}, e.text, el('span', { class: 'meta' }, ` · ${new Date(e.ts).toLocaleTimeString()}`)))));
+  const drift = m.drift.filter((x) => x.subject === n.id);
+  if (drift.length) card('drift', `Drift · ${drift.length}`, el('ul', { class: 'list' }, drift.slice(0, 5).map((x) => el('li', {}, `${x.kind}: ${x.detail}`))));
+  return cards.slice(0, MAX_CARDS);
+}
+
+/** L3's panel: the building's name and its cards, flat (the dock on narrow screens, the list on wide ones). */
+function buildingPanel(m, live, events, v, focused) {
+  const n = m.nodes.get(v.id);
+  if (!n) return el('div', {}, el('h2', {}, v.id), el('p', {}, 'Not in the current projection.'));
+  const cards = buildingCards(m, live, events, v);
+  return el('div', {}, el('p', { class: 'kicker' }, 'L3 · Building'), el('h2', {}, label(n)),
+    el('p', { class: 'meta' }, 'Click a wall card to face it; Escape goes back to the city.'),
+    el('nav', { class: 'cardnav', 'aria-label': 'Cards' }, cards.map((c) => el('button', { type: 'button', 'data-focus': c.key, 'aria-pressed': String(focused === c.key) }, c.title))),
+    cards.map((c) => c.el));
+}
+
+/** panel is the side panel's content for a view. extra: {events, focused} for L3. */
+export function panel(m, live, v, extra = {}) {
+  if (v.level === 3) return buildingPanel(m, live, extra.events, v, extra.focused);
   if (v.sel) return card(m, live, v);
   if (v.group) return groupPanel(m, live, v);
+  if (v.level === 2) return cityPanel(m, live, v);
   if (v.level === 1) return empirePanel(m, live, v);
   return mapPanel(m, live, v);
 }
@@ -179,8 +254,12 @@ export function results(m, v, ids) {
 }
 
 /** minimap: the seven realms as small hexes; the one in view is lit. */
-export function minimap(v) {
+export function minimap(v, still = null) {
   const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+  if (still) { // the reader is open: the minimap is a still of the 3D it froze
+    const img = el('img', { src: still, alt: 'The 3D view, frozen while you read' });
+    return img;
+  }
   svg.setAttribute('viewBox', '-12 -7.5 20 15');
   svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', `Minimap: ${v.realm ? REALM[v.realm].label : 'the whole map'}`);

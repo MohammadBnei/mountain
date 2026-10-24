@@ -68,9 +68,18 @@ type Use struct {
 }
 
 type Land struct {
-	Capacity Use            `json:"capacity"` // allocatable CPU and RAM, provisioned volume capacity
-	Realms   map[string]Use `json:"realms"`   // realm (or "unattributed") -> share of Capacity, 0..1 per field
-	NS       map[string]Use `json:"ns"`       // namespace -> use, absolute
+	Capacity Use                 `json:"capacity"` // allocatable CPU and RAM, provisioned volume capacity
+	Realms   map[string]Use      `json:"realms"`   // realm (or "unattributed") -> share of Capacity, 0..1 per field
+	NS       map[string]Use      `json:"ns"`       // namespace -> use, absolute
+	NSRealm  map[string]string   `json:"nsRealm"`  // namespace -> the realm its pods count toward
+	Nodes    map[string]NodeLand `json:"nodes"`    // k8s node (vm id) -> what runs on it: a city's worked tiles
+}
+
+// NodeLand is one k8s node's allocatable CPU and RAM and what each namespace uses of it (disk is not per node:
+// volumes are replicated).
+type NodeLand struct {
+	Capacity Use            `json:"capacity"`
+	NS       map[string]Use `json:"ns"`
 }
 
 type AlertLive struct {
@@ -107,7 +116,7 @@ type Live struct {
 
 func newLive(rl *realms.Realms, hub *Hub) *Live {
 	return &Live{rl: rl, hub: hub, st: LiveState{T: "live", Apps: map[string]AppLive{}, Ready: map[string]bool{}, Probes: map[string]bool{},
-		Land: Land{Realms: map[string]Use{}, NS: map[string]Use{}}, Alerts: []AlertLive{}, Stale: map[string]int64{}}, events: []Event{}}
+		Land: Land{Realms: map[string]Use{}, NS: map[string]Use{}, NSRealm: map[string]string{}, Nodes: map[string]NodeLand{}}, Alerts: []AlertLive{}, Stale: map[string]int64{}}, events: []Event{}}
 }
 
 // hello is the frame a client gets on connect: the build, the latest projection's seq, the live state and the recent
@@ -252,6 +261,11 @@ var promQ = map[string]string{
 	"memcap":  `sum(kube_node_status_allocatable{resource="memory"})`,
 	"diskcap": `sum(kubelet_volume_stats_capacity_bytes)`,
 	"req":     `sum by (exported_service) (rate(traefik_service_requests_total[2m]))`,
+	// per node: the city's worked tiles (cadvisor's series carry the node; allocatable is per node)
+	"cpunode":    `sum by (namespace, node) (rate(container_cpu_usage_seconds_total{container!="",image!=""}[5m]))`,
+	"memnode":    `sum by (namespace, node) (container_memory_working_set_bytes{container!="",image!=""})`,
+	"cpucapnode": `sum by (node) (kube_node_status_allocatable{resource="cpu"})`,
+	"memcapnode": `sum by (node) (kube_node_status_allocatable{resource="memory"})`,
 }
 
 func query(ctx context.Context, hc *http.Client, base, q string) ([]sample, error) {
@@ -342,7 +356,45 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 		}
 	}
 
-	land := Land{Capacity: Use{CPU: one("cpucap"), Mem: one("memcap"), Disk: one("diskcap")}, Realms: map[string]Use{}, NS: map[string]Use{}}
+	land := Land{Capacity: Use{CPU: one("cpucap"), Mem: one("memcap"), Disk: one("diskcap")}, Realms: map[string]Use{}, NS: map[string]Use{},
+		NSRealm: map[string]string{}, Nodes: map[string]NodeLand{}}
+	node := func(name string) (NodeLand, string, bool) {
+		id := "vm:" + strings.ToLower(name)
+		if !idx.Has[id] {
+			return NodeLand{}, "", false
+		}
+		n, ok := land.Nodes[id]
+		if !ok {
+			n = NodeLand{NS: map[string]Use{}}
+		}
+		return n, id, true
+	}
+	for _, q := range []string{"cpucapnode", "memcapnode"} {
+		for _, s := range r[q] {
+			if n, id, ok := node(s.L["node"]); ok {
+				if q == "cpucapnode" {
+					n.Capacity.CPU = s.V
+				} else {
+					n.Capacity.Mem = s.V
+				}
+				land.Nodes[id] = n
+			}
+		}
+	}
+	for _, q := range []string{"cpunode", "memnode"} {
+		for _, s := range r[q] {
+			if n, id, ok := node(s.L["node"]); ok && s.L["namespace"] != "" {
+				u := n.NS[s.L["namespace"]]
+				if q == "cpunode" {
+					u.CPU = math.Round(s.V*1000) / 1000
+				} else {
+					u.Mem = math.Round(s.V)
+				}
+				n.NS[s.L["namespace"]] = u
+				land.Nodes[id] = n
+			}
+		}
+	}
 	add := func(name string, set func(*Use, float64)) {
 		for _, s := range r[name] {
 			ns := s.L["namespace"]
@@ -363,8 +415,14 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 		}
 		return x / c
 	}
+	for _, n := range land.Nodes {
+		for ns := range n.NS {
+			land.NSRealm[ns] = realmOfNS(idx, p.l.rl, ns)
+		}
+	}
 	for ns, u := range land.NS {
 		realm := realmOfNS(idx, p.l.rl, ns)
+		land.NSRealm[ns] = realm
 		t := land.Realms[realm]
 		t.CPU += share(u.CPU, land.Capacity.CPU)
 		t.Mem += share(u.Mem, land.Capacity.Mem)

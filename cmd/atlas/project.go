@@ -72,7 +72,7 @@ func round(ctx context.Context, src heads, rl *realms.Realms, c *roundCache) (ex
 		// phase 1: the branches ArgoCD deploys from, read from infra-bootstrap alone
 		first, err := extract.Run(repos, rl, extract.All)
 		if err != nil {
-			return extract.Result{}, nil, err
+			return extract.Result{}, repos, err // the reader still learns infra-bootstrap's new tree (its old one may go next round)
 		}
 		branch = map[string]string{}
 		for _, t := range first.Tracked { // sorted: a repo deployed from two branches is read at the first (vos-monolith: dev)
@@ -159,6 +159,9 @@ func (a *App) project(ctx context.Context) {
 
 func (a *App) projectOnce(ctx context.Context, src heads, c *roundCache) error {
 	res, repos, err := round(ctx, src, a.Realms, c)
+	if repos != nil {
+		a.Files.update(repos) // what the reader serves: the trees this round read, at their shas; a repo it did not read keeps the last
+	}
 	if errors.Is(err, errUnchanged) {
 		SourceLastSuccess.Set("projection", float64(time.Now().Unix()))
 		return nil

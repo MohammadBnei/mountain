@@ -1,7 +1,7 @@
 # 10 · atlas: understanding the system (design, 2026-10-24)
 
-> Status: **A0 + A1 merged, A2 built** ("A2 as built" under Delivery). The owner went through five interview rounds,
-> two doubt cycles (five read-only reviews) and an architect round. A section is shared with the agent-kit design
+> Status: **A0, A1 and A2 merged, A3 built** ("A2 as built" and "A3 as built" under Delivery). The owner went
+> through five interview rounds, two doubt cycles (five read-only reviews) and an architect round. A section is shared with the agent-kit design
 > (the other session's work), signed there before anything assumed its schema.
 
 ## Why
@@ -298,6 +298,52 @@ What changed against the table above, and why:
 - **Rollback** is a revert, plus, before the relay image starts again, `DROP TABLE atlas_migrations, atlas_drift,
   atlas_edge_ver, atlas_node_ver, atlas_vector, atlas_projection` (the relay's migrations would meet a schema they
   don't expect). The town's history is gone either way: R10 drops it on purpose.
+
+### A3 as built (2026-10-24)
+What changed against the ladder table, and why:
+- **L2 city** (`#/L2/<realm>`, `www/js/city.js`):
+  - Districts are the realm's groups; buildings are their parts. A building's height grows with the log of the ADR
+    citations that govern it, and its colour is its health (or its namespace's share of the cluster under the land
+    lens). Alerts stand as beacons on the building they name.
+  - Three instanced draws plus the ground; the plan itself is a pure `layout()` in `geometry.js`, unit-tested.
+  - A click picks a building, a second click enters it.
+  - The panel holds the city's districts, the ADRs that govern the realm, and its **worked tiles**: the realm's CPU
+    and RAM per PVE host. That needs a per-node land, so the live frame gained `land.nodes` (use per namespace per
+    node, allocatable per node) and `land.nsRealm`.
+  - **The build queue and troops wait for A5**, as at L0: nothing is drawn before it has a source.
+- **L3 building** (`#/L3/<node id>`, `www/js/building.js`):
+  - The part as a tower, its child parts as annexes, and up to 7 HTML cards on a ring in CSS3D: facts, live, routes,
+    governed by (each ADR a link to L4), alerts, last events, drift.
+  - Cards keep `pointer-events: none`. A click on a card's wall (an invisible stand-in the raycaster hits) or on its
+    name in the panel focuses it: the camera faces it, and it alone takes the pointer. Escape unfocuses it first.
+  - At 600 px wide or less, the cards are not drawn in 3D at all; the panel carries them flat (iOS and preserve-3d).
+  - `CSS3DRenderer.js` is vendored from the same three@0.186.1 tarball, with its hash in `www/vendor/manifest.json`.
+- **L4 reader** (`#/L4/<repo>/<path>?from=<node id>`, `www/js/reader.js`, `cmd/atlas/read.go`):
+  - `GET /api/read?repo&path` (admins, like every route) reads a file from the tree atlas extracted, at the sha it
+    read it. Only a repo atlas holds, a clean relative path, a regular file under `os.Root`, ≤ 1 MiB, UTF-8 text.
+  - Markdown is parsed in Go (goldmark) and sent as blocks and inlines, never as HTML. Raw HTML is dropped and images
+    become their alt text. A link is either a doc link (relative, or a GitHub URL into a repo atlas holds) shown as a
+    hash route, or an http(s) link opened elsewhere with no referrer; anything else is plain text.
+  - **Redaction** before anything leaves atlas: PEM blocks; GitHub, Slack, AWS, Anthropic and Discord tokens; Discord
+    webhooks; JWTs; SCRAM and bcrypt hashes; URL passwords; the value of a secret-named key (`*_PASS`, `password: |`
+    block scalars, a key and its value in separate nodes or table cells); long mixed-class runs. A link whose URL
+    holds any of these is no link: its words stay, its URL never reaches the page. The count shows in the reader.
+    A file atlas reads is in git already, so this is a second line, not the first; checked over every markdown file
+    of the five repos for what it hides and what it should not.
+  - **Cost**: a document is rendered once per sha (a cache of 64), two at a time. A file shaped like goldmark's
+    quadratic inputs (a paragraph of 64 KiB, quotes nested past 32) is served as text; nesting past 24 levels comes
+    back flat. The page highlights lines up to 2000 characters.
+  - The page builds everything with `textContent`; code highlighting is by class names (the CSP stays
+    `style-src 'self'`). The 3D scene freezes to a still, shown in the minimap and the side column, and the light
+    Office theme takes the page.
+  - Not yet: a diff or a session transcript in the reader (A5/A6, with the history and the bridge).
+- **Ladder keys**: Escape climbs one step (L4 → the building it came from → its district → the city → the realm at L1
+  → L1 → the map). Ids keep `:` and `@` readable in the hash (`#/L3/svc:agent-fleet/core`).
+- **Checks**: `core.test.mjs` adds the L2–L4 routes and `up()`, the city plan, the card ring, worked tiles and the
+  highlighter. The gate draws L2, a district, the land lens, L3 and L4 on both tiers within budget, then on desktop:
+  pick and enter a building, focus a wall card, Escape, open its ADR, Escape back up. On both tiers it also opens a
+  hostile markdown file (`www/dev/fixtures/repos`): no element from its markup, no `javascript:` link, the secrets
+  redacted.
 
 **Human-gated** (queued; the cluster and build runner are down):
 - create the App, its key and its installs;

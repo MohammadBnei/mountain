@@ -298,6 +298,218 @@
    "disk": 2000000000000.0,
    "mem": 160000000000.0
   },
+  "nodes": {
+   "vm:k8s-cp-01": {
+    "capacity": {
+     "cpu": 8,
+     "disk": 0,
+     "mem": 32000000000.0
+    },
+    "ns": {
+     "actions-runner": {
+      "cpu": 1.138,
+      "disk": 0,
+      "mem": 1833613631
+     },
+     "default": {
+      "cpu": 1.674,
+      "disk": 0,
+      "mem": 4599196654
+     },
+     "has-journal": {
+      "cpu": 2.483,
+      "disk": 0,
+      "mem": 4940452480
+     },
+     "longhorn-system": {
+      "cpu": 2.21,
+      "disk": 0,
+      "mem": 4924715035
+     },
+     "pgweb": {
+      "cpu": 1.42,
+      "disk": 0,
+      "mem": 5720932657
+     },
+     "traefik": {
+      "cpu": 0.53,
+      "disk": 0,
+      "mem": 1015703967
+     },
+     "wedding-2026": {
+      "cpu": 1.17,
+      "disk": 0,
+      "mem": 2928816206
+     }
+    }
+   },
+   "vm:k8s-cp-02": {
+    "capacity": {
+     "cpu": 8,
+     "disk": 0,
+     "mem": 32000000000.0
+    },
+    "ns": {
+     "agent-fleet": {
+      "cpu": 1.75,
+      "disk": 0,
+      "mem": 1502374239
+     },
+     "dream-analyst": {
+      "cpu": 2.19,
+      "disk": 0,
+      "mem": 1916797701
+     },
+     "hq": {
+      "cpu": 1.675,
+      "disk": 0,
+      "mem": 184249422
+     },
+     "lost-ns": {
+      "cpu": 0.703,
+      "disk": 0,
+      "mem": 2521014277
+     },
+     "pi-lab": {
+      "cpu": 1.294,
+      "disk": 0,
+      "mem": 3724676859
+     },
+     "ukubi-bridge": {
+      "cpu": 0.011,
+      "disk": 0,
+      "mem": 950026347
+     },
+     "wird": {
+      "cpu": 0.863,
+      "disk": 0,
+      "mem": 1625303506
+     }
+    }
+   },
+   "vm:k8s-cp-03": {
+    "capacity": {
+     "cpu": 8,
+     "disk": 0,
+     "mem": 32000000000.0
+    },
+    "ns": {
+     "agent-vault": {
+      "cpu": 1.318,
+      "disk": 0,
+      "mem": 5257068099
+     },
+     "drop": {
+      "cpu": 1.49,
+      "disk": 0,
+      "mem": 3500376465
+     },
+     "infisical": {
+      "cpu": 0.302,
+      "disk": 0,
+      "mem": 400778795
+     },
+     "monitoring": {
+      "cpu": 2.395,
+      "disk": 0,
+      "mem": 947979389
+     },
+     "searxng": {
+      "cpu": 0.144,
+      "disk": 0,
+      "mem": 5402221410
+     },
+     "ukubi-stt": {
+      "cpu": 0.073,
+      "disk": 0,
+      "mem": 5252277645
+     },
+     "zot": {
+      "cpu": 0.412,
+      "disk": 0,
+      "mem": 187419540
+     }
+    }
+   },
+   "vm:k8s-worker-01": {
+    "capacity": {
+     "cpu": 8,
+     "disk": 0,
+     "mem": 32000000000.0
+    },
+    "ns": {
+     "argocd": {
+      "cpu": 0.727,
+      "disk": 0,
+      "mem": 5882040343
+     },
+     "editable-blog": {
+      "cpu": 2.362,
+      "disk": 0,
+      "mem": 2870885108
+     },
+     "kube-system": {
+      "cpu": 0.332,
+      "disk": 0,
+      "mem": 1523308260
+     },
+     "mountain": {
+      "cpu": 0.591,
+      "disk": 0,
+      "mem": 2935528246
+     },
+     "silverbullet": {
+      "cpu": 2.188,
+      "disk": 0,
+      "mem": 4797345071
+     },
+     "vos": {
+      "cpu": 0.38,
+      "disk": 0,
+      "mem": 1550933652
+     }
+    }
+   },
+   "vm:k8s-worker-02": {
+    "capacity": {
+     "cpu": 8,
+     "disk": 0,
+     "mem": 32000000000.0
+    },
+    "ns": {
+     "authentik": {
+      "cpu": 1.895,
+      "disk": 0,
+      "mem": 954307981
+     },
+     "ente": {
+      "cpu": 0.161,
+      "disk": 0,
+      "mem": 4223877527
+     },
+     "local-path-storage": {
+      "cpu": 0.211,
+      "disk": 0,
+      "mem": 2722665036
+     },
+     "netbird": {
+      "cpu": 0.664,
+      "disk": 0,
+      "mem": 74356940
+     },
+     "thot": {
+      "cpu": 0.268,
+      "disk": 0,
+      "mem": 3824022916
+     },
+     "vos-dev": {
+      "cpu": 0.316,
+      "disk": 0,
+      "mem": 5101174713
+     }
+    }
+   }
+  },
   "ns": {
    "actions-runner": {
     "cpu": 1.138,
@@ -464,6 +676,41 @@
     "disk": 0,
     "mem": 187419540
    }
+  },
+  "nsRealm": {
+   "actions-runner": "infra",
+   "agent-fleet": "fleet",
+   "agent-vault": "identity",
+   "argocd": "platform",
+   "authentik": "identity",
+   "default": "platform",
+   "dream-analyst": "apps",
+   "drop": "platform",
+   "editable-blog": "apps",
+   "ente": "apps",
+   "has-journal": "apps",
+   "hq": "apps",
+   "infisical": "identity",
+   "kube-system": "infra",
+   "local-path-storage": "infra",
+   "longhorn-system": "infra",
+   "lost-ns": "unattributed",
+   "monitoring": "platform",
+   "mountain": "platform",
+   "netbird": "identity",
+   "pgweb": "platform",
+   "pi-lab": "apps",
+   "searxng": "platform",
+   "silverbullet": "platform",
+   "thot": "fleet",
+   "traefik": "platform",
+   "ukubi-bridge": "events",
+   "ukubi-stt": "apps",
+   "vos": "apps",
+   "vos-dev": "apps",
+   "wedding-2026": "apps",
+   "wird": "apps",
+   "zot": "platform"
   },
   "realms": {
    "apps": {

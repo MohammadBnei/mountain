@@ -162,8 +162,8 @@ func TestGitHubHeads(t *testing.T) {
 	if err != nil || r3.SHA != sha2 || f.tarballs != 2 {
 		t.Fatalf("moved: %+v %v %d", r3, err, f.tarballs)
 	}
-	if _, err := os.Stat(r.Dir); err == nil {
-		t.Error("the old tree was kept")
+	if _, err := os.Stat(r.Dir); err != nil {
+		t.Error("the replaced tree went at once: the reader may still be serving it this round")
 	}
 	f.head["infra-bootstrap@main"], f.status = sha0, "behind"
 	if r4, _ := g.checkout(ctx, "infra-bootstrap", "main"); r4.SHA != sha2 || f.tarballs != 2 {
@@ -171,6 +171,12 @@ func TestGitHubHeads(t *testing.T) {
 	}
 	if r5, _ := g.checkout(ctx, "infra-bootstrap", "main"); r5.SHA != sha0 || f.tarballs != 3 {
 		t.Errorf("the same head behind, a second round running: a real reset, taken: %+v %d", r5, f.tarballs)
+	}
+	if _, err := os.Stat(r.Dir); err == nil {
+		t.Error("the tree replaced two rounds ago was kept")
+	}
+	if _, err := os.Stat(r3.Dir); err != nil {
+		t.Error("the tree replaced this round went at once")
 	}
 	// a branch retargeted onto the commit already held: no download, and the held tree stays on disk (it was once
 	// deleted as "the old tree", being the same path)

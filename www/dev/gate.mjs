@@ -11,8 +11,12 @@
 //   - each level, desktop (1280×800) and phone low tier (390×844, ?q=low): drawn without a console error, an exception,
 //     a failed request or a request to another origin, within the per-level budget (plan/10: ≤ 220 draw calls;
 //     ≤ 350k triangles high, ≤ 200k phone-low), with its labels, panel and minimap;
+//   - both tiers: the reader on a hostile markdown file builds no element from its markup, links only in-atlas or out
+//     with no referrer, and redacts the secrets in it;
 //   - desktop: a click on an island opens its realm (L1), search finds a node and Enter opens its card, Escape zooms
-//     out one step; 100 firing alerts stay within budget; the page says the connection is lost while atlas is down
+//     out one step; in a city a click picks a building and a second enters it (L3), a click on a wall focuses its card
+//     (the only one taking the pointer), Escape unfocuses it, a governs link opens the ADR (L4) and Escape climbs
+//     back to the building and the district; 100 firing alerts stay within budget; the page says the connection is lost while atlas is down
 //     and recovers through the next hello.
 import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -51,7 +55,7 @@ const port = await new Promise((r) => { const s = createServer().listen(0, '127.
 const origin = `http://127.0.0.1:${port}`;
 let srv, log = '';
 async function start() {
-  srv = spawn(bin, ['--dev', `--listen=127.0.0.1:${port}`, '--metrics=127.0.0.1:0', `--graph-fixture=${graphFile}`, `--live-fixture=${join(ROOT, 'dev/fixtures/live.json')}`],
+  srv = spawn(bin, ['--dev', `--listen=127.0.0.1:${port}`, '--metrics=127.0.0.1:0', `--graph-fixture=${graphFile}`, `--live-fixture=${join(ROOT, 'dev/fixtures/live.json')}`, `--repos=${join(ROOT, 'dev/fixtures/repos')}`],
     { cwd: repo, env: { ...process.env, MOUNTAIN_OIDC_ISSUER: '', MOUNTAIN_GITHUB_TOKEN: '', DATABASE_URL: '' } });
   srv.stderr.on('data', (d) => { log += d; });
   for (let i = 0; i < 50; i++) { try { if ((await fetch(`${origin}/healthz`)).ok) return; } catch {} await sleep(100); }
@@ -59,7 +63,10 @@ async function start() {
 }
 const stop = () => new Promise((r) => { srv.once('exit', r); srv.kill(); });
 
-const VIEWS = [['map', '#/'], ['land', '#/?lens=land'], ['routes', '#/L1'], ['realm', '#/L1/fleet'], ['card', '#/L1/infra?g=nodes&sel=vm:k8s-worker-02']];
+// [name, hash, the labels it must show at least]
+const VIEWS = [['map', '#/', 7], ['land', '#/?lens=land', 7], ['routes', '#/L1', 7], ['realm', '#/L1/fleet', 7], ['card', '#/L1/infra?g=nodes&sel=vm:k8s-worker-02', 7],
+  ['city', '#/L2/platform', 4], ['district', '#/L2/platform?g=observability', 8], ['citylens', '#/L2/apps?lens=land', 3], ['building', '#/L3/svc:agent-fleet/core', 1],
+  ['reader', '#/L4/infra-bootstrap/docs/hostile.md', 0]];
 
 try {
   await start();
@@ -93,18 +100,30 @@ try {
     const ready = await waitFor(page, 'globalThis.__atlas?.ready && (globalThis.__atlas.error || globalThis.__atlas.stats) && true', 60000);
     const err = ready && (await page.evalJSON('globalThis.__atlas.error || null'));
     if (!ready || err) { fail(`${tier}: the map was never drawn ${err || ''}`); await page.close(); continue; }
-    for (const [name, hash] of VIEWS) {
+    for (const [name, hash, minLabels] of VIEWS) {
       await page.evalJSON(`(location.hash = ${JSON.stringify(hash)}, true)`);
       await sleep(1800); // the fly-in, then a few frames
-      const info = await page.evalJSON(`({ ...__atlas.stats(), labels: [...document.querySelectorAll('.lbl')].filter((l) => !l.hidden).length,
-        panel: document.getElementById('panel').textContent.length, minimap: document.querySelectorAll('#minimap polygon').length,
+      const info = await page.evalJSON(`({ ...__atlas.stats(), labels: [...document.querySelectorAll('.lbl')].filter((l) => !l.hidden && l.offsetParent).length,
+        panel: document.getElementById('panel').textContent.length, reader: document.getElementById('reader').hidden ? 0 : document.getElementById('reader').textContent.length,
+        minimap: document.querySelectorAll('#minimap polygon').length, still: !!document.querySelector('#minimap img'), cards: document.querySelectorAll('#css3d .card3d').length,
         level: document.getElementById('level').textContent, pwned: globalThis.__pwned || 0 })`);
       note(`${tier} ${name}: ${JSON.stringify(info)}`);
       if (info.calls > 220 || info.triangles > TRIS) fail(`${tier} ${name}: over the budget (${info.calls} draws / 220, ${info.triangles} tris / ${TRIS / 1000}k)`);
-      if (info.labels < 7) fail(`${tier} ${name}: ${info.labels} labels shown`);
-      if (!info.panel || info.minimap !== 7) fail(`${tier} ${name}: panel ${info.panel} chars, minimap ${info.minimap} realms`);
+      if (info.labels < minLabels) fail(`${tier} ${name}: ${info.labels} labels shown, want ≥ ${minLabels}`);
+      if (name === 'reader' ? !info.reader || !info.still : !info.panel || info.minimap !== 7) fail(`${tier} ${name}: panel ${info.panel}, reader ${info.reader} chars, minimap ${info.minimap} realms, still ${info.still}`);
+      if (name === 'building' && (qs ? info.cards !== 0 : info.cards < 2 || info.cards > 7)) fail(`${tier} building: ${info.cards} wall cards (flat on phones, 2..7 on desktop)`);
       if (info.pwned) fail(`${tier} ${name}: graph text ran as script`);
       if (tier === 'desktop') await writeFile(join(OUT, `${name}.png`), Buffer.from((await page.s('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+    }
+    { // the reader on a hostile document, both tiers: markup is text, links are hash routes or external, secrets redacted
+      await page.evalJSON(`(location.hash = '#/L4/infra-bootstrap/docs/hostile.md', true)`);
+      const r = await waitFor(page, `document.getElementById('reader').textContent.includes('hostile') && (() => { const b = document.getElementById('reader');
+        return { bad: b.querySelectorAll('img:not(#readstill img), script, div[onclick], b').length, js: [...b.querySelectorAll('a')].filter((a) => !/^(#\\/|https:\\/\\/)/.test(a.getAttribute('href') || '')).length,
+          ext: [...b.querySelectorAll('a[target]')].every((a) => a.rel.includes('noopener') && a.rel.includes('noreferrer')), redacted: (b.textContent.match(/\\[redacted\\]/g) || []).length,
+          secret: /ghp_|hunter2|Ab3dEf7h/.test(b.textContent), sibling: !!b.querySelector('a[href^="#/L4/infra-bootstrap/docs/other.md"]'), out: /etc\\/passwd/.test([...b.querySelectorAll('a')].map((a) => a.href).join()),
+          pwned: globalThis.__pwned || 0 }; })()`, 8000);
+      note(`${tier} hostile reader: ${JSON.stringify(r)}`);
+      if (!r || r.bad || r.js || !r.ext || r.redacted < 3 || r.secret || !r.sibling || r.out || r.pwned) fail(`${tier} hostile reader: ${JSON.stringify(r)}`);
     }
     if (mode === 'selftest') { // every hostile string shows as text: no element built from it, no javascript: link
       await page.evalJSON(`(location.hash = '#/L1/apps?g=products&sel=app:wird', true)`);
@@ -149,6 +168,47 @@ try {
       await key('l', 'KeyL', 76, 'l');
       const last = await waitFor(page, `location.hash.includes('sel=app%3Awird-adminweb') && location.hash`, 3000);
       if (!last) fail(`Last event: did not open wird-adminweb (${await page.evalJSON('location.hash')})`);
+      // L2 → L3: a building is picked, then entered; a wall card takes the pointer only once focused; Escape unfocuses, then
+      // goes back to the city's district; L4 opens from a card's ADR and Escape returns to the building
+      await page.evalJSON(`(location.hash = '#/L2/fleet', true)`);
+      await sleep(1600);
+      const clickAt = async (pt) => { for (const type of ['mousePressed', 'mouseReleased']) await page.s('Input.dispatchMouseEvent', { type, x: pt.x, y: pt.y, button: 'left', clickCount: 1 }); };
+      let bp = await page.evalJSON(`__atlas.pointAt('b:svc:agent-fleet/core')`);
+      if (bp) await clickAt(bp);
+      const selected = await waitFor(page, `location.hash.includes('sel=svc%3Aagent-fleet%2Fcore') && location.hash`, 3000);
+      await sleep(2000);
+      bp = await page.evalJSON(`__atlas.pointAt('b:svc:agent-fleet/core')`);
+      if (bp) await clickAt(bp);
+      const entered = await waitFor(page, `location.hash.startsWith('#/L3/svc:agent-fleet/core') && location.hash`, 3000);
+      note(`city: pick → ${selected}, enter → ${entered}`);
+      if (!selected || !entered) fail(`city: picking and entering core failed (${selected} / ${entered})`);
+      await sleep(1600);
+      const cp = await page.evalJSON(`__atlas.pointCard('governs')`);
+      if (cp) await clickAt(cp);
+      await sleep(1200);
+      const focus = await page.evalJSON(`({ f: __atlas.focused(), auto: [...document.querySelectorAll('#css3d .card3d')].filter((c) => c.style.pointerEvents === 'auto').map((c) => c.dataset.card) })`);
+      note(`building: card focus → ${JSON.stringify(focus)}`);
+      if (focus.f !== 'governs' || focus.auto.join() !== 'governs') fail(`building: focusing the governs card: ${JSON.stringify(focus)}`);
+      // a live frame refreshes the cards on the same walls: the focused card's element and the focus survive it
+      await page.evalJSON(`(globalThis.__card = document.querySelector('#css3d .card3d[data-card="governs"]'),
+        fetch('/dev/fixtures/live.json').then((r) => r.json()).then((l) => { l.t = 'live'; __atlas.inject(l); return true; }))`);
+      await sleep(300);
+      const kept = await page.evalJSON(`!!globalThis.__card && globalThis.__card === document.querySelector('#css3d .card3d[data-card="governs"]') && globalThis.__card.isConnected && __atlas.focused() === 'governs' && globalThis.__card.textContent.length > 0`);
+      note(`building: live frame → walls kept ${kept}`);
+      if (!kept) fail('building: a live frame rebuilt the walls (or lost the focus) instead of refreshing its cards in place');
+      await key('Escape', 'Escape', 27);
+      await sleep(400);
+      if (await page.evalJSON(`__atlas.focused()`)) fail('building: Escape did not unfocus the card first');
+      const adr = await page.evalJSON(`document.querySelector('.bcard[data-card="governs"] a[href^="#/L4/"]')?.getAttribute('href')`);
+      if (adr) await page.evalJSON(`(location.hash = ${JSON.stringify(adr)}.slice(1), true)`);
+      const read = await waitFor(page, `globalThis.__atlas.read?.doc && !document.getElementById('reader').hidden && document.querySelector('#reader article') && location.hash`, 6000);
+      note(`building → reader: ${read} ${JSON.stringify(await page.evalJSON('globalThis.__atlas.read'))}`);
+      await key('Escape', 'Escape', 27);
+      const backL3 = await waitFor(page, `location.hash.startsWith('#/L3/svc:agent-fleet/core') && location.hash`, 3000);
+      await key('Escape', 'Escape', 27);
+      const city = await waitFor(page, `location.hash.startsWith('#/L2/fleet') && location.hash.includes('g=control') && location.hash`, 3000);
+      note(`reader → back ${backL3} → city ${city}`);
+      if (!adr || !read || !backL3 || !city) fail(`ladder: adr ${adr}, read ${read}, back ${backL3}, city ${city}`);
       // 100 alerts: the beacons are instanced and capped, the budget holds
       await page.evalJSON(`(location.hash = '#/', true)`);
       await sleep(1200);

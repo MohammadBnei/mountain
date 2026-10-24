@@ -80,16 +80,20 @@ func TestPromPoll(t *testing.T) {
 	health, req := "Healthy", "2"
 	srv := fakeProm(t, func() map[string]string {
 		return map[string]string{
-			"info":    pvec(`{"name":"wird","health_status":"`+health+`","sync_status":"Synced"}`, "1", `{"name":"not-in-graph","health_status":"Healthy"}`, "1"),
-			"ready":   pvec(`{"node":"k8s-cp-01"}`, "1", `{"node":"k8s-nope"}`, "1"),
-			"probes":  pvec(`{"target":"guest-archive-h2"}`, "0", `{"target":"pve-bnei"}`, "1", `{"target":"guest-unknown"}`, "1"),
-			"cpu":     pvec(`{"namespace":"wird"}`, "2", `{"namespace":"kube-system"}`, "1", `{"namespace":"lost"}`, "1"),
-			"mem":     pvec(`{"namespace":"wird"}`, "1e9"),
-			"disk":    pvec(`{"namespace":"wird"}`, "5e9"),
-			"cpucap":  pvec(`{}`, "10"),
-			"memcap":  pvec(`{}`, "1e10"),
-			"diskcap": pvec(`{}`, "1e11"),
-			"req":     pvec(`{"exported_service":"wird-wird-80@kubernetescrd"}`, req),
+			"info":       pvec(`{"name":"wird","health_status":"`+health+`","sync_status":"Synced"}`, "1", `{"name":"not-in-graph","health_status":"Healthy"}`, "1"),
+			"ready":      pvec(`{"node":"k8s-cp-01"}`, "1", `{"node":"k8s-nope"}`, "1"),
+			"probes":     pvec(`{"target":"guest-archive-h2"}`, "0", `{"target":"pve-bnei"}`, "1", `{"target":"guest-unknown"}`, "1"),
+			"cpu":        pvec(`{"namespace":"wird"}`, "2", `{"namespace":"kube-system"}`, "1", `{"namespace":"lost"}`, "1"),
+			"mem":        pvec(`{"namespace":"wird"}`, "1e9"),
+			"disk":       pvec(`{"namespace":"wird"}`, "5e9"),
+			"cpucap":     pvec(`{}`, "10"),
+			"memcap":     pvec(`{}`, "1e10"),
+			"diskcap":    pvec(`{}`, "1e11"),
+			"req":        pvec(`{"exported_service":"wird-wird-80@kubernetescrd"}`, req),
+			"cpunode":    pvec(`{"namespace":"wird","node":"k8s-cp-01"}`, "1.5", `{"namespace":"wird","node":"k8s-gone"}`, "1"),
+			"memnode":    pvec(`{"namespace":"wird","node":"k8s-cp-01"}`, "1e9"),
+			"cpucapnode": pvec(`{"node":"k8s-cp-01"}`, "4"),
+			"memcapnode": pvec(`{"node":"k8s-cp-01"}`, "8e9"),
 		}
 	})
 	p := &promPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex}
@@ -114,6 +118,12 @@ func TestPromPoll(t *testing.T) {
 	}
 	if lr := s.Land.Realms; lr["apps"].CPU != 0.2 || lr["infra"].CPU != 0.1 || lr[unattrib].CPU != 0.1 || lr["apps"].Mem != 0.1 || lr["apps"].Disk != 0.05 {
 		t.Errorf("land: %+v", lr)
+	}
+	if n := s.Land.Nodes["vm:k8s-cp-01"]; n.Capacity.CPU != 4 || n.Capacity.Mem != 8e9 || n.NS["wird"].CPU != 1.5 || n.NS["wird"].Mem != 1e9 || len(s.Land.Nodes) != 1 {
+		t.Errorf("nodes: %+v", s.Land.Nodes)
+	}
+	if s.Land.NSRealm["wird"] != "apps" || s.Land.NSRealm["kube-system"] != "infra" || s.Land.NSRealm["lost"] != unattrib {
+		t.Errorf("nsRealm: %v", s.Land.NSRealm)
 	}
 	if len(l.events) != 1 || l.events[0].Kind != "health" || l.events[0].Node != "app:wird" {
 		t.Errorf("events: %+v", l.events)

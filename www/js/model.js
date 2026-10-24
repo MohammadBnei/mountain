@@ -202,3 +202,43 @@ export function sourceURL(n) {
   if (!s?.repo || !s.path) return null;
   return `https://github.com/MohammadBnei/${encodeURIComponent(s.repo)}/blob/${s.sha || 'HEAD'}/${s.path.split('/').map(encodeURIComponent).join('/')}`;
 }
+
+/**
+ * workedTiles is a realm's share of each host (Civ's worked tiles): for each host, the CPU and RAM its k8s nodes'
+ * pods of this realm use, against those nodes' allocatable. Hosts with no k8s node (or no live frame) are left out.
+ * → [{host, cpu, mem, capCpu, capMem}] sorted by host id
+ */
+export function workedTiles(m, live, realm) {
+  const nodes = live?.land?.nodes || {}, nsRealm = live?.land?.nsRealm || {}, by = new Map();
+  for (const [vm, nl] of Object.entries(nodes)) {
+    const host = (m.out.get(vm) || []).find((e) => e.kind === 'runs-on')?.to;
+    if (!host) continue;
+    const t = by.get(host) || { host, cpu: 0, mem: 0, capCpu: 0, capMem: 0 };
+    t.capCpu += nl.capacity?.cpu || 0;
+    t.capMem += nl.capacity?.mem || 0;
+    for (const [ns, u] of Object.entries(nl.ns || {})) if (nsRealm[ns] === realm) { t.cpu += u.cpu || 0; t.mem += u.mem || 0; }
+    by.set(host, t);
+  }
+  return [...by.values()].sort((a, b) => a.host.localeCompare(b.host));
+}
+
+/** The ADRs governing a whole realm: each ADR's citations summed over the realm's components, most cited first. */
+export function realmGoverns(m, realm) {
+  const sum = new Map();
+  for (const g of m.realms[realm].groups.values()) for (const id of g.members) for (const x of governs(m, id)) sum.set(x.id, (sum.get(x.id) || 0) + x.count);
+  return [...sum].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+}
+
+/** The file a node was read from, as a reader document {repo, path}, or null. */
+export function docOf(n) {
+  return n?.source?.repo && n.source.path ? { repo: n.source.repo, path: n.source.path } : null;
+}
+
+/** The ADR node a reader document is, or null. */
+export function adrOfDoc(m, doc) {
+  for (const id of m.adrs) {
+    const n = m.nodes.get(id);
+    if (n?.source?.repo === doc.repo && n.source.path === doc.path) return n;
+  }
+  return null;
+}
