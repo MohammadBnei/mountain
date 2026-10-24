@@ -31,8 +31,39 @@ GitHub cancels a job that waited more than 24 h for a runner, so these runs are 
 again by hand (Actions → the workflow → Run workflow, branch `main`).
 - [ ] **mountain** `app` on `main` (`7c8623a`, A2; A1 is inside it). It tests, builds, pushes the image and bumps
       `helm/values.yaml`'s tag, and ArgoCD rolls atlas out. One run is enough. Do step 4 first if you can.
-- [ ] **ukubi-bridge**, **agent-fleet**, **hq**: the other session's list (bridge #8–#10 and v0.1.0; the agent-fleet
-      release with migrations 19–22; hq #2).
+
+From the other session (it runs 3a, 3b and 3e; you click Run where it can't):
+- [ ] **3.0 (you, before any re-run): free the build box's disk.** agent-fleet's `build-push` failed once on "no space
+      left" before the outage. On `root@192.168.1.111`: `buildah rmi --prune`, then clear `/var/tmp/buildah-cache-0`
+      (the `build-runner-ops` skill). Check that both runner instances, agent-fleet and ukubi-bridge, show `Idle`.
+- [ ] **3a. ukubi-bridge, deploying #8, #9 and #10.** After step 6's Pigsty role and DB if `bridge` is really missing;
+      **before I2 and B1b** (B1b pins the cert into `BRIDGE_OIDC_CERT`, which only #9's code reads).
+      - Run: re-run `app.yml` on main (run 40102366773, for `914bd61`) or Run workflow on `main`. It tests, builds,
+        pushes, then `deploy` bumps `helm/values.yaml` and ArgoCD rolls it out.
+      - Check:
+        - the pod is Ready;
+        - one log line `BRIDGE_CLIENTS is ignored` (expected until I3);
+        - the API refuses every call (expected until B1b);
+        - GitHub webhook deliveries still get 2xx;
+        - the hourly retention job logs a run.
+- [ ] **3b. agent-fleet, releasing #321 and everything since 6.24.0.** Any time after 3.0; it does not depend on the
+      bridge (core logs one Info line, "bridge client unconfigured", until I2 and B1b).
+      - Run: re-run main's `docker.yml` (run 40105751702, for `32f31fe`). release-it commits the version and tag
+        (expect `6.25.0`), `build-push` builds all six images, `deploy` commits "pin images for X", ArgoCD runs core's
+        PreSync migrate Job, rolls out core, and the provisioner follows from main.
+      - Check:
+        - the migrate Job is Succeeded and `schema_migrations` reads 22, not dirty (000019–000022; 000022 drops
+          `scheduled_audits`);
+        - core is Ready and the console loads;
+        - warming one repo session reaches a PR (the golden path);
+        - the dispatcher is idle (`bridge.yaml` lists no definition).
+      - Rollback: migrate down to 21 recreates `scheduled_audits` empty; nothing reads it.
+- [ ] **3c. hq #2**: nothing to re-run (docs only, no `app/**`). Check that no hq run is left queued.
+- [ ] **3d. infra-bootstrap #365**: nothing to re-run (docs, plus one YAML comment ArgoCD applies as a no-op).
+- [ ] **3e. After 3b** (the other session, a small PR): bump infra-bootstrap's `agent-fleet` submodule to the new tag.
+- [ ] **You, any time:** revoke `UKUBI_BOT_GH_PAT` at GitHub **before 2026-10-28**, then delete it from Infisical.
+      Optional: the "now" rulesets (no delete or force-push on main, immutable agent-fleet tags, no numeric branches);
+      they never block CI.
 
 ## 4. atlas's repo token (you, before or right after the mountain build)
 - [ ] Infisical project `mountain-8c-cz`, key `MOUNTAIN_GITHUB_TOKEN`: give the token **Contents: read** and
@@ -55,7 +86,7 @@ again by hand (Actions → the workflow → Run workflow, branch `main`).
       atlas_vector, atlas_projection` in `mountaindb` before the relay image starts (`10-understanding.md` "A2 as built").
 
 ## 6. The event bridge, finished (the plan of 2026-10-23; code merged, never run)
-- [ ] **you:** the bridge's Pigsty role and database (`docs/secrets.md`: "not yet created"), from the hub
+- [ ] **you:** (before 3a) the bridge's Pigsty role and database (`docs/secrets.md`: "not yet created"), from the hub
       (`docs/runbook-k9s-ops-hub.md`): `./pgsql-user.yml -l pg-proxmox -e username=dbuser_bridge`, then
       `./pgsql-db.yml -l pg-proxmox -e dbname=bridge`. The bridge pod then goes `Ready`.
 - [ ] **I1** (me, a PR): alerts also go to the bridge. The token rides the existing `alertmanager-thot-token` Secret (a
@@ -77,7 +108,9 @@ again by hand (Actions → the workflow → Run workflow, branch `main`).
 ## 7. Still open from earlier rounds (only if not done before the outage)
 - [ ] ADR-0065's live checks (R8 deploy C1), if you never ran them: the header-forged `curl` to
       `/outpost.goauthentik.io/auth/traefik` redirects with a `redirect_uri` on mountain.bnei.dev.
-- [ ] B0 (ukubi-bridge release workflow) waits on the release App and the `release` environment.
+- [ ] B0 (ukubi-bridge's release workflow) no longer waits on the release App, deferred to Track 4 (owner,
+      2026-10-24): main pushes stay on `GITHUB_TOKEN` in push-to-main jobs, built the way agent-fleet's `docker.yml`
+      is. Code, not a cluster step.
 
 ## After all that
 A4 (Hubble metrics, the ServiceMonitor, the Alloy traces Deployment, OTEL in atlas and the bridge) needs the cluster
