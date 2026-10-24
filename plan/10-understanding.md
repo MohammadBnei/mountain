@@ -234,7 +234,20 @@ drawn red. That mismatch is drift, and often the most useful thing to see.
     the PR can't review it. The bridge ingests `check_run.completed` filtered by `app.id`, under
     `dev.bnei.process.check`, with an ADR-0060 amendment.
   - **Per-repo table:** each repo is recorded as a **gate** (a ruleset is possible) or a **signal** (a private repo on
-    GitHub Free).
+    GitHub Free). agent-kit is **public**, so it is a gate (owner, 2026-10-24). It is the laptops' supply chain, so it
+    joins the infra repos under the `process/*` rules, with gitleaks in its CI. Until `ukubi-gate` exists, only the
+    rulesets that need no checks apply.
+- **Commit trailers label commits per unit.** atlas reads them with `git interpret-trailers --parse`. They are claims,
+  never evidence: evidence stays with the ADR-0079 ledger and `ukubi-gate`.
+  - `Co-Authored-By: <agent> <noreply@bnei.dev>`, where the agent is one of:
+    - `ukubi-claude-<host>` for laptops;
+    - `ukubi-claude-cloud` for claude.ai/code;
+    - `ukubi-agent` for fleet repo pods;
+    - nothing on definition pods, whose author is already the definition's `git.identity`.
+  - `Agent-Session: <opaque id>` on fleet and cloud sessions.
+  - `Agent-Definition: <name>@<sha>` on definition pods.
+  - `Agent-Kit: <sha>` once vendored.
+  - No model ids and no URLs. mountain's own rule (no AI trailer) is unchanged until the owner says otherwise.
 - **Drift atlas shows for the process:** a merged PR with no `process/review`, and skill drift per runtime.
 - **atlas's bridge client:** `bridge-atlas` (ADR-0066 service account) subscribes to `dev.bnei.github.pull_request.`
   on `github/`, and to `dev.bnei.process.` once that lands.
