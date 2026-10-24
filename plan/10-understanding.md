@@ -324,9 +324,15 @@ What changed against the ladder table, and why:
   - Markdown is parsed in Go (goldmark) and sent as blocks and inlines, never as HTML. Raw HTML is dropped and images
     become their alt text. A link is either a doc link (relative, or a GitHub URL into a repo atlas holds) shown as a
     hash route, or an http(s) link opened elsewhere with no referrer; anything else is plain text.
-  - **Redaction** before anything leaves atlas: PEM blocks, GitHub, Slack and AWS tokens, JWTs, SCRAM and bcrypt
-    hashes, and the value of any secret-looking `key: value`. The count shows in the reader. A file atlas reads is in
-    git already, so this is a second line, not the first.
+  - **Redaction** before anything leaves atlas: PEM blocks; GitHub, Slack, AWS, Anthropic and Discord tokens; Discord
+    webhooks; JWTs; SCRAM and bcrypt hashes; URL passwords; the value of a secret-named key (`*_PASS`, `password: |`
+    block scalars, a key and its value in separate nodes or table cells); long mixed-class runs. A link whose URL
+    holds any of these is no link: its words stay, its URL never reaches the page. The count shows in the reader.
+    A file atlas reads is in git already, so this is a second line, not the first; checked over every markdown file
+    of the five repos for what it hides and what it should not.
+  - **Cost**: a document is rendered once per sha (a cache of 64), two at a time. A file shaped like goldmark's
+    quadratic inputs (a paragraph of 64 KiB, quotes nested past 32) is served as text; nesting past 24 levels comes
+    back flat. The page highlights lines up to 2000 characters.
   - The page builds everything with `textContent`; code highlighting is by class names (the CSP stays
     `style-src 'self'`). The 3D scene freezes to a still, shown in the minimap and the side column, and the light
     Office theme takes the page.

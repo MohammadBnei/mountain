@@ -227,7 +227,7 @@ async function start() {
 
   // L4: the 3D freezes to a still (the minimap), the reader takes the stage
   async function openReader() {
-    const key = `${view.doc.repo}/${view.doc.path}`;
+    const key = format(view); // the doc, and where back goes and the lens: both are drawn in the reader
     if (reading === key) return;
     reading = key;
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); // a page opened on L4: one frame drawn first
@@ -313,7 +313,7 @@ async function start() {
     model = buildModel(v);
     map.setModel(model);
     map.setLive(live);
-    mounted = { key: '', mod: mounted.mod }; // rebuilt against the new projection on render
+    mounted = { key: 'stale', mod: mounted.mod }; // rebuilt (or, at L0/L1, unmounted) against the new projection on render
     buildLabels();
     render();
   }

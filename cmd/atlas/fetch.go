@@ -51,6 +51,7 @@ type ghHeads struct {
 	body            map[string][]byte       // request -> last 200 body (a 304 replays it)
 	have            map[string]extract.Repo // repo -> the checkout on disk
 	behind          map[string]string       // repo -> a head seen behind the held one, once
+	retired         map[string]string       // repo -> the tree replaced last round, removed when the next one is (the reader may still be serving it)
 	seq             int                     // tree directories are never reused: <repo>-<sha>-<seq>
 	pauseUntil      time.Time
 }
@@ -64,7 +65,7 @@ func newGitHub(apiURL, token, dir string) (*ghHeads, error) {
 		os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
 	return &ghHeads{url: strings.TrimRight(apiURL, "/"), token: token, dir: dir, hc: &http.Client{Timeout: 5 * time.Minute},
-		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}}, nil
+		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}, retired: map[string]string{}}, nil
 }
 
 func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Repo, error) {
@@ -105,8 +106,11 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 	if err != nil {
 		return cur, err // cur (when held) is still a whole tree: round reads it, stale, rather than lose the repo
 	}
-	if ok {
-		os.RemoveAll(cur.Dir)
+	if ok { // the replaced tree goes one round later: the reader serves the last round's trees until this round ends
+		if old := g.retired[repo]; old != "" {
+			os.RemoveAll(old)
+		}
+		g.retired[repo] = cur.Dir
 	}
 	r := extract.Repo{Dir: dir, SHA: sha, Branch: branch}
 	g.have[repo] = r

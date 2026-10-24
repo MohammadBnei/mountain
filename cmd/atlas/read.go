@@ -29,6 +29,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 
 	"github.com/MohammadBnei/mountain/internal/extract"
 )
@@ -80,25 +81,53 @@ var redactions = []*regexp.Regexp{
 	regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),
 	regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`), // a JWT
 	regexp.MustCompile(`SCRAM-SHA-256\$[^\s'"]+`),
-	regexp.MustCompile(`\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}`), // bcrypt
-	// key: value / key=value where the key names a secret and the value is a literal (not a reference or a blank)
-	regexp.MustCompile(`(?i)((?:password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret)["']?\s*[:=]\s*["']?)([^\s"'{}$<>][^\s"'<>]{7,})`),
+	regexp.MustCompile(`\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}`),                                 // bcrypt
+	regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_-]{20,}`),                                       // an Anthropic key
+	regexp.MustCompile(`\b[MNO][A-Za-z0-9_-]{23,25}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}`), // a Discord bot token
+	regexp.MustCompile(`(?i)discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+`),          // a Discord webhook
 }
 
+// keyValue is key: value / key=value where the key names a secret and the value is a literal (not a reference or a
+// blank). The key stays, the value goes. secretKeys alone are the key names, also used for a key and its value in separate
+// nodes (a table row, `password`: value) and for YAML block scalars (password: |).
+const secretKeys = `(?:password|passwd|pass|pwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret|session[_-]?key|access[_-]?key|secret[_-]?key)`
+
+var (
+	keyValue   = regexp.MustCompile(`(?i)((?:\b|_)` + secretKeys + `\b["']?\s*[:=]\s*["']?)([^\s"'{}$<>][^\s"'<>]{7,})`)
+	valueAfter = regexp.MustCompile(`^(["']?\s*[:=]\s*["']?)([^\s"'{}$<>][^\s"'<>]{7,})`)    // ": value", its key in the node before
+	keyBefore  = regexp.MustCompile(`(?i)(?:^|\b|_)` + secretKeys + `["']?\s*$`)             // that node: it ends with a key name
+	keyCell    = regexp.MustCompile(`(?i)^\s*[A-Za-z0-9_.-]*(?:\b|_)` + secretKeys + `\s*$`) // a table cell holding a key name only
+	blockKey   = regexp.MustCompile(`(?i)^(\s*)[\w.-]*(?:\b|_)` + secretKeys + `["']?\s*:\s*[|>][-+0-9]*\s*$`)
+	userinfo   = regexp.MustCompile(`(://[^/\s:@]+:)([^@\s/]+)(@)`) // scheme://user:password@host
+	queryKey   = regexp.MustCompile(`(?i)^(?:[A-Za-z0-9_.-]*` + secretKeys + `|sig|key|code)$`)
+)
+
 // highEntropy matches a long run of key-like characters; it is redacted only when it mixes classes enough to be one.
-var highEntropy = regexp.MustCompile(`[A-Za-z0-9+/_=-]{32,}`)
+// The = is padding only: inside the run it would join a name to its value (PROJ=<uuid>) into one "mixed" token; and
+// no /, which would join a URL's path segments into one.
+var highEntropy = regexp.MustCompile(`[A-Za-z0-9+_-]{32,}={0,2}`)
 
 func redact(s string, n *int) string {
-	for i, re := range redactions {
-		s = re.ReplaceAllStringFunc(s, func(m string) string {
-			*n++
-			if i == len(redactions)-1 { // keep the key, hide the value
-				sub := re.FindStringSubmatch(m)
-				return sub[1] + "[redacted]"
-			}
-			return "[redacted]"
-		})
+	s = redactBlockScalars(s, n)
+	for _, re := range redactions {
+		s = re.ReplaceAllStringFunc(s, func(string) string { *n++; return "[redacted]" })
 	}
+	s = keyValue.ReplaceAllStringFunc(s, func(m string) string {
+		sub := keyValue.FindStringSubmatch(m)
+		if !literal(sub[2]) {
+			return m
+		}
+		*n++
+		return sub[1] + "[redacted]"
+	})
+	s = userinfo.ReplaceAllStringFunc(s, func(m string) string {
+		sub := userinfo.FindStringSubmatch(m)
+		if strings.HasPrefix(sub[2], "$") || strings.HasPrefix(sub[2], "{") || strings.HasPrefix(sub[2], "<") { // a reference, not a value
+			return m
+		}
+		*n++
+		return sub[1] + "[redacted]" + sub[3]
+	})
 	return highEntropy.ReplaceAllStringFunc(s, func(m string) string {
 		if !secretish(m) {
 			return m
@@ -106,6 +135,53 @@ func redact(s string, n *int) string {
 		*n++
 		return "[redacted]"
 	})
+}
+
+// literal: a value after a secret's key that reads as one, not as prose or a pointer to one: not a path (/run/…), not
+// a label ending in ":" ("token: cloudflare: failed…"), not a lower-case word ("password: infeasible to crack").
+func literal(v string) bool {
+	if strings.HasPrefix(v, "/") || strings.HasSuffix(v, ":") {
+		return false
+	}
+	for _, r := range v {
+		if r < 'a' || r > 'z' {
+			return true
+		}
+	}
+	return false
+}
+
+// redactBlockScalars hides the lines of a YAML block scalar under a secret key (password: |, then the value on the
+// lines indented below it).
+func redactBlockScalars(s string, n *int) string {
+	if !strings.ContainsAny(s, "|>") {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i := 0; i < len(lines); i++ {
+		m := blockKey.FindStringSubmatch(lines[i])
+		if m == nil {
+			continue
+		}
+		hid := false
+		for j := i + 1; j < len(lines); j++ {
+			l := lines[j]
+			if strings.TrimSpace(l) == "" {
+				continue
+			}
+			ind := len(l) - len(strings.TrimLeft(l, " \t"))
+			if ind <= len(m[1]) {
+				break
+			}
+			lines[j] = l[:ind] + "[redacted]"
+			hid = true
+			i = j
+		}
+		if hid {
+			*n++
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // secretish: upper, lower and digits all present, and no long run of one class (a path, a sha or a word list is not
@@ -127,16 +203,23 @@ func secretish(s string) bool {
 
 // ---- the files
 
-// repoSet is the checkouts the last round read (the reader's files), swapped whole by the projector.
+// repoSet is the checkouts the reader serves: each repo at the tree the latest round read it at. A round overlays
+// the repos it read; one it did not read (a failed checkout, a round cut short) keeps its last tree, which the
+// GitHub source removes only when it replaces it, one round after the reader moved on.
 type repoSet struct {
 	mu    sync.Mutex
 	repos extract.Repos
 }
 
-func (r *repoSet) set(repos extract.Repos) {
+func (r *repoSet) update(repos extract.Repos) {
 	r.mu.Lock()
-	r.repos = repos
-	r.mu.Unlock()
+	defer r.mu.Unlock()
+	if r.repos == nil {
+		r.repos = extract.Repos{}
+	}
+	for name, x := range repos {
+		r.repos[name] = x
+	}
 }
 
 func (r *repoSet) get(name string) (extract.Repo, bool) {
@@ -193,7 +276,7 @@ func langOf(p string) string {
 func render(repo, p, sha string, b []byte, inAtlas func(string) bool) Doc {
 	d := Doc{Repo: repo, Path: p, SHA: sha}
 	ext := strings.ToLower(path.Ext(p))
-	if ext != ".md" && ext != ".markdown" {
+	if ext != ".md" && ext != ".markdown" || !mdSafe(b) {
 		d.Kind, d.Lang = "text", langOf(p)
 		red := redact(string(b), &d.Redacted)
 		d.Lines = strings.Split(strings.TrimRight(red, "\n"), "\n")
@@ -207,16 +290,59 @@ func render(repo, p, sha string, b []byte, inAtlas func(string) bool) Doc {
 	return d
 }
 
+// mdSafe: the file is shaped like prose, not like the inputs goldmark parses in quadratic time (a paragraph of 64 KiB
+// or more, quotes nested more than 32 deep: 200 KB of ">" or 500 KB of "*a " cost 15 to 18 s of CPU). The largest
+// real document, infra-bootstrap's bootstrap-test-notes.md (260 KB), parses in about 0.1 s. Anything else is served
+// as text, which is still readable.
+func mdSafe(b []byte) bool {
+	para := 0
+	for _, l := range bytes.Split(b, []byte("\n")) {
+		if len(bytes.TrimSpace(l)) == 0 {
+			para = 0
+			continue
+		}
+		if para += len(l); para >= 64<<10 {
+			return false
+		}
+		depth := 0
+		for _, c := range l {
+			if c == '>' {
+				depth++
+			} else if c != ' ' && c != '\t' {
+				break
+			}
+		}
+		if depth > 32 {
+			return false
+		}
+	}
+	return true
+}
+
+// maxDepth bounds how deep the walker follows nested blocks and inlines (quotes in quotes, lists in lists, emphasis
+// in emphasis): deeper content comes back flat, as its plain text. Unbounded, a file of 512 KB of ">" overflows the
+// goroutine stack and kills atlas.
+const maxDepth = 24
+
 type mdWalker struct {
 	src     []byte
 	repo    string
 	dir     string
 	inAtlas func(string) bool
 	n       *int
+	depth   int
 }
 
 func (w *mdWalker) blocks(parent ast.Node) []Block {
 	out := []Block{}
+	if w.depth >= maxDepth {
+		if t := strings.TrimSpace(string(parent.Text(w.src))); t != "" {
+			out = append(out, Block{T: "p", In: []Inline{{T: "text", Text: w.redact(t)}}})
+		}
+		return out
+	}
+	w.depth++
+	defer func() { w.depth-- }()
 	for c := parent.FirstChild(); c != nil; c = c.NextSibling() {
 		switch x := c.(type) {
 		case *ast.Heading:
@@ -246,6 +372,12 @@ func (w *mdWalker) blocks(parent ast.Node) []Block {
 				for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
 					cells = append(cells, w.inlines(cell))
 				}
+				for i := 0; row != x.FirstChild() && i+1 < len(cells); i++ { // | PASSWORD | value |: the value's cell, when it is one bare token (not in the head row)
+					if keyCell.MatchString(plain(cells[i])) && bareValue(plain(cells[i+1])) {
+						cells[i+1] = []Inline{{T: "text", Text: "[redacted]"}}
+						*w.n++
+					}
+				}
 				t.Rows = append(t.Rows, cells)
 			}
 			out = append(out, t)
@@ -269,8 +401,23 @@ func (w *mdWalker) lines(n ast.Node) string {
 
 func (w *mdWalker) redact(s string) string { return redact(s, w.n) }
 
+// bareValue is a table cell that looks like a value rather than a description: one token of 8 or more characters,
+// a literal (above), not a reference ($VAR, {{ }}, <placeholder>) or a note (*(required)*).
+func bareValue(s string) bool {
+	s = strings.TrimSpace(s)
+	return len(s) >= 8 && !strings.ContainsAny(s, " \t") && !strings.ContainsAny(s[:1], "${<(*[`") && literal(s)
+}
+
 func (w *mdWalker) inlines(parent ast.Node) []Inline {
 	out := []Inline{}
+	if w.depth >= maxDepth {
+		if t := string(parent.Text(w.src)); t != "" {
+			out = append(out, Inline{T: "text", Text: w.redact(t)})
+		}
+		return out
+	}
+	w.depth++
+	defer func() { w.depth-- }()
 	add := func(in Inline) {
 		if in.T == "text" && len(out) > 0 && out[len(out)-1].T == "text" { // merge runs: fewer nodes, and a secret split across segments is redacted whole
 			out[len(out)-1].Text += in.Text
@@ -281,7 +428,11 @@ func (w *mdWalker) inlines(parent ast.Node) []Inline {
 	for c := parent.FirstChild(); c != nil; c = c.NextSibling() {
 		switch x := c.(type) {
 		case *ast.Text:
-			add(Inline{T: "text", Text: string(x.Value(w.src))})
+			v := x.Value(w.src)
+			if !x.IsRaw() { // what a renderer would show: \* as *, &amp; as &
+				v = util.UnescapePunctuations(util.ResolveNumericReferences(util.ResolveEntityNames(v)))
+			}
+			add(Inline{T: "text", Text: string(v)})
 			if x.HardLineBreak() {
 				add(Inline{T: "br"})
 			} else if x.SoftLineBreak() {
@@ -322,6 +473,13 @@ func (w *mdWalker) inlines(parent ast.Node) []Inline {
 	}
 	for i := range out { // redaction last, on merged runs
 		out[i] = redactInline(out[i], w.n)
+		// `password`: value or **token** = value: the key in one node, the value at the start of the next text run
+		if i > 0 && out[i].T == "text" && keyBefore.MatchString(plain(out[i-1:i])) {
+			if m := valueAfter.FindStringSubmatchIndex(out[i].Text); m != nil && literal(out[i].Text[m[4]:m[5]]) {
+				out[i].Text = out[i].Text[:m[3]] + "[redacted]" + out[i].Text[m[5]:]
+				*w.n++
+			}
+		}
 	}
 	return out
 }
@@ -343,16 +501,27 @@ func plain(in []Inline) string {
 	return b.String()
 }
 
-var ghBlob = regexp.MustCompile(`^https://github\.com/MohammadBnei/([A-Za-z0-9._-]+)/(?:blob|tree)/[^/]+/(.+)$`)
+var (
+	ghBlob = regexp.MustCompile(`^(?i:github\.com)/(?i:MohammadBnei)/([A-Za-z0-9._-]+)/(?:blob|tree)/[^/]+/(.+)$`)
+	// docPath is the character set the page's router takes in an L4 path (router.js PATH): a doc link outside it would
+	// open the map instead of the file, so it stays text.
+	docPath = regexp.MustCompile(`^[A-Za-z0-9._@+,=~ /-]+$`)
+)
 
-// link resolves a destination: external http(s) kept, in-atlas docs resolved, anything else reduced to its text.
+// link resolves a destination: external http(s) kept, in-atlas docs resolved, anything else reduced to its text. A
+// URL carrying a secret (a webhook, a token in its query, a password in its userinfo) is not a link at all: its text
+// is redacted with the rest, and an href is never redacted into something else that still points somewhere.
 func (w *mdWalker) link(dest string, in []Inline) Inline {
 	u, err := url.Parse(dest)
 	switch {
 	case err != nil:
 	case u.Scheme == "http" || u.Scheme == "https":
-		if m := ghBlob.FindStringSubmatch(dest); m != nil && w.inAtlas(m[1]) {
-			if p := cleanRel(strings.SplitN(m[2], "#", 2)[0]); p != "" {
+		if hrefSecret(u) {
+			*w.n++
+			return Inline{T: "em", In: in}
+		}
+		if m := ghBlob.FindStringSubmatch(u.Host + u.Path); m != nil && w.inAtlas(m[1]) {
+			if p := cleanRel(m[2]); p != "" && docPath.MatchString(p) {
 				return Inline{T: "link", Doc: m[1] + "/" + p, In: in}
 			}
 		}
@@ -362,11 +531,26 @@ func (w *mdWalker) link(dest string, in []Inline) Inline {
 		if !strings.HasPrefix(target, "/") {
 			target = path.Join(w.dir, target)
 		}
-		if p := cleanRel(target); p != "" {
+		if p := cleanRel(target); p != "" && docPath.MatchString(p) {
 			return Inline{T: "link", Doc: w.repo + "/" + p, In: in}
 		}
 	}
 	return Inline{T: "em", In: in} // a link atlas will not follow keeps its words
+}
+
+// hrefSecret: the URL holds something redaction would hide (userinfo, a secret-named query key, a known token shape).
+func hrefSecret(u *url.URL) bool {
+	if _, set := u.User.Password(); set {
+		return true
+	}
+	for k := range u.Query() {
+		if queryKey.MatchString(k) {
+			return true
+		}
+	}
+	var n int
+	redact(u.String(), &n)
+	return n > 0
 }
 
 // cleanRel is p as a clean repo-relative path, or "" when it would leave the repo.
@@ -410,7 +594,51 @@ func serveRead(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such file at the sha atlas holds", http.StatusNotFound)
 		return
 	}
-	d := render(repo, p, rp.SHA, b, func(name string) bool { _, ok := app.Files.get(name); return ok })
+	key := repo + "@" + rp.SHA + ":" + p
+	out, ok := reads.get(key)
+	if !ok {
+		select { // at most two renders at once: a pathological file costs seconds of CPU, once per sha (then cached)
+		case readSlots <- struct{}{}:
+		case <-r.Context().Done():
+			return
+		}
+		d := render(repo, p, rp.SHA, b, func(name string) bool { _, ok := app.Files.get(name); return ok })
+		<-readSlots
+		out = mustJSON(d)
+		reads.put(key, out)
+	}
 	h.Set("Content-Type", "application/json")
-	w.Write(mustJSON(d))
+	w.Write(out)
+}
+
+var readSlots = make(chan struct{}, 2)
+
+// reads caches rendered documents by repo, sha and path (a file at a sha never changes): the last 64, by insertion.
+var reads = &readCache{m: map[string][]byte{}}
+
+type readCache struct {
+	mu    sync.Mutex
+	m     map[string][]byte
+	order []string
+}
+
+func (c *readCache) get(k string) ([]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	b, ok := c.m[k]
+	return b, ok
+}
+
+func (c *readCache) put(k string, b []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.m[k]; ok {
+		return
+	}
+	c.m[k] = b
+	c.order = append(c.order, k)
+	if len(c.order) > 64 {
+		delete(c.m, c.order[0])
+		c.order = c.order[1:]
+	}
 }

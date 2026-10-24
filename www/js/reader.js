@@ -11,8 +11,13 @@ const KEYWORDS = new Set(('func package import return if else for range switch c
   'nil true false let function export class new await async try catch throw def from as in not and or None True False ' +
   'apiVersion kind metadata spec').split(' '));
 
+// A line longer than this is shown plain: the string pattern backtracks on an unterminated quote, quadratic in the
+// line (a 160 K line of escaped quotes took 14 s), and nobody reads a 2000-character line for its colours.
+const MAX_HIGHLIGHT = 2000;
+
 /** tokens splits a line of code into [class, text] pairs: comments, strings, numbers, keywords. Pure. */
 export function tokens(line, lang) {
+  if (line.length > MAX_HIGHLIGHT) return [['', line]];
   const out = [], hashComment = ['yaml', 'sh', 'py', 'toml', 'ini', 'docker', 'hcl'].includes(lang);
   const re = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`)|(\/\/.*$|#.*$)|\b(\d+(?:\.\d+)?)\b|\b([A-Za-z_][A-Za-z0-9_]*)\b/g;
   let last = 0, m;

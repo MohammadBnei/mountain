@@ -127,7 +127,7 @@ func serve(o Opts) error {
 			if err != nil {
 				return err
 			}
-			a.Files.set(repos)
+			a.Files.update(repos)
 		}
 	} else {
 		go a.project(ctx)

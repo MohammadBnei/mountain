@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MohammadBnei/mountain/internal/extract"
 )
@@ -87,6 +88,71 @@ func TestRender(t *testing.T) {
 	}
 }
 
+// TestRedactShapes: the shapes a first redaction pass missed (A3 review): a secret in a link's URL, a key and its
+// value in separate nodes or cells, a YAML block scalar, *_PASS keys, URL userinfo, Discord and Anthropic tokens.
+func TestRedactShapes(t *testing.T) {
+	md := "[hook](https://discord.com/api/webhooks/1234/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ) " +
+		"[q](https://x.example/cb?token=hunter2hunter2) <https://x.example/?api_key=hunter3hunter3> " +
+		"[u](https://admin:hunter4hunter4@x.example/) [fine](https://example.com/docs?page=2)\n\n" +
+		"`password`: hunter5hunter5 and **token** = hunter6hunter6, but `token`: is described below.\n\n" +
+		"| key | value | note |\n|---|---|---|\n| ARGOCD_ADMIN_PASSWORD | hunter7hunter7 | rotate yearly |\n" +
+		"| `GITHUB_TOKEN` | the CI token, from Infisical | |\n| DB_PASS | ${DB_PASS} | a reference stays |\n\n" +
+		"```yaml\npassword: |\n  hunter8hunter8\n  hunter9hunter9\nnext: 1\n```\n\n" +
+		"DB_PASS: DBUser.Wiki and postgres://dbuser_meta:DBUser.Meta@10.0.0.1:5432/meta and postgres://u:${PW}@h/db; " +
+		"MTA1MjM0NTY3ODkwMTIzNDU2Nw.GaBcDe.abcdefghijklmnopqrstuvwxyz0123 sk-ant-api03-abcdefghijklmnopqrstuvwxyz.\n"
+	d := render("infra-bootstrap", "docs/x.md", "abc", []byte(md), func(string) bool { return false })
+	all := string(mustJSON(d))
+	for _, bad := range []string{"abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ", "hunter", "DBUser.Wiki", "DBUser.Meta", "GaBcDe", "sk-ant-api03"} {
+		if strings.Contains(all, bad) {
+			t.Errorf("%q in the rendered doc: %s", bad, all)
+		}
+	}
+	for _, keep := range []string{"https://example.com/docs?page=2", "the CI token, from Infisical", "${DB_PASS}", "${PW}", "rotate yearly", "next: 1", "dbuser_meta"} {
+		if !strings.Contains(all, keep) {
+			t.Errorf("%q redacted or lost: %s", keep, all)
+		}
+	}
+	var hrefs []string
+	walkBlocks(d.Blocks, func(b Block) {
+		walkInlines(b.In, func(x Inline) {
+			if x.Href != "" {
+				hrefs = append(hrefs, x.Href)
+			}
+		})
+	})
+	if strings.Join(hrefs, " ") != "https://example.com/docs?page=2" {
+		t.Errorf("only the clean URL stays a link: %v", hrefs)
+	}
+}
+
+// TestRenderBounds: deep nesting comes back flat instead of overflowing the stack; escapes and entities read as a
+// renderer shows them; a GitHub link with a query or a lower-case owner still resolves; a path the page's router
+// would refuse stays text.
+func TestRenderBounds(t *testing.T) {
+	start := time.Now()
+	for _, bad := range []string{strings.Repeat(">", 500000) + " deep", strings.Repeat("*a ", 170000), strings.Repeat("[", 256000)} {
+		if d := render("r", "x.md", "s", []byte(bad), nil); d.Kind != "text" {
+			t.Errorf("a pathological file was parsed as markdown (%.10q…)", bad)
+		}
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Errorf("pathological files took %v", time.Since(start))
+	}
+	nested := strings.Repeat("> ", 32) + "deep\n\n" + strings.Repeat("- ", 30) + "list\n" // within mdSafe, past maxDepth
+	if b := mustJSON(render("r", "x.md", "s", []byte(nested), nil)); !strings.Contains(string(b), "deep") || !strings.Contains(string(b), "list") {
+		t.Errorf("deep nesting lost its text: %.300s", b)
+	}
+	d := render("infra-bootstrap", "docs/x.md", "abc", []byte("\\*not em\\* AT&amp;T &#65; "+
+		"[g](https://github.com/mohammadbnei/agent-fleet/blob/main/docs/a.md?plain=1#L3) [p](odd(name).md)\n"), func(r string) bool { return r == "agent-fleet" })
+	all := string(mustJSON(d))
+	if got := plain(d.Blocks[0].In); !strings.HasPrefix(got, "*not em* AT&T A ") {
+		t.Errorf("escapes and entities: %q", got)
+	}
+	if !strings.Contains(all, `"doc":"agent-fleet/docs/a.md"`) || strings.Contains(all, `"doc":"infra-bootstrap/`) {
+		t.Errorf("links: %s", all)
+	}
+}
+
 // TestRead: the endpoint reads a file of a held checkout at its sha; it refuses paths that leave the checkout,
 // symlinks, binaries and repos atlas does not hold.
 func TestRead(t *testing.T) {
@@ -101,7 +167,7 @@ func TestRead(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "bin.dat"), []byte("x\x00y"), 0o644)
 	os.WriteFile(filepath.Join(base, "outside.md"), []byte("secret"), 0o644)
 	os.Symlink(filepath.Join(base, "outside.md"), filepath.Join(dir, "link.md"))
-	a.Files.set(extract.Repos{"infra-bootstrap": {Dir: dir, SHA: "s1"}})
+	a.Files.update(extract.Repos{"infra-bootstrap": {Dir: dir, SHA: "s1"}})
 	r := serveReq("GET", "/api/read?repo=infra-bootstrap&path=docs/a.md", nil)
 	var d Doc
 	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&d) != nil || d.SHA != "s1" || d.Kind != "md" || len(d.Blocks) != 2 || r.Header.Get("Cache-Control") != "private, no-store" {

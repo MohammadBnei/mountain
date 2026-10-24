@@ -125,6 +125,8 @@ const yaml = tokens(lines[1], 'yaml');
 ok(yaml.some(([c, t]) => c === 's' && t === '"a # not a comment"') && yaml.at(-1)[0] === 'c' && yaml.at(-1)[1] === '# but this is', 'reader: a # inside a string is not a comment');
 ok(!tokens(lines[2], 'js').some(([c]) => c === 'c'), 'reader: # is no comment in js');
 ok(tokens(lines[3], 'yaml')[0][0] === 'k', 'reader: a manifest key reads as a keyword');
+const long = '"' + '\\"'.repeat(160000), t0 = Date.now(), lt = tokens(long, 'js');
+ok(Date.now() - t0 < 200 && lt.length === 1 && lt[0][1] === long, 'reader: a very long line is shown plain, at once (no quadratic backtracking)');
 
 // ---- socket: a lapsed sign-in reloads the page once (the gate's redirect, or atlas's own session ending)
 const store = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
