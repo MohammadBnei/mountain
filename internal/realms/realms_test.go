@@ -26,14 +26,15 @@ func TestEmbedded(t *testing.T) {
 
 func TestParseRefuses(t *testing.T) {
 	for name, y := range map[string]string{
-		"unknown realm": "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\ncomponents: {app:x: {realm: nope, group: g}}",
-		"no group":      "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\ncomponents: {app:x: {realm: infra}}",
-		"bad path":      "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\ncomponents: {app:x: {realm: infra, group: g, paths: [nope]}}",
-		"bad placement": "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nk8sPlacement: {n: b}",
+		"unknown realm": "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: nope, group: g}}",
+		"no group":      "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra}}",
+		"bad path":      "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g, paths: [nope]}}",
+		"bad placement": "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nk8sPlacement: {n: b}",
 		"bad pve name":  "realms: [infra]\nhosts: {a: h1}\npveNodeName: b",
 		"bad sources":   "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nsources: [mountain]",
-		"bad probe":     "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nprobes: {guest-x: vm:nope}",
-		"bad namespace": "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nnamespaces: {kube-system: nope}",
+		"no sources":    "realms: [infra]\nhosts: {a: h1}\npveNodeName: a",
+		"bad probe":     "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nprobes: {guest-x: vm:nope}",
+		"bad namespace": "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nnamespaces: {kube-system: nope}",
 	} {
 		if _, err := Parse([]byte(y)); err == nil {
 			t.Errorf("%s: parsed", name)

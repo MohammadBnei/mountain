@@ -25,6 +25,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"regexp"
@@ -211,7 +212,11 @@ func adminOnly(h http.Handler) http.Handler {
 		// Only an admin ever holds a session (a non-admin's callback ends on a refusal page, not here), so the
 		// sign-in cannot loop; a town-era cookie is not a session and signs in again.
 		if r.Method == http.MethodGet && r.URL.Path == "/" && auth != nil {
-			http.Redirect(w, r, "/auth/login?return=/", http.StatusFound)
+			ret := "/"
+			if q := "/?" + r.URL.RawQuery; r.URL.RawQuery != "" && returnRE.MatchString(q) {
+				ret = q // the page's own query (?q=low) survives the sign-in
+			}
+			http.Redirect(w, r, "/auth/login?return="+url.QueryEscape(ret), http.StatusFound)
 			return
 		}
 		http.Error(w, "platform admins only", http.StatusForbidden)
@@ -299,10 +304,11 @@ func static(www fs.FS, dev bool) http.Handler {
 			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(index))
 			return
 		}
-		key := p
-		if strings.HasSuffix(key, "/") {
-			key += "index.html"
+		if strings.HasSuffix(p, "/") { // no directory listings: the page names every file it needs
+			http.NotFound(w, r)
+			return
 		}
+		key := p
 		if e, ok := etags[key]; ok {
 			h.Set("ETag", e)
 		}

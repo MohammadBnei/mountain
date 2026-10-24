@@ -120,6 +120,10 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 			w.Header().Set("ETag", `"`+sha+`"`)
 			w.Write([]byte(sha))
 		case len(parts) == 3 && parts[1] == "compare":
+			if f.status == "error" {
+				http.Error(w, "gone", http.StatusUnprocessableEntity)
+				return
+			}
 			w.Write([]byte(`{"status":"` + f.status + `"}`))
 		case len(parts) == 3 && parts[1] == "tarball":
 			f.tarballs++
@@ -164,6 +168,21 @@ func TestGitHubHeads(t *testing.T) {
 	f.head["infra-bootstrap@main"], f.status = sha0, "behind"
 	if r4, _ := g.checkout(ctx, "infra-bootstrap", "main"); r4.SHA != sha2 || f.tarballs != 2 {
 		t.Errorf("a head behind was taken: %+v", r4)
+	}
+	if r5, _ := g.checkout(ctx, "infra-bootstrap", "main"); r5.SHA != sha0 || f.tarballs != 3 {
+		t.Errorf("the same head behind, a second round running: a real reset, taken: %+v %d", r5, f.tarballs)
+	}
+	// a branch retargeted onto the commit already held: no download, and the held tree stays on disk (it was once
+	// deleted as "the old tree", being the same path)
+	f.head["infra-bootstrap@dev"] = sha0
+	r6, err := g.checkout(ctx, "infra-bootstrap", "dev")
+	if _, serr := os.Stat(filepath.Join(r6.Dir, "README.md")); err != nil || r6.Branch != "dev" || f.tarballs != 3 || serr != nil {
+		t.Errorf("retargeted: %+v %v %d %v", r6, err, f.tarballs, serr)
+	}
+	f.status = "error"
+	f.head["infra-bootstrap@dev"] = sha1
+	if r7, _ := g.checkout(ctx, "infra-bootstrap", "dev"); r7.SHA != sha1 {
+		t.Errorf("an unreadable compare pinned the old head: %+v", r7)
 	}
 	if _, err := g.checkout(ctx, "agent-fleet", "main"); err != errNoAccess {
 		t.Errorf("no access: %v", err)

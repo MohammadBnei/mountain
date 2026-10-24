@@ -295,6 +295,9 @@ What changed against the table above, and why:
   `--dev` admits everyone only on a loopback address with sign-in unset (the gate, `scripts/devpod.sh`).
 - **Alert rules**: MountainSourceStale (now prom, alerts, github, projection, db), MountainTokenExpiring,
   MountainUnassigned (drift `unassigned` for 1 h). MountainUnmapped and MountainTownEmpty went with the town.
+- **Rollback** is a revert, plus, before the relay image starts again, `DROP TABLE atlas_migrations, atlas_drift,
+  atlas_edge_ver, atlas_node_ver, atlas_vector, atlas_projection` (the relay's migrations would meet a schema they
+  don't expect). The town's history is gone either way: R10 drops it on purpose.
 
 **Human-gated** (queued; the cluster and build runner are down):
 - create the App, its key and its installs;

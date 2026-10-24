@@ -77,7 +77,7 @@ func TestPromPoll(t *testing.T) {
 	rl, _ := realms.Load()
 	hub := NewHub(false, func() []byte { return nil })
 	l := newLive(rl, hub)
-	health, req := "Healthy", "100"
+	health, req := "Healthy", "2"
 	srv := fakeProm(t, func() map[string]string {
 		return map[string]string{
 			"info":    pvec(`{"name":"wird","health_status":"`+health+`","sync_status":"Synced"}`, "1", `{"name":"not-in-graph","health_status":"Healthy"}`, "1"),
@@ -92,13 +92,13 @@ func TestPromPoll(t *testing.T) {
 			"req":     pvec(`{"exported_service":"wird-wird-80@kubernetescrd"}`, req),
 		}
 	})
-	p := &promPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex, ctr: map[string]counter{}}
+	p := &promPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex}
 	ctx := context.Background()
 	t0 := time.Now()
 	if err := p.poll(ctx, t0); err != nil {
 		t.Fatal(err)
 	}
-	health, req = "Degraded", "130"
+	health = "Degraded"
 	if err := p.poll(ctx, t0.Add(15*time.Second)); err != nil {
 		t.Fatal(err)
 	}
@@ -158,5 +158,36 @@ func TestAlertPoll(t *testing.T) {
 	var f map[string]any
 	if json.Unmarshal(mustJSON(l.st), &f) != nil || f["t"] != "live" {
 		t.Errorf("frame: %v", f)
+	}
+}
+
+// TestLiveQuiet: a poll that changes nothing but the timestamp sends no frame (the page would rebuild its panel and
+// close what the reader opened); a stale source sends one frame when it goes stale and one when it recovers; an
+// empty answer is [] alerts, never null.
+func TestLiveQuiet(t *testing.T) {
+	rl, _ := realms.Load()
+	hub := NewHub(false, func() []byte { return nil })
+	c := &Client{send: make(chan []byte, 64)}
+	hub.clients[c] = struct{}{}
+	l := newLive(rl, hub)
+	for i := 0; i < 3; i++ {
+		l.update(func(s *LiveState) { s.At = int64(i + 1) })
+	}
+	if n := len(c.send); n != 1 {
+		t.Errorf("3 polls, one change: %d frames", n)
+	}
+	l.stale("prom", true)
+	l.stale("prom", true)
+	l.stale("prom", false)
+	l.stale("prom", false)
+	if n := len(c.send); n != 3 {
+		t.Errorf("stale then recovered: %d frames, want 3", n)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`[]`)) }))
+	defer srv.Close()
+	a := &amPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex, firing: map[string]AlertLive{}}
+	a.poll(context.Background(), time.Now())
+	if !strings.Contains(string(mustJSON(l.st)), `"alerts":[]`) {
+		t.Errorf("no alerts: %s", mustJSON(l.st))
 	}
 }

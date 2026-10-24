@@ -37,7 +37,7 @@ import (
 
 const (
 	ghOwner      = "MohammadBnei"
-	maxTreeBytes = 768 << 20
+	maxTreeBytes = 256 << 20 // ×5 sources + one being swapped stays under the 2 Gi cache (helm/values.yaml)
 	maxFileBytes = 8 << 20
 	maxEntries   = 200_000
 )
@@ -50,6 +50,8 @@ type ghHeads struct {
 	etag            map[string]string       // request -> ETag
 	body            map[string][]byte       // request -> last 200 body (a 304 replays it)
 	have            map[string]extract.Repo // repo -> the checkout on disk
+	behind          map[string]string       // repo -> a head seen behind the held one, once
+	seq             int                     // tree directories are never reused: <repo>-<sha>-<seq>
 	pauseUntil      time.Time
 }
 
@@ -62,7 +64,7 @@ func newGitHub(apiURL, token, dir string) (*ghHeads, error) {
 		os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
 	return &ghHeads{url: strings.TrimRight(apiURL, "/"), token: token, dir: dir, hc: &http.Client{Timeout: 5 * time.Minute},
-		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}}, nil
+		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}}, nil
 }
 
 func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Repo, error) {
@@ -75,26 +77,33 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 		return extract.Repo{}, fmt.Errorf("head of %s: not a sha", branch)
 	}
 	cur, ok := g.have[repo]
-	if ok && cur.SHA == sha && cur.Branch == branch {
+	if ok && cur.SHA == sha { // the same tree (a branch retargeted onto the same commit only changes the name)
+		cur.Branch = branch
+		g.have[repo] = cur
+		delete(g.behind, repo)
 		return cur, nil
 	}
 	if ok && cur.Branch == branch {
+		// A head behind the one held is a stale read (a lagging replica) the first time; seen again on the next
+		// round, it is a branch really reset to an older commit, and taken. A compare that fails says nothing:
+		// the head GitHub named is the truth, so it is taken.
 		switch st, err := g.compare(ctx, repo, cur.SHA, sha); {
 		case err != nil:
-			return cur, nil // keep what atlas holds; the next round asks again
-		case st == "behind":
-			log.Printf("projector: %s@%s: head %s is behind %s: ignored", repo, branch, sha[:12], cur.SHA[:12])
+			log.Printf("projector: %s@%s: compare %s...%s: %v: taking the head", repo, branch, cur.SHA[:12], sha[:12], err)
+		case st == "behind" && g.behind[repo] != sha:
+			log.Printf("projector: %s@%s: head %s is behind %s: held until the next round says so again", repo, branch, sha[:12], cur.SHA[:12])
+			g.behind[repo] = sha
 			return cur, nil
+		case st == "behind":
+			log.Printf("projector: %s@%s: reset back to %s from %s: taken", repo, branch, sha[:12], cur.SHA[:12])
 		case st == "diverged":
-			log.Printf("projector: %s@%s: %s does not descend from %s (a force-push): accepted", repo, branch, sha[:12], cur.SHA[:12])
+			log.Printf("projector: %s@%s: %s does not descend from %s (a force-push): taken", repo, branch, sha[:12], cur.SHA[:12])
 		}
 	}
+	delete(g.behind, repo)
 	dir, err := g.tree(ctx, repo, sha)
 	if err != nil {
-		if ok {
-			return cur, err
-		}
-		return extract.Repo{}, err
+		return cur, err // cur (when held) is still a whole tree: round reads it, stale, rather than lose the repo
 	}
 	if ok {
 		os.RemoveAll(cur.Dir)
@@ -132,7 +141,8 @@ func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("tarball %s: status %d", sha[:12], resp.StatusCode)
 	}
-	dir := filepath.Join(g.dir, repo+"-"+sha)
+	g.seq++
+	dir := filepath.Join(g.dir, fmt.Sprintf("%s-%s-%d", repo, sha[:12], g.seq)) // never the held tree's path
 	os.RemoveAll(dir)
 	if err := unpack(resp.Body, dir); err != nil {
 		os.RemoveAll(dir)

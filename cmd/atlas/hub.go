@@ -130,10 +130,11 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		conn.CloseNow()
 	}()
 
-	ctx, cancel := context.WithCancel(r.Context())
-	if !exp.IsZero() { // the session's end is the socket's end: a lost group stops the overlay within the TTL
-		ctx, cancel = context.WithDeadline(r.Context(), exp)
+	end := exp // the session's end is the socket's end: a lost group stops the overlay within the TTL
+	if end.IsZero() {
+		end = time.Now().Add(100 * 365 * 24 * time.Hour) // devOpen: no session
 	}
+	ctx, cancel := context.WithDeadline(r.Context(), end)
 	defer cancel()
 	go func() { // reader: drops what it reads; also what lets Ping return
 		defer cancel()

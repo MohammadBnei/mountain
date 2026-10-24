@@ -58,8 +58,11 @@ func vectorKey(repos extract.Repos) string {
 func round(ctx context.Context, src heads, rl *realms.Realms, c *roundCache) (extract.Result, extract.Repos, error) {
 	repos := extract.Repos{}
 	infra, err := src.checkout(ctx, rl.Sources[0], "main")
-	if err != nil {
+	if err != nil && infra.Dir == "" {
 		return extract.Result{}, nil, fmt.Errorf("%s: %w", rl.Sources[0], err)
+	}
+	if err != nil {
+		log.Printf("projector: %s: %v: reading the tree held at %s", rl.Sources[0], err, infra.SHA[:min(12, len(infra.SHA))])
 	}
 	repos[rl.Sources[0]] = infra
 	var branch map[string]string
@@ -92,9 +95,12 @@ func round(ctx context.Context, src heads, rl *realms.Realms, c *roundCache) (ex
 				log.Printf("projector: %s@%s: %v", name, b, err)
 				unread[name] = msg
 			}
-			continue // left out: the store refuses the round if the last projection read it
+			if r.Dir == "" {
+				continue // left out: the store refuses the round if the last projection read it
+			}
+		} else {
+			delete(unread, name)
 		}
-		delete(unread, name)
 		repos[name] = r
 	}
 	if c != nil && c.vector == vectorKey(repos) {
@@ -160,7 +166,11 @@ func (a *App) projectOnce(ctx context.Context, src heads, c *roundCache) error {
 	if err != nil {
 		return err
 	}
-	seq, changed, err := a.Graph.put(ctx, res, repos, false)
+	counted := map[string]bool{} // only the sources realms.yaml still lists count as lost when unread
+	for _, s := range a.Realms.Sources {
+		counted[s] = true
+	}
+	seq, changed, err := a.Graph.put(ctx, res, repos, counted)
 	if err != nil {
 		return err
 	}
@@ -211,12 +221,16 @@ func projectCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	g := openGraphs(ctx, *dsn)
-	defer g.close()
-	if g.pool == nil {
-		return errors.New("project: the database is unusable (logged above)")
+	g := &Graphs{}
+	if err := g.attach(ctx, *dsn); err != nil {
+		return err
 	}
-	seq, changed, err := g.put(ctx, res, repos, *drop)
+	defer g.close()
+	var counted map[string]bool // every repo the last projection read
+	if *drop {
+		counted = map[string]bool{}
+	}
+	seq, changed, err := g.put(ctx, res, repos, counted)
 	if err != nil {
 		return err
 	}

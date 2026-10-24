@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { buildModel, routes, search, fold, use, namespaces, health, alertsOn, governs, groupOf, sourceURL, label, REALMS, MAX_GROUPS } from '../js/model.js';
 import { parse, format, up } from '../js/router.js';
+import { gateLapsed } from '../js/socket.js';
 
 let failed = 0;
 const ok = (c, m) => { if (!c) { failed++; console.log(`FAIL ${m}`); } else console.log(`ok   ${m}`); };
@@ -65,6 +66,19 @@ let v = parse('#/L1/infra?g=nodes&sel=vm%3Ak8s-cp-01');
 const steps = [];
 for (let i = 0; i < 5; i++) { v = up(v); steps.push(format(v)); }
 ok(steps.join(' ') === '#/L1/infra?g=nodes #/L1/infra #/L1 #/ #/', 'router: up zooms out one step at a time, to the map');
+
+// ---- socket: a lapsed sign-in reloads the page once (the gate's redirect, or atlas's own session ending)
+const store = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
+const probe = async (res) => { let n = 0; await gateLapsed({ fetchFn: async () => res, reload: () => n++, store: store(), now: 1e12 }); return n; };
+const json = (b, status = 200) => ({ type: 'basic', status, ok: status < 300, json: async () => b });
+ok(await probe({ type: 'opaqueredirect', status: 0, ok: false }) === 1, 'socket: the gate\'s redirect reloads');
+ok(await probe(json({ enabled: true, admin: false })) === 1, 'socket: atlas\'s session ended (signed out of atlas, gate still open) reloads');
+ok(await probe(json({ enabled: true, admin: true })) === 0, 'socket: still an admin: no reload (atlas is down, not the session)');
+ok(await probe(json({ enabled: false, admin: true })) === 0 && await probe(json({}, 503)) === 0, 'socket: dev, or a 5xx: no reload');
+const st = store();
+let reloads = 0;
+for (const now of [1e12, 1e12 + 60e3]) await gateLapsed({ fetchFn: async () => json({ enabled: true, admin: false }), reload: () => reloads++, store: st, now });
+ok(reloads === 1, 'socket: at most one reload per 5 min');
 
 console.log(failed ? `${failed} FAILED` : 'all passed');
 process.exit(failed ? 1 : 0);

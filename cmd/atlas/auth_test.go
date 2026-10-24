@@ -258,6 +258,14 @@ func TestRoutes(t *testing.T) {
 			t.Errorf("anonymous %s: %d", path, r.StatusCode)
 		}
 	}
+	if r := serveReq("GET", "/?q=low", nil); r.Header.Get("Location") != "/auth/login?return=%2F%3Fq%3Dlow" {
+		t.Errorf("the page's query is lost on the way to the sign-in: %q", r.Header.Get("Location"))
+	}
+	for _, dir := range []string{"/js/", "/vendor/"} {
+		if r := serveReq("GET", dir, []*http.Cookie{admin}); r.StatusCode != http.StatusNotFound {
+			t.Errorf("admin %s: %d, want no directory listing", dir, r.StatusCode)
+		}
+	}
 	if len(open) != 5 || !open["GET /healthz"] || !open["GET /auth/me"] {
 		t.Errorf("open routes changed: %v (a new open route is a new public endpoint: add it here on purpose)", open)
 	}

@@ -4,15 +4,16 @@ package main
 // every 15 s and joined onto graph nodes by id. Real names throughout (admins only, R10 Audience row).
 //
 //   - apps: ArgoCD health and sync per Application (argocd_app_info's name is the app node's name, A1), plus the
-//     requests per second Traefik serves it (counters diffed here, per series, with reset handling).
+//     requests per second Traefik serves it (rate() per series, then summed: a counter reset is handled by rate).
 //   - ready: each k8s node's Ready condition, as its vm node. probes: blackbox targets as the node they probe.
 //   - land (the land lens): CPU, RAM and disk in use per namespace, and each realm's share of the cluster's capacity,
 //     plus an explicit "unattributed" share for namespaces no realm claims. Per pod, summed by namespace, never
 //     summed per host, so a DaemonSet or a replicated volume counts once.
 //   - alerts: what Alertmanager has firing, placed on the node (and realm) its labels name.
 //
-// Every poll sends the whole live frame (a few kB); changes also become events (the "Last event" key). A source that
-// fails keeps its last answer and is marked stale in the frame, so the page can say since when.
+// The whole live frame (a few kB) goes out when it changed, never when only its timestamp did; changes also become
+// events (the "Last event" key). A source that fails keeps its last answer and is marked stale in the frame, so the
+// page can say since when.
 
 import (
 	"cmp"
@@ -37,9 +38,8 @@ import (
 var liveEvery = 15 * time.Second
 
 const (
-	maxEvents  = 50
-	unattrib   = "unattributed"
-	staleAfter = 40 // polls (10 min) before a vanished counter series is forgotten
+	maxEvents = 50
+	unattrib  = "unattributed"
 )
 
 // LiveState is the live frame and hello.live.
@@ -102,6 +102,7 @@ type Live struct {
 	st     LiveState
 	events []Event
 	nextID int64
+	sent   string // the last frame broadcast, without its timestamp
 }
 
 func newLive(rl *realms.Realms, hub *Hub) *Live {
@@ -132,20 +133,34 @@ func (l *Live) event(kind, node, text string) {
 	l.hub.Broadcast(mustJSON(e))
 }
 
-// update changes the state under the lock, then broadcasts the whole frame.
+// update changes the state under the lock, then broadcasts the whole frame if anything but its timestamp changed
+// (a page rebuilds its panel on each frame: an unchanged one would close what the reader opened, every 15 s).
 func (l *Live) update(f func(*LiveState)) {
 	l.mu.Lock()
 	f(&l.st)
-	b := mustJSON(l.st)
+	at := l.st.At
+	l.st.At = 0
+	key := string(mustJSON(l.st))
+	l.st.At = at
+	var b []byte
+	if key != l.sent {
+		l.sent, b = key, mustJSON(l.st)
+	}
 	l.mu.Unlock()
-	l.hub.Broadcast(b)
+	l.hub.Broadcast(b) // nil = nothing
 }
 
 func (l *Live) stale(source string, failing bool) {
+	l.mu.Lock()
+	_, was := l.st.Stale[source]
+	l.mu.Unlock()
+	if was == failing {
+		return
+	}
 	l.update(func(s *LiveState) {
 		if !failing {
 			delete(s.Stale, source)
-		} else if _, ok := s.Stale[source]; !ok {
+		} else {
 			s.Stale[source] = time.Now().UnixMilli()
 		}
 	})
@@ -176,7 +191,7 @@ func (l *Live) loadFixture(file string) error {
 
 func (l *Live) start(ctx context.Context, promURL, amURL string, idx func() *GraphIndex) {
 	hc := &http.Client{Timeout: 10 * time.Second}
-	p := &promPoll{l: l, url: strings.TrimRight(promURL, "/"), hc: hc, idx: idx, ctr: map[string]counter{}}
+	p := &promPoll{l: l, url: strings.TrimRight(promURL, "/"), hc: hc, idx: idx}
 	am := &amPoll{l: l, url: strings.TrimRight(amURL, "/"), hc: hc, idx: idx, firing: map[string]AlertLive{}}
 	for name, run := range map[string]func(context.Context, time.Time) error{"prom": p.poll, "alerts": am.poll} {
 		SourceLastSuccess.Set(name, float64(time.Now().Unix())) // seeded: a source that never answers still ages into the alert
@@ -218,19 +233,11 @@ type sample struct {
 	V float64
 }
 
-type counter struct {
-	v    float64
-	poll int // the last poll that saw it
-}
-
 type promPoll struct {
-	l     *Live
-	url   string
-	hc    *http.Client
-	idx   func() *GraphIndex
-	ctr   map[string]counter
-	polls int
-	last  time.Time
+	l   *Live
+	url string
+	hc  *http.Client
+	idx func() *GraphIndex
 }
 
 // promQ: name -> PromQL.
@@ -244,7 +251,7 @@ var promQ = map[string]string{
 	"cpucap":  `sum(kube_node_status_allocatable{resource="cpu"})`,
 	"memcap":  `sum(kube_node_status_allocatable{resource="memory"})`,
 	"diskcap": `sum(kubelet_volume_stats_capacity_bytes)`,
-	"req":     `sum by (exported_service) (traefik_service_requests_total)`,
+	"req":     `sum by (exported_service) (rate(traefik_service_requests_total[2m]))`,
 }
 
 func query(ctx context.Context, hc *http.Client, base, q string) ([]sample, error) {
@@ -281,20 +288,6 @@ func query(ctx context.Context, hc *http.Client, base, q string) ([]sample, erro
 	return s, nil
 }
 
-// diff is the counter's increase since the last poll: a reset (the value went down) counts the new value; a series
-// first seen is a baseline.
-func (p *promPoll) diff(k string, v float64) (float64, bool) {
-	last, ok := p.ctr[k]
-	p.ctr[k] = counter{v, p.polls}
-	switch {
-	case !ok:
-		return 0, false
-	case v < last.v:
-		return v, true
-	}
-	return v - last.v, true
-}
-
 func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	r := map[string][]sample{}
 	for name, q := range promQ {
@@ -324,22 +317,17 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 		}
 	}
 	// Traefik: requests per second per Application, from the exported service "<namespace>-<service>-<port>@<provider>"
-	dt := now.Sub(p.last).Seconds()
 	for _, s := range r["req"] {
-		d, ok := p.diff("req/"+s.L["exported_service"], s.V)
-		if id := appOfService(idx, s.L["exported_service"]); ok && id != "" && dt > 0 {
+		if id := appOfService(idx, s.L["exported_service"]); id != "" {
 			a := apps[id]
-			a.RPS += math.Round(d/dt*100) / 100
+			a.RPS += s.V
 			apps[id] = a
 		}
 	}
-	for k, c := range p.ctr {
-		if p.polls-c.poll >= staleAfter {
-			delete(p.ctr, k)
-		}
+	for id, a := range apps {
+		a.RPS = math.Round(a.RPS*100) / 100
+		apps[id] = a
 	}
-	p.polls++
-	p.last = now
 
 	ready := map[string]bool{}
 	for _, s := range r["ready"] {
@@ -511,7 +499,7 @@ func (a *amPoll) poll(ctx context.Context, now time.Time) error {
 	if a.warm { // the first answer is the state, not a burst of events
 		for _, fp := range slices.Sorted(maps.Keys(a.firing)) {
 			if _, ok := cur[fp]; !ok {
-				a.l.event("alert.resolve", a.firing[fp].Node, a.firing[fp].Name+" resolved")
+				a.l.event("alert.resolve", a.firing[fp].Node, a.firing[fp].Name+" no longer firing (resolved or silenced)")
 			}
 		}
 		for _, fp := range slices.Sorted(maps.Keys(cur)) {
@@ -521,9 +509,9 @@ func (a *amPoll) poll(ctx context.Context, now time.Time) error {
 		}
 	}
 	a.firing, a.warm = cur, true
-	list := slices.SortedFunc(maps.Values(cur), func(x, y AlertLive) int {
+	list := append([]AlertLive{}, slices.SortedFunc(maps.Values(cur), func(x, y AlertLive) int {
 		return cmp.Or(cmp.Compare(x.StartsAt, y.StartsAt), strings.Compare(x.FP, y.FP))
-	})
+	})...) // [] when nothing fires, never null
 	a.l.update(func(s *LiveState) { s.Alerts = list })
 	return nil
 }

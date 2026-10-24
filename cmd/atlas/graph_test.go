@@ -116,16 +116,16 @@ func TestDBAtlasProject(t *testing.T) {
 	e := graph.Edge{From: "app:a", To: "app:b", Kind: graph.EdgeGit, Origin: graph.Declared}
 	repos := extract.Repos{"infra-bootstrap": {SHA: strings.Repeat("1", 40)}}
 	r1 := atlasResult([]graph.Node{n("app:a", "1", "s1"), n("app:b", "1", "s1")}, []graph.Edge{e})
-	seq1, changed, err := projectGraph(ctx, pool, r1, repos, false)
+	seq1, changed, err := projectGraph(ctx, pool, r1, repos, nil)
 	if err != nil || !changed || seq1 == 0 {
 		t.Fatalf("first: %d %v %v", seq1, changed, err)
 	}
-	if seq, changed, err := projectGraph(ctx, pool, r1, repos, false); err != nil || changed || seq != seq1 {
+	if seq, changed, err := projectGraph(ctx, pool, r1, repos, nil); err != nil || changed || seq != seq1 {
 		t.Fatalf("same again: %d %v %v", seq, changed, err)
 	}
 	repos2 := extract.Repos{"infra-bootstrap": {SHA: strings.Repeat("2", 40)}}
 	r1b := atlasResult([]graph.Node{n("app:a", "1", "s2"), n("app:b", "1", "s2")}, []graph.Edge{e})
-	seq2, changed, err := projectGraph(ctx, pool, r1b, repos2, false)
+	seq2, changed, err := projectGraph(ctx, pool, r1b, repos2, nil)
 	if err != nil || !changed || seq2 <= seq1 {
 		t.Fatalf("new sha: %d %v %v", seq2, changed, err)
 	}
@@ -134,7 +134,7 @@ func TestDBAtlasProject(t *testing.T) {
 	}
 	r3 := atlasResult([]graph.Node{n("app:b", "2", "s3"), n("app:c", "1", "s3")}, nil,
 		graph.Drift{Kind: graph.DriftMirror, Subject: "app:c", Detail: "d"})
-	seq3, changed, err := projectGraph(ctx, pool, r3, repos2, false)
+	seq3, changed, err := projectGraph(ctx, pool, r3, repos2, nil)
 	if err != nil || !changed {
 		t.Fatalf("change: %d %v %v", seq3, changed, err)
 	}
@@ -145,7 +145,7 @@ func TestDBAtlasProject(t *testing.T) {
 		t.Errorf("edge not closed: %d", c)
 	}
 	r4 := atlasResult([]graph.Node{n("app:b", "2", "s3")}, nil)
-	if _, _, err := projectGraph(ctx, pool, r4, extract.Repos{"other": {SHA: "o"}}, false); !errors.Is(err, errLostRepos) {
+	if _, _, err := projectGraph(ctx, pool, r4, extract.Repos{"other": {SHA: "o"}}, nil); !errors.Is(err, errLostRepos) {
 		t.Fatalf("a lost repo: %v", err)
 	}
 	if _, err := pool.Exec(ctx, "DELETE FROM atlas_projection WHERE seq = $1", seq1); err == nil {
@@ -177,22 +177,26 @@ func TestGraphsMemory(t *testing.T) {
 	ctx := context.Background()
 	repos := extract.Repos{"infra-bootstrap": {SHA: "s1"}}
 	res := atlasResult([]graph.Node{n("app:a", "1", "s1")}, nil)
-	if seq, changed, err := a.Graph.put(ctx, res, repos, false); seq != 1 || !changed || err != nil {
+	if seq, changed, err := a.Graph.put(ctx, res, repos, nil); seq != 1 || !changed || err != nil {
 		t.Fatalf("first: %d %v %v", seq, changed, err)
 	}
-	if seq, changed, err := a.Graph.put(ctx, res, repos, false); seq != 1 || changed || err != nil {
+	if seq, changed, err := a.Graph.put(ctx, res, repos, nil); seq != 1 || changed || err != nil {
 		t.Fatalf("same: %d %v %v", seq, changed, err)
 	}
 	res2 := atlasResult([]graph.Node{n("app:a", "2", "s1")}, nil)
-	if seq, changed, err := a.Graph.put(ctx, res2, repos, false); seq != 2 || !changed || err != nil {
+	if seq, changed, err := a.Graph.put(ctx, res2, repos, nil); seq != 2 || !changed || err != nil {
 		t.Fatalf("changed: %d %v %v", seq, changed, err)
 	}
-	if _, _, err := a.Graph.put(ctx, res2, extract.Repos{}, false); !errors.Is(err, errLostRepos) {
+	if _, _, err := a.Graph.put(ctx, res2, extract.Repos{}, nil); !errors.Is(err, errLostRepos) {
 		t.Errorf("lost repo: %v", err)
 	}
+	if _, _, err := a.Graph.put(ctx, res2, extract.Repos{}, map[string]bool{"agent-fleet": true}); err != nil { // dropped from the sources
+		t.Errorf("a repo no longer a source was refused as lost: %v", err)
+	}
+	a.Graph.put(ctx, res2, repos, nil)
 	var v atlasView
 	r := serveReq("GET", "/api/graph", nil)
-	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&v) != nil || v.Seq != 2 || len(v.Nodes) != 1 || r.Header.Get("Cache-Control") != "private, no-store" {
+	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&v) != nil || v.Seq != a.Graph.Latest().Seq || len(v.Nodes) != 1 || r.Header.Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("serve: %d %+v", r.StatusCode, v)
 	}
 	if r := serveReq("GET", "/api/graph?seq=1", nil); r.StatusCode != http.StatusNotFound {
@@ -214,15 +218,15 @@ func TestDBGraphsServe(t *testing.T) {
 	mux = h
 	a.Graph = openGraphs(ctx, dsn)
 	t.Cleanup(a.Graph.close)
-	if a.Graph.pool == nil {
+	if a.Graph.db() == nil {
 		t.Fatal("no pool")
 	}
 	repos := extract.Repos{"infra-bootstrap": {SHA: "s1"}}
-	s1, _, err := a.Graph.put(ctx, atlasResult([]graph.Node{n("app:a", "1", "s1")}, nil), repos, false)
+	s1, _, err := a.Graph.put(ctx, atlasResult([]graph.Node{n("app:a", "1", "s1")}, nil), repos, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s2, _, err := a.Graph.put(ctx, atlasResult([]graph.Node{n("app:a", "2", "s1"), n("app:b", "1", "s1")}, nil), repos, false)
+	s2, _, err := a.Graph.put(ctx, atlasResult([]graph.Node{n("app:a", "2", "s1"), n("app:b", "1", "s1")}, nil), repos, nil)
 	if err != nil || a.Graph.Latest().Seq != s2 || len(a.Graph.Latest().Nodes) != 2 {
 		t.Fatalf("latest: %v %+v", err, a.Graph.Latest())
 	}
@@ -230,9 +234,23 @@ func TestDBGraphsServe(t *testing.T) {
 	if r := serveReq("GET", fmt.Sprintf("/api/graph?seq=%d", s1), nil); r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&v) != nil || len(v.Nodes) != 1 {
 		t.Fatalf("old seq: %d %+v", r.StatusCode, v)
 	}
+	// atlas project stores a newer projection behind the service's back (--drop-repos): the service's next round,
+	// unchanged against the store, must still serve the store's latest, not its own older copy
+	other := &Graphs{}
+	if err := other.attach(ctx, dsn); err != nil {
+		t.Fatal(err)
+	}
+	s3, _, err := other.put(ctx, atlasResult([]graph.Node{n("app:c", "1", "s1")}, nil), extract.Repos{"infra-bootstrap": {SHA: "s1"}}, map[string]bool{})
+	other.close()
+	if err != nil || s3 <= s2 {
+		t.Fatalf("stored behind the service: %d %v", s3, err)
+	}
+	if seq, _, err := a.Graph.put(ctx, atlasResult([]graph.Node{n("app:c", "1", "s1")}, nil), repos, nil); err != nil || seq != s3 || a.Graph.Latest().Seq != s3 {
+		t.Errorf("the service kept its own copy: put %d, latest %d, %v", seq, a.Graph.Latest().Seq, err)
+	}
 	again := openGraphs(ctx, dsn)
 	defer again.close()
-	if again.Latest() == nil || again.Latest().Seq != s2 || again.index().NSApps == nil {
+	if again.Latest() == nil || again.Latest().Seq != s3 || again.index().NSApps == nil {
 		t.Errorf("restart: %+v", again.Latest())
 	}
 }
@@ -254,11 +272,11 @@ func TestDBAtlasReal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	seq, changed, err := projectGraph(ctx, pool, res, repos, false)
+	seq, changed, err := projectGraph(ctx, pool, res, repos, nil)
 	if err != nil || !changed {
 		t.Fatalf("first: %v %v", changed, err)
 	}
-	if again, changed, err := projectGraph(ctx, pool, res, repos, false); err != nil || changed || again != seq {
+	if again, changed, err := projectGraph(ctx, pool, res, repos, nil); err != nil || changed || again != seq {
 		t.Fatalf("second run wrote: %d %v %v", again, changed, err)
 	}
 	v, err := loadGraph(ctx, pool, 0)

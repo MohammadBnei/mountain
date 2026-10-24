@@ -190,10 +190,13 @@ async function start() {
   setInterval(paintStatus, 15000);
 
   // ---- live
+  let fetching = 0;
   async function refetch(seq) {
     if (seq && seq === model.seq) return;
+    const mine = ++fetching;
     const v = await fetchGraph().catch((e) => (console.warn(e), null));
-    if (!v) return;
+    if (!v || mine !== fetching || v.seq === model.seq) return; // a later refetch owns the answer
+    if (v.seq < model.seq && !seq) return;
     model = buildModel(v);
     map.setModel(model);
     map.setLive(live);

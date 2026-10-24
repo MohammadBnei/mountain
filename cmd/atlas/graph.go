@@ -93,7 +93,10 @@ func versionHash[T graph.Node | graph.Edge](v T) string {
 // projectGraph stores res as the next projection: it closes the versions that changed or went away and opens the
 // new ones, in one transaction. When nothing changed (graph, drift, vector) it writes nothing and returns the latest
 // seq with changed=false.
-func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, repos extract.Repos, allowLoss bool) (seq int64, changed bool, err error) {
+// counted is the repos whose absence from a round is a loss (a checkout that could not be read): nil = every repo
+// the last projection read, an empty set = none (atlas project --drop-repos). A repo dropped from realms.yaml sources
+// is not in the service's set, so taking it out is a change, not a refusal.
+func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, repos extract.Repos, counted map[string]bool) (seq int64, changed bool, err error) {
 	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", atlasLock); err != nil {
 			return err
@@ -132,14 +135,7 @@ func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, r
 			}
 			// A repo the last projection read and this one can't is a missing checkout, not a system without it:
 			// storing it would close every version that repo holds, and reopen them all on the next full run.
-			var lost []string
-			for r := range lastVector {
-				if _, ok := vector[r]; !ok {
-					lost = append(lost, r)
-				}
-			}
-			if len(lost) > 0 && !allowLoss {
-				slices.Sort(lost)
+			if lost := lostRepos(lastVector, vector, counted); len(lost) > 0 {
 				return fmt.Errorf("%w: %s", errLostRepos, strings.Join(lost, ", "))
 			}
 			if same(curNodes, newNodes) && same(curEdges, newEdges) && same(lastVector, vector) && jsonEqual(lastDrift, drift) {
@@ -176,6 +172,18 @@ func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, r
 		return closeGone(ctx, tx, "atlas_edge_ver", "key", curEdges, newEdges, seq)
 	})
 	return seq, changed, err
+}
+
+// lostRepos are the repos last read that this round lacks and that count as lost, sorted.
+func lostRepos[V any](last map[string]V, now map[string]string, counted map[string]bool) []string {
+	var lost []string
+	for r := range last {
+		if _, ok := now[r]; !ok && (counted == nil || counted[r]) {
+			lost = append(lost, r)
+		}
+	}
+	slices.Sort(lost)
+	return lost
 }
 
 func current(ctx context.Context, tx pgx.Tx, q string) (map[string]string, error) {
@@ -331,15 +339,15 @@ func nonNilDrift(d []graph.Drift) []graph.Drift {
 // Graphs is the read side: the database when there is one, and always the latest projection in memory (the hello,
 // the live overlay's index and GET /api/graph without ?seq read it there).
 type Graphs struct {
-	pool *pgxpool.Pool // nil = memory-only
-
 	mu     sync.Mutex
-	latest *atlasView // nil = no projection yet
+	pool   *pgxpool.Pool // nil = memory-only (or the database not reached yet: attach keeps trying)
+	latest *atlasView    // nil = no projection yet
 	idx    *GraphIndex
 	sig    string // memory-only: the latest projection's content, to tell a change
 }
 
-// openGraphs opens dsn (empty or unusable = memory-only, logged) and loads the latest stored projection.
+// openGraphs opens dsn and loads the latest stored projection. Empty dsn = memory-only (logged). A database that
+// can't be reached or migrated is retried every 30 s in the background; until then atlas runs memory-only.
 func openGraphs(ctx context.Context, dsn string) *Graphs {
 	g := &Graphs{}
 	SourceLastSuccess.Set("db", float64(time.Now().Unix())) // memory-only ages into MountainSourceStale: the alarm for a missing secret
@@ -347,34 +355,65 @@ func openGraphs(ctx context.Context, dsn string) *Graphs {
 		log.Printf("db: DATABASE_URL unset: memory-only (the latest projection, no history)")
 		return g
 	}
-	cfg, err := pgxpool.ParseConfig(dsn)
-	if err == nil {
-		cfg.MaxConns = 4
-		g.pool, err = pgxpool.NewWithConfig(ctx, cfg)
+	if err := g.attach(ctx, dsn); err != nil {
+		log.Printf("db: %v: memory-only until it answers (retried every 30 s)", err)
+		go func() {
+			t := time.NewTicker(30 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					if g.attach(ctx, dsn) == nil {
+						log.Printf("db: attached")
+						return
+					}
+				}
+			}
+		}()
 	}
-	if err == nil {
-		err = migrate(ctx, g.pool)
-	}
-	if err != nil {
-		log.Printf("db: %v: memory-only", err)
-		if g.pool != nil {
-			g.pool.Close()
-		}
-		g.pool = nil
-		return g
-	}
-	SourceLastSuccess.Set("db", float64(time.Now().Unix()))
-	switch v, err := loadGraph(ctx, g.pool, 0); {
-	case err == nil:
-		g.set(&v)
-	case !errors.Is(err, errNoProjection):
-		log.Printf("db: load the latest projection: %v", err)
-	}
-	go g.ping(ctx)
 	return g
 }
 
-func (g *Graphs) ping(ctx context.Context) {
+// attach connects, migrates and loads the latest stored projection when memory has none.
+func (g *Graphs) attach(ctx context.Context, dsn string) error {
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return err
+	}
+	cfg.MaxConns = 4
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	if err := migrate(ctx, pool); err != nil {
+		pool.Close()
+		return err
+	}
+	SourceLastSuccess.Set("db", float64(time.Now().Unix()))
+	v, err := loadGraph(ctx, pool, 0)
+	switch {
+	case err == nil && g.Latest() == nil:
+		g.set(&v)
+	case err != nil && !errors.Is(err, errNoProjection):
+		log.Printf("db: load the latest projection: %v", err)
+	}
+	g.mu.Lock()
+	g.pool = pool
+	g.mu.Unlock()
+	go g.ping(ctx, pool)
+	return nil
+}
+
+// db is the database, nil while there is none.
+func (g *Graphs) db() *pgxpool.Pool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.pool
+}
+
+func (g *Graphs) ping(ctx context.Context, pool *pgxpool.Pool) {
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
 	for {
@@ -383,7 +422,7 @@ func (g *Graphs) ping(ctx context.Context) {
 			return
 		case <-t.C:
 			pc, cancel := context.WithTimeout(ctx, 5*time.Second)
-			if g.pool.Ping(pc) == nil {
+			if pool.Ping(pc) == nil {
 				SourceLastSuccess.Set("db", float64(time.Now().Unix()))
 			}
 			cancel()
@@ -392,8 +431,8 @@ func (g *Graphs) ping(ctx context.Context) {
 }
 
 func (g *Graphs) close() {
-	if g.pool != nil {
-		g.pool.Close()
+	if pool := g.db(); pool != nil {
+		pool.Close()
 	}
 }
 
@@ -428,29 +467,30 @@ func (g *Graphs) index() *GraphIndex {
 }
 
 // put stores res as the next projection and makes it the latest; changed=false when it is the latest already.
-func (g *Graphs) put(ctx context.Context, res extract.Result, repos extract.Repos, allowLoss bool) (int64, bool, error) {
-	if g.pool != nil {
-		seq, changed, err := projectGraph(ctx, g.pool, res, repos, allowLoss)
-		if err != nil || (!changed && g.Latest() != nil) {
+func (g *Graphs) put(ctx context.Context, res extract.Result, repos extract.Repos, counted map[string]bool) (int64, bool, error) {
+	if pool := g.db(); pool != nil {
+		seq, changed, err := projectGraph(ctx, pool, res, repos, counted)
+		if err != nil {
 			return seq, changed, err
 		}
-		v, err := loadGraph(ctx, g.pool, seq)
+		if cur := g.Latest(); !changed && cur != nil && cur.Seq == seq {
+			return seq, false, nil
+		}
+		// changed, or the store's latest is another than memory's (atlas project stored one meanwhile): load it
+		v, err := loadGraph(ctx, pool, seq)
 		if err != nil {
 			return seq, changed, err
 		}
 		g.set(&v)
-		return seq, changed, nil
+		return seq, true, nil
 	}
 	cur := g.Latest()
-	if cur != nil && !allowLoss {
-		var lost []string
-		for r := range cur.Vector {
-			if _, ok := repos[r]; !ok {
-				lost = append(lost, r)
-			}
+	if cur != nil {
+		now := map[string]string{}
+		for r := range repos {
+			now[r] = ""
 		}
-		if len(lost) > 0 {
-			slices.Sort(lost)
+		if lost := lostRepos(cur.Vector, now, counted); len(lost) > 0 {
 			return cur.Seq, false, fmt.Errorf("%w: %s", errLostRepos, strings.Join(lost, ", "))
 		}
 	}
@@ -545,12 +585,12 @@ func serveGraph(w http.ResponseWriter, r *http.Request) {
 	case seq == 0:
 		http.Error(w, errNoProjection.Error(), http.StatusNotFound)
 		return
-	case g.pool == nil:
+	case g.db() == nil:
 		http.Error(w, "atlas: no history without a database", http.StatusNotFound)
 		return
 	default:
 		var err error
-		v, err = loadGraph(r.Context(), g.pool, seq)
+		v, err = loadGraph(r.Context(), g.db(), seq)
 		switch {
 		case errors.Is(err, errNoProjection):
 			http.Error(w, err.Error(), http.StatusNotFound)

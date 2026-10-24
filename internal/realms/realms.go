@@ -72,7 +72,7 @@ func Parse(b []byte) (*Realms, error) {
 			return nil, fmt.Errorf("realms.yaml: k8s node %s is on %q, not a listed host", vm, h)
 		}
 	}
-	if len(r.Sources) > 0 && r.Sources[0] != "infra-bootstrap" {
+	if len(r.Sources) == 0 || r.Sources[0] != "infra-bootstrap" {
 		return nil, fmt.Errorf("realms.yaml: sources must start with infra-bootstrap (its registry names the branches)")
 	}
 	for target, id := range r.Probes {

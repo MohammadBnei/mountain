@@ -50,10 +50,18 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
   let model = null, live = null, view = { level: -1 }, islands = {}, tiles = null, tileInfo = [], buoys = null, beacons = null, beaconInfo = [];
   const pos = new Map(); // endpoint key ("realm/group", "outside/github", "realm") -> Vector3 on the tops
 
+  // clear frees what a layer built: its own geometries and materials, and each InstancedMesh's instance buffers
+  // (three frees those only on the mesh's own dispose()). The shared geometries above stay.
+  const shared = new Set([hexGeo, rimGeo, tileGeo, buoyGeo, beaconGeo, dotGeo]);
   function clear(g) {
     for (const o of [...g.children]) {
       g.remove(o);
-      o.traverse((x) => { if (x.isMesh || x.isInstancedMesh) { if (x.geometry !== hexGeo && x.geometry !== rimGeo && x.geometry !== tileGeo && x.geometry !== buoyGeo && x.geometry !== beaconGeo && x.geometry !== dotGeo) x.geometry.dispose(); (Array.isArray(x.material) ? x.material : [x.material]).forEach((mm) => mm.dispose()); } });
+      o.traverse((x) => {
+        if (!x.isMesh) return;
+        if (!shared.has(x.geometry)) x.geometry.dispose();
+        (Array.isArray(x.material) ? x.material : [x.material]).forEach((mm) => mm.dispose());
+        if (x.isInstancedMesh) x.dispose();
+      });
     }
   }
 
@@ -173,11 +181,12 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
   }
 
   // ---- L1: trade routes
-  let routeList = [];
+  let routeList = [], routeShape = '';
   function buildRoutes() {
     clear(routeLayer);
     routeList = [];
     if (!model) return;
+    routeShape = tradeRoutes(model, live).map((r) => `${r.key}:${r.observed ? Math.round(8 * Math.log2(1 + r.rps)) : '-'}`).join();
     const dots = [];
     for (const r of tradeRoutes(model, live)) {
       const a = pos.get(r.from), b = pos.get(r.to);
@@ -306,7 +315,15 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
     /** the back edge of a realm's island (its label's place at L1, clear of the group labels) */
     edge(r) { const is = islands[r]; return is ? is.centre.clone().add(new THREE.Vector3(0, 0.3, -is.R * 0.95)) : null; },
     setModel(m) { build(m); aim(true); },
-    setLive(l) { live = l; paint(); if (view.level === 1) buildRoutes(); },
+    setLive(l) {
+      live = l;
+      // the routes are rebuilt only when their shape changed (which are measured, how wide): a live frame that
+      // moves a number by a hair repaints, never reallocates
+      const shape = model ? tradeRoutes(model, live).map((r) => `${r.key}:${r.observed ? Math.round(8 * Math.log2(1 + r.rps)) : '-'}`).join() : '';
+      const rebuild = view.level === 1 && shape !== routeShape;
+      routeShape = shape;
+      if (rebuild) buildRoutes(); else paint();
+    },
     setView(v) {
       const levelChanged = v.level !== view.level, moved = v.realm !== view.realm || levelChanged;
       view = v;
