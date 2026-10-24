@@ -9,7 +9,7 @@
 
 :root {
   --surface: #1c1814; --raised: #25201b; --sunken: #14110e; --line: #3a3129; --line-strong: #7a6a57;
-  --ink: #f2e9dc; --muted: #b9a990; --subtle: #988870; --accent: #e3bb7c; --accent-bg: #3a2c18;
+  --ink: #f2e9dc; --muted: #b9a990; --subtle: #988870; --accent: #e3bb7c; --accent-bg: #3a2c18; --ochre: #d4a45e; --on-ochre: #1c1814;
   --danger: #ec8a72; --warning: #ff8a1f; --ok: #7cc4bf; --focus: #8ec0ef;
   --apps: #ffd83a; --identity: #9a8a72; --fleet: #ff7a2e; --events: #9a8a72; --platform: #3fa2ff; --data: #1ff2dc; --infra: #b4ff3c;
   --sans: "Readex Pro", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
@@ -104,6 +104,62 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 #status { position: fixed; inset: auto 0 0 0; height: 28px; margin: 0; padding: 2px 24px; background: var(--sunken); border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 24px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* L2 and L3 labels */
+.lbl.district { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: rgba(20, 17, 14, .7); }
+.lbl.bld { font-size: 12px; background: rgba(20, 17, 14, .6); }
+.lbl.tower b { font-size: 17px; }
+
+/* panel extras */
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+a.primary { display: inline-block; padding: 6px 14px; border-radius: 3px; background: var(--ochre); color: var(--on-ochre); text-decoration: none; font-weight: 500; }
+a.primary:hover { color: var(--on-ochre); filter: brightness(1.08); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips a { padding: 2px 8px; border: 1px solid var(--line-strong); border-radius: 2px; font: 500 12px/20px var(--mono); text-decoration: none; }
+.cardnav { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.cardnav button { min-height: 32px; }
+
+/* L3 cards: on the walls (CSS3D) and flat in the panel */
+#css3d { position: absolute; inset: 0; pointer-events: none; }
+.bcard { box-sizing: border-box; padding: 12px 16px; margin: 8px 0; background: var(--raised); border: 1px solid var(--line); border-radius: 4px; font-size: 13px; line-height: 20px; }
+.bcard h3 { margin: 0 0 4px; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.bcard p { margin: 2px 0; }
+.bcard dl { display: grid; grid-template-columns: max-content 1fr; gap: 0 10px; margin: 4px 0; }
+.bcard dt { color: var(--subtle); }
+.bcard dd { margin: 0; word-break: break-all; }
+.bcard li.critical b { color: var(--danger); } .bcard li.warning b { color: var(--warning); }
+.card3d { width: 300px; max-height: 260px; overflow: hidden; margin: 0; background: rgba(37, 32, 27, .94); }
+.card3d.focused { border-color: var(--accent); overflow: auto; }
+.card3d a { color: var(--accent); }
+
+/* L4: the reader, Office by day (the styleboard's light page): the 3D is frozen behind it, its still in the minimap */
+#reader { position: absolute; inset: 0; z-index: 2; overflow: auto; padding: 32px; background: #f5eee2; color: #2c2219; }
+body.reading #panel, body.reading #labels, body.reading #css3d { display: none; }
+body.reading #minimap { z-index: 3; left: auto; right: 24px; bottom: auto; top: 24px; width: 240px; height: 160px; }
+#minimap img { width: 100%; height: 100%; object-fit: cover; border-radius: 2px; }
+.reader { display: flex; gap: 32px; max-width: 1200px; margin: 0 auto; }
+.reader article { flex: 1 1 720px; max-width: 760px; min-width: 0; font-size: 16px; line-height: 26px; }
+.reader aside { flex: 0 0 240px; padding-top: 184px; display: flex; flex-direction: column; gap: 12px; font-size: 13px; line-height: 20px; }
+.reader aside .still { display: none; }
+.reader a { color: #84561c; }
+.reader a:hover { color: #2c2219; }
+.reader .where { color: #64533f; margin: 0 0 16px; }
+.reader h1 { font-size: 30px; line-height: 36px; margin: 8px 0 16px; letter-spacing: -.01em; }
+.reader h2 { font-size: 22px; line-height: 28px; margin: 28px 0 8px; }
+.reader h3, .reader h4 { font-size: 17px; line-height: 24px; margin: 20px 0 6px; }
+.reader aside h3 { font-size: 11px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: #64533f; margin: 0; }
+.reader p, .reader li { margin: 8px 0; }
+.reader code { font: 13px/20px var(--mono); background: #ebe1d0; padding: 1px 4px; border-radius: 2px; }
+.reader pre.code { background: #ebe1d0; border-radius: 4px; padding: 12px 16px; overflow: auto; font: 13px/20px var(--mono); }
+.reader pre.code code { background: none; padding: 0; }
+.reader blockquote { margin: 12px 0; padding: 4px 16px; border-left: 3px solid #c4904a; color: #4d3f30; }
+.reader .tablewrap { overflow: auto; }
+.reader table { border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+.reader th, .reader td { border: 1px solid #dccdb6; padding: 4px 10px; text-align: left; vertical-align: top; }
+.reader .meta, .reader .faint { color: #64533f; }
+.reader .list li { border-color: #dccdb6; }
+.reader a.back { display: inline-block; padding: 8px 16px; border: 1px solid #8f7c63; border-radius: 3px; color: #2c2219; text-decoration: none; }
+.t-k { color: #84561c; font-weight: 600; } .t-s { color: #2f6b6b; } .t-c { color: #7d6a54; font-style: italic; } .t-n { color: #6a5a9a; }
+
 /* phones: the panel is a sheet under the map, the bar wraps */
 @media (max-width: 720px) {
   #top { padding: 8px 16px; }
@@ -115,4 +171,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
   #stage { inset: 0 0 50% 0; }
   #panel { top: 50%; left: 0; right: 0; bottom: 0; width: auto; border-radius: 0; border-width: 1px 0 0; }
   #minimap { bottom: auto; top: 8px; left: 8px; width: 96px; height: 72px; }
+  #reader { padding: 16px; }
+  .reader { flex-direction: column; }
+  .reader aside { padding-top: 0; flex-basis: auto; }
+  body.reading #minimap { display: none; }
 }

@@ -87,7 +87,7 @@ func testApp(t *testing.T) (*App, http.Handler) {
 		t.Fatal(err)
 	}
 	www, _ := fs.Sub(mountain.WWW, "www")
-	a := &App{Realms: rl, Build: buildID(www), Graph: &Graphs{}}
+	a := &App{Realms: rl, Build: buildID(www), Graph: &Graphs{}, Files: &repoSet{}}
 	a.Hub = NewHub(false, a.hello)
 	a.Live = newLive(rl, a.Hub)
 	saved := app

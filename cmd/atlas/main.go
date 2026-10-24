@@ -28,12 +28,14 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/MohammadBnei/mountain"
+	"github.com/MohammadBnei/mountain/internal/extract"
 	"github.com/MohammadBnei/mountain/internal/realms"
 )
 
@@ -91,7 +93,8 @@ type App struct {
 	Hub    *Hub
 	Graph  *Graphs
 	Live   *Live
-	Build  string // the served www's build id (/v/<build>/); hello.build
+	Files  *repoSet // the checkouts the last round read: the reader's files (read.go)
+	Build  string   // the served www's build id (/v/<build>/); hello.build
 }
 
 var app *App // set by serve (and tests) before routes run
@@ -110,7 +113,7 @@ func serve(o Opts) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	a := &App{Opts: o, Realms: rl, Build: buildID(www)}
+	a := &App{Opts: o, Realms: rl, Build: buildID(www), Files: &repoSet{}}
 	a.Hub = NewHub(o.Dev, a.hello)
 	a.Graph = openGraphs(ctx, os.Getenv("DATABASE_URL"))
 	a.Live = newLive(rl, a.Hub)
@@ -118,6 +121,13 @@ func serve(o Opts) error {
 	if o.GraphFixture != "" {
 		if err := a.Graph.loadFixture(o.GraphFixture); err != nil {
 			return err
+		}
+		if o.Repos != "" { // dev: the reader reads these directories (checkouts or not); nothing is projected from them
+			repos, err := devRepos(o.Repos)
+			if err != nil {
+				return err
+			}
+			a.Files.set(repos)
 		}
 	} else {
 		go a.project(ctx)
@@ -182,6 +192,7 @@ func routeTable(a *App, www fs.FS) []route {
 		{"GET /auth/me", true, http.HandlerFunc(me)},
 		{"GET /ws", false, a.Hub},
 		{"GET /api/graph", false, http.HandlerFunc(serveGraph)},
+		{"GET /api/read", false, http.HandlerFunc(serveRead)},
 		{"GET /", false, static(www, a.Opts.Dev)},
 	}
 }
@@ -319,4 +330,26 @@ func static(www fs.FS, dev bool) http.Handler {
 		}
 		files.ServeHTTP(w, r)
 	})
+}
+
+// devRepos is every directory under dir as a repo for the reader (--dev with a graph fixture): a git checkout at its
+// HEAD, any other directory at a zero sha (the gate's fixture repos are plain directories).
+func devRepos(dir string) (extract.Repos, error) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	out := extract.Repos{}
+	for _, e := range ents {
+		if !e.IsDir() {
+			continue
+		}
+		root := filepath.Join(dir, e.Name())
+		sha, branch, err := extract.Head(root)
+		if err != nil {
+			sha, branch = strings.Repeat("0", 40), ""
+		}
+		out[e.Name()] = extract.Repo{Dir: root, SHA: sha, Branch: branch}
+	}
+	return out, nil
 }

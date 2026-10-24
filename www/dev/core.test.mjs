@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-// Unit tests for the page's pure modules (model.js, router.js) over the real fixture graph. Node >= 22, no deps.
+// Unit tests for the page's pure modules (model.js, router.js, geometry.js, reader.js's highlighter) over the real
+// fixture graph. Node >= 22, no deps.
 import { readFileSync } from 'node:fs';
-import { buildModel, routes, search, fold, use, namespaces, health, alertsOn, governs, groupOf, sourceURL, label, REALMS, MAX_GROUPS } from '../js/model.js';
+import { buildModel, routes, search, fold, use, namespaces, health, alertsOn, governs, groupOf, sourceURL, label, REALMS, MAX_GROUPS, workedTiles, realmGoverns, docOf, adrOfDoc } from '../js/model.js';
+import { layout, heightOf, cardSlots, MAX_CARDS } from '../js/geometry.js';
+import { tokens } from '../js/reader.js';
 import { parse, format, up } from '../js/router.js';
 import { gateLapsed } from '../js/socket.js';
 
@@ -66,6 +69,62 @@ let v = parse('#/L1/infra?g=nodes&sel=vm%3Ak8s-cp-01');
 const steps = [];
 for (let i = 0; i < 5; i++) { v = up(v); steps.push(format(v)); }
 ok(steps.join(' ') === '#/L1/infra?g=nodes #/L1/infra #/L1 #/ #/', 'router: up zooms out one step at a time, to the map');
+
+// ---- router, L2..L4
+for (const h of ['#/L2/fleet', '#/L2/fleet?g=control&sel=svc%3Aagent-fleet%2Fcore', '#/L2/apps?lens=land', '#/L3/svc:agent-fleet/core', '#/L3/vm:k8s-cp-01?lens=land',
+  '#/L4/agent-fleet/docs/adr/0048-x.md?from=svc%3Aagent-fleet%2Fcore', '#/L4/infra-bootstrap/gitops/a%20b.yaml'])
+  ok(format(parse(h)) === h, `router: ${h} round-trips`);
+ok(parse('#/L2').level === 0 && parse('#/L2/nowhere').level === 0, 'router: a city needs a realm');
+ok(parse('#/L3/<b>').level === 0 && parse('#/L3/svc:').level === 0, 'router: a building needs a node id');
+for (const bad of ['#/L4/infra-bootstrap/../etc/passwd', '#/L4/infra-bootstrap/./x.md', '#/L4/infra-bootstrap/%2Fetc%2Fpasswd', '#/L4/a%2Fb/x.md', '#/L4/x'])
+  ok(parse(bad).level === 0, `router: ${bad} is not a document`);
+ok(parse('#/L4/infra-bootstrap//etc/passwd').doc.path === 'etc/passwd', 'router: an empty segment collapses, the path stays in the repo');
+ok(parse('#/L4/a/b.md?from=%3Cb%3E').from === null && format(parse('#/L4/a/b.md?from=javascript:x')).startsWith('#/L4/'), 'router: from is a node id, and only ever a hash route');
+const where = (id) => groupOf(m, id);
+v = parse('#/L4/agent-fleet/docs/adr/0048-x.md?from=svc%3Aagent-fleet%2Fcore');
+const ladder = [];
+for (let i = 0; i < 6; i++) { v = up(v, where); ladder.push(format(v)); }
+ok(ladder.join(' ') === '#/L3/svc:agent-fleet/core #/L2/fleet?g=control #/L2/fleet #/L1/fleet #/L1 #/', `router: up climbs L4 → L3 → district → city → realm → L1 → map (${ladder.join(' ')})`);
+ok(format(up(parse('#/L4/a/b.md'), where)) === '#/' && format(up(parse('#/L3/svc:nowhere/x'), where)) === '#/', 'router: no from, or no city: back to the map');
+ok(format(up(parse('#/L4/a/b.md?lens=land'), where)) === '#/?lens=land', 'router: up keeps the lens');
+
+// ---- geometry: L2's city plan, L3's wall cards
+const groups = [...m.realms.fleet.groups.values()], plan = layout(groups);
+const blds = plan.plots.flatMap((p) => p.buildings);
+ok(blds.length === groups.reduce((s, x) => s + x.members.length, 0), 'city: every part is one building');
+ok(plan.plots.every((p) => p.buildings.every((b) => b.x > p.x && b.x < p.x + p.w && b.z > p.z && b.z < p.z + p.d)), 'city: a building stands inside its district');
+ok(plan.plots.every((p, i) => plan.plots.every((q, j) => i === j || p.x + p.w <= q.x || q.x + q.w <= p.x || p.z + p.d <= q.z || q.z + q.d <= p.z)), 'city: districts never overlap');
+ok(new Set(blds.map((b) => `${b.x},${b.z}`)).size === blds.length, 'city: no two buildings on one spot');
+const cx = plan.plots.reduce((s, p) => Math.min(s, p.x), Infinity) + plan.width / 2, cz = plan.plots.reduce((s, p) => Math.min(s, p.z), Infinity) + plan.depth / 2;
+ok(Math.abs(cx) < 1e-9 && Math.abs(cz) < 1e-9, 'city: centred on the origin');
+ok(layout([]).plots.length === 0, 'city: no groups, no districts');
+ok(heightOf(0) === 0.5 && heightOf(3) > heightOf(1) && heightOf(1023) === 6, 'city: height grows with citations, by log');
+for (let n = 1; n <= MAX_CARDS; n++) {
+  const s = cardSlots(n), ang = s.map((x) => Math.atan2(x.z, x.x));
+  const gap = Math.min(...ang.flatMap((a, i) => ang.slice(i + 1).map((b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))))));
+  ok(s.length === n && (n === 1 || gap >= Math.PI / 4.5 - 1e-9) && s.every((x) => Math.abs(Math.hypot(x.x, x.z) - 3.4) < 1e-9), `building: ${n} cards on the ring, ≥ 40° apart`);
+}
+ok(Math.abs(cardSlots(1)[0].x) < 1e-9 && cardSlots(1)[0].z > 0, 'building: one card faces the default camera');
+
+// ---- L2's panel joins: worked tiles (where a realm's work runs), what governs a realm, a node's document
+const tiles = workedTiles(m, live, 'fleet');
+ok(tiles.length > 0 && tiles.every((t) => t.host.startsWith('host:') && t.capCpu > 0 && t.cpu <= t.capCpu), 'worked tiles: a realm\'s use, per PVE host, within its capacity');
+ok(workedTiles(m, null, 'fleet').length === 0 && workedTiles(m, { land: {} }, 'fleet').length === 0, 'worked tiles: no live frame, no tiles');
+const rg = realmGoverns(m, 'fleet');
+ok(rg.length > 0 && rg.every((x, i) => i === 0 || rg[i - 1].count >= x.count) && rg.every((x) => m.nodes.get(x.id)?.kind === 'adr'), 'realm governs: its ADRs, most cited first');
+const adr = m.nodes.get('adr:agent-fleet/0048');
+ok(adrOfDoc(m, docOf(adr)) === adr && adrOfDoc(m, { repo: 'agent-fleet', path: 'README.md' }) === null && docOf({ source: { repo: 'x', path: '' } }) === null, 'docOf / adrOfDoc: a node\'s file and back');
+
+// ---- the reader's highlighter: classes only, and the text survives exactly
+const lines = ['func main() { return 42 } // done', 'name: "a # not a comment" # but this is', "const x = 'y'; # hash in js", 'apiVersion: v1', ''];
+for (const [line, lang] of [[lines[0], 'go'], [lines[1], 'yaml'], [lines[2], 'js'], [lines[3], 'yaml'], [lines[4], 'go']])
+  ok(tokens(line, lang).map(([, t]) => t).join('') === line, `reader: ${JSON.stringify(line)} survives tokenising`);
+const go = tokens(lines[0], 'go');
+ok(go.some(([c, t]) => c === 'k' && t === 'func') && go.some(([c, t]) => c === 'n' && t === '42') && go.some(([c, t]) => c === 'c' && t === '// done'), 'reader: keywords, numbers, comments');
+const yaml = tokens(lines[1], 'yaml');
+ok(yaml.some(([c, t]) => c === 's' && t === '"a # not a comment"') && yaml.at(-1)[0] === 'c' && yaml.at(-1)[1] === '# but this is', 'reader: a # inside a string is not a comment');
+ok(!tokens(lines[2], 'js').some(([c]) => c === 'c'), 'reader: # is no comment in js');
+ok(tokens(lines[3], 'yaml')[0][0] === 'k', 'reader: a manifest key reads as a keyword');
 
 // ---- socket: a lapsed sign-in reloads the page once (the gate's redirect, or atlas's own session ending)
 const store = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };

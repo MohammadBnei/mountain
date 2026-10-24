@@ -38,5 +38,10 @@
   "bytes": 4123,
   "sha256": "6c660e1682721267f673ecf4cf2cac4ac4972dc49e43474ea8b269fc98fca55f",
   "source": "pi-lab compose/www/vendor/examples/jsm/utils/SkeletonUtils.js (three@0.186.1, esbuild-minified; R7 town)"
+ },
+ "examples/jsm/renderers/CSS3DRenderer.js": {
+  "bytes": 11126,
+  "sha256": "cd1f6bfaff0e2efa8a95b8cca6e96b0eea957d6a6057d875de8bab720b49057b",
+  "source": "npm three@0.186.1 (registry tarball), examples/jsm/renderers/CSS3DRenderer.js, unmodified (R10 A3 L3 cards)"
  }
 }

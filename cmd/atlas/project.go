@@ -159,6 +159,9 @@ func (a *App) project(ctx context.Context) {
 
 func (a *App) projectOnce(ctx context.Context, src heads, c *roundCache) error {
 	res, repos, err := round(ctx, src, a.Realms, c)
+	if repos != nil {
+		a.Files.set(repos) // what the reader serves: the trees this round read, at their shas
+	}
 	if errors.Is(err, errUnchanged) {
 		SourceLastSuccess.Set("projection", float64(time.Now().Unix()))
 		return nil

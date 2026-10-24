@@ -1,12 +1,17 @@
 // The 3D map (plan/10 "The ladder", L0 and L1): the seven realms as hex islands, each realm's groups as tiles on it,
-// the outside at the rim, and at L1 the trade routes between groups. One scene; the L1 route layer is built on entry
-// and disposed on exit, so each level holds the draw budget alone (www/dev/gate.mjs).
+// the outside at the rim, and at L1 the trade routes between groups. The L1 route layer is built on entry and
+// disposed on exit, so each level holds the draw budget alone (www/dev/gate.mjs).
+//
+// It is also the stage the deeper levels mount on (mount()): one renderer, camera, controls and loop for every level.
+// A mounted level (city.js, building.js) brings its own scene, and a CSS3D scene for L3's cards; only one level's
+// scene is ever drawn.
 //
 // Everything drawn comes from the model and the live frame: an island's size from its component count, a tile's
 // height from its group's, a route's width from observed traffic (dashed when nothing measured it), a beacon from a
 // firing alert. The land lens recolours tops by their share of cluster capacity; nothing moves.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 import { REALMS, REALM, OUTSIDE, routes as tradeRoutes, use, namespaces, health } from './model.js';
 
 const SURFACE = new THREE.Color('#25201b'), SEA = new THREE.Color('#1c1814'), SUNK = new THREE.Color('#14110e');
@@ -37,6 +42,12 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
   const sun = new THREE.DirectionalLight(0xfff4e6, 1.6);
   sun.position.set(-6, 14, 8);
   scene.add(sun);
+  const cssRenderer = new CSS3DRenderer(); // L3's cards: its own DOM layer over the canvas, pointer-events none
+  cssRenderer.domElement.id = 'css3d';
+  cssRenderer.domElement.style.pointerEvents = 'none';
+  canvas.after(cssRenderer.domElement);
+  const emptyCSS = new THREE.Scene();
+  let active = null, frozen = false; // a mounted level (L2, L3); frozen: the reader (L4) is open, nothing renders
   const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 300);
   const controls = new OrbitControls(camera, canvas);
   Object.assign(controls, { enableDamping: true, dampingFactor: 0.08, minDistance: 5, maxDistance: 80, maxPolarAngle: 1.25, screenSpacePanning: false });
@@ -226,12 +237,17 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
   }
 
   // ---- camera
-  const goal = { target: new THREE.Vector3(), dist: 30, t: 1 }, from = { target: new THREE.Vector3(), pos: new THREE.Vector3() };
+  const goal = { target: new THREE.Vector3(), dist: 30, t: 1, dir: null }, from = { target: new THREE.Vector3(), pos: new THREE.Vector3() };
   const DIR = new THREE.Vector3(0.12, 0.92, 0.75).normalize();
   function aim(instant) {
     if (!model) return;
-    let target, dist;
-    if (view.realm && islands[view.realm]) {
+    let target, dist, dir = DIR;
+    if (active) {
+      const a = active.aim(view);
+      target = a.target;
+      dist = a.fit ? fitDistance(...a.fit) : a.dist;
+      dir = a.dir || DIR;
+    } else if (view.realm && islands[view.realm]) {
       target = islands[view.realm].centre.clone();
       dist = 6 + islands[view.realm].R * 3.2;
     } else {
@@ -240,13 +256,14 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
     }
     goal.target.copy(target);
     goal.dist = dist;
+    goal.dir = dir;
     from.target.copy(controls.target);
     from.pos.copy(camera.position);
     goal.t = instant ? 1 : 0;
-    if (instant) { controls.target.copy(target); camera.position.copy(target).addScaledVector(DIR, dist); }
+    if (instant) { controls.target.copy(target); camera.position.copy(target).addScaledVector(dir, dist); }
   }
-  function fitDistance() { // every island and buoy on screen: the widest extent over the narrower half-FOV
-    const w = 24, h = 17, vfov = (camera.fov * Math.PI) / 360, hfov = Math.atan(Math.tan(vfov) * camera.aspect * free);
+  function fitDistance(w = 24, h = 17) { // the whole extent on screen: the widest extent over the narrower half-FOV
+    const vfov = (camera.fov * Math.PI) / 360, hfov = Math.atan(Math.tan(vfov) * camera.aspect * free);
     return Math.max((h / 2) / Math.tan(vfov), (w / 2) / Math.tan(hfov)) * 1.05;
   }
 
@@ -257,6 +274,7 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (!w || !h) return;
     renderer.setSize(w, h, false);
+    cssRenderer.setSize(w, h);
     const p = Math.min(cover(), w * 0.6);
     free = (w - p) / w;
     camera.aspect = w / h;
@@ -271,6 +289,7 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
     const r = canvas.getBoundingClientRect();
     ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
+    if (active) return active.pick(ray);
     const hit = ray.intersectObjects([tiles, buoys, ...Object.values(islands).flatMap((i) => [i.top, i.rim])], false)[0];
     if (!hit) return null;
     if (hit.object === tiles) return { realm: tileInfo[hit.instanceId].realm, group: tileInfo[hit.instanceId].group };
@@ -294,12 +313,15 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
       goal.t = Math.min(1, goal.t + dt / 0.7);
       const k = goal.t * goal.t * (3 - 2 * goal.t);
       controls.target.lerpVectors(from.target, goal.target, k);
-      const end = goal.target.clone().addScaledVector(DIR, goal.dist);
+      const end = goal.target.clone().addScaledVector(goal.dir || DIR, goal.dist);
       camera.position.lerpVectors(from.pos, end, k);
     }
+    if (frozen) return;
     controls.update();
     if (beacons) beacons.position.y = 0.12 * Math.sin(now / 300); // the beacons bob: something is firing
-    renderer.render(scene, camera);
+    active?.frame(now);
+    renderer.render(active ? active.scene : scene, camera);
+    cssRenderer.render(active?.css || emptyCSS, camera);
     stats = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
     for (const f of listeners) f();
   });
@@ -315,8 +337,30 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
     /** the back edge of a realm's island (its label's place at L1, clear of the group labels) */
     edge(r) { const is = islands[r]; return is ? is.centre.clone().add(new THREE.Vector3(0, 0.3, -is.R * 0.95)) : null; },
     setModel(m) { build(m); aim(true); },
+    /** mount a deeper level (L2 city, L3 building) on the stage, or null for the map. The previous one is disposed. */
+    mount(mod, keepCamera = false) {
+      if (active && active !== mod) active.dispose();
+      active = mod;
+      if (mod) mod.paint(live, view);
+      if (!keepCamera) aim(false);
+    },
+    get active() { return active; },
+    /** re-aim the camera for the current view (a focused card, a selected building) */
+    reaim() { aim(false); },
+    /** freeze (the reader is open): stop drawing, and hand back one still of the last frame for the minimap */
+    freeze(on) {
+      if (on && !frozen) {
+        renderer.render(active ? active.scene : scene, camera);
+        const still = canvas.toDataURL('image/png');
+        frozen = true;
+        return still;
+      }
+      frozen = !!on;
+      return null;
+    },
     setLive(l) {
       live = l;
+      active?.paint(live, view);
       // the routes are rebuilt only when their shape changed (which are measured, how wide): a live frame that
       // moves a number by a hair repaints, never reallocates
       const shape = model ? tradeRoutes(model, live).map((r) => `${r.key}:${r.observed ? Math.round(8 * Math.log2(1 + r.rps)) : '-'}`).join() : '';
@@ -325,11 +369,12 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
       if (rebuild) buildRoutes(); else paint();
     },
     setView(v) {
-      const levelChanged = v.level !== view.level, moved = v.realm !== view.realm || levelChanged;
+      const levelChanged = v.level !== view.level, moved = v.realm !== view.realm || levelChanged || v.group !== view.group || v.sel !== view.sel || v.id !== view.id;
       view = v;
       if (levelChanged) { if (v.level === 1) buildRoutes(); else { clear(routeLayer); routeList = []; } }
       paint();
-      if (moved) aim(false);
+      active?.paint(live, view);
+      if (moved && v.level <= 3) aim(false);
     },
     resize,
   };
