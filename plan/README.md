@@ -99,6 +99,7 @@ every later deploy reloads such tabs by itself.
 | `08-auth.md` | Detail mode, visitor enrollment hardening, moderation |
 | `09-play.md` | Playing the town (research, parked in R10) |
 | `10-understanding.md` | atlas: the system understanding surface (R10 design) |
+| `11-cluster-return.md` | The owner's checklist for when the cluster is back (2026-10-24 outage) |
 | `adr-0056-amendment.md` | The R7 draft for infra-bootstrap, landed as ADR-0064 (R8) |
 
 ## R7 phases

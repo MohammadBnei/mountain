@@ -1,0 +1,85 @@
+# 11 · When the cluster is back (owner checklist, written 2026-10-24)
+
+The cluster has been offline since 2026-10-23 (internet outage at home, back around 2026-10-26). Code merged while it was
+down has never run. This file is the whole list of what to do when it returns, in order, with what each step should
+show. Steps marked **you** are yours (the cluster, Infisical, pigsty, authentik); the rest are mine (I write the PRs and
+check them) once you tell me the cluster is up.
+
+The other session ("Fleet and infra assessment") keeps its own list for agent-fleet and ukubi-bridge releases; its steps
+are folded in under step 3 as they arrive.
+
+## 1. The platform is up (you)
+- [ ] The 5 k8s nodes are `Ready`: `kubectl get nodes`.
+- [ ] ArgoCD: the `bootstrap` Application and every app are `Synced` and `Healthy`, or catching up.
+- [ ] Pigsty: Patroni has a leader (`pg-proxmox`), `postgres.bnei.lan:5432` answers.
+- [ ] authentik answers at https://authentik.bnei.dev.
+- [ ] The `build-runner` LXC is up and its runner instances are online (GitHub → each repo → Settings → Actions →
+      Runners: `Idle`). `build-runner-ops` skill if one is offline.
+
+## 2. The gate narrows to platform-admins (infra-bootstrap #373, ADR-0067)
+ArgoCD applies the two changed blueprint ConfigMaps on its own; authentik does not reload them by itself
+(`docs/runbook-authentik-identity.md` §9.1).
+- [ ] **you:** check the files are mounted in the worker, then restart it:
+      `ssh k9s kubectl exec -n authentik deploy/platform-authentik-worker -- find /blueprints/mounted -maxdepth 2 -name 'mountain*'`
+      then `ssh k9s kubectl rollout restart deploy/platform-authentik-worker -n authentik`.
+- [ ] **you:** the bindings: `psql -d authentik -tAc 'SELECT target_id, group_id, enabled FROM authentik_policies_policybinding'`.
+      The `mountain-visitors` rows on `mountain` and `mountain-gate` are gone; the `platform-admins` rows remain.
+- [ ] Later, your call: remove the inert invitation flow and the `mountain-visitors` group (ADR-0067 rollout step 3).
+
+## 3. Re-run the builds that queued while the runner was down
+GitHub cancels a job that waited more than 24 h for a runner, so these runs are almost certainly cancelled: start them
+again by hand (Actions → the workflow → Run workflow, branch `main`).
+- [ ] **mountain** `app` on `main` (`7c8623a`, A2; A1 is inside it). It tests, builds, pushes the image and bumps
+      `helm/values.yaml`'s tag, and ArgoCD rolls atlas out. One run is enough. Do step 4 first if you can.
+- [ ] **ukubi-bridge**, **agent-fleet**, **hq**: the other session's list (bridge #8–#10 and v0.1.0; the agent-fleet
+      release with migrations 19–22; hq #2).
+
+## 4. atlas's repo token (you, before or right after the mountain build)
+- [ ] Infisical project `mountain-8c-cz`, key `MOUNTAIN_GITHUB_TOKEN`: give the token **Contents: read** and
+      **Metadata: read** on `agent-fleet`, `ukubi-bridge` and `pi-lab` too (it already covers infra-bootstrap, mountain
+      and the app repos). Same token, edited in GitHub's fine-grained token settings; the value does not change.
+- [ ] If you replaced the token instead: update the key, then restart the pod (env is read at start):
+      `kubectl -n mountain rollout restart deploy/mountain`.
+
+## 5. atlas is live (you check, I read the logs with you)
+- [ ] ArgoCD `mountain`: `Synced`, `Healthy`; the image tag in `helm/values.yaml` is `7c8623ae0784` (or later).
+- [ ] The log: `db: applied migration 001_atlas.sql` once, then `projector: projection 1: 5 repos, … nodes`. A line
+      `projector: <repo>@main: not found (no access)` means step 4 is not done for that repo.
+- [ ] Anonymous: `curl -sI https://mountain.bnei.dev/` answers 302 to authentik.
+- [ ] Signed in as a platform admin: the map draws; the status line says `projection N, … ago`; the land lens shows
+      percentages; Trade routes shows solid (measured) routes into the apps Traefik serves; a card opens on a click.
+- [ ] Metrics (Prometheus): `mountain_source_last_success` for `prom`, `alerts`, `github`, `projection`, `db` all
+      recent; `mountain_drift{kind="unassigned"}` is 0. MountainUnassigned firing = a component realms.yaml does not
+      place: tell me, it is a one-line PR.
+- [ ] Rollback, if needed: revert #29, then `DROP TABLE atlas_migrations, atlas_drift, atlas_edge_ver, atlas_node_ver,
+      atlas_vector, atlas_projection` in `mountaindb` before the relay image starts (`10-understanding.md` "A2 as built").
+
+## 6. The event bridge, finished (the plan of 2026-10-23; code merged, never run)
+- [ ] **you:** the bridge's Pigsty role and database (`docs/secrets.md`: "not yet created"), from the hub
+      (`docs/runbook-k9s-ops-hub.md`): `./pgsql-user.yml -l pg-proxmox -e username=dbuser_bridge`, then
+      `./pgsql-db.yml -l pg-proxmox -e dbname=bridge`. The bridge pod then goes `Ready`.
+- [ ] **I1** (me, a PR): alerts also go to the bridge. The token rides the existing `alertmanager-thot-token` Secret (a
+      new Secret's missing mount would block Alertmanager and Grafana from starting); a second `webhook_configs` entry
+      in receiver `thot`, `send_resolved: true`; Grafana posts to `/webhook/grafana`. Check: one firing alert gives one
+      proposal, whichever path lands first.
+- [ ] **you:** check no `bridge-*` user exists in authentik, then create `BRIDGE_CORE_APP_PASSWORD` in Infisical.
+- [ ] **I2** (me, a PR): the authentik provider (`client_id: ukubi-bridge-api`), the `bridge-core` service account,
+      the reserved game/push accounts (no token), the reserved name prefixes in every enrollment flow, username
+      changes off. Checked first against the pinned authentik image locally, then a real token decoded live.
+- [ ] ~~M1~~ (the relay's handle check): gone with the relay; atlas has no handles. Nothing to do.
+- [ ] **B1b** (me, a PR): pin the live signing cert in the bridge, then restart core. ADR-0066 §1 gets its one-line
+      amendment (the pinned cert is the trust anchor).
+- [ ] **I3** (me, a PR): remove the `BRIDGE_CLIENTS` template line, then **you** delete `BRIDGE_CLIENTS` and
+      `BRIDGE_CORE_TOKEN` from Infisical.
+- [ ] Not verifiable before: a live token's `iss`; Alertmanager reaching the bridge; core's grant; one PR event opening
+      a session end to end. I check each with you as its step lands.
+
+## 7. Still open from earlier rounds (only if not done before the outage)
+- [ ] ADR-0065's live checks (R8 deploy C1), if you never ran them: the header-forged `curl` to
+      `/outpost.goauthentik.io/auth/traefik` redirects with a `redirect_uri` on mountain.bnei.dev.
+- [ ] B0 (ukubi-bridge release workflow) waits on the release App and the `release` environment.
+
+## After all that
+A4 (Hubble metrics, the ServiceMonitor, the Alloy traces Deployment, OTEL in atlas and the bridge) needs the cluster
+for every step, and A5 (the `ukubi-atlas` App, `bridge-atlas`) needs you to create the App and its Infisical project.
+I prepare both PRs during the outage where code allows; their rollout steps land in this file.
