@@ -15,7 +15,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -45,7 +47,7 @@ func versionHash[T graph.Node | graph.Edge](v T) string {
 // projectGraph stores res as the next projection: it closes the versions that changed or went away and opens the
 // new ones, in one transaction. When nothing changed (graph, drift, vector) it writes nothing and returns the latest
 // seq with changed=false.
-func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, repos extract.Repos) (seq int64, changed bool, err error) {
+func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, repos extract.Repos, allowLoss bool) (seq int64, changed bool, err error) {
 	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", atlasLock); err != nil {
 			return err
@@ -65,9 +67,9 @@ func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, r
 		for _, e := range res.Graph.Edges {
 			newEdges[e.Key()] = versionHash(e)
 		}
-		vector := map[string]string{}
+		vector := map[string]string{} // repo -> branch@sha
 		for name, r := range repos {
-			vector[name] = r.SHA
+			vector[name] = r.Branch + "@" + r.SHA
 		}
 		drift := mustJSON(res.Graph.Drift)
 		var last int64
@@ -77,10 +79,22 @@ func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, r
 			return err
 		}
 		if last > 0 {
-			rows, _ := tx.Query(ctx, "SELECT repo, sha FROM atlas_vector WHERE seq = $1", last)
-			var repo, sha string
-			if _, err := pgx.ForEachRow(rows, []any{&repo, &sha}, func() error { lastVector[repo] = sha; return nil }); err != nil {
+			rows, _ := tx.Query(ctx, "SELECT repo, branch, sha FROM atlas_vector WHERE seq = $1", last)
+			var repo, branch, sha string
+			if _, err := pgx.ForEachRow(rows, []any{&repo, &branch, &sha}, func() error { lastVector[repo] = branch + "@" + sha; return nil }); err != nil {
 				return err
+			}
+			// A repo the last projection read and this one can't is a missing checkout, not a system without it:
+			// storing it would close every version that repo holds, and reopen them all on the next full run.
+			var lost []string
+			for r := range lastVector {
+				if _, ok := vector[r]; !ok {
+					lost = append(lost, r)
+				}
+			}
+			if len(lost) > 0 && !allowLoss {
+				slices.Sort(lost)
+				return fmt.Errorf("%w: %s", errLostRepos, strings.Join(lost, ", "))
 			}
 			if same(curNodes, newNodes) && same(curEdges, newEdges) && same(lastVector, vector) && jsonEqual(lastDrift, drift) {
 				seq = last
@@ -92,8 +106,8 @@ func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, r
 			mustJSON(res.Versions), mustJSON(res.Tracked), mustJSON(nonNil(res.Skipped))).Scan(&seq); err != nil {
 			return err
 		}
-		for name, sha := range vector {
-			if _, err := tx.Exec(ctx, "INSERT INTO atlas_vector (seq, repo, sha) VALUES ($1, $2, $3)", seq, name, sha); err != nil {
+		for name, r := range repos {
+			if _, err := tx.Exec(ctx, "INSERT INTO atlas_vector (seq, repo, branch, sha) VALUES ($1, $2, $3, $4)", seq, name, r.Branch, r.SHA); err != nil {
 				return err
 			}
 		}
@@ -182,24 +196,32 @@ func nonNil(s []string) []string {
 	return s
 }
 
-// atlasView is GET /api/graph's answer: one projection, whole.
-type atlasView struct {
-	Seq        int64             `json:"seq"`
-	At         time.Time         `json:"at"`
-	Extractors map[string]int    `json:"extractors"`
-	Tracked    []extract.Track   `json:"tracked"`
-	Skipped    []string          `json:"skipped"`
-	Vector     map[string]string `json:"vector"`
-	Nodes      []json.RawMessage `json:"nodes"`
-	Edges      []json.RawMessage `json:"edges"`
-	Drift      json.RawMessage   `json:"drift"`
+type vectorEntry struct {
+	Branch string `json:"branch"`
+	SHA    string `json:"sha"`
 }
 
-var errNoProjection = errors.New("atlas: no projection yet")
+// atlasView is GET /api/graph's answer: one projection, whole.
+type atlasView struct {
+	Seq        int64                  `json:"seq"`
+	At         time.Time              `json:"at"`
+	Extractors map[string]int         `json:"extractors"`
+	Tracked    []extract.Track        `json:"tracked"`
+	Skipped    []string               `json:"skipped"`
+	Vector     map[string]vectorEntry `json:"vector"`
+	Nodes      []json.RawMessage      `json:"nodes"`
+	Edges      []json.RawMessage      `json:"edges"`
+	Drift      json.RawMessage        `json:"drift"`
+}
+
+var (
+	errNoProjection = errors.New("atlas: no projection yet")
+	errLostRepos    = errors.New("atlas: repos the last projection read are not checked out (pass --drop-repos if they are really gone)")
+)
 
 // loadGraph reads projection seq (0: the latest) as it stood.
 func loadGraph(ctx context.Context, pool *pgxpool.Pool, seq int64) (atlasView, error) {
-	v := atlasView{Vector: map[string]string{}, Nodes: []json.RawMessage{}, Edges: []json.RawMessage{}}
+	v := atlasView{Vector: map[string]vectorEntry{}, Nodes: []json.RawMessage{}, Edges: []json.RawMessage{}}
 	q := "SELECT p.seq, p.at, p.extractors, p.tracked, p.skipped, d.body FROM atlas_projection p JOIN atlas_drift d USING (seq) WHERE p.seq = $1"
 	if seq == 0 {
 		q = "SELECT p.seq, p.at, p.extractors, p.tracked, p.skipped, d.body FROM atlas_projection p JOIN atlas_drift d USING (seq) ORDER BY p.seq DESC LIMIT 1"
@@ -218,9 +240,9 @@ func loadGraph(ctx context.Context, pool *pgxpool.Pool, seq int64) (atlasView, e
 	if err := errors.Join(json.Unmarshal(ext, &v.Extractors), json.Unmarshal(tracked, &v.Tracked), json.Unmarshal(skipped, &v.Skipped)); err != nil {
 		return v, err
 	}
-	rows, _ := pool.Query(ctx, "SELECT repo, sha FROM atlas_vector WHERE seq = $1", v.Seq)
-	var repo, sha string
-	if _, err := pgx.ForEachRow(rows, []any{&repo, &sha}, func() error { v.Vector[repo] = sha; return nil }); err != nil {
+	rows, _ := pool.Query(ctx, "SELECT repo, branch, sha FROM atlas_vector WHERE seq = $1", v.Seq)
+	var repo, branch, sha string
+	if _, err := pgx.ForEachRow(rows, []any{&repo, &branch, &sha}, func() error { v.Vector[repo] = vectorEntry{branch, sha}; return nil }); err != nil {
 		return v, err
 	}
 	for _, t := range []struct {
@@ -281,6 +303,7 @@ func atlasProject(args []string) error {
 	f := flag.NewFlagSet("atlas-project", flag.ContinueOnError)
 	dir := f.String("repos", "", "directory holding the repo checkouts (one per GitHub repo name)")
 	dsn := f.String("dsn", os.Getenv("DATABASE_URL"), "Postgres URL (default: DATABASE_URL)")
+	drop := f.Bool("drop-repos", false, "accept that repos the last projection read are gone (their nodes close)")
 	if err := f.Parse(args); err != nil {
 		return err
 	}
@@ -308,7 +331,7 @@ func atlasProject(args []string) error {
 	if err := migrate(ctx, pool); err != nil {
 		return err
 	}
-	seq, changed, err := projectGraph(ctx, pool, res, repos)
+	seq, changed, err := projectGraph(ctx, pool, res, repos, *drop)
 	if err != nil {
 		return err
 	}

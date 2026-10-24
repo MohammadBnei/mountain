@@ -25,11 +25,11 @@ func Checkouts(dir string) (Repos, error) {
 			continue
 		}
 		root := filepath.Join(dir, e.Name())
-		sha, err := Head(root)
+		sha, branch, err := Head(root)
 		if err != nil {
 			continue // not a checkout
 		}
-		out[e.Name()] = Repo{Dir: root, SHA: sha}
+		out[e.Name()] = Repo{Dir: root, SHA: sha, Branch: branch}
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("extract: no git checkouts under %s", dir)
@@ -37,38 +37,39 @@ func Checkouts(dir string) (Repos, error) {
 	return out, nil
 }
 
-// Head is the sha root's HEAD points at: detached, a loose ref, or a packed one.
-func Head(root string) (string, error) {
+// Head is the sha root's HEAD points at (detached, a loose ref, or a packed one) and the branch it names ("" when
+// detached).
+func Head(root string) (sha, branch string, err error) {
 	gitDir := filepath.Join(root, ".git")
 	if fi, err := os.Stat(gitDir); err != nil || !fi.IsDir() {
-		return "", fmt.Errorf("extract: %s is not a checkout", root)
+		return "", "", fmt.Errorf("extract: %s is not a checkout", root)
 	}
 	b, err := os.ReadFile(filepath.Join(gitDir, "HEAD"))
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	head := strings.TrimSpace(string(b))
 	if shaRe.MatchString(head) {
-		return head, nil
+		return head, "", nil
 	}
 	ref, ok := strings.CutPrefix(head, "ref: ")
 	if !ok || strings.Contains(ref, "..") {
-		return "", fmt.Errorf("extract: %s: odd HEAD", root)
+		return "", "", fmt.Errorf("extract: %s: odd HEAD", root)
 	}
 	if b, err := os.ReadFile(filepath.Join(gitDir, filepath.FromSlash(ref))); err == nil {
 		if s := strings.TrimSpace(string(b)); shaRe.MatchString(s) {
-			return s, nil
+			return s, strings.TrimPrefix(ref, "refs/heads/"), nil
 		}
 	}
 	packed, err := os.ReadFile(filepath.Join(gitDir, "packed-refs"))
 	if err != nil {
-		return "", fmt.Errorf("extract: %s: %s not found", root, ref)
+		return "", "", fmt.Errorf("extract: %s: %s not found", root, ref)
 	}
 	sc := bufio.NewScanner(bytes.NewReader(packed))
 	for sc.Scan() {
 		if sha, name, ok := strings.Cut(sc.Text(), " "); ok && name == ref && shaRe.MatchString(sha) {
-			return sha, nil
+			return sha, strings.TrimPrefix(ref, "refs/heads/"), nil
 		}
 	}
-	return "", fmt.Errorf("extract: %s: %s not found", root, ref)
+	return "", "", fmt.Errorf("extract: %s: %s not found", root, ref)
 }

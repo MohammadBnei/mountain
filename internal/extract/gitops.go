@@ -1,7 +1,10 @@
 package extract
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"regexp"
 	"slices"
@@ -97,30 +100,45 @@ func gitops(x *Ctx) error {
 		return fmt.Errorf("%s: %w", registryPath, err)
 	}
 	var appsElems []element // the registry's hand mirror (apps.applicationset.yaml)
-	for _, p := range x.Glob("infra-bootstrap", appsetDir+"/*.yaml") {
+	files := append(x.Glob("infra-bootstrap", appsetDir+"/*.yaml"), x.Glob("infra-bootstrap", appsetDir+"/*.yml")...)
+	slices.Sort(files)
+	for _, p := range files {
 		b, src, err := x.Read("infra-bootstrap", p)
 		if err != nil {
 			return err
 		}
-		var m manifest
-		if err := yaml.Unmarshal(b, &m); err != nil {
-			continue // not one manifest (a multi-document Secret, a CRD bundle): not an Application
-		}
-		switch m.Kind {
-		case "Application":
-			app(x, src, m.Metadata.Name, m.Spec.appSpec, element{})
-		case "ApplicationSet":
-			for _, gen := range m.Spec.Generators {
-				for _, el := range gen.List.Elements {
-					name, ok := expand(m.Spec.Template.Metadata.Name, el)
-					if !ok || name == "" {
-						x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: "appset:" + m.Metadata.Name, Detail: "template name " + m.Spec.Template.Metadata.Name, Source: src})
+		// ArgoCD applies every document of a file, so atlas reads every one.
+		dec := yaml.NewDecoder(bytes.NewReader(b))
+		for {
+			var m manifest
+			err := dec.Decode(&m)
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if err != nil {
+				x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: p + ": not YAML atlas can read: " + err.Error(), Source: src})
+				break
+			}
+			switch m.Kind {
+			case "Application":
+				app(x, src, m.Metadata.Name, m.Spec.appSpec, element{})
+			case "ApplicationSet":
+				for _, gen := range m.Spec.Generators {
+					if len(gen.List.Elements) == 0 { // a git, cluster or matrix generator: its apps are not in the repo
+						x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: p + ": ApplicationSet " + m.Metadata.Name + " has a generator atlas cannot expand", Source: src})
 						continue
 					}
-					app(x, src, name, expandSpec(m.Spec.Template.Spec, el), el)
-				}
-				if m.Metadata.Name == "apps" {
-					appsElems = append(appsElems, gen.List.Elements...)
+					for _, el := range gen.List.Elements {
+						name, ok := expand(m.Spec.Template.Metadata.Name, el)
+						if !ok || name == "" {
+							x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: p + ": template name " + m.Spec.Template.Metadata.Name, Source: src})
+							continue
+						}
+						app(x, src, name, expandSpec(m.Spec.Template.Spec, el), el)
+					}
+					if m.Metadata.Name == "apps" {
+						appsElems = append(appsElems, gen.List.Elements...)
+					}
 				}
 			}
 		}

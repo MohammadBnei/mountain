@@ -36,6 +36,17 @@ func TestMerge(t *testing.T) {
 	if g.Nodes[0].ID != "app:a" || g.Nodes[1].ID != "app:b" {
 		t.Errorf("not sorted: %v", g.Nodes)
 	}
+	e1 := Edge{From: "app:a", To: "app:b", Kind: EdgeSupersede, Source: Source{Repo: "r", Path: "2.md"}}
+	e2 := e1
+	e2.Source.Path = "1.md"
+	if err := g.Merge(Graph{Edges: []Edge{e1, e2}}); err != nil || len(g.Edges) != 1 || g.Edges[0].Source.Path != "1.md" {
+		t.Fatalf("one edge stated by two files: %v %+v", err, g.Edges)
+	}
+	e3 := e1
+	e3.Attrs = map[string]string{"x": "y"}
+	if err := g.Merge(Graph{Edges: []Edge{e3}}); err == nil {
+		t.Fatal("one edge with two contents merged")
+	}
 	g.Edges = []Edge{{From: "app:a", To: "app:c", Kind: EdgeGit}}
 	if g.Check() == nil {
 		t.Error("an edge to a missing node passed Check")

@@ -2,6 +2,7 @@ package extract
 
 import (
 	"math"
+	"os"
 	"strings"
 	"testing"
 
@@ -17,6 +18,8 @@ hosts: { bnei: h1, server1: h2, ex-laptop: h3 }
 pveNodeName: bnei
 k8sPlacement: { k8s-cp-01: bnei }
 adrHome: { mountain: infra-bootstrap }
+shortADR: { infra-bootstrap: agent-fleet, agent-fleet: agent-fleet }
+skip: { infra-bootstrap: [kubespray] }
 components:
   host:bnei: { realm: infra, group: hosts }
   host:server1: { realm: infra, group: hosts }
@@ -29,6 +32,7 @@ components:
   app:vos-monolith-dev: { realm: apps, group: products }
   app:platform-authentik: { realm: identity, group: authentik }
   app:platform-thot: { realm: fleet, group: cluster-access }
+  app:platform-second: { realm: fleet, group: cluster-access }
   app:mountain: { realm: platform, group: observability, paths: [mountain/] }
   svc:agent-fleet/core: { realm: fleet, group: control, paths: [agent-fleet/core/] }
 `
@@ -41,7 +45,7 @@ func fixture(t *testing.T) Result {
 	}
 	repos := Repos{}
 	for _, r := range []string{"infra-bootstrap", "agent-fleet", "pi-lab", "mountain"} {
-		repos[r] = Repo{Dir: "testdata/" + r, SHA: strings.Repeat(r[:1], 40)}
+		repos[r] = Repo{Dir: "testdata/" + r, SHA: strings.Repeat(r[:1], 40), Branch: "main"}
 	}
 	res, err := Run(repos, rl, All)
 	if err != nil {
@@ -113,7 +117,10 @@ func TestGitops(t *testing.T) {
 	if e, ok := edge(g, "app:platform-thot", "repo:infra-bootstrap", graph.EdgeGit); !ok || e.Attrs["paths"] != "gitops/platform/thot" {
 		t.Errorf("thot: %+v %v", e, ok)
 	}
-	noNode(t, g, "app:second-document-is-not-read")
+	node(t, g, "app:platform-second") // the second document of a file: ArgoCD applies it, so atlas reads it
+	if !hasDrift(g, graph.DriftUnresolved, "repo:infra-bootstrap", "gitgen has a generator atlas cannot expand") {
+		t.Error("a git generator is skipped silently")
+	}
 	if !hasDrift(g, graph.DriftMirror, "app:vos-monolith-dev", "dev.api.example.com") {
 		t.Error("the registry/appset hostname mismatch is not drift")
 	}
@@ -176,7 +183,7 @@ func TestADRs(t *testing.T) {
 	if a := node(t, g, "adr:agent-fleet/0010"); a.Attrs["title"] != "Dash title" || a.Attrs["status"] != "Proposed" {
 		t.Errorf("fleet 0010 = %+v", a.Attrs)
 	}
-	if a := node(t, g, "adr:infra-bootstrap/0002"); a.Attrs["status"] != "Superseded by agent-fleet ADR-0071" {
+	if a := node(t, g, "adr:infra-bootstrap/0002"); a.Attrs["status"] != "Superseded" {
 		t.Errorf("0002 status = %q", a.Attrs["status"])
 	}
 	if a := node(t, g, "adr:pi-lab/0001"); a.Attrs["status"] != "Accepted" {
@@ -187,6 +194,8 @@ func TestADRs(t *testing.T) {
 		{"adr:infra-bootstrap/0001", "adr:agent-fleet/0010", graph.EdgeRelated},
 		{"adr:agent-fleet/0071", "adr:infra-bootstrap/0002", graph.EdgeSupersede},
 		{"adr:agent-fleet/0071", "adr:agent-fleet/0010", graph.EdgeAmends},
+		{"adr:agent-fleet/0071", "adr:infra-bootstrap/0001", graph.EdgeRelated}, // a URL link, on a continuation line
+		{"adr:agent-fleet/0071", "adr:pi-lab/0001", graph.EdgeRelated},          // a nested bullet of a wrapped Related
 	} {
 		if _, ok := edge(g, c.from, c.to, c.kind); !ok {
 			t.Errorf("no %s %s -> %s", c.kind, c.from, c.to)
@@ -196,15 +205,16 @@ func TestADRs(t *testing.T) {
 		e, _ := edge(g, from, to, graph.EdgeGoverns)
 		return e.Attrs["count"]
 	}
-	// notes.md: ADR-0001 + the ../adr link; kubespray/ and the submodule are not the repo's words.
-	if c := count("repo:infra-bootstrap", "adr:infra-bootstrap/0001"); c != "2" {
-		t.Errorf("infra -> its 0001 = %s, want 2", c)
+	// notes.md: ADR-0001 + two ../adr links, one whose text is an id (counted once); kubespray/ and the submodule
+	// are not the repo's words.
+	if c := count("repo:infra-bootstrap", "adr:infra-bootstrap/0001"); c != "3" {
+		t.Errorf("infra -> its 0001 = %s, want 3", c)
 	}
 	if c := count("repo:infra-bootstrap", "adr:infra-bootstrap/0002"); c != "1" {
 		t.Errorf("docs/adr/0002 = %s", c)
 	}
 	if c := count("repo:infra-bootstrap", "adr:agent-fleet/0071"); c != "1" {
-		t.Errorf("bare adr/0071 in infra = %s, want agent-fleet's", c)
+		t.Errorf("infra's bare short form = %s, want the fleet's ADR", c)
 	}
 	if c := count("repo:infra-bootstrap", "adr:agent-fleet/0010"); c != "1" {
 		t.Errorf("a prefix ending the line before = %s", c)
@@ -218,7 +228,7 @@ func TestADRs(t *testing.T) {
 	if c := count("repo:pi-lab", "adr:infra-bootstrap/0002"); c != "1" {
 		t.Errorf("pi-lab wrapped prefix = %s", c)
 	}
-	if c := count("repo:pi-lab", "adr:pi-lab/0001"); c != "1" {
+	if c := count("repo:pi-lab", "adr:pi-lab/0001"); c != "2" { // its bare adr/0001 is its own, not the fleet's
 		t.Errorf("pi-lab own = %s", c)
 	}
 	// mountain has no ADRs: adrHome sends its bare citation to infra-bootstrap; app:mountain isn't in this run, so
@@ -297,4 +307,52 @@ func entropy(w string) float64 {
 		h -= p * math.Log2(p)
 	}
 	return h
+}
+
+// TestBranch: a checkout on a branch ArgoCD doesn't deploy is drift (atlas would be projecting work in progress).
+func TestBranch(t *testing.T) {
+	rl, _ := realms.Parse([]byte(fixtureRealms))
+	repos := Repos{"infra-bootstrap": {Dir: "testdata/infra-bootstrap", SHA: strings.Repeat("i", 40), Branch: "wip"}}
+	res, err := Run(repos, rl, All)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasDrift(res.Graph, graph.DriftUnresolved, "repo:infra-bootstrap", "checked out on branch wip; ArgoCD deploys main") {
+		t.Errorf("no branch drift: %+v", res.Graph.Drift)
+	}
+	if hasDrift(fixture(t).Graph, graph.DriftUnresolved, "repo:infra-bootstrap", "checked out on") {
+		t.Error("branch drift on a checkout of main")
+	}
+}
+
+// TestSymlinkOut: a file that is a symlink out of the checkout is never read, nor is a "../" path.
+func TestSymlinkOut(t *testing.T) {
+	outside := t.TempDir() + "/secret.md"
+	if err := os.WriteFile(outside, []byte("# ADR-0001: SECRET-TITLE\n\n**Status:** hunter2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	repo := t.TempDir()
+	if err := os.MkdirAll(repo+"/docs/adr", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, repo+"/docs/adr/0001-link.md"); err != nil {
+		t.Fatal(err)
+	}
+	rl, _ := realms.Parse([]byte(fixtureRealms))
+	res, err := Run(Repos{"r": {Dir: repo, SHA: strings.Repeat("r", 40)}}, rl, All)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range res.Graph.Nodes {
+		if n.Kind == graph.KindADR {
+			t.Errorf("a symlinked ADR was read: %+v", n)
+		}
+	}
+	x := &Ctx{Repos: Repos{"r": {Dir: repo}}}
+	if _, _, err := x.Read("r", "../secret.md"); err == nil {
+		t.Error("Read followed ../")
+	}
+	if _, _, err := x.Read("r", "docs/adr/0001-link.md"); err == nil {
+		t.Error("Read followed a symlink")
+	}
 }

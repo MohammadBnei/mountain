@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -85,17 +86,17 @@ func TestDBAtlasProject(t *testing.T) {
 	e := graph.Edge{From: "app:a", To: "app:b", Kind: graph.EdgeGit, Origin: graph.Declared}
 	repos := extract.Repos{"infra-bootstrap": {SHA: strings.Repeat("1", 40)}}
 	r1 := atlasResult([]graph.Node{n("app:a", "1", "s1"), n("app:b", "1", "s1")}, []graph.Edge{e})
-	seq1, changed, err := projectGraph(ctx, pool, r1, repos)
+	seq1, changed, err := projectGraph(ctx, pool, r1, repos, false)
 	if err != nil || !changed || seq1 == 0 {
 		t.Fatalf("first: %d %v %v", seq1, changed, err)
 	}
-	if seq, changed, err := projectGraph(ctx, pool, r1, repos); err != nil || changed || seq != seq1 {
+	if seq, changed, err := projectGraph(ctx, pool, r1, repos, false); err != nil || changed || seq != seq1 {
 		t.Fatalf("same again: %d %v %v", seq, changed, err)
 	}
 	// a new commit that changes no fact: the vector moves, the versions don't
 	repos2 := extract.Repos{"infra-bootstrap": {SHA: strings.Repeat("2", 40)}}
 	r1b := atlasResult([]graph.Node{n("app:a", "1", "s2"), n("app:b", "1", "s2")}, []graph.Edge{e})
-	seq2, changed, err := projectGraph(ctx, pool, r1b, repos2)
+	seq2, changed, err := projectGraph(ctx, pool, r1b, repos2, false)
 	if err != nil || !changed || seq2 <= seq1 {
 		t.Fatalf("new sha: %d %v %v", seq2, changed, err)
 	}
@@ -105,7 +106,7 @@ func TestDBAtlasProject(t *testing.T) {
 	// b changes, a goes (with its edge), c arrives
 	r3 := atlasResult([]graph.Node{n("app:b", "2", "s3"), n("app:c", "1", "s3")}, nil,
 		graph.Drift{Kind: graph.DriftMirror, Subject: "app:c", Detail: "d"})
-	seq3, changed, err := projectGraph(ctx, pool, r3, repos2)
+	seq3, changed, err := projectGraph(ctx, pool, r3, repos2, false)
 	if err != nil || !changed {
 		t.Fatalf("change: %d %v %v", seq3, changed, err)
 	}
@@ -119,8 +120,21 @@ func TestDBAtlasProject(t *testing.T) {
 		t.Errorf("current: %d, want b and c", c)
 	}
 
+	// a checkout gone missing is refused, not stored as every node of that repo closing
+	r4 := atlasResult([]graph.Node{n("app:b", "2", "s3")}, nil)
+	if _, _, err := projectGraph(ctx, pool, r4, extract.Repos{"other": {SHA: "o"}}, false); !errors.Is(err, errLostRepos) {
+		t.Fatalf("a lost repo: %v", err)
+	}
+	if c := rows(t, pool, "SELECT count(*) FROM atlas_projection"); c != 3 {
+		t.Errorf("the refused run wrote: %d projections", c)
+	}
+	// history can't be pruned under the versions
+	if _, err := pool.Exec(ctx, "DELETE FROM atlas_projection WHERE seq = $1", seq1); err == nil {
+		t.Error("deleting a projection that versions start at succeeded")
+	}
+
 	old, err := loadGraph(ctx, pool, seq1)
-	if err != nil || len(old.Nodes) != 2 || len(old.Edges) != 1 || old.Vector["infra-bootstrap"] != strings.Repeat("1", 40) {
+	if err != nil || len(old.Nodes) != 2 || len(old.Edges) != 1 || old.Vector["infra-bootstrap"].SHA != strings.Repeat("1", 40) {
 		t.Fatalf("seq1 as it was: %+v %v", old, err)
 	}
 	cur, err := loadGraph(ctx, pool, 0)
@@ -152,7 +166,7 @@ func TestDBAtlasServe(t *testing.T) {
 		t.Fatalf("no projection: %d", r.StatusCode)
 	}
 	res := atlasResult([]graph.Node{n("app:a", "1", "s")}, nil)
-	if _, _, err := projectGraph(context.Background(), a.store.pool, res, extract.Repos{"infra-bootstrap": {SHA: "s"}}); err != nil {
+	if _, _, err := projectGraph(context.Background(), a.store.pool, res, extract.Repos{"infra-bootstrap": {SHA: "s"}}, false); err != nil {
 		t.Fatal(err)
 	}
 	r := serveAuth("GET", "/api/graph", []*http.Cookie{admin})
@@ -186,11 +200,11 @@ func TestDBAtlasReal(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	seq, changed, err := projectGraph(ctx, pool, res, repos)
+	seq, changed, err := projectGraph(ctx, pool, res, repos, false)
 	if err != nil || !changed {
 		t.Fatalf("first: %v %v", changed, err)
 	}
-	if again, changed, err := projectGraph(ctx, pool, res, repos); err != nil || changed || again != seq {
+	if again, changed, err := projectGraph(ctx, pool, res, repos, false); err != nil || changed || again != seq {
 		t.Fatalf("second run wrote: %d %v %v", again, changed, err)
 	}
 	v, err := loadGraph(ctx, pool, 0)

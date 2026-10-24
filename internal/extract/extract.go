@@ -15,10 +15,11 @@ import (
 	"github.com/MohammadBnei/mountain/internal/realms"
 )
 
-// Repo is one checkout: its root and the sha it is at.
+// Repo is one checkout: its root, the sha it is at and the branch HEAD names ("" when detached).
 type Repo struct {
-	Dir string
-	SHA string
+	Dir    string
+	SHA    string
+	Branch string
 }
 
 // Repos is repo name (the GitHub name, "infra-bootstrap") -> checkout.
@@ -59,14 +60,28 @@ func (x *Ctx) Edge(e graph.Edge)   { x.g.Edges = append(x.g.Edges, e) }
 func (x *Ctx) Drift(d graph.Drift) { x.g.Drift = append(x.g.Drift, d) }
 func (x *Ctx) Track(t Track)       { x.track[t] = true }
 
-// Read returns a repo file and where it came from.
+// Read returns a repo file and where it came from. It opens the file through an os.Root on the checkout, so neither
+// "..", an absolute path nor a symlink can reach outside it (a cloned repo is not trusted to point at the
+// projector's own files), and it reads regular files only.
 func (x *Ctx) Read(repo, path string) ([]byte, graph.Source, error) {
 	r, ok := x.Repos[repo]
 	if !ok {
 		return nil, graph.Source{}, fmt.Errorf("extract: repo %s not checked out", repo)
 	}
 	src := graph.Source{Repo: repo, Path: path, SHA: r.SHA}
-	b, err := os.ReadFile(filepath.Join(r.Dir, filepath.FromSlash(path)))
+	root, err := os.OpenRoot(r.Dir)
+	if err != nil {
+		return nil, src, err
+	}
+	defer root.Close()
+	fi, err := root.Lstat(filepath.FromSlash(path))
+	if err != nil {
+		return nil, src, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, src, fmt.Errorf("extract: %s/%s is not a regular file", repo, path)
+	}
+	b, err := root.ReadFile(filepath.FromSlash(path))
 	return b, src, err
 }
 
@@ -79,6 +94,9 @@ func (x *Ctx) Glob(repo, pattern string) []string {
 	m, _ := filepath.Glob(filepath.Join(r.Dir, filepath.FromSlash(pattern)))
 	out := make([]string, 0, len(m))
 	for _, p := range m {
+		if fi, err := os.Lstat(p); err != nil || !fi.Mode().IsRegular() {
+			continue // a directory, or a symlink that could lead out of the checkout
+		}
 		rel, _ := filepath.Rel(r.Dir, p)
 		out = append(out, filepath.ToSlash(rel))
 	}
@@ -147,8 +165,33 @@ func Run(repos Repos, rl *realms.Realms, exs []Extractor) (Result, error) {
 	for t := range track {
 		res.Tracked = append(res.Tracked, t)
 	}
+	res.Graph.Merge(graph.Graph{Drift: branchDrift(repos, track)}) // drift only: cannot fail
 	slices.SortFunc(res.Tracked, func(a, b Track) int { return cmp.Or(cmp.Compare(a.Repo, b.Repo), cmp.Compare(a.Branch, b.Branch)) })
 	return res, res.Graph.Check()
+}
+
+// branchDrift reports a checkout that is not on a branch ArgoCD deploys from: atlas would be projecting work in
+// progress as the system.
+func branchDrift(repos Repos, track map[Track]bool) []graph.Drift {
+	want := map[string][]string{}
+	for t := range track {
+		want[t.Repo] = append(want[t.Repo], t.Branch)
+	}
+	var out []graph.Drift
+	for _, name := range sortedKeys(repos) {
+		r, branches := repos[name], want[name]
+		if len(branches) == 0 || slices.Contains(branches, r.Branch) {
+			continue
+		}
+		slices.Sort(branches)
+		on := "a detached HEAD"
+		if r.Branch != "" {
+			on = "branch " + r.Branch
+		}
+		out = append(out, graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, name),
+			Detail: "checked out on " + on + "; ArgoCD deploys " + strings.Join(branches, ", "), Source: graph.Source{Repo: name, SHA: r.SHA}})
+	}
+	return out
 }
 
 // realmKinds are the kinds realms.yaml must place: components, not documents (repos, hostnames, ADRs).

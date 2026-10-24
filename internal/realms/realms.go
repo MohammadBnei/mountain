@@ -27,6 +27,8 @@ type Realms struct {
 	PVENodeName  string               `yaml:"pveNodeName"`
 	K8sPlacement map[string]string    `yaml:"k8sPlacement"` // k8s VM -> Proxmox host
 	ADRHome      map[string]string    `yaml:"adrHome"`      // repo without ADRs -> repo its bare citations mean
+	ShortADR     map[string]string    `yaml:"shortADR"`     // repo -> repo its bare "adr/NNNN" means (else its ADR home)
+	Skip         map[string][]string  `yaml:"skip"`         // repo -> repo-relative dirs whose files are not the repo's words
 	Components   map[string]Component `yaml:"components"`
 }
 

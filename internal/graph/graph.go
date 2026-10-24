@@ -139,8 +139,15 @@ func (g *Graph) Merge(o Graph) error {
 		if !Valid(e.From) || !Valid(e.To) {
 			return fmt.Errorf("graph: bad edge %s -> %s", e.From, e.To)
 		}
-		if p, ok := edges[e.Key()]; ok && Hash(p) != Hash(e) {
-			return fmt.Errorf("graph: edge %s -> %s (%s) read twice, differently", e.From, e.To, e.Kind)
+		if p, ok := edges[e.Key()]; ok {
+			// Two files stating the same edge agree ("Supersedes" here, "Superseded by" there): keep one, by the
+			// earlier source so a rerun picks the same. Only different content is a conflict.
+			if Hash(withoutSource(p)) != Hash(withoutSource(e)) {
+				return fmt.Errorf("graph: edge %s -> %s (%s) read twice, differently (%s, %s)", e.From, e.To, e.Kind, p.Source.Path, e.Source.Path)
+			}
+			if cmp.Or(cmp.Compare(p.Source.Repo, e.Source.Repo), cmp.Compare(p.Source.Path, e.Source.Path)) <= 0 {
+				continue
+			}
 		}
 		edges[e.Key()] = e
 	}
@@ -153,6 +160,8 @@ func (g *Graph) Merge(o Graph) error {
 	g.Drift = sortedValues(drift, func(a, b Drift) int { return cmp.Compare(a.Key(), b.Key()) })
 	return nil
 }
+
+func withoutSource(e Edge) Edge { e.Source = Source{}; return e }
 
 // Check reports edges whose ends are not nodes and nodes whose parent is not one.
 func (g *Graph) Check() error {

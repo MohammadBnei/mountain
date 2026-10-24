@@ -28,6 +28,19 @@ adrHome:
   mountain: infra-bootstrap
   ukubi-bridge: infra-bootstrap
 
+# Where a bare "adr/NNNN" points. It is agent-fleet's own shorthand (its CLAUDE.md), and infra-bootstrap uses it for
+# agent-fleet's ADRs; any other repo means its own (pi-lab writes `adr/0001`).
+shortADR:
+  agent-fleet: agent-fleet
+  infra-bootstrap: agent-fleet
+
+# Vendored or generated directories, by repo-relative path: their citations are not the repo's. node_modules,
+# vendor and testdata are skipped everywhere, and submodules are read (if at all) as their own repo.
+skip:
+  infra-bootstrap: [kubespray, pigsty/conf, pigsty/roles]
+  agent-fleet: [proto/gen, core/proto/gen, dashboard/src/gen, dashboard/dist, core/internal/webui/dist, core/internal/islands/dist]
+  ukubi-bridge: [proto/gen]
+
 # Components: id -> realm and group (the L1 fold key). paths (repo-relative prefixes, "<repo>/<prefix>") attach the
 # ADR citations found under them to this component (governs edges); a citation under no listed path goes to its repo.
 components:
