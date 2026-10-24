@@ -16,6 +16,7 @@ const fixtureRealms = `
 realms: [infra, platform, data, identity, events, fleet, apps]
 hosts: { bnei: h1, server1: h2, ex-laptop: h3 }
 pveNodeName: bnei
+sources: [infra-bootstrap, agent-fleet, mountain, pi-lab]
 k8sPlacement: { k8s-cp-01: bnei }
 adrHome: { mountain: infra-bootstrap }
 shortADR: { infra-bootstrap: agent-fleet, agent-fleet: agent-fleet }

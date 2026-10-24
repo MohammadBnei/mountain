@@ -1,9 +1,8 @@
 # 10 · atlas: understanding the system (design, 2026-10-24)
 
-> Status: **design**. The owner went through five interview rounds, two doubt cycles (five read-only reviews) and an
-> architect round. Nothing here is built. It is written down as step A0; the code follows in slices A1–A6 (end of
-> this file). A section is shared with the agent-kit design (the other session's work) and is signed there before
-> anything assumes its schema.
+> Status: **A0 + A1 merged, A2 built** ("A2 as built" under Delivery). The owner went through five interview rounds,
+> two doubt cycles (five read-only reviews) and an architect round. A section is shared with the agent-kit design
+> (the other session's work), signed there before anything assumed its schema.
 
 ## Why
 ukubi is too big to hold in one head: hosts, VMs, the cluster, the platform, apps, the fleet, the bridge, and about
@@ -264,6 +263,41 @@ Each slice gets a code review and a merge on the owner's word.
 | A4 | infra + mountain + bridge | Hubble metrics and the ServiceMonitor, the Alloy traces Deployment, the remote-write receiver, OTEL in atlas and the bridge, the live overlay |
 | A5 | infra + bridge | the `ukubi-atlas` App and its Infisical project (its own InfisicalSecret and identity), the `bridge-atlas` blueprint and client entry, the poll and hints, retiring the PAT |
 | A6 | mountain (+ fleet, bridge via agent-kit's session) | the remaining extractors (proto, definitions, blueprints, env hosts, network policies, bridge clients), the drift views, OTEL in the fleet, the agent-kit extractor |
+
+### A2 as built (2026-10-24)
+What changed against the table above, and why:
+- **The poll came forward from A5.** Without it the deployed atlas would have no graph. It uses the relay's existing
+  read-only token (`MOUNTAIN_GITHUB_TOKEN`): the head sha per tracked branch with a conditional request (a 304 is
+  free), a tarball only when the sha moved, unpacked under `os.Root` into an `emptyDir` cache (regular files only,
+  size caps). A head behind the one held is ignored; a diverged one (a force-push) is taken and logged. No git
+  binary, no go-git: history (`git log`) waits for A5's App. A5 swaps the credential, not the code.
+  - The token covers the repos `relay/config.yaml` listed plus infra-bootstrap; **agent-fleet, ukubi-bridge and pi-lab
+    need adding to it** (owner, Infisical `mountain-8c-cz`), or their ADRs stay out. A source it can't read is left
+    out and logged; a round that loses one the last projection read is refused, never stored as its nodes closing.
+  - A round whose heads did not move runs no extractor.
+- **Memory-only works**: without `DATABASE_URL` atlas keeps the latest projection (no history). The new migration
+  series (`cmd/atlas/migrations`, tracked in `atlas_migrations`) drops the town's tables and A1's `atlas_*` first.
+- **L0** draws what the graph and the live frame hold, nothing else: the seven islands (size from the component
+  count), each realm's groups as tiles (height from the group's size), GitHub and Cloudflare at the rim (repos and
+  hostnames), alert beacons on the group their labels name. **Troops and "Waiting on you" wait for A5** (the bridge
+  client): no counter is drawn before it has a source.
+- **The land lens** is per namespace: CPU in use (cadvisor), RAM working set, PVC bytes used, over allocatable CPU and
+  RAM and provisioned volume capacity. A namespace counts toward its Applications' realm when they agree, toward
+  `realms.yaml namespaces` (kube-system: Infra), else "unattributed". Data shows "no pods in the cluster": Pigsty and
+  Garage are VMs.
+- **L1** routes are the trade edges A1 extracts, aggregated group to group: https (Cloudflare → app, weighted by
+  Traefik's requests per second), git (app → GitHub), runs-on (VM/LXC → host). Solid where traffic was measured,
+  dotted where it is only declared. The richer routes (HTTP between services, gRPC, SQL, secrets) come with A4/A6.
+- **A group opens as a list and a node as a card** (L2's 3D city is A3): health in words, live facts, edges, the
+  ADRs that govern it (most cited first), a link to the file it was read from at its sha.
+- **The gate**: `adminOnly` wraps every route but `/healthz` and `/auth/*`; the page redirects to the sign-in, the rest
+  answer 403. A non-admin's callback sets no cookie. A town cookie (same key, `Role` field) is not a session.
+  `--dev` admits everyone only on a loopback address with sign-in unset (the gate, `scripts/devpod.sh`).
+- **Alert rules**: MountainSourceStale (now prom, alerts, github, projection, db), MountainTokenExpiring,
+  MountainUnassigned (drift `unassigned` for 1 h). MountainUnmapped and MountainTownEmpty went with the town.
+- **Rollback** is a revert, plus, before the relay image starts again, `DROP TABLE atlas_migrations, atlas_drift,
+  atlas_edge_ver, atlas_node_ver, atlas_vector, atlas_projection` (the relay's migrations would meet a schema they
+  don't expect). The town's history is gone either way: R10 drops it on purpose.
 
 **Human-gated** (queued; the cluster and build runner are down):
 - create the App, its key and its installs;

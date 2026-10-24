@@ -1,4 +1,4 @@
-# Test, build the relay image on the build-runner LXC, push it to the in-cluster
+# Test, build the atlas image on the build-runner LXC, push it to the in-cluster
 # Zot registry, then pin the tag in helm/values.yaml so ArgoCD rolls it out.
 # Copied from hq's .github/workflows/app.yml; its gotchas, paid for once:
 #   - every buildah call goes through sudo (rootless splits the auth file)
@@ -19,7 +19,7 @@ on:
     branches: [main]
     paths:
       - 'internal/**'
-      - 'relay/**'
+      - 'cmd/**'
       - 'www/**'
       - 'embed.go'
       - 'go.mod'
@@ -75,18 +75,12 @@ jobs:
           set -euo pipefail
           go vet ./...
           go test ./...
-      - name: Schema check (Go-generated hello fixture)
-        run: |
-          set -euo pipefail
-          go run ./relay dump-hello --events www/dev/fixtures/hello-events.json --out "$RUNNER_TEMP/hello.json"
-          node www/dev/schema/check.mjs "$RUNNER_TEMP/hello.json"
-          node www/dev/schema/check.mjs
       # Chrome is not installed on ukubi-build and is not apt-installed here (04): the gate
       # selftest runs only where a Chrome already exists; otherwise it is a local pre-merge step.
       - name: www core test + gate selftest (if Chrome)
         run: |
           set -euo pipefail
-          if [ -f www/dev/core.test.mjs ]; then node www/dev/core.test.mjs; fi
+          node www/dev/core.test.mjs
           CHROME="${CHROME:-$(command -v google-chrome chromium chromium-browser 2>/dev/null | head -n1 || true)}"
           if [ -n "$CHROME" ] && [ -f www/dev/gate.mjs ]; then
             CHROME="$CHROME" node www/dev/gate.mjs selftest
@@ -115,12 +109,8 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      # the replay frame is validated by www/dev/schema/check.mjs
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
       - name: DB tests
-        run: go test -run '^TestDB' -v ./relay/
+        run: go test -run '^TestDB' -v ./cmd/atlas/
 
   build-push:
     needs: [test, db-test]

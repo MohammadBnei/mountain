@@ -1,424 +1,240 @@
-// The live town (R7): ukubi as three islands, one per Proxmox host, every app and service a building on the host
-// its pods run on. The relay (/ws) is the only source: hello, then ev / world / metrics frames (js/world.js).
-// Opens on the whole town; tap an island or a building to fly in (and read its card), tap the sea to fly back.
-// The sky follows the real sun over Paris (js/sun.js). Dev (127.0.0.1): window.__town hooks for the gate.
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createWorld } from './world.js';
+// atlas (plan/10-understanding.md): the system as a map. L0 is the seven realms as islands, L1 the trade routes
+// between their groups; a group opens as a list, a node as a card. The graph comes from GET /api/graph (one
+// projection of the repos), the live overlay from /ws. Hash routes make every view a link (router.js).
+// Dev (127.0.0.1): window.__atlas exposes the frame stats and the view for www/dev/gate.mjs.
+import { buildModel, REALM, REALMS, OUTSIDE, search, groupOf, alertsOn } from './model.js';
+import { parse, format, up } from './router.js';
 import { connect, gateLapsed } from './socket.js';
-import { sun as sunAt, now as clock } from './sun.js';
-import { createLabels } from './labels.js';
-import { goldenAge, turnOf, GOLDEN_DAYS } from './civ.js';
-import { createToys } from './toys.js';
+import { el, crumbs, panel, results, minimap, status, pct } from './ui.js';
 
-const canvas = document.getElementById('c');
-const q = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
 const dev = location.hostname === '127.0.0.1';
-const lang = () => (q.get('lang') || navigator.language || 'en').slice(0, 2) === 'fr' ? 'fr' : 'en';
+const q = new URLSearchParams(location.search);
 const coarse = matchMedia('(pointer: coarse)').matches;
-globalThis.__quality = q.get('q') || (coarse && ((navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcurrency || 8) <= 4) ? 'low' : 'high');
-if (dev) globalThis.__town = { ready: false };
-const RETRY = 'town:reloaded';
+const low = q.get('q') === 'low' || (coarse && ((navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcurrency || 8) <= 4));
+const RETRY = 'atlas:reloaded';
 const store = (f) => { try { return f(sessionStorage); } catch { return null; } };
+if (dev) globalThis.__atlas = { ready: false };
 
 if (!document.createElement('canvas').getContext('webgl2')) {
-  document.getElementById('fallback').hidden = false;
-  document.getElementById('loader').hidden = true;
-  canvas.remove();
+  $('fallback').hidden = false;
+  $('loader').hidden = true;
+  $('c').remove();
 } else {
   start().then(() => store((s) => s.removeItem(RETRY)), failed);
-  // a model fetched after the start 404s (buildings.js): a deploy retired this page's /v/<build>/ while it was open
-  globalThis.addEventListener('town:retired', () => { if (!dev) failed(new Error('this build was retired')); }, { once: true });
 }
 
 function failed(e) {
   console.error(e);
-  if (dev) globalThis.__town = { ready: true, error: String(e?.stack || e) };
-  // A failed load (a deploy retired this page's /v/<build>/ modules, a flaky fetch) reloads once onto the current
-  // index; the sessionStorage flag stops a loop and is cleared once a load succeeds.
-  const loader = document.getElementById('loader');
+  if (dev) globalThis.__atlas = { ready: true, error: String(e?.stack || e) };
+  const loader = $('loader');
   loader.hidden = false;
+  // a deploy retired this page's /v/<build>/ modules: reload once onto the current index
   if (dev || store((s) => s.getItem(RETRY)) || store((s) => (s.setItem(RETRY, '1'), true)) !== true) {
-    loader.textContent = 'The town could not be built. Reload to try again.';
+    loader.textContent = 'The map could not be drawn. Reload to try again.';
     return;
   }
   loader.textContent = 'Could not load, retrying…';
   setTimeout(() => location.reload(), 1000);
 }
 
+async function fetchGraph() {
+  const r = await fetch('/api/graph', { cache: 'no-store' });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`/api/graph: ${r.status}`);
+  return r.json();
+}
+
 async function start() {
-  const kit = await import('./kit.js');
-  const low = kit.QUALITY === 'low';
-  const apps = await (await fetch(new URL('../apps.json', import.meta.url))).json();
-  const world = createWorld();
-  if (q.has('hello')) fetch(q.get('hello')).then((r) => r.json()).then(world.applyHello); // dev: a hello file, no relay
-  else connect({ world, ...(dev && q.get('ws') ? { url: q.get('ws') } : { probe: () => gateLapsed() }) }); // dev: a relay on another port
-  const slow = setTimeout(() => { // no hello yet: say so in words (the socket keeps retrying)
-    document.getElementById('loader').textContent = lang() === 'fr'
-      ? 'Impossible de joindre la ville pour l’instant, nouvel essai… (trop d’onglets ouverts sur ce réseau ?)'
-      : 'Can’t reach the town yet, retrying… (too many tabs open on this network?)';
-  }, 8000);
-  let started = null; // R9: the town's first day (hello.snapshot.started), for the turn counter; set before the first
-  world.on('hello', (h) => { started = h.snapshot?.started || null; }); // hello lands (world.loaded follows its emit)
-  await world.loaded;
-  // R8 build guard: a hello from another build means a deploy happened while this page was open (a reconnect after
-  // the relay restarted). Its town may not be the one this code draws: reload once onto the current index.
+  const { createMap, project } = await import('./map.js');
+  let model = null, live = null, events = [], conn = 'closed', view = parse(location.hash);
   const mine = import.meta.url.match(/\/v\/([0-9a-f]{12})\//)?.[1];
-  const guard = (h) => { if (mine && h.build && h.build !== mine) failed(new Error(`build ${mine} → ${h.build}`)); };
-  guard({ build: world.build });
-  world.on('hello', guard);
-  clearTimeout(slow);
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, low ? 1.25 : 2));
-  renderer.shadowMap.enabled = !low;
-  const scene = new THREE.Scene();
-  const bg = new THREE.Color(kit.ukubi.office.surface);
-  scene.background = bg;
-  scene.fog = new THREE.Fog(bg, 70, 160);
-  const hemi = new THREE.HemisphereLight(0xffffff, 0xd9cfc4, 1.6);
-  const sun = new THREE.DirectionalLight(0xfff4e6, 2.4);
-  sun.castShadow = !low;
-  sun.shadow.mapSize.set(4096, 4096);
-  Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 140 });
-  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
-  const moon = new THREE.DirectionalLight(0xa9bbff, 0);
-  scene.add(hemi, sun, sun.target, moon);
+  // ---- the graph: until the first projection exists, say so and ask again
+  let g = await fetchGraph();
+  while (!g) {
+    $('loader').textContent = 'No projection yet: atlas has not read the repos. Asking again in 20 s…';
+    await new Promise((r) => setTimeout(r, 20000));
+    g = await fetchGraph();
+  }
+  model = buildModel(g);
+  $('loader').hidden = true;
 
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 400);
-  const controls = new OrbitControls(camera, canvas);
-  Object.assign(controls, { enableDamping: true, dampingFactor: 0.08, minDistance: 6, maxDistance: 120, maxPolarAngle: 1.35, screenSpacePanning: false });
+  const bar = $('top'), fit = () => document.documentElement.style.setProperty('--top', `${bar.offsetHeight}px`);
+  new ResizeObserver(fit).observe(bar);
+  fit();
+  const map = createMap({ canvas: $('c'), low, cover: () => { const pr = $('panel').getBoundingClientRect(), cr = $('c').getBoundingClientRect(); return pr.left > cr.left + cr.width / 2 ? Math.max(0, cr.right - pr.left + 16) : 0; }, onPick: (p) => {
+    if (!p) return go(view.realm ? { ...view, group: null, sel: null } : view);
+    if (p.outside) return openSearch(`${OUTSIDE[p.outside].kind}:`);
+    go({ level: 1, realm: p.realm, group: p.group || null, sel: null, lens: view.lens });
+  } });
+  map.setModel(model);
 
-  // ---- the town
-  const ctx = { THREE, kit, world, apps, lang };
-  const [islands, bridges, buildings, marks, people, herald, bunting] = await Promise.all(['islands', 'bridges', 'buildings', 'marks', 'people', 'herald', 'bunting']
-    .map(async (n) => (await import(`./objects/${n}.js`)).default(ctx)));
-  for (const o of [islands, bridges, buildings, marks, people, herald, bunting]) scene.add(o.root);
-  const labels = createLabels({ THREE, layer: document.getElementById('labels'), apps, lang });
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  // ---- camera: overview of the three islands, or one island / building up close
-  const centres = islands.islands.map((i) => i.centre);
-  const mid = centres.reduce((a, c) => [a[0] + c[0] / 3, a[1] + c[1] / 3], [0, 0]);
-  // R8: the shadow camera fits the town (the islands' rims around mid, plus a margin for the tallest buildings)
-  const townR = Math.max(...islands.islands.map((i) => Math.hypot(i.centre[0] - mid[0], i.centre[1] - mid[1]) + 2 * i.radius + 2));
-  Object.assign(sun.shadow.camera, { left: -townR, right: townR, top: townR, bottom: -townR, far: 60 + 2 * townR });
-  sun.shadow.camera.updateProjectionMatrix();
-  // R8: the dock (panel or card) covers the bottom of the canvas. The projection centre sits in the middle of the free
-  // area above it (setViewOffset), so every view, the fly-ins too, centres above the dock, never behind it; and the
-  // overview is fitted: the distance at which every island's rim (tiles, building tops, the cone's tip) is on screen.
-  const dock = document.getElementById('dock'), Y = new THREE.Vector3(0, 1, 0), V = new THREE.Vector3();
-  const FRONT = new THREE.Vector3(0.15, 0.85, 0.85).normalize(); // front-high: the islands read as a map, buildings still stand up
-  const rim = islands.islands.flatMap((is) => {
-    const [cx, cz] = is.centre, R = 2 * is.radius + 0.4, pts = [new THREE.Vector3(cx, -7.5 * is.radius / 4, cz)];
-    for (let i = 0; i < 12; i++) for (const y of [0, 2.6]) pts.push(new THREE.Vector3(cx + R * Math.cos(i * Math.PI / 6), y, cz + R * Math.sin(i * Math.PI / 6)));
-    return pts;
-  });
-  let free = 1, dockBox = null; // the fraction of the canvas height above the dock; the dock in canvas px (labels)
-  function lens() {
-    const dr = dock.getBoundingClientRect(), cr = canvas.getBoundingClientRect(), top = dr.top - cr.top;
-    dockBox = [dr.left - cr.left, top, dr.right - cr.left, dr.bottom - cr.top];
-    free = Math.min(1, Math.max(0.45, (top - 8) / h));
-    const u = free * h, H = 2 * h - u; // a virtual image H tall whose centre is the free area's: the canvas is its bottom h
-    camera.aspect = w / H;
-    camera.setViewOffset(w, H, 0, h - u, w, h);
-    camera.updateProjectionMatrix();
-  }
-  let fly = null, home = true, moved = false;
-  function view(target, radius) {
-    // distance so a sphere of `radius` fits the free area's narrower axis
-    const t = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), H = 2 * h - free * h;
-    const half = Math.atan(t * Math.min(free * h, w) / H);
-    return { pos: target.clone().addScaledVector(FRONT, radius / Math.sin(half)), target };
-  }
-  // portrait: a steeper look (the depth axis foreshortens least) from whichever side lets the town come closest
-  const STEEP = new THREE.Vector3(0.1, 0.92, 0.5).normalize();
-  const PORTRAIT = [FRONT, STEEP].flatMap((d) => [0, Math.PI / 2, -Math.PI / 2].map((a) => d.clone().applyAxisAngle(Y, a)));
-  function overview() {
-    const target = new THREE.Vector3(mid[0], 0, mid[1]), cam = camera.clone();
-    const fit = (dir) => { // the closest distance at which the whole town is on screen above the dock (binary search)
-      const fits = (d) => {
-        cam.position.copy(target).addScaledVector(dir, d); cam.lookAt(target); cam.updateMatrixWorld();
-        return rim.every((p) => (V.copy(p).project(cam), V.z < 1 && Math.abs(V.x) <= 0.95 && V.y <= 0.95 && V.y >= 1.03 - 2 * free));
-      };
-      let lo = 5, hi = 400;
-      for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (fits(m)) hi = m; else lo = m; }
-      return hi;
-    };
-    let best = { dir: FRONT, d: fit(FRONT) };
-    if (w < 0.8 * h) for (const dir of PORTRAIT) { const d = fit(dir); if (d < best.d - 0.5) best = { dir, d }; }
-    controls.maxDistance = Math.max(120, 1.3 * best.d);
-    return { pos: target.clone().addScaledVector(best.dir, best.d), target, home: true };
-  }
-  function flyTo(v, dur = reduced ? 0.01 : 1.2) {
-    fly = { from: camera.position.clone(), fromT: controls.target.clone(), to: v.pos, toT: v.target, t0: performance.now(), dur: dur * 1000 };
-    home = v.home === true;
-    if (home) moved = false;
-    overviewBtn.hidden = home;
-  }
-  controls.addEventListener('start', () => { moved = true; overviewBtn.hidden = false; });
-  // the dock grows or shrinks (a card opens, the panel's text wraps): re-centre; at home and untouched, refit
-  function refit() {
-    lens();
-    if (home && !moved && !fly) { const v = overview(); camera.position.copy(v.pos); controls.target.copy(v.target); }
-  }
-  new ResizeObserver(() => { if (w) refit(); }).observe(dock);
-  const overviewBtn = document.getElementById('overview');
-  overviewBtn.onclick = () => { closeCard(); flyTo(overview()); };
-
-  // ---- picking: a tap (not a drag) picks a building, else an island, else flies home
-  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-  // a tap = one pointer that went down and up in place; a gesture that ever had two (a pinch) is never a tap
-  const pointers = new Map();
-  let multi = false;
-  canvas.addEventListener('pointerdown', (e) => {
-    pointers.set(e.pointerId, [e.clientX, e.clientY]);
-    if (pointers.size > 1) multi = true;
-  });
-  const lift = (e) => { pointers.delete(e.pointerId); if (!pointers.size) setTimeout(() => { if (!pointers.size) multi = false; }); };
-  canvas.addEventListener('pointercancel', lift);
-  canvas.addEventListener('pointerup', (e) => {
-    const down = pointers.get(e.pointerId), wasMulti = multi;
-    lift(e);
-    if (!down || wasMulti || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
-    if (toys.tap(e)) return; // plant / remove mode takes the tap
-    const r = canvas.getBoundingClientRect();
-    ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-    ray.setFromCamera(ndc, camera);
-    pick(ray);
-  });
-  function pick(r) {
-    const hb = r.intersectObjects(buildings.pickables(), false)[0];
-    const tent = hb && buildings.annexOf(hb), p = hb && buildings.plotOf(hb);
-    if (p) { // R8 C: a tent opens its app's card (that island first in "also on") and the camera flies to the tent
-      openCard(p, tent?.host);
-      return flyTo(view(new THREE.Vector3(tent ? tent.x : p.x, 0.6, tent ? tent.z : p.z), 4.5));
-    }
-    const hi = r.intersectObjects(islands.pickables, false)[0];
-    if (hi) {
-      closeCard();
-      const is = islands.islands.find((i) => i.host === hi.object.userData.pick.host);
-      return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5));
-    }
-    closeCard();
-    flyTo(overview());
-  }
-
-  // ---- card + panel
-  const card = document.getElementById('card'), fr = () => lang() === 'fr';
-  let carded = null, cardedAt = null, info = null; // cardedAt: the island of the tent that opened the card (R8 C), listed first; info: an R9 card (tech | guide)
-  function openCard(p, at = null) { carded = p.app; cardedAt = at; info = null; card.hidden = false; fillCard(); }
-  function openInfo(kind) { carded = null; info = kind; card.hidden = false; fillInfo(); }
-  world.on('names', () => { if (carded) fillCard(); }); // R8: an admin's names arrive (or leave) with /auth/me
-  function closeCard() { carded = null; info = null; card.hidden = true; }
-  document.getElementById('cardclose').onclick = closeCard;
-  // Status always comes with a word (Ukubi): the colour only repeats it.
-  const healthText = { Healthy: ['running', 'en marche', 'ok'], Progressing: ['deploying', 'en déploiement', 'warn'], Degraded: ['degraded', 'dégradé', 'bad'],
-    Missing: ['missing', 'absent', 'bad'], Suspended: ['suspended', 'suspendu', 'info'], Unknown: ['unknown', 'inconnu', 'info'] };
-  const word = (cls, text) => Object.assign(document.createElement('span'), { className: cls, textContent: text });
-  function fillCard() {
-    const p = buildings.plots().find((x) => x.app === carded);
-    if (!p) return closeCard();
-    const a = apps[p.app] || {}, s = world.state, F = fr();
-    card.style.setProperty('--wire', `var(--wire-${p.wire})`);
-    const machine = a.group === 'machine';
-    card.querySelector('.kicker').textContent = `${machine || a.group === 'service' ? a.group : (F ? 'application' : 'app')} · ${F ? 'hôte' : 'host'} ${p.host}`;
-    card.querySelector('h2').textContent = a.name || p.app;
-    const real = card.querySelector('.realname'), nm = machine && world.names?.[p.app]; // R8: a platform admin's real name
-    real.hidden = !nm;
-    real.textContent = nm || '';
-    card.querySelector('.desc').textContent = a[lang()] || a.en || '';
-    const st = [];
-    if (p.ruinAt) st.push(word('bad', machine ? (F ? 'disparue de la topologie' : 'gone from the topology') : (F ? 'retirée du cluster' : 'removed from the cluster')));
-    else {
-      if (a.probed) { // R8: a guest's state, shown 10 min after it changed; none yet = still checking
-        const m = s.machines?.[p.app];
-        st.push(m === 'up' ? word('ok', F ? 'en ligne' : 'up') : m === 'down' ? word('bad', F ? 'injoignable' : 'not answering') : word('info', F ? 'vérification' : 'checking'));
+  // ---- labels: one per realm, per group (L1, or the realm in focus) and per outside entry
+  const layer = $('labels');
+  let labels = [];
+  function buildLabels() {
+    layer.replaceChildren();
+    labels = [];
+    for (const r of REALMS) {
+      const e = el('div', { class: 'lbl realm', 'data-realm': r }, el('b', {}, REALM[r].label), el('span', {}));
+      layer.append(e);
+      labels.push({ key: r, e, kind: 'realm', realm: r });
+      for (const grp of model.realms[r].groups.values()) {
+        const ge = el('div', { class: 'lbl grp' }, grp.id);
+        layer.append(ge);
+        labels.push({ key: `${r}/${grp.id}`, e: ge, kind: 'grp', realm: r });
       }
-      const h = healthText[s.health[p.app]];
-      if (h) st.push(word(h[2], h[F ? 1 : 0]));
-      if (s.builds[p.app]) st.push(word('warn', F ? 'construction en cours' : 'build in progress'));
-      const n = s.alerts.filter((x) => x.app === p.app).length;
-      if (n) st.push(word('bad', F ? `${n} alerte${n > 1 ? 's' : ''}` : `${n} alert${n > 1 ? 's' : ''}`));
-      if (p.down) st.push(word('bad', F ? `hôte ${p.host} hors ligne` : `host ${p.host} down`));
-      // R8 C: its tents, the hosts it also runs on (never how many pods); a down host says so
-      const also = buildings.annexes().filter((x) => x.app === p.app).sort((x, y) => (y.host === cardedAt) - (x.host === cardedAt) || x.host.localeCompare(y.host))
-        .map((x) => (x.down ? `${x.host} (${F ? 'hors ligne' : 'down'})` : x.host));
-      if (also.length) st.push(word('info', `${F ? 'aussi sur' : 'also on'} ${new Intl.ListFormat(F ? 'fr' : 'en', { type: 'conjunction' }).format(also)}`));
     }
-    card.querySelector('.state').replaceChildren(...st);
-    const go = card.querySelector('.go');
-    go.hidden = !a.url || !!p.ruinAt;
-    if (a.url) { go.href = a.url; go.textContent = `${F ? 'Ouvrir' : 'Open'} ${a.name}`; }
-  }
-  // R9 Civ cards: the technologies (infra-bootstrap's ADRs, numbers only) and the guide (what the town's signs mean)
-  function fillInfo() {
-    const F = fr(), s = world.state, g = goldenAge(world);
-    card.style.setProperty('--wire', 'var(--wire-data)');
-    card.querySelector('.realname').hidden = true;
-    card.querySelector('.go').hidden = true;
-    if (info === 'tech') {
-      const top = `ADR-${String(s.tech.top).padStart(4, '0')}`;
-      card.querySelector('.kicker').textContent = F ? 'civilisation' : 'civilization';
-      card.querySelector('h2').textContent = F ? 'Technologies' : 'Technologies';
-      card.querySelector('.desc').textContent = !s.tech.count // a day from before R9, or not listed yet
-        ? (F ? 'Chaque décision d\'architecture prise pour le cluster est une technologie découverte. Aucune n\'est encore connue ici.' : 'Every architecture decision recorded for the cluster is a technology discovered. None is known here yet.')
-        : F
-          ? `Chaque décision d'architecture prise pour le cluster est une technologie découverte : ${s.tech.count} à ce jour, la dernière est ${top}.`
-          : `Every architecture decision recorded for the cluster is a technology discovered: ${s.tech.count} so far, the latest is ${top}.`;
-      card.querySelector('.state').replaceChildren(word('info', F ? 'sources : les ADR d\'infra-bootstrap' : 'source: infra-bootstrap ADRs'));
-      return;
+    for (const [k, o] of Object.entries(OUTSIDE)) {
+      const e = el('div', { class: 'lbl outside' }, el('b', {}, o.label), el('span', {}, `${model.outside[k].length} ${o.kind === 'repo' ? 'repos' : 'hostnames'}`));
+      layer.append(e);
+      labels.push({ key: `outside/${k}`, e, kind: 'outside' });
     }
-    card.querySelector('.kicker').textContent = F ? 'civilopédie' : 'civilopedia';
-    card.querySelector('h2').textContent = F ? 'Comment lire la ville' : 'How to read the town';
-    card.querySelector('.desc').textContent = '';
-    const rows = F ? [
-      ['Îles', 'les trois hôtes Proxmox ; grise et enfoncée : hôte hors ligne (catastrophe)'],
-      ['Bâtiments', 'une application ou un service, sur l\'hôte où tournent la plupart de ses pods ; les services de la plateforme sont les merveilles'],
-      ['Copies et bannières', 'l\'application tourne aussi sur cette île (colonie)'],
-      ['Échafaudage', 'une construction en cours (production)'],
-      ['Feux', 'une alerte en cours (barbares)'],
-      ['Fumée', 'une application dégradée (agitation)'],
-      ['Héraut', 'un déploiement, de nouvelles lois (commits gitops), une technologie (ADR)'],
-      ['Âge d\'or', `aucune alerte Alertmanager d'avertissement ou critique et aucune application dégradée depuis ${GOLDEN_DAYS} jours`],
-      ['Tour', 'le nombre de jours depuis la naissance de la ville'],
-    ] : [
-      ['Islands', 'the three Proxmox hosts; grey and sunk: a host down (disaster)'],
-      ['Buildings', 'an app or a service, on the host running most of its pods; the platform services are the wonders'],
-      ['Copies and banners', 'the app also runs on that island (a settlement)'],
-      ['Scaffolding', 'a build in progress (production)'],
-      ['Fires', 'an alert firing (barbarians)'],
-      ['Smoke', 'a degraded app (unrest)'],
-      ['The herald', 'a deploy, new laws (gitops commits), a technology (an ADR)'],
-      ['Golden age', `no warning or critical Alertmanager alert and no degraded app for ${GOLDEN_DAYS} days`],
-      ['Turn', 'the number of days since the town began'],
-    ];
-    const dl = document.createElement('dl');
-    dl.className = 'guide';
-    for (const [k, v] of rows) dl.append(Object.assign(document.createElement('dt'), { textContent: k }), Object.assign(document.createElement('dd'), { textContent: v }));
-    card.querySelector('.state').replaceChildren(dl, ...(g.on ? [word('ok', F ? `âge d'or, jour ${g.days}` : `golden age, day ${g.days}`)] : []));
+    paintLabels();
   }
-  const techBtn = Object.assign(document.createElement('button'), { type: 'button', onclick: () => openInfo('tech') });
-  const guideBtn = Object.assign(document.createElement('button'), { type: 'button', onclick: () => openInfo('guide') });
-  const line = document.getElementById('line'), facts = document.getElementById('facts'), staleEl = document.getElementById('stale');
-  const led = Object.assign(document.createElement('button'), { type: 'button' }), ledText = document.createElement('span');
-  led.append(Object.assign(document.createElement('span'), { className: 'led' }), ledText);
-  led.onclick = () => world.state.alerts[0] && goAlert(world.state.alerts[0]);
-  function fillPanel() {
-    const F = fr(), s = world.state, n = s.plots.filter((p) => !p.ruinAt).length;
-    const turn = turnOf(world, started), g = goldenAge(world);
-    line.textContent = (turn ? (F ? `Tour ${turn} · ` : `Turn ${turn} · `) : '') + (F ? `Le cluster ukubi en direct : ${n} bâtiments sur 3 îles.` : `The ukubi cluster, live: ${n} buildings on 3 islands.`);
-    const parts = world.town.islands.map((i) => world.ready[i.host] === false ? word('bad', `${i.host} ${F ? 'hors ligne' : 'down'}`) : word('ok', `${i.host} ${F ? 'en ligne' : 'up'}`));
-    const off = Object.entries(s.machines || {}).filter(([app, st]) => st === 'down' && s.plots.some((p) => p.app === app && !p.ruinAt)).length;
-    if (off) parts.push(word('bad', F ? `${off} machine${off > 1 ? 's' : ''} injoignable${off > 1 ? 's' : ''}` : `${off} machine${off > 1 ? 's' : ''} not answering`));
-    const al = s.alerts.length;
-    if (al) { // the LED: lit only while something fires; it takes you there (one button, updated in place: taps land)
-      ledText.textContent = F ? `${al} alerte${al > 1 ? 's' : ''}` : `${al} alert${al > 1 ? 's' : ''}`;
-      parts.push(led);
+  function paintLabels() {
+    for (const l of labels) {
+      if (l.kind !== 'realm') continue;
+      const realm = model.realms[l.realm], firing = alertsOn(model, live, { realm: l.realm }).length;
+      let text = `${realm.groups.size} groups · ${realm.count} parts`;
+      if (view.lens === 'land') {
+        const s = live?.land?.realms?.[l.realm];
+        text = s ? `cpu ${pct(s.cpu)} · ram ${pct(s.mem)} · disk ${pct(s.disk)}` : live?.land?.capacity?.cpu ? 'no pods in the cluster' : 'no land data yet';
+      }
+      if (firing) text += ` · ${firing} firing`;
+      l.e.lastChild.textContent = text;
     }
-    if (g.on) parts.push(word('gold', F ? `âge d'or · jour ${g.days}` : `golden age · day ${g.days}`)); // R9
-    if (s.tech?.count) { techBtn.textContent = F ? `${s.tech.count} technologies` : `${s.tech.count} technologies`; parts.push(techBtn); }
-    guideBtn.textContent = F ? 'guide' : 'guide';
-    parts.push(guideBtn);
-    facts.replaceChildren(...parts);
-    staleEl.hidden = world.stale == null;
-    if (world.stale != null) staleEl.textContent = `${F ? 'Figé depuis' : 'Stale since'} ${new Date(world.stale).toLocaleTimeString(F ? 'fr' : 'en', { hour: '2-digit', minute: '2-digit' })}`;
-    if (carded) fillCard();
-    if (info) fillInfo();
   }
-  function goAlert(al) {
-    const p = al.app && buildings.plots().find((x) => x.app === al.app);
-    if (p) { openCard(p); return flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5)); }
-    const host = al.host || buildings.plots().find((x) => x.role === 'watchtower')?.host || 'h1';
-    const is = islands.islands.find((i) => i.host === host);
-    flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5));
-  }
-  world.on('state', fillPanel); world.on('metrics', fillPanel); world.on('hello', fillPanel);
-  const toys = createToys({ THREE, kit, world, canvas, camera, lang });
-  scene.add(toys.aim);
-  fillPanel();
-
-  // ---- sky: the real sun over Paris → day, dusk, night
-  // Ukubi: the Office surface by day, the Underground surface at night (with the Glow theme: the wires light up)
-  const day = { bg: new THREE.Color(kit.ukubi.office.surface), hemi: low ? 1.1 : 1.6, sun: low ? 3.2 : 2.4 };
-  const dark = { bg: new THREE.Color(kit.ukubi.glow.surface), hemi: 0.85, sun: 0 };
-  const dusk = new THREE.Color(0xf2c9a0);
-  let night = 0, skyAt = 0, pinned = null;
-  function sky(ms) {
-    const s = sunAt(ms), el = s.elev;
-    night = kit.clamp01((4 - el) / 12); // +4° → day, −8° → night
-    const glow = kit.clamp01(1 - Math.abs(el - 1) / 7) * (1 - night * 0.6); // a warm band around sunset/sunrise
-    bg.copy(day.bg).lerp(dusk, glow * 0.55).lerp(dark.bg, night);
-    scene.fog.color.copy(bg);
-    hemi.intensity = THREE.MathUtils.lerp(day.hemi, dark.hemi, night);
-    sun.intensity = THREE.MathUtils.lerp(day.sun, 0.25, night);
-    sun.color.set(0xfff4e6).lerp(new THREE.Color(0xffb27a), glow);
-    moon.intensity = 0.9 * night;
-    // light from the sun's real direction (south = −z, so the day arc crosses the default view), never from below
-    const az = THREE.MathUtils.degToRad(s.az), e = THREE.MathUtils.degToRad(Math.max(el, 12));
-    sun.position.set(mid[0] - 60 * Math.cos(e) * Math.sin(az), 60 * Math.sin(e), mid[1] + 60 * Math.cos(e) * Math.cos(az));
-    sun.target.position.set(mid[0], 0, mid[1]);
-    moon.position.set(mid[0] + 30, 50, mid[1] + 40);
-    document.body.classList.toggle('glow', night > 0.5);
-  }
-
-  // ---- loop
-  let w = 0, h = 0, last = performance.now(), t = 0, drawn = 0;
-  const fps = low ? 30 : 60;
-  function resize() {
-    if (canvas.clientWidth === w && canvas.clientHeight === h) return;
-    w = canvas.clientWidth; h = canvas.clientHeight;
-    renderer.setSize(w, h, false);
-    refit();
-  }
-  resize();
-  controls.update();
-  sky(pinned ?? clock());
-  document.getElementById('loader').hidden = true;
-  renderer.setAnimationLoop((nowMs) => {
-    if (nowMs - drawn < 1000 / fps - 2) return;
-    drawn = nowMs;
-    const dt = Math.min(0.1, (nowMs - last) / 1000); last = nowMs; t += dt;
-    resize();
-    if (nowMs - skyAt > 30000) { skyAt = nowMs; sky(pinned ?? clock()); }
-    if (fly) {
-      const f = Math.min(1, (nowMs - fly.t0) / fly.dur), k = kit.easeInOut(f);
-      camera.position.lerpVectors(fly.from, fly.to, k);
-      controls.target.lerpVectors(fly.fromT, fly.toT, k);
-      if (f >= 1) fly = null;
+  map.onFrame(() => {
+    const c = $('c');
+    for (const l of labels) {
+      const show = l.kind !== 'grp' || view.level === 1 || view.realm === l.realm;
+      const w = show && map.where(l.key);
+      const at = !w ? null : l.kind === 'realm' ? (view.level === 1 ? map.edge(l.realm) : w.clone().setY(1.2)) : l.kind === 'grp' ? w.clone().setY(w.y + 0.45) : w.clone().setY(0.9);
+      const p = at && project(map.camera, c, at);
+      if (!p) { l.e.hidden = true; continue; }
+      l.e.hidden = false;
+      l.e.style.transform = `translate(-50%, -100%) translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
+      l.e.classList.toggle('dim', !!view.realm && l.realm !== view.realm && l.kind !== 'outside');
     }
-    controls.update();
-    { const d = camera.position.distanceTo(controls.target); scene.fog.near = d + 25 + 200 * night; scene.fog.far = d + 110 + 400 * night; }
-    islands.update(); bridges.update(dt, night); marks.update(night);
-    herald.update(dt, t); bunting.update(dt, t, night); // R9 Civ
-    buildings.update(dt, t, night, home && !moved && !fly ? null : controls.target); // R8 C: annex copies by zoom level
-    people.update(t);
-    toys.tick();
-    world.step(dt);
-    labels.update(buildings.plots(), camera, w, h, {
-      obstacle: dockBox,
-      chips: w < 600 && home && !moved && !fly ? islands.islands : null, // the phone's overview: one chip per island
-      machines: !(home && !moved), // R8: machine names only once the camera leaves the overview
-      tents: buildings.annexes(), // R8 C: named with the machines, once the camera leaves the overview
-      notes: herald.notes(), // R9: the herald's decree, placed first
-    });
-    renderer.render(scene, camera);
   });
+  buildLabels();
 
-  if (dev) globalThis.__town = {
-    ready: true, world, scene, renderer, camera, controls, buildings,
-    inject: (f) => world.applyFrame(f),
-    sunAt: (iso) => { pinned = Date.parse(iso); skyAt = 0; sky(pinned); },
-    fly: (what) => {
-      const tent = buildings.annexes().find((x) => x.key === what); // R8 C: 'app@h1'
-      const main = tent && buildings.plots().find((x) => x.app === tent.app);
-      if (main) { openCard(main, tent.host); flyTo(view(new THREE.Vector3(tent.x, 0.6, tent.z), 4.5), 0.01); return; }
-      const p = buildings.plots().find((x) => x.app === what);
-      if (p) { openCard(p); flyTo(view(new THREE.Vector3(p.x, 0.6, p.z), 4.5), 0.01); return; }
-      const is = islands.islands.find((i) => i.host === what);
-      if (is) return flyTo(view(new THREE.Vector3(is.centre[0], 0, is.centre[1]), 2 * is.radius + 1.5), 0.01);
-      closeCard(); flyTo(overview(), 0.01);
-    },
-    info: () => ({ draws: renderer.info.render.calls, tris: renderer.info.render.triangles, plots: buildings.plots().length, annexes: buildings.annexes().length, copies: buildings.copies(), heralds: herald.notes().length, cam: +camera.position.distanceTo(controls.target).toFixed(1) }),
+  // ---- the view
+  function go(v) {
+    const h = format(v);
+    if (h !== location.hash) location.hash = h;
+    else render();
+  }
+  function render() {
+    view = parse(location.hash);
+    $('panel').replaceChildren(panel(model, live, view));
+    map.resize(); // the panel's width sets the projection centre
+    map.setView(view);
+    $('level').textContent = view.level === 1 ? 'L1 · EMPIRE' : 'L0 · MAP';
+    $('crumbs').replaceChildren(crumbs(model, view));
+    $('minimap').replaceChildren(minimap(view));
+    $('lens-structure').setAttribute('aria-pressed', String(view.lens !== 'land'));
+    $('lens-land').setAttribute('aria-pressed', String(view.lens === 'land'));
+    $('level-0').setAttribute('aria-pressed', String(view.level === 0));
+    $('level-1').setAttribute('aria-pressed', String(view.level === 1));
+    paintLabels();
+    paintStatus();
+    if (dev) globalThis.__atlas = { ready: true, view, stats: () => map.stats, model: { nodes: model.nodes.size, edges: model.edges.length },
+      inject: (f) => onFrame(f), point: (key) => { const w = map.where(key), r = $('c').getBoundingClientRect(), p = w && project(map.camera, $('c'), w); return p && { x: r.left + p[0], y: r.top + p[1] }; } };
+  }
+  addEventListener('hashchange', render);
+  $('lens-structure').addEventListener('click', () => go({ ...view, lens: 'structure' }));
+  $('lens-land').addEventListener('click', () => go({ ...view, lens: 'land' }));
+  $('level-0').addEventListener('click', () => go({ level: 0, lens: view.lens }));
+  $('level-1').addEventListener('click', () => go({ ...view, level: 1 }));
+
+  // ---- search: the way out of a fold
+  const box = $('search'), res = $('results');
+  function openSearch(text) { box.value = text; box.focus(); showResults(); }
+  function showResults() {
+    const s = box.value.trim();
+    res.hidden = !s;
+    if (s) res.replaceChildren(results(model, view, search(model, s, 30)));
+  }
+  box.addEventListener('input', showResults);
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { res.querySelector('a')?.click(); e.preventDefault(); }
+    if (e.key === 'Escape') { box.value = ''; showResults(); box.blur(); }
+  });
+  res.addEventListener('click', (e) => { if (e.target.closest('a')) { box.value = ''; res.hidden = true; } });
+
+  // ---- Last event (Age of Empires' idle key): fly to it, at the deepest level where it stands alone
+  function lastEvent() {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i], g = e.node && groupOf(model, e.node);
+      if (g) return go({ level: 1, realm: g.realm, group: g.group, sel: e.node, lens: view.lens });
+      if (e.node && model.nodes.has(e.node)) return go({ ...view, sel: e.node });
+    }
+  }
+  $('last').addEventListener('click', lastEvent);
+  addEventListener('keydown', (e) => {
+    if (e.target.closest?.('input, textarea')) return;
+    if (e.key === 'l' || e.key === 'L') lastEvent();
+    else if (e.key === '/') { e.preventDefault(); box.focus(); }
+    else if (e.key === 'Escape') go(up(view));
+  });
+  function paintLast() {
+    const e = [...events].reverse().find((x) => x.node);
+    $('last').disabled = !e;
+    $('last').title = e ? `${e.text} (${new Date(e.ts).toLocaleTimeString()})` : 'No event yet';
+  }
+
+  function paintStatus() { $('status').textContent = status(model, live, conn); }
+  setInterval(paintStatus, 15000);
+
+  // ---- live
+  let fetching = 0;
+  async function refetch(seq) {
+    if (seq && seq === model.seq) return;
+    const mine = ++fetching;
+    const v = await fetchGraph().catch((e) => (console.warn(e), null));
+    if (!v || mine !== fetching || v.seq === model.seq) return; // a later refetch owns the answer
+    if (v.seq < model.seq && !seq) return;
+    model = buildModel(v);
+    map.setModel(model);
+    map.setLive(live);
+    buildLabels();
+    render();
+  }
+  const onFrame = (f) => {
+    if (f.t === 'hello') {
+      if (mine && f.build && f.build !== mine) return failed(new Error(`build ${mine} → ${f.build}`));
+      live = f.live;
+      events = f.events || [];
+      map.setLive(live);
+      refetch(f.seq);
+    } else if (f.t === 'live') {
+      live = f;
+      map.setLive(live);
+    } else if (f.t === 'ev') {
+      events.push(f);
+      events = events.slice(-50);
+    } else if (f.t === 'graph') {
+      refetch(f.seq);
+      return;
+    } else return;
+    paintLast();
+    const pane = $('panel'), y = pane.scrollTop;
+    pane.replaceChildren(panel(model, live, view));
+    pane.scrollTop = y;
+    paintLabels();
+    paintStatus();
   };
+  connect({ onFrame, onStatus: (s) => { conn = s; paintStatus(); }, ...(dev && q.get('ws') ? { url: q.get('ws') } : { probe: () => gateLapsed() }) });
+
+  // ---- who is signed in
+  fetch('/auth/me', { cache: 'no-store' }).then((r) => r.json()).then((me) => {
+    if (me.name) $('who').textContent = me.name;
+    $('signout').hidden = !me.enabled;
+  }).catch(() => {});
+
+  render();
+  paintLast();
 }

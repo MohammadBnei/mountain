@@ -7,7 +7,9 @@
 > **Revision 8, 2026-10-22.** The town grows up: islands sized by their hosts, a building typology, then the machines
 > and the annexes (00 R8 rows).
 > **Revision 10, 2026-10-24.** atlas: admins only, the town rebuilt as realm islands, the relay absorbed into a
-> CQRS projector (00 R10 rows, `10-understanding.md`). Design only so far.
+> CQRS projector (00 R10 rows, `10-understanding.md`). A1 merged; A2 (`cmd/atlas`, L0/L1, the town deleted) built.
+> From A2 on, the town sections below (Context, R7–R9, `01`–`08`) are history: the code they describe is gone, and
+> `10-understanding.md` is the live design.
 
 ## Context
 mountain.bnei.dev draws the ukubi cluster live. Since R7 it is a **town** built from pi-lab's clay kit
@@ -77,7 +79,7 @@ building (it is an LXC). The owner's answers, one question at a time, are the R8
 | Civ (R9) | The herald, technologies, golden age bunting, turns, a guide (00 Civ row); levels taken out until goals exist (09-play) | Styleboard **signed off by the owner** (2026-10-23); PR open after C2 merged |
 | Engine | Measure (shadow shapes, walker shadows, simplification test, gate breakdown), then BatchedMesh | After Civ (its worst case fits as is) |
 | Play (research) | Make the town playable with fleet agents: owner interview, architecture, doubt cycle (`09-play.md`) | **Parked** 2026-10-24 (admins only, R10) |
-| Atlas (R10) | The system understanding surface: realm islands, a 5-step ladder, a CQRS projector over the repos and live data, admins only (`10-understanding.md`). Joint with agent-kit | Design done 2026-10-24 (A0); A1 next after the owner signs off on the styleboard |
+| Atlas (R10) | The system understanding surface: realm islands, a 5-step ladder, a CQRS projector over the repos and live data, admins only (`10-understanding.md`). Joint with agent-kit | A0 + A1 merged (#28, `8d0e3ad`). A2 built: `cmd/atlas` replaces the relay, L0 map + land lens and L1 trade routes, the repo poll, the town deleted. One deploy, with infra-bootstrap's gate narrowing; merge on the owner's word. A3 next |
 | Later | **The sea** (owner, 2026-10-23): water between the islands, with waves | After Deploy C; its own plan |
 
 **Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads

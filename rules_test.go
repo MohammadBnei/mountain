@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestRules checks the PrometheusRule in helm/values.yaml extraManifests (06): every rule is severity notice
+// TestRules checks the PrometheusRule in helm/values.yaml extraManifests: every rule is severity notice
 // (warning|critical route to thot; info is eaten by the live InfoInhibitor inhibit rule, so never reaches Discord), and runs helm/rules.test.yaml through promtool when it is on PATH.
 func TestRules(t *testing.T) {
 	b, err := os.ReadFile("helm/values.yaml")
@@ -54,7 +54,7 @@ func TestRules(t *testing.T) {
 			}
 		}
 	}
-	for _, n := range []string{"MountainSourceStale", "MountainTokenExpiring", "MountainUnmapped"} {
+	for _, n := range []string{"MountainSourceStale", "MountainTokenExpiring", "MountainUnassigned"} {
 		if !names[n] {
 			t.Errorf("rule %s missing", n)
 		}

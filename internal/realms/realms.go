@@ -29,7 +29,21 @@ type Realms struct {
 	ADRHome      map[string]string    `yaml:"adrHome"`      // repo without ADRs -> repo its bare citations mean
 	ShortADR     map[string]string    `yaml:"shortADR"`     // repo -> repo its bare "adr/NNNN" means (else its ADR home)
 	Skip         map[string][]string  `yaml:"skip"`         // repo -> repo-relative dirs whose files are not the repo's words
+	Sources      []string             `yaml:"sources"`      // repos atlas fetches and reads, infra-bootstrap first
+	Probes       map[string]string    `yaml:"probes"`       // blackbox target -> node id (pve-<host> is implicit)
+	Namespaces   map[string]string    `yaml:"namespaces"`   // namespace without an Application -> realm
 	Components   map[string]Component `yaml:"components"`
+}
+
+// ProbeNode is the node a blackbox target probes, or "".
+func (r *Realms) ProbeNode(target string) string {
+	if h, ok := strings.CutPrefix(target, "pve-"); ok {
+		if _, known := r.Hosts[h]; known {
+			return "host:" + h
+		}
+		return ""
+	}
+	return r.Probes[target]
 }
 
 // Load parses the embedded realms.yaml.
@@ -56,6 +70,19 @@ func Parse(b []byte) (*Realms, error) {
 	for vm, h := range r.K8sPlacement {
 		if _, ok := r.Hosts[h]; !ok {
 			return nil, fmt.Errorf("realms.yaml: k8s node %s is on %q, not a listed host", vm, h)
+		}
+	}
+	if len(r.Sources) == 0 || r.Sources[0] != "infra-bootstrap" {
+		return nil, fmt.Errorf("realms.yaml: sources must start with infra-bootstrap (its registry names the branches)")
+	}
+	for target, id := range r.Probes {
+		if _, ok := r.Components[id]; !ok {
+			return nil, fmt.Errorf("realms.yaml: probe %s -> %s is not a listed component", target, id)
+		}
+	}
+	for ns, realm := range r.Namespaces {
+		if !slices.Contains(r.Realms, realm) {
+			return nil, fmt.Errorf("realms.yaml: namespace %s has realm %q, not one of %v", ns, realm, r.Realms)
 		}
 	}
 	if _, ok := r.Hosts[r.PVENodeName]; !ok {
