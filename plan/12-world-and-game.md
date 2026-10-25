@@ -4,6 +4,8 @@
 > code lives in the private repo `ukubi-game` once the owner creates it. Slices 3–5 wait on the owner's go for
 > agent-fleet items (c) and (d).
 
+> The game's town (its look, buildings, civs, ages and AoE mechanics) is designed in `13-game-town.md` (R12).
+
 ## Context
 The cluster is down until about 2026-10-26. atlas can only be iterated on against static fixtures, which bypass its
 own clients (`--live-fixture` unmarshals straight into `LiveState`, and nothing in them ever happens). The owner
