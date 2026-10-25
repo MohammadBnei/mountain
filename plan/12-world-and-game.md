@@ -1,6 +1,6 @@
 # 12 · R11: ukubi-game, an offline world that mirrors the contracts, and the game on top (design, 2026-10-25)
 
-> Status: **approved 2026-10-25; slice 1a in progress** (this repo's half: `contract/` exported, `realms/` public). The
+> Status: **approved 2026-10-25; slice 1a: this repo's half (`contract/`, public `realms/`) is PR #31; no recorder**. The
 > code lives in the private repo `ukubi-game` once the owner creates it. Slices 3–5 wait on the owner's go for
 > agent-fleet items (c) and (d).
 
@@ -23,7 +23,8 @@ on the owner's go for the agent-fleet items listed under them.
 ## Decisions (owner 2026-10-24/25; the other session's corrections adopted)
 - **Purpose:** iterate atlas offline; prototype the game.
 - **Drivers:** an adaptive director, scripted scenarios, real fleet agents.
-- **Realism:** statistical replay. Synthetic models now; series recorded **forward only** from the cluster's return.
+- **Realism:** statistical replay. Synthetic models now; real curves later from a one-shot pull of Prometheus's
+  history (no recorder: atlas already polls).
 - **Time:** real time plus pause/step. Rewind/branch are deferred, but not designed out.
 - **Homes:**
   - a new **private repo `ukubi-game`** for the sim, the game backend and the game client;
@@ -88,18 +89,12 @@ on the owner's go for the agent-fleet items listed under them.
   nothing else.
 - **Checks:** mountain's full suite and the render gate, unchanged.
 
-**ukubi-game: scaffold and recorder** (the owner creates the private repo first):
-- `go.mod` requiring mountain; `GOPRIVATE=github.com/MohammadBnei/*`; CI reads mountain with a token through
-  `insteadOf`; `go.work` locally.
-- **`cmd/record`** (read-only):
-  - polls the 14 queries as range queries over the last minute at a 15 s step, and AM's `/api/v2/alerts`, every
-    15 s;
-  - appends to `recordings/<id>/{prom/<name>/<day>.json.zst, am/<day>.jsonl.zst}`, with a `meta.json` (window,
-    query-table hash, graph seq);
-  - `record capture` saves verbatim responses with headers into `contract/captures/<date>/`.
-- **Proves (offline):** the recorder against a fake Prometheus/AM; the query table covers `contract` exactly.
-- **Where the recorder runs** when the cluster is back: the k9s hub or a dev pod. To be added to
-  `mountain/plan/11-cluster-return.md` as an owner step.
+**No recorder (owner, 2026-10-25).** atlas already polls these queries every 15 s, and a second poller would
+duplicate it. Real curves come later from a **one-shot pull of Prometheus's own history** (range queries over
+whatever retention it keeps), which fits the models (slice 5). The same command takes the contract captures (verbatim
+responses with headers) for the shape tests. So nothing has to run from the cluster's first day, and 1a's
+ukubi-game half is the repo scaffold, which goes in with slice 1. The repo exists (created 2026-10-25); commits
+follow infra-bootstrap's trailers (`Co-Authored-By: ukubi-claude-cloud`, `Agent-Session`).
 
 ## Slice 1: atlas against a living world
 **`cmd/sim`** in ukubi-game:
@@ -213,15 +208,13 @@ on the owner's go for the agent-fleet items listed under them.
   - bounds: λ between 0.2× and 3×, at most 2 incidents, 10 min of calm after a resolution, nothing new while a
     needs-you is older than 15 min, never work time or rewards.
 - **SLO closure.**
-- **Fitted replay** (`Bootstrap`, `fit` from recordings).
+- **Fitted replay** (`Bootstrap`, `fit`) from the one-shot Prometheus pull, plus the contract captures.
 - **The `real` world profile.**
 - **The forge deep-dive** (PRs, checks).
 
 ## Verification
 - **Slice 1a:**
-  - mountain's suite and render gate, unchanged after the export;
-  - the recorder against a fake Prometheus/AM;
-  - query-table coverage.
+  - mountain's suite and render gate, unchanged after the export.
 - **Slice 1:**
   - unit tests: determinism (same seed and t → same Frame, across pause/step); the four projection invariants;
     alert rules; the AM fingerprint;

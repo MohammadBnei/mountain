@@ -125,12 +125,6 @@ From the other session (it runs 3a, 3b and 3e; you click Run where it can't):
 - [ ] Not verifiable before: a live token's `iss`; Alertmanager reaching the bridge; core's grant; one PR event opening
       a session end to end. I check each with you as its step lands.
 
-## 6b. Start the recorder (you; R11, `12-world-and-game.md`)
-- [ ] Once `ukubi-game` exists and its recorder is merged: run `record` where the cluster's Prometheus and
-      Alertmanager are reachable (the k9s hub, or a dev pod in `mountain-test` with `scripts/devpod.sh`'s pattern).
-      It is read-only (range queries, `/api/v2/alerts`). Recording is forward only, so each day it is not running is
-      lost history. Also run `record capture` once, for the contract shape tests.
-
 ## 7. Still open from earlier rounds (only if not done before the outage)
 - [ ] ADR-0065's live checks (R8 deploy C1), if you never ran them: the header-forged `curl` to
       `/outpost.goauthentik.io/auth/traefik` redirects with a `redirect_uri` on mountain.bnei.dev.
