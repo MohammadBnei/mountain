@@ -32,7 +32,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/MohammadBnei/mountain/internal/realms"
+	"github.com/MohammadBnei/mountain/contract"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 var liveEvery = 15 * time.Second
@@ -249,27 +250,11 @@ type promPoll struct {
 	idx func() *GraphIndex
 }
 
-// promQ: name -> PromQL.
-var promQ = map[string]string{
-	"info":    `argocd_app_info`,
-	"ready":   `kube_node_status_condition{condition="Ready",status="true"}`,
-	"probes":  `max by (target) (probe_success{target=~"guest-.*|pve-.*"})`,
-	"cpu":     `sum by (namespace) (rate(container_cpu_usage_seconds_total{container!="",image!=""}[5m]))`,
-	"mem":     `sum by (namespace) (container_memory_working_set_bytes{container!="",image!=""})`,
-	"disk":    `sum by (namespace) (kubelet_volume_stats_used_bytes)`,
-	"cpucap":  `sum(kube_node_status_allocatable{resource="cpu"})`,
-	"memcap":  `sum(kube_node_status_allocatable{resource="memory"})`,
-	"diskcap": `sum(kubelet_volume_stats_capacity_bytes)`,
-	"req":     `sum by (exported_service) (rate(traefik_service_requests_total[2m]))`,
-	// per node: the city's worked tiles (cadvisor's series carry the node; allocatable is per node)
-	"cpunode":    `sum by (namespace, node) (rate(container_cpu_usage_seconds_total{container!="",image!=""}[5m]))`,
-	"memnode":    `sum by (namespace, node) (container_memory_working_set_bytes{container!="",image!=""})`,
-	"cpucapnode": `sum by (node) (kube_node_status_allocatable{resource="cpu"})`,
-	"memcapnode": `sum by (node) (kube_node_status_allocatable{resource="memory"})`,
-}
+// promQ: name -> PromQL (contract.Queries: the sim mirrors exactly these).
+var promQ = contract.Queries
 
 func query(ctx context.Context, hc *http.Client, base, q string) ([]sample, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", base+"/api/v1/query?query="+url.QueryEscape(q), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", base+contract.PromQueryPath+"?query="+url.QueryEscape(q), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -325,14 +310,14 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 
 	apps := map[string]AppLive{}
 	for _, s := range r["info"] {
-		id := "app:" + strings.ToLower(s.L["name"])
+		id := "app:" + strings.ToLower(s.L[contract.LabelName])
 		if idx.Has[id] {
-			apps[id] = AppLive{Health: s.L["health_status"], Sync: s.L["sync_status"]}
+			apps[id] = AppLive{Health: s.L[contract.LabelHealth], Sync: s.L[contract.LabelSync]}
 		}
 	}
 	// Traefik: requests per second per Application, from the exported service "<namespace>-<service>-<port>@<provider>"
 	for _, s := range r["req"] {
-		if id := appOfService(idx, s.L["exported_service"]); id != "" {
+		if id := appOfService(idx, s.L[contract.LabelExportedService]); id != "" {
 			a := apps[id]
 			a.RPS += s.V
 			apps[id] = a
@@ -345,13 +330,13 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 
 	ready := map[string]bool{}
 	for _, s := range r["ready"] {
-		if id := "vm:" + strings.ToLower(s.L["node"]); idx.Has[id] {
+		if id := "vm:" + strings.ToLower(s.L[contract.LabelNode]); idx.Has[id] {
 			ready[id] = s.V == 1
 		}
 	}
 	probes := map[string]bool{}
 	for _, s := range r["probes"] {
-		if id := p.l.rl.ProbeNode(s.L["target"]); id != "" {
+		if id := p.l.rl.ProbeNode(s.L[contract.LabelTarget]); id != "" {
 			probes[id] = s.V == 1
 		}
 	}
@@ -371,7 +356,7 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	}
 	for _, q := range []string{"cpucapnode", "memcapnode"} {
 		for _, s := range r[q] {
-			if n, id, ok := node(s.L["node"]); ok {
+			if n, id, ok := node(s.L[contract.LabelNode]); ok {
 				if q == "cpucapnode" {
 					n.Capacity.CPU = s.V
 				} else {
@@ -383,21 +368,21 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	}
 	for _, q := range []string{"cpunode", "memnode"} {
 		for _, s := range r[q] {
-			if n, id, ok := node(s.L["node"]); ok && s.L["namespace"] != "" {
-				u := n.NS[s.L["namespace"]]
+			if n, id, ok := node(s.L[contract.LabelNode]); ok && s.L[contract.LabelNamespace] != "" {
+				u := n.NS[s.L[contract.LabelNamespace]]
 				if q == "cpunode" {
 					u.CPU = math.Round(s.V*1000) / 1000
 				} else {
 					u.Mem = math.Round(s.V)
 				}
-				n.NS[s.L["namespace"]] = u
+				n.NS[s.L[contract.LabelNamespace]] = u
 				land.Nodes[id] = n
 			}
 		}
 	}
 	add := func(name string, set func(*Use, float64)) {
 		for _, s := range r[name] {
-			ns := s.L["namespace"]
+			ns := s.L[contract.LabelNamespace]
 			if ns == "" {
 				continue
 			}
@@ -522,7 +507,7 @@ type amPoll struct {
 }
 
 func (a *amPoll) poll(ctx context.Context, now time.Time) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", a.url+"/api/v2/alerts?active=true&silenced=false&inhibited=false", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", a.url+contract.AlertsPath, nil)
 	if err != nil {
 		return err
 	}
@@ -546,13 +531,13 @@ func (a *amPoll) poll(ctx context.Context, now time.Time) error {
 	}
 	cur := map[string]AlertLive{}
 	for _, x := range r {
-		name := x.Labels["alertname"]
-		if name == "Watchdog" || name == "InfoInhibitor" || x.Fingerprint == "" {
+		name := x.Labels[contract.LabelAlertName]
+		if slices.Contains(contract.AlertsSkipped, name) || x.Fingerprint == "" {
 			continue
 		}
 		node, realm := a.place(idx, x.Labels)
-		cur[x.Fingerprint] = AlertLive{FP: x.Fingerprint, Name: name, Severity: x.Labels["severity"], StartsAt: x.StartsAt.UnixMilli(),
-			Summary: x.Annotations["summary"], Node: node, Realm: realm, Labels: x.Labels}
+		cur[x.Fingerprint] = AlertLive{FP: x.Fingerprint, Name: name, Severity: x.Labels[contract.LabelSeverity], StartsAt: x.StartsAt.UnixMilli(),
+			Summary: x.Annotations[contract.AnnotationSummary], Node: node, Realm: realm, Labels: x.Labels}
 	}
 	if a.warm { // the first answer is the state, not a burst of events
 		for _, fp := range slices.Sorted(maps.Keys(a.firing)) {
@@ -577,13 +562,13 @@ func (a *amPoll) poll(ctx context.Context, now time.Time) error {
 // place is the node an alert's labels name (a probe target, a k8s node, then a namespace's one Application) and the
 // realm it pings at L0.
 func (a *amPoll) place(idx *GraphIndex, l map[string]string) (node, realm string) {
-	if id := a.l.rl.ProbeNode(l["target"]); id != "" {
+	if id := a.l.rl.ProbeNode(l[contract.LabelTarget]); id != "" {
 		return id, idx.Realm[id]
 	}
-	if id := "vm:" + strings.ToLower(l["node"]); l["node"] != "" && idx.Has[id] {
+	if id := "vm:" + strings.ToLower(l[contract.LabelNode]); l[contract.LabelNode] != "" && idx.Has[id] {
 		return id, idx.Realm[id]
 	}
-	if ns := l["namespace"]; ns != "" {
+	if ns := l[contract.LabelNamespace]; ns != "" {
 		if apps := idx.NSApps[ns]; len(apps) == 1 {
 			return apps[0], idx.Realm[apps[0]]
 		}

@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/MohammadBnei/mountain/internal/extract"
-	"github.com/MohammadBnei/mountain/internal/realms"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 type entry struct {

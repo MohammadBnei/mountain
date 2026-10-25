@@ -36,7 +36,7 @@ import (
 
 	"github.com/MohammadBnei/mountain"
 	"github.com/MohammadBnei/mountain/internal/extract"
-	"github.com/MohammadBnei/mountain/internal/realms"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 // Opts are the command-line flags plus the env the service reads at start.

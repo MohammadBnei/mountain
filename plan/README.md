@@ -9,6 +9,8 @@
 > **Revision 10, 2026-10-24.** atlas: admins only, the town rebuilt as realm islands, the relay absorbed into a
 > CQRS projector (00 R10 rows, `10-understanding.md`). A1 and A2 (`cmd/atlas`, L0/L1, the town deleted) merged; A3
 > (L2 cities, L3 cards, the L4 reader) built.
+> **Revision 11, 2026-10-25.** `ukubi-game`: an offline world mirroring the contracts, and the game on top
+> (`12-world-and-game.md`). mountain exports what atlas reads as `contract/`, and `realms/` goes public.
 > From A2 on, the town sections below (Context, R7–R9, `01`–`08`) are history: the code they describe is gone, and
 > `10-understanding.md` is the live design.
 
@@ -81,6 +83,7 @@ building (it is an LXC). The owner's answers, one question at a time, are the R8
 | Engine | Measure (shadow shapes, walker shadows, simplification test, gate breakdown), then BatchedMesh | After Civ (its worst case fits as is) |
 | Play (research) | Make the town playable with fleet agents: owner interview, architecture, doubt cycle (`09-play.md`) | **Parked** 2026-10-24 (admins only, R10) |
 | Atlas (R10) | The system understanding surface: realm islands, a 5-step ladder, a CQRS projector over the repos and live data, admins only (`10-understanding.md`). Joint with agent-kit | A0 + A1 merged (#28, `8d0e3ad`). A2 merged (#29, `7c8623a`): `cmd/atlas` replaces the relay, L0 map + land lens and L1 trade routes, the repo poll, the town deleted; not live until the cluster is back (`11-cluster-return.md`). A3 built: L2 cities, L3 CSS3D cards, the L4 reader with redaction; merge on the owner's word |
+| World and game (R11) | `ukubi-game` (private): an offline sim mirroring Prometheus, Alertmanager, GitHub and authentik on the wire, so atlas iterates with no cluster; a goals-per-building game on top, with agent-fleet definition sessions doing the work (`12-world-and-game.md`) | Approved 2026-10-25. Slice 1a: mountain's half (`contract/`, public `realms/`) is PR #31; `ukubi-game` exists (2026-10-25). No recorder: real curves come later from a one-shot Prometheus pull. Slices 3–5 wait on agent-fleet items (c) ADR-0070 ask-in-Invoke and (d) offline kind-local |
 | Later | **The sea** (owner, 2026-10-23): water between the islands, with waves | After Deploy C; its own plan |
 
 **Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads

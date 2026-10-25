@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/MohammadBnei/mountain/internal/graph"
-	"github.com/MohammadBnei/mountain/internal/realms"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 // Repo is one checkout: its root, the sha it is at and the branch HEAD names ("" when detached).
@@ -214,7 +214,7 @@ func declare(x *Ctx, repos Repos, rl *realms.Realms, g graph.Graph) {
 			continue
 		}
 		x.Node(graph.Node{ID: id, Kind: kind, Attrs: map[string]string{"repo": repo},
-			Source: graph.Source{Repo: "mountain", Path: "internal/realms/realms.yaml", SHA: repos["mountain"].SHA},
+			Source: graph.Source{Repo: "mountain", Path: "realms/realms.yaml", SHA: repos["mountain"].SHA},
 		})
 	}
 }

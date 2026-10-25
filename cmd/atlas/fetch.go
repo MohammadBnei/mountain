@@ -32,11 +32,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MohammadBnei/mountain/contract"
 	"github.com/MohammadBnei/mountain/internal/extract"
 )
 
 const (
-	ghOwner      = "MohammadBnei"
+	ghOwner      = contract.GitHubOwner
 	maxTreeBytes = 256 << 20 // ×5 sources + one being swapped stays under the 2 Gi cache (helm/values.yaml)
 	maxFileBytes = 8 << 20
 	maxEntries   = 200_000
@@ -69,7 +70,7 @@ func newGitHub(apiURL, token, dir string) (*ghHeads, error) {
 }
 
 func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Repo, error) {
-	b, err := g.get(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo)+"/commits/"+url.PathEscape(branch), "application/vnd.github.sha", true)
+	b, err := g.get(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo)+contract.GitHubCommits+url.PathEscape(branch), contract.GitHubHeadAccept, true)
 	if err != nil {
 		return extract.Repo{}, err
 	}
@@ -119,7 +120,7 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 
 // compare is GitHub's status of head relative to base: ahead, behind, identical or diverged.
 func (g *ghHeads) compare(ctx context.Context, repo, base, head string) (string, error) {
-	b, err := g.get(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo)+"/compare/"+base+"..."+head+"?per_page=1", "application/vnd.github+json", false)
+	b, err := g.get(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo)+contract.GitHubCompare+base+"..."+head+"?per_page=1", contract.GitHubJSONAccept, false)
 	if err != nil {
 		return "", err
 	}
@@ -132,7 +133,7 @@ func (g *ghHeads) compare(ctx context.Context, repo, base, head string) (string,
 
 // tree downloads repo at sha and unpacks it into a fresh directory under the cache.
 func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
-	req, err := g.request(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo)+"/tarball/"+sha, "application/vnd.github+json")
+	req, err := g.request(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo)+contract.GitHubTarball+sha, contract.GitHubJSONAccept)
 	if err != nil {
 		return "", err
 	}

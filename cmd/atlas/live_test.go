@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MohammadBnei/mountain/internal/realms"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 func testIndex() *GraphIndex {

@@ -5,6 +5,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY embed.go ./
 COPY internal ./internal
+COPY contract ./contract
+COPY realms ./realms
 COPY cmd ./cmd
 COPY www ./www
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /atlas ./cmd/atlas

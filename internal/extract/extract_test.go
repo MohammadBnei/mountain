@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/MohammadBnei/mountain/internal/graph"
-	"github.com/MohammadBnei/mountain/internal/realms"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 // fixtureRealms places what testdata holds, except ghost (a mirror-only app) and mystery (unresolved): those must

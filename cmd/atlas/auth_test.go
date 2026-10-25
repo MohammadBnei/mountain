@@ -20,7 +20,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 
 	"github.com/MohammadBnei/mountain"
-	"github.com/MohammadBnei/mountain/internal/realms"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 // fakeIdP is an in-process OIDC provider: discovery, JWKS, and a token endpoint that checks the PKCE verifier and

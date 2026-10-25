@@ -38,7 +38,7 @@ ArgoCD applies the two changed blueprint ConfigMaps on its own; authentik does n
 ## 3. Re-run the builds that queued while the runner was down
 GitHub cancels a job that waited more than 24 h for a runner, so these runs are almost certainly cancelled: start them
 again by hand (Actions → the workflow → Run workflow, branch `main`).
-- [ ] **mountain** `app` on `main` (`7c8623a`, A2; A1 is inside it). It tests, builds, pushes the image and bumps
+- [ ] **mountain** `app` on `main` (the latest main: A1, A2 and A3 at `2b5eaf9`, plus whatever merged since). It tests, builds, pushes the image and bumps
       `helm/values.yaml`'s tag, and ArgoCD rolls atlas out. One run is enough. Do step 4 first if you can.
 
 From the other session (it runs 3a, 3b and 3e; you click Run where it can't):
@@ -92,7 +92,7 @@ From the other session (it runs 3a, 3b and 3e; you click Run where it can't):
       `kubectl -n mountain rollout restart deploy/mountain`.
 
 ## 5. atlas is live (you check, I read the logs with you)
-- [ ] ArgoCD `mountain`: `Synced`, `Healthy`; the image tag in `helm/values.yaml` is `7c8623ae0784` (or later).
+- [ ] ArgoCD `mountain`: `Synced`, `Healthy`; the image tag in `helm/values.yaml` is main's latest sha (`2b5eaf9…` or later).
 - [ ] The log: `db: applied migration 001_atlas.sql` once, then `projector: projection 1: 5 repos, … nodes`. A line
       `projector: <repo>@main: not found (no access)` means step 4 is not done for that repo.
 - [ ] Anonymous: `curl -sI https://mountain.bnei.dev/` answers 302 to authentik.

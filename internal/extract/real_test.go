@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/MohammadBnei/mountain/internal/realms"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 // TestRealRepos runs every extractor over real checkouts when ATLAS_REPOS names a directory holding them (locally:
