@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"strings"
@@ -13,7 +14,17 @@ import (
 // fixtureRealms places what testdata holds, except ghost (a mirror-only app) and mystery (unresolved): those must
 // come out as unassigned drift.
 const fixtureRealms = `
-realms: [infra, platform, data, identity, events, fleet, apps]
+realms: [platform, data, operations, guard, fleet, apps, code]
+functions:
+  platform/hosts: land
+  platform/nodes: houses
+  data/postgres: economy
+  operations/build: trade
+  operations/atlas: town-centre
+  apps/products: product
+  guard/authentik: defence
+  fleet/cluster-access: barracks
+  fleet/control: barracks
 hosts: { bnei: h1, server1: h2, ex-laptop: h3 }
 pveNodeName: bnei
 sources: [infra-bootstrap, agent-fleet, mountain, pi-lab]
@@ -22,19 +33,19 @@ adrHome: { mountain: infra-bootstrap }
 shortADR: { infra-bootstrap: agent-fleet, agent-fleet: agent-fleet }
 skip: { infra-bootstrap: [kubespray] }
 components:
-  host:bnei: { realm: infra, group: hosts }
-  host:server1: { realm: infra, group: hosts }
-  host:ex-laptop: { realm: infra, group: hosts }
-  vm:k8s-cp-01: { realm: infra, group: nodes }
-  vm:k8s-worker-01: { realm: infra, group: nodes }
+  host:bnei: { realm: platform, group: hosts }
+  host:server1: { realm: platform, group: hosts }
+  host:ex-laptop: { realm: platform, group: hosts }
+  vm:k8s-cp-01: { realm: platform, group: nodes }
+  vm:k8s-worker-01: { realm: platform, group: nodes }
   vm:pg02: { realm: data, group: postgres }
-  ct:build-runner: { realm: infra, group: build }
+  ct:build-runner: { realm: operations, group: build }
   app:wird: { realm: apps, group: products }
   app:vos-monolith-dev: { realm: apps, group: products }
-  app:platform-authentik: { realm: identity, group: authentik }
+  app:platform-authentik: { realm: guard, group: authentik }
   app:platform-thot: { realm: fleet, group: cluster-access }
-  app:platform-second: { realm: fleet, group: cluster-access }
-  app:mountain: { realm: platform, group: observability, paths: [mountain/] }
+  app:platform-second: { realm: fleet, group: cluster-access, function: trade }
+  app:mountain: { realm: operations, group: atlas, paths: [mountain/] }
   svc:agent-fleet/core: { realm: fleet, group: control, paths: [agent-fleet/core/] }
 `
 
@@ -93,10 +104,54 @@ func hasDrift(g graph.Graph, kind, subject, detail string) bool {
 	return false
 }
 
+func TestPlace(t *testing.T) {
+	g := fixture(t).Graph
+	if n := node(t, g, "app:platform-second"); n.Function != realms.FnTrade {
+		t.Errorf("a component's own function wins over its group's: %+v", n)
+	}
+	if n := node(t, g, "app:platform-thot"); n.Function != realms.FnBarracks {
+		t.Errorf("thot = %+v", n)
+	}
+	for id, group := range map[string]string{
+		"repo:wird":            "apps",   // fed by app:wird alone
+		"repo:vos-monolith":    "apps",   // two apps, one realm
+		"repo:infra-bootstrap": "shared", // the chart and thot's paths: apps, fleet and more
+		"repo:ghost":           "own",    // deployed only by app:ghost, which realms.yaml doesn't list
+	} {
+		if n := node(t, g, id); n.Realm != realms.Code || n.Group != group || n.Function != realms.FnWorkshop {
+			t.Errorf("%s = %s/%s %s, want code/%s workshop", id, n.Realm, n.Group, n.Function, group)
+		}
+	}
+	for _, n := range g.Nodes {
+		if n.Kind == graph.KindRepo && n.Realm != realms.Code {
+			t.Errorf("%s is not in code", n.ID)
+		}
+		if (n.Kind == graph.KindDNS || n.Kind == graph.KindADR) && (n.Realm != "" || n.Function != "") {
+			t.Errorf("%s is placed: %+v", n.ID, n)
+		}
+	}
+}
+
+func TestFoldCode(t *testing.T) {
+	g := graph.Graph{}
+	for i, r := range []string{"a", "b", "b", "c", "c", "d", "d", "e", "e", "f", "f", "g", "g", "h", "h", "own"} {
+		g.Nodes = append(g.Nodes, graph.Node{ID: fmt.Sprintf("repo:r%d", i), Kind: graph.KindRepo, Realm: realms.Code, Group: r})
+	}
+	foldCode(&g)
+	got := map[string]int{}
+	for _, n := range g.Nodes {
+		got[n.Group]++
+	}
+	// 9 groups, and "shared" takes a slot too: a (the smallest), then h and g (ties fold the later name) go, own stays
+	if len(got) != maxGroups || got["shared"] != 5 || got["a"]+got["g"]+got["h"] != 0 || got["b"] != 2 || got["own"] != 1 {
+		t.Errorf("folded: %v", got)
+	}
+}
+
 func TestGitops(t *testing.T) {
 	g := fixture(t).Graph
 	w := node(t, g, "app:wird")
-	if w.Realm != "apps" || w.Group != "products" || w.Attrs["namespace"] != "wird" {
+	if w.Realm != "apps" || w.Group != "products" || w.Function != realms.FnProduct || w.Attrs["namespace"] != "wird" {
 		t.Errorf("app:wird = %+v", w)
 	}
 	if e, ok := edge(g, "app:wird", "repo:wird", graph.EdgeGit); !ok || e.Attrs["branch"] != "main" || e.Attrs["paths"] != "helm/values.yaml" {

@@ -2,8 +2,38 @@
 # file says it, plainly. Every component atlas extracts must be listed here: one that isn't becomes an "unassigned"
 # drift node, and internal/extract's tests fail on it. It moves into the service registry once one exists.
 
-# The seven realms, in L0 order.
-realms: [infra, platform, data, identity, events, fleet, apps]
+# The seven realms, in L0 order. Since R12 (plan/13) they are the game's civs too: groups of elements of the same
+# category. code holds the repos: atlas places them itself (by the realms of the apps they feed), never listed here.
+realms: [platform, data, operations, guard, fleet, apps, code]
+
+# What a group does in play (plan/13 §1 Functions), by realm/group; a component may override it with function:.
+# land is the hardware (hosts): drawn in atlas, never a building in the game. The repos' workshop is set by atlas.
+functions:
+  platform/hosts: land
+  platform/nodes: houses
+  platform/storage: utility
+  platform/gpu: utility
+  platform/edge: utility
+  platform/metrics: utility
+  data/postgres: economy
+  data/s3: economy
+  data/nfs: economy
+  operations/delivery: trade
+  operations/build: trade
+  operations/observability: trade
+  operations/events: trade
+  operations/atlas: town-centre
+  guard/authentik: defence
+  guard/secrets: defence
+  guard/mesh: defence
+  fleet/control: barracks
+  fleet/cluster-access: barracks
+  fleet/hermes: barracks
+  fleet/session-pod: barracks
+  apps/sites: product
+  apps/products: product
+  apps/ai: product
+  apps/tools: product
 
 # Proxmox hosts (the land) and their island labels.
 hosts:
@@ -59,62 +89,56 @@ probes:
 # Namespaces no ArgoCD Application deploys into, but whose pods belong to a realm (the land lens): kubespray installs
 # Cilium, CoreDNS and the like straight into kube-system. A namespace in neither list counts as "unattributed".
 namespaces:
-  kube-system: infra
+  kube-system: platform
 
 # Components: id -> realm and group (the L1 fold key). paths (repo-relative prefixes, "<repo>/<prefix>") attach the
 # ADR citations found under them to this component (governs edges); a citation under no listed path goes to its repo.
 components:
-  # Infra
-  host:bnei: { realm: infra, group: hosts }
-  host:server1: { realm: infra, group: hosts }
-  host:ex-laptop: { realm: infra, group: hosts }
-  vm:k8s-cp-01: { realm: infra, group: nodes }
-  vm:k8s-cp-02: { realm: infra, group: nodes }
-  vm:k8s-cp-03: { realm: infra, group: nodes }
-  vm:k8s-worker-01: { realm: infra, group: nodes }
-  vm:k8s-worker-02: { realm: infra, group: nodes }
-  vm:nfs-storage: { realm: infra, group: storage }
-  app:platform-longhorn: { realm: infra, group: storage }
-  app:platform-local-path-provisioner: { realm: infra, group: storage }
-  app:platform-csi-driver-nfs: { realm: infra, group: storage }
-  app:platform-nvidia-device-plugin: { realm: infra, group: gpu }
-  ct:build-runner: { realm: infra, group: build }
-  app:platform-actions-runner: { realm: infra, group: build }
-
-  # Platform
-  app:argocd: { realm: platform, group: delivery }
-  app:bootstrap: { realm: platform, group: delivery }
-  app:zot: { realm: platform, group: delivery }
+  # Platform: the land (hosts, a lens in the game), the nodes, and the cluster's utilities
+  host:bnei: { realm: platform, group: hosts }
+  host:server1: { realm: platform, group: hosts }
+  host:ex-laptop: { realm: platform, group: hosts }
+  vm:k8s-cp-01: { realm: platform, group: nodes }
+  vm:k8s-cp-02: { realm: platform, group: nodes }
+  vm:k8s-cp-03: { realm: platform, group: nodes }
+  vm:k8s-worker-01: { realm: platform, group: nodes }
+  vm:k8s-worker-02: { realm: platform, group: nodes }
+  app:platform-longhorn: { realm: platform, group: storage }
+  app:platform-local-path-provisioner: { realm: platform, group: storage }
+  app:platform-csi-driver-nfs: { realm: platform, group: storage }
+  app:platform-nvidia-device-plugin: { realm: platform, group: gpu }
   app:platform-traefik: { realm: platform, group: edge }
   app:redirectors: { realm: platform, group: edge }
-  app:platform-prometheus: { realm: platform, group: observability }
-  app:platform-grafana: { realm: platform, group: observability }
-  app:platform-loki: { realm: platform, group: observability }
-  app:platform-alloy: { realm: platform, group: observability }
-  app:platform-blackbox-exporter: { realm: platform, group: observability }
-  app:platform-metrics-server: { realm: platform, group: observability }
-  app:mountain: { realm: platform, group: observability, paths: [mountain/] }
-  app:searxng: { realm: platform, group: tools }
-  app:pgweb: { realm: platform, group: tools }
-  app:silverbullet: { realm: platform, group: tools }
-  app:drop: { realm: platform, group: tools }
+  app:platform-metrics-server: { realm: platform, group: metrics } # kube-system, with the add-ons: HPA plumbing, not observability
 
-  # Data
+  # Data: the stores
+  vm:nfs-storage: { realm: data, group: nfs }
   vm:pg01: { realm: data, group: postgres }
   vm:pg02: { realm: data, group: postgres }
   vm:pg-etcd-witness: { realm: data, group: postgres }
   ct:garage-storage: { realm: data, group: s3 }
 
-  # Identity
-  app:platform-authentik: { realm: identity, group: authentik }
-  app:platform-infisical: { realm: identity, group: secrets }
-  app:platform-infisical-operator: { realm: identity, group: secrets }
-  app:agent-vault: { realm: identity, group: secrets }
-  app:netbird: { realm: identity, group: mesh }
-  app:netbird-dashboard: { realm: identity, group: mesh }
+  # Operations: deliver, build, observe, the events bridge, and atlas (the game's town centre)
+  ct:build-runner: { realm: operations, group: build }
+  app:platform-actions-runner: { realm: operations, group: build }
+  app:argocd: { realm: operations, group: delivery }
+  app:bootstrap: { realm: operations, group: delivery }
+  app:zot: { realm: operations, group: delivery }
+  app:platform-prometheus: { realm: operations, group: observability }
+  app:platform-grafana: { realm: operations, group: observability }
+  app:platform-loki: { realm: operations, group: observability }
+  app:platform-alloy: { realm: operations, group: observability }
+  app:platform-blackbox-exporter: { realm: operations, group: observability, function: defence }
+  app:mountain: { realm: operations, group: atlas, paths: [mountain/] }
+  app:ukubi-bridge: { realm: operations, group: events, paths: [ukubi-bridge/] }
 
-  # Events
-  app:ukubi-bridge: { realm: events, group: bridge, paths: [ukubi-bridge/] }
+  # Guard: identity, secrets, the mesh
+  app:platform-authentik: { realm: guard, group: authentik }
+  app:platform-infisical: { realm: guard, group: secrets }
+  app:platform-infisical-operator: { realm: guard, group: secrets }
+  app:agent-vault: { realm: guard, group: secrets }
+  app:netbird: { realm: guard, group: mesh }
+  app:netbird-dashboard: { realm: guard, group: mesh }
 
   # Fleet
   app:agent-fleet-core: { realm: fleet, group: control }
@@ -128,7 +152,11 @@ components:
   svc:agent-fleet/executor: { realm: fleet, group: cluster-access, paths: [agent-fleet/executor/] }
   svc:agent-fleet/dashboard: { realm: fleet, group: control, parent: app:agent-fleet-core, paths: [agent-fleet/dashboard/] }
 
-  # Apps
+  # Apps: products, sites, AI, tools
+  app:searxng: { realm: apps, group: tools }
+  app:pgweb: { realm: apps, group: tools }
+  app:silverbullet: { realm: apps, group: tools }
+  app:drop: { realm: apps, group: tools }
   app:editable-blog: { realm: apps, group: sites }
   app:wedding-2026: { realm: apps, group: sites }
   app:pi-lab: { realm: apps, group: sites, paths: [pi-lab/] }

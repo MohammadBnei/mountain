@@ -23,7 +23,7 @@
    },
    "name": "KubeNodeNotReady",
    "node": "vm:k8s-worker-02",
-   "realm": "infra",
+   "realm": "platform",
    "severity": "critical",
    "startsAt": 1792854000000,
    "summary": "k8s-worker-02 has been unready for more than 15 minutes."
@@ -288,7 +288,7 @@
    "kind": "health",
    "node": "app:wird-adminweb",
    "t": "ev",
-   "text": "wird-adminweb: Healthy \u2192 Degraded",
+   "text": "wird-adminweb: Healthy → Degraded",
    "ts": 1792856000000
   }
  ],
@@ -678,70 +678,65 @@
    }
   },
   "nsRealm": {
-   "actions-runner": "infra",
+   "actions-runner": "operations",
    "agent-fleet": "fleet",
-   "agent-vault": "identity",
-   "argocd": "platform",
-   "authentik": "identity",
+   "agent-vault": "guard",
+   "argocd": "operations",
+   "authentik": "guard",
    "default": "platform",
    "dream-analyst": "apps",
-   "drop": "platform",
+   "drop": "apps",
    "editable-blog": "apps",
    "ente": "apps",
    "has-journal": "apps",
    "hq": "apps",
-   "infisical": "identity",
-   "kube-system": "infra",
-   "local-path-storage": "infra",
-   "longhorn-system": "infra",
+   "infisical": "guard",
+   "kube-system": "platform",
+   "local-path-storage": "platform",
+   "longhorn-system": "platform",
    "lost-ns": "unattributed",
-   "monitoring": "platform",
-   "mountain": "platform",
-   "netbird": "identity",
-   "pgweb": "platform",
+   "monitoring": "operations",
+   "mountain": "operations",
+   "netbird": "guard",
+   "pgweb": "apps",
    "pi-lab": "apps",
-   "searxng": "platform",
-   "silverbullet": "platform",
+   "searxng": "apps",
+   "silverbullet": "apps",
    "thot": "fleet",
    "traefik": "platform",
-   "ukubi-bridge": "events",
+   "ukubi-bridge": "operations",
    "ukubi-stt": "apps",
    "vos": "apps",
    "vos-dev": "apps",
    "wedding-2026": "apps",
    "wird": "apps",
-   "zot": "platform"
+   "zot": "operations"
   },
   "realms": {
    "apps": {
-    "cpu": 0.324,
-    "disk": 0.041,
-    "mem": 0.214
-   },
-   "events": {
-    "cpu": 0.0,
-    "disk": 0.015,
-    "mem": 0.006
+    "cpu": 0.455,
+    "disk": 0.09,
+    "mem": 0.336
    },
    "fleet": {
     "cpu": 0.05,
     "disk": 0.003,
     "mem": 0.033
    },
-   "identity": {
+   "guard": {
     "cpu": 0.104,
     "disk": 0.016,
     "mem": 0.042
    },
-   "infra": {
-    "cpu": 0.097,
-    "disk": 0.035,
-    "mem": 0.069
+   "operations": {
+    "cpu": 0.132,
+    "disk": 0.041,
+    "mem": 0.08
    },
    "platform": {
-    "cpu": 0.289,
-    "disk": 0.078,
-    "mem": 0.219
+    "cpu": 0.124,
+    "disk": 0.037,
+    "mem": 0.092
    },
    "unattributed": {
     "cpu": 0.018,

@@ -6,12 +6,15 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/MohammadBnei/mountain"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 // TestStaticRevalidates: without validators + no-cache, Cloudflare's default 4 h browser TTL
@@ -78,5 +81,40 @@ func TestStaticVersioned(t *testing.T) {
 	}
 	if rec = get("/v/000000000000/js/main.js"); rec.Code != 404 || rec.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("another build: want a no-store 404, got %d %q", rec.Code, rec.Header().Get("Cache-Control"))
+	}
+}
+
+// TestPageRealms: the page's realm list (www/js/model.js REALMS) and colours (style.css) are realms.yaml's, by hand;
+// a realm the page doesn't know drops its nodes from the map silently, so the two must not drift.
+func TestPageRealms(t *testing.T) {
+	rl, err := realms.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	js, err := os.ReadFile("../../www/js/model.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`export const REALMS = \[([^\]]*)\]`).FindSubmatch(js)
+	if m == nil {
+		t.Fatal("model.js: no REALMS")
+	}
+	var page []string
+	for _, q := range regexp.MustCompile(`'([a-z]+)'`).FindAllSubmatch(m[1], -1) {
+		page = append(page, string(q[1]))
+	}
+	if !slices.Equal(page, rl.Realms) {
+		t.Errorf("model.js REALMS %v, realms.yaml %v", page, rl.Realms)
+	}
+	css, err := os.ReadFile("../../www/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rl.Realms {
+		for _, want := range []string{"--" + r + ":", `.lbl[data-realm="` + r + `"]`, `.swatch[data-realm="` + r + `"]`} {
+			if !strings.Contains(string(css), want) {
+				t.Errorf("style.css: no %s", want)
+			}
+		}
 	}
 }

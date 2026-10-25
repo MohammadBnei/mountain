@@ -1,7 +1,8 @@
 # 13 · R12: the game's town: buildings, civs, ages, kits (design draft, 2026-10-25)
 
 > Status: **draft**. It comes from four owner interview rounds and three doubt cycles (19, 20 and 16 findings). The
-> owner's answers below are decisions; the open questions at the end are not. Nothing is built, and each slice gets
+> owner's answers below are decisions; the open questions at the end are not: the owner settles them by in-game
+> tests (2026-10-25), so each default below ships tunable. Nothing is built, and each slice gets
 > its own plan and doubt cycle when it starts. It extends `12-world-and-game.md` and amends rows of `00-decisions.md`
 > and `09-play.md` (listed under "What changes elsewhere").
 
@@ -33,30 +34,35 @@ and the sim mirrors (or, for what we own, runs) every signal the game uses.
   - 10 feed exactly one app and fold as a **workshop annex** on it;
   - agent-fleet, vos-monolith and wird feed two apps each (open question 5);
   - infra-bootstrap feeds all 44 and stays a workshop in Code.
-- **Hosts and the town centre carry no civ by design.** What is never drawn carries over: R8's list (k9s) and the
-  Audience rows.
+- **Hosts and the town centre sit in a civ for atlas** (hosts in Platform with the function `land`, atlas in
+  Operations with `town-centre`), and the game treats both by function: land is a lens, never a building, and the
+  town centre stands at the map's centre, outside every district. What is never drawn carries over: R8's list (k9s)
+  and the Audience rows.
 
 **One taxonomy, owned by atlas (owner: civs = realms).**
 - atlas's realms are **reshaped** into the civs (§2): merged, split, and one added. atlas's islands and the game's
-  districts then group things the same way, and repos and hostnames leave atlas's rim.
+  districts then group things the same way, and repos leave atlas's rim for code. Hostnames stay at its Cloudflare
+  rim, where outside traffic enters; the game draws them as doors.
 - **`function` is its own field** in `realms.yaml`, set per group and overridable per element. It says what a building
   does in play, which is separate from its civ: blackbox is in the Operations civ and works as a watchtower.
 - **The component → kit-model mapping** (`model:`) lives in `realms.yaml` too. ukubi-kit holds no component names.
-- An element with no civ or function is drift, except hosts and the town centre.
+- An element with no civ or function is drift. Hostnames and ADRs are never placed.
 
 **Functions** (AoE-like, not the same):
 
 | Function | Meaning | Examples |
 |---|---|---|
+| Land | the hardware: a lens, never a building | the 3 hosts |
 | Town centre | the information hub: atlas and the game as one (below) | one building at the centre |
 | Houses | the schedulable nodes, which hold the population (§3 Resources) | all 5 k8s nodes |
-| Workshops | repos, where a unit (`game-<repo>`) is trained and works | infra-bootstrap, the game, annexes |
+| Workshops | repos, where a unit (`game-<repo>`) works on its code (set by atlas, never in realms.yaml) | infra-bootstrap, the game, annexes |
+| Barracks | the fleet, which runs the units (agent sessions) | core, provisioner, thot, hermes |
 | Economy | data stores | Postgres, Redis, Garage, NFS |
 | Utilities | network, ingress, storage | Cilium, CoreDNS, MetalLB, Traefik, Longhorn |
 | Defence | identity, secrets, mesh, probes | authentik, Infisical, agent-vault, NetBird, blackbox |
 | Trade | build, ship, observe | Argo CD, zot, runners, Prometheus, Grafana, Loki |
 | Products | what people use | the apps and sites |
-| Gates | where outside traffic enters | hostnames, as doors |
+| Gates | where outside traffic enters; the game's, from route edges (atlas leaves hostnames unplaced) | hostnames, as doors |
 
 **The town centre is the information hub: atlas and the game as one (owner).**
 - **On the map** it is one central building. Its interior holds the catalog, goals, needs-you, the age and research.
@@ -82,7 +88,7 @@ and the sim mirrors (or, for what we own, runs) every signal the game uses.
 
 | Civ | Holds (fixture, after the folds) | Style (draft) |
 |---|---|---|
-| Platform | nodes, network, ingress, storage, GPU: 15, plus the new add-ons | fortress |
+| Platform | the hosts (land), nodes, ingress, storage, GPU, metrics-server: 15, plus the new add-ons | fortress |
 | Data | Postgres (with its VMs), Garage, NFS: 3, plus Redis | miners |
 | Operations | delivery, build, observability, the bridge: 12 | market town |
 | Guard | identity, secrets, mesh: 6 | walled monastery |
@@ -284,7 +290,8 @@ later, as one more source feeding the same catalog and review.
 
 ## 6. What changes elsewhere
 - **00-decisions, amended:**
-  - **atlas R10's realm list** is reshaped into the civs, and repos and hostnames leave the rim;
+  - **atlas R10's realm list** is reshaped into the civs, repos leave the rim for code, and hostnames stay at its
+    Cloudflare rim (doors in the game);
   - **Audience R10** admits one read-only machine principal for the town centre;
   - **Civ R9:** its levels and score give way to the age, its golden age is renamed the calm streak, and its
     technologies cover every repo's ADRs.
@@ -316,7 +323,16 @@ later, as one more source feeding the same catalog and review.
   - its own admins-only gate before it leaves loopback.
 
 ## 7. Slices (each with its own plan and doubt cycle)
-1. **A7, atlas data (mountain):**
+1. **A7, atlas data (mountain)**, in three PRs:
+   - **A7a (built):** the realms reshaped into civs (`realms.yaml`, the page, the fixtures); `function` per group with
+     per-component overrides; the repos placed in code by atlas, grouped by the realm of the apps they feed
+     (`shared` when several, `own` when none). metrics-server moved to Platform (it shares kube-system with the
+     add-ons). Hostnames stay at atlas's Cloudflare rim, where outside traffic enters; the game draws them as doors
+     from the route edges;
+   - **A7b:** the kubespray and Pigsty extractors;
+   - **A7c:** coverage, walls, `needs:` rows, `public: true`, and `model:` once ukubi-kit has ids.
+
+   Its full scope:
    - the realms reshaped into civs, `function`, `model:`, the folds, `needs:` rows, `public: true`;
    - ukubi-game added to `sources`;
    - extractors, reading allowlisted fields only and keeping the never-draw list:

@@ -11,7 +11,7 @@
   --surface: #1c1814; --raised: #25201b; --sunken: #14110e; --line: #3a3129; --line-strong: #7a6a57;
   --ink: #f2e9dc; --muted: #b9a990; --subtle: #988870; --accent: #e3bb7c; --accent-bg: #3a2c18; --ochre: #d4a45e; --on-ochre: #1c1814;
   --danger: #ec8a72; --warning: #ff8a1f; --ok: #7cc4bf; --focus: #8ec0ef;
-  --apps: #ffd83a; --identity: #9a8a72; --fleet: #ff7a2e; --events: #9a8a72; --platform: #3fa2ff; --data: #1ff2dc; --infra: #b4ff3c;
+  --apps: #ffd83a; --guard: #9a8a72; --fleet: #ff7a2e; --operations: #3fa2ff; --code: #ff5cc8; --data: #1ff2dc; --platform: #b4ff3c;
   --sans: "Readex Pro", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   --top: 64px; --panel: 380px;
   color-scheme: dark;
@@ -61,8 +61,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 .lbl[data-realm] b { border-bottom: 2px solid var(--line-strong); }
 .lbl[data-realm="apps"] b { border-color: var(--apps); } .lbl[data-realm="fleet"] b { border-color: var(--fleet); }
 .lbl[data-realm="platform"] b { border-color: var(--platform); } .lbl[data-realm="data"] b { border-color: var(--data); }
-.lbl[data-realm="infra"] b { border-color: var(--infra); } .lbl[data-realm="identity"] b { border-color: var(--identity); }
-.lbl[data-realm="events"] b { border-color: var(--events); }
+.lbl[data-realm="operations"] b { border-color: var(--operations); } .lbl[data-realm="guard"] b { border-color: var(--guard); }
+.lbl[data-realm="code"] b { border-color: var(--code); }
 #loader, #fallback { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); margin: 0; color: var(--muted); text-align: center; max-width: 80vw; }
 
 #panel { position: absolute; top: 16px; right: 16px; bottom: 16px; width: var(--panel); overflow: auto; padding: 16px 20px; background: var(--raised); border: 1px solid var(--line); border-radius: 4px; }
@@ -81,11 +81,11 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 .swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--line-strong); align-self: center; }
 .swatch[data-realm="apps"] { background: var(--apps); } .swatch[data-realm="fleet"] { background: var(--fleet); }
 .swatch[data-realm="platform"] { background: var(--platform); } .swatch[data-realm="data"] { background: var(--data); }
-.swatch[data-realm="infra"] { background: var(--infra); } .swatch[data-realm="identity"] { background: var(--identity); }
-.swatch[data-realm="events"] { background: var(--events); }
+.swatch[data-realm="operations"] { background: var(--operations); } .swatch[data-realm="guard"] { background: var(--guard); }
+.swatch[data-realm="code"] { background: var(--code); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--subtle); display: inline-block; align-self: center; }
 .dot.ok { background: var(--ok); } .dot.degraded { background: var(--warning); } .dot.down { background: var(--danger); }
-.wire { width: 24px; height: 0; border-top: 3px solid var(--platform); align-self: center; }
+.wire { width: 24px; height: 0; border-top: 3px solid var(--operations); align-self: center; }
 .wire.declared { border-top: 2px dotted var(--muted); }
 .alerts { list-style: none; padding: 0; margin: 4px 0; }
 .alerts li { padding: 6px 8px; margin: 4px 0; border-left: 3px solid var(--line-strong); background: var(--sunken); }

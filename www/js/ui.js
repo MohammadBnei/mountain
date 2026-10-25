@@ -116,7 +116,7 @@ function empirePanel(m, live, v) {
         v.lens === 'land' ? ` · ${liveFacts(m, live, g.members).join(' · ')}` : '')));
   }));
   return el('div', {}, el('h2', {}, REALM[v.realm].label),
-    el('p', { class: 'meta' }, `${realm.groups.size} groups · ${realm.count} parts`, realm.groups.size > MAX_GROUPS ? ` · over the ${MAX_GROUPS}-group load rule: realms.yaml should split it` : ''),
+    el('p', { class: 'meta' }, `${realm.groups.size} groups · ${realm.count} parts`, realm.groups.size > MAX_GROUPS ? ` · over the ${MAX_GROUPS}-group load rule: ${realm.id === 'code' ? 'atlas folds code itself, so this is a bug' : 'realms.yaml should split it'}` : ''),
     el('p', {}, el('a', { href: format({ level: 2, realm: v.realm, lens: v.lens }), class: 'primary' }, `Enter ${REALM[v.realm].label}`)),
     groups, alertList(alertsOn(m, live, { realm: v.realm })), el('h3', {}, `Routes in and out (${rs.length})`), routeItems);
 }

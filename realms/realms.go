@@ -15,10 +15,11 @@ import (
 var embedded []byte
 
 type Component struct {
-	Realm  string   `yaml:"realm"`
-	Group  string   `yaml:"group"`
-	Parent string   `yaml:"parent"`
-	Paths  []string `yaml:"paths"` // "<repo>/<prefix>": ADR citations under it govern this component
+	Realm    string   `yaml:"realm"`
+	Group    string   `yaml:"group"`
+	Function string   `yaml:"function"` // overrides its group's function
+	Parent   string   `yaml:"parent"`
+	Paths    []string `yaml:"paths"` // "<repo>/<prefix>": ADR citations under it govern this component
 }
 
 type Realms struct {
@@ -33,6 +34,41 @@ type Realms struct {
 	Probes       map[string]string    `yaml:"probes"`       // blackbox target -> node id (pve-<host> is implicit)
 	Namespaces   map[string]string    `yaml:"namespaces"`   // namespace without an Application -> realm
 	Components   map[string]Component `yaml:"components"`
+	Functions    map[string]string    `yaml:"functions"` // "<realm>/<group>" -> what the group does in play
+}
+
+// Code is the realm atlas places the repos in itself (extract's place), by the realms of the apps they feed.
+const Code = "code"
+
+// The functions a building has in play (plan/13 §1). Land is the hardware: drawn in atlas, never a building.
+const (
+	FnLand       = "land"
+	FnTownCentre = "town-centre"
+	FnHouses     = "houses"
+	FnWorkshop   = "workshop"
+	FnEconomy    = "economy"
+	FnUtility    = "utility"
+	FnDefence    = "defence"
+	FnTrade      = "trade"
+	FnBarracks   = "barracks"
+	FnProduct    = "product"
+)
+
+var functions = []string{FnLand, FnTownCentre, FnHouses, FnWorkshop, FnEconomy, FnUtility, FnDefence, FnTrade, FnBarracks, FnProduct}
+
+// componentKinds are the node kinds realms.yaml may list (extract's realmKinds); repos are atlas's, the rest unplaced.
+var componentKinds = []string{"host", "vm", "ct", "app", "svc"}
+
+// Function is what component id does in play: its own function, else its group's, or "" if it isn't listed.
+func (r *Realms) Function(id string) string {
+	c, ok := r.Components[id]
+	if !ok {
+		return ""
+	}
+	if c.Function != "" {
+		return c.Function
+	}
+	return r.Functions[c.Realm+"/"+c.Group]
 }
 
 // ProbeNode is the node a blackbox target probes, or "".
@@ -54,12 +90,36 @@ func Parse(b []byte) (*Realms, error) {
 	if err := yaml.Unmarshal(b, &r); err != nil {
 		return nil, fmt.Errorf("realms.yaml: %w", err)
 	}
+	if !slices.Contains(r.Realms, Code) {
+		return nil, fmt.Errorf("realms.yaml: realms must include %q (atlas places the repos there)", Code)
+	}
+	for key, fn := range r.Functions {
+		realm, group, _ := strings.Cut(key, "/")
+		if !slices.Contains(r.Realms, realm) || group == "" || realm == Code {
+			return nil, fmt.Errorf("realms.yaml: functions key %q is not <realm>/<group> of a listed realm (code's are atlas's)", key)
+		}
+		if !slices.Contains(functions, fn) || fn == FnWorkshop {
+			return nil, fmt.Errorf("realms.yaml: functions %s is %q, not one of %v (workshop is the repos', set by atlas)", key, fn, functions)
+		}
+	}
 	for id, c := range r.Components {
+		if kind, _, _ := strings.Cut(id, ":"); !slices.Contains(componentKinds, kind) {
+			return nil, fmt.Errorf("realms.yaml: %s is not a component (%v); atlas places repos itself", id, componentKinds)
+		}
+		if c.Realm == Code {
+			return nil, fmt.Errorf("realms.yaml: %s is in realm %q, which only atlas fills (the repos)", id, Code)
+		}
 		if !slices.Contains(r.Realms, c.Realm) {
 			return nil, fmt.Errorf("realms.yaml: %s has realm %q, not one of %v", id, c.Realm, r.Realms)
 		}
 		if c.Group == "" {
 			return nil, fmt.Errorf("realms.yaml: %s has no group", id)
+		}
+		if c.Function != "" && (!slices.Contains(functions, c.Function) || c.Function == FnWorkshop) {
+			return nil, fmt.Errorf("realms.yaml: %s has function %q, not one of %v", id, c.Function, functions)
+		}
+		if c.Function == "" && r.Functions[c.Realm+"/"+c.Group] == "" {
+			return nil, fmt.Errorf("realms.yaml: %s: group %s/%s has no function (functions:), and it sets none", id, c.Realm, c.Group)
 		}
 		for _, p := range c.Paths {
 			if !strings.Contains(p, "/") {
@@ -81,7 +141,7 @@ func Parse(b []byte) (*Realms, error) {
 		}
 	}
 	for ns, realm := range r.Namespaces {
-		if !slices.Contains(r.Realms, realm) {
+		if !slices.Contains(r.Realms, realm) || realm == Code {
 			return nil, fmt.Errorf("realms.yaml: namespace %s has realm %q, not one of %v", ns, realm, r.Realms)
 		}
 	}
