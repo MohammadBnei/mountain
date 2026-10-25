@@ -2,8 +2,11 @@ package extract
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -25,6 +28,8 @@ functions:
   guard/authentik: defence
   fleet/cluster-access: barracks
   fleet/control: barracks
+  platform/network: utility
+  data/redis: economy
 hosts: { bnei: h1, server1: h2, ex-laptop: h3 }
 pveNodeName: bnei
 sources: [infra-bootstrap, agent-fleet, mountain, pi-lab]
@@ -38,7 +43,15 @@ components:
   host:ex-laptop: { realm: platform, group: hosts }
   vm:k8s-cp-01: { realm: platform, group: nodes }
   vm:k8s-worker-01: { realm: platform, group: nodes }
-  vm:pg02: { realm: data, group: postgres }
+  vm:pg02: { realm: data, group: postgres, parent: db:pg-proxmox }
+  db:pg-proxmox: { realm: data, group: postgres }
+  db:redis-main: { realm: data, group: redis }
+  addon:cilium: { realm: platform, group: network }
+  addon:kube-proxy: { realm: platform, group: network }
+  addon:coredns: { realm: platform, group: network }
+  addon:nodelocaldns: { realm: platform, group: network }
+  addon:metallb: { realm: platform, group: network }
+  addon:kube-vip: { realm: platform, group: network }
   ct:build-runner: { realm: operations, group: build }
   app:wird: { realm: apps, group: products }
   app:vos-monolith-dev: { realm: apps, group: products }
@@ -145,6 +158,77 @@ func TestFoldCode(t *testing.T) {
 	// 9 groups, and "shared" takes a slot too: a (the smallest), then h and g (ties fold the later name) go, own stays
 	if len(got) != maxGroups || got["shared"] != 5 || got["a"]+got["g"]+got["h"] != 0 || got["b"] != 2 || got["own"] != 1 {
 		t.Errorf("folded: %v", got)
+	}
+}
+
+func TestKubespray(t *testing.T) {
+	g := fixture(t).Graph
+	for id, want := range map[string]map[string]string{
+		"addon:cilium":       {"namespace": "kube-system", "hubble": "true", "encryption": "wireguard"},
+		"addon:kube-proxy":   {"namespace": "kube-system", "mode": "ipvs"}, // cilium chains, kube-proxy stays
+		"addon:coredns":      {"namespace": "kube-system"},
+		"addon:nodelocaldns": {"namespace": "kube-system"},
+		"addon:metallb":      {"namespace": "metallb-system"},
+		"addon:kube-vip":     {"namespace": "kube-system", "role": "control-plane"},
+	} {
+		n := node(t, g, id)
+		if !maps.Equal(n.Attrs, want) || n.Realm != "platform" || n.Group != "network" || n.Function != realms.FnUtility {
+			t.Errorf("%s = %+v", id, n) // no address, no pool, no extra values: named fields only
+		}
+	}
+	if n := node(t, g, "addon:cilium"); !strings.HasSuffix(n.Source.Path, "k8s-cluster.yml") {
+		t.Errorf("cilium's source = %+v", n.Source)
+	}
+}
+
+func TestKubesprayProxyReplaced(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"k8s-cluster.yml", "addons.yml"} {
+		b, _ := os.ReadFile("testdata/infra-bootstrap/" + groupVars + f)
+		os.MkdirAll(filepath.Join(dir, groupVars), 0o755)
+		os.WriteFile(filepath.Join(dir, groupVars, f), b, 0o644)
+	}
+	os.WriteFile(filepath.Join(dir, groupVars, "k8s-net-cilium.yml"), []byte("cilium_kube_proxy_replacement: strict\n"), 0o644)
+	x := &Ctx{Repos: Repos{"infra-bootstrap": {Dir: dir}}, track: map[Track]bool{}}
+	if err := kubespray(x); err != nil {
+		t.Fatal(err)
+	}
+	if slices.ContainsFunc(x.g.Nodes, func(n graph.Node) bool { return n.ID == "addon:kube-proxy" }) {
+		t.Error("cilium replaces kube-proxy, yet it is drawn")
+	}
+}
+
+func TestPigsty(t *testing.T) {
+	g := fixture(t).Graph
+	pg, redis := node(t, g, "db:pg-proxmox"), node(t, g, "db:redis-main")
+	if pg.Attrs["engine"] != "postgres" || redis.Attrs["engine"] != "redis" || len(pg.Attrs) != 1 || pg.Realm != "data" || redis.Group != "redis" {
+		t.Errorf("pg = %+v, redis = %+v", pg, redis)
+	}
+	if e, ok := edge(g, "db:pg-proxmox", "vm:pg02", graph.EdgeRunsOn); !ok || e.Attrs["as"] != "postgres,etcd" {
+		t.Errorf("pg-proxmox on pg02 (a member and an etcd node): %+v %v", e, ok)
+	}
+	if e, ok := edge(g, "db:redis-main", "vm:pg02", graph.EdgeRunsOn); !ok || e.Attrs["as"] != "redis" {
+		t.Errorf("redis on pg02: %+v %v", e, ok)
+	}
+	if n := node(t, g, "vm:pg02"); n.Parent != "db:pg-proxmox" {
+		t.Errorf("pg02's parent = %q", n.Parent)
+	}
+	// .205 and .197 are not in the testdata LAN records: drift, and no dangling edge
+	if !hasDrift(g, graph.DriftUnresolved, "db:pg-proxmox", "192.168.1.205") || !hasDrift(g, graph.DriftUnresolved, "db:pg-proxmox", "192.168.1.197") {
+		t.Error("a pigsty host outside the LAN records is not drift")
+	}
+	for _, e := range g.Edges {
+		if strings.Contains(e.Attrs["as"], "primary") || strings.Contains(e.Attrs["as"], "replica") {
+			t.Errorf("pg_role reached the graph: %+v", e)
+		}
+	}
+}
+
+func TestMemberDangling(t *testing.T) {
+	g := graph.Graph{Nodes: []graph.Node{{ID: "db:a", Kind: graph.KindDB}}}
+	out := resolve(g, []graph.Edge{{From: "db:a", To: "vm:gone", Kind: graph.EdgeRunsOn}})
+	if len(out.Edges) != 0 || len(out.Drift) != 1 || !strings.Contains(out.Drift[0].Detail, "vm:gone") {
+		t.Errorf("resolve = %+v", out)
 	}
 }
 

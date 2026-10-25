@@ -15,19 +15,21 @@ import (
 
 // Kinds of node. An id is "<kind>:<qualified-name>", stable across shas (plan/10 "Nodes and edges").
 const (
-	KindHost = "host" // a Proxmox host (host:bnei)
-	KindVM   = "vm"   // a VM, k8s nodes included (vm:k8s-cp-01)
-	KindCT   = "ct"   // an LXC container (ct:build-runner)
-	KindApp  = "app"  // an ArgoCD Application (app:wird)
-	KindSvc  = "svc"  // a component inside a repo (svc:agent-fleet/core)
-	KindRepo = "repo" // a git repository (repo:infra-bootstrap)
-	KindDNS  = "dns"  // a public hostname (dns:wird.bnei.dev)
-	KindADR  = "adr"  // a decision record (adr:infra-bootstrap/0064)
+	KindHost  = "host"  // a Proxmox host (host:bnei)
+	KindVM    = "vm"    // a VM, k8s nodes included (vm:k8s-cp-01)
+	KindCT    = "ct"    // an LXC container (ct:build-runner)
+	KindApp   = "app"   // an ArgoCD Application (app:wird)
+	KindSvc   = "svc"   // a component inside a repo (svc:agent-fleet/core)
+	KindRepo  = "repo"  // a git repository (repo:infra-bootstrap)
+	KindAddon = "addon" // cluster software kubespray installs, no Application (addon:cilium)
+	KindDB    = "db"    // a data service outside the cluster, by its cluster name (db:pg-proxmox)
+	KindDNS   = "dns"   // a public hostname (dns:wird.bnei.dev)
+	KindADR   = "adr"   // a decision record (adr:infra-bootstrap/0064)
 )
 
 // Kinds of edge.
 const (
-	EdgeRunsOn    = "runs-on"    // vm|ct -> host
+	EdgeRunsOn    = "runs-on"    // vm|ct -> host, db -> vm (attrs: as)
 	EdgeGit       = "git"        // app -> repo it deploys from (attrs: branch, paths)
 	EdgeRoute     = "route"      // dns -> app
 	EdgeGoverns   = "governs"    // component|repo -> adr (attrs: count)
@@ -92,7 +94,7 @@ type Graph struct {
 	Drift []Drift `json:"drift"`
 }
 
-var idRe = regexp.MustCompile(`^(host|vm|ct|app|svc|repo|dns|adr):[a-z0-9][a-z0-9._/@-]*$`)
+var idRe = regexp.MustCompile(`^(host|vm|ct|app|svc|repo|dns|adr|addon|db):[a-z0-9][a-z0-9._/@-]*$`)
 
 // ID builds "<kind>:<name>", lower-cased.
 func ID(kind, name string) string { return kind + ":" + strings.ToLower(name) }

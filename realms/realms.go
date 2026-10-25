@@ -57,7 +57,7 @@ const (
 var functions = []string{FnLand, FnTownCentre, FnHouses, FnWorkshop, FnEconomy, FnUtility, FnDefence, FnTrade, FnBarracks, FnProduct}
 
 // componentKinds are the node kinds realms.yaml may list (extract's realmKinds); repos are atlas's, the rest unplaced.
-var componentKinds = []string{"host", "vm", "ct", "app", "svc"}
+var componentKinds = []string{"host", "vm", "ct", "app", "svc", "addon", "db"}
 
 // Function is what component id does in play: its own function, else its group's, or "" if it isn't listed.
 func (r *Realms) Function(id string) string {

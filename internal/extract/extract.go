@@ -49,16 +49,21 @@ type Extractor struct {
 
 // Ctx is what an extractor writes into.
 type Ctx struct {
-	Repos  Repos
-	Realms *realms.Realms
-	g      graph.Graph
-	track  map[Track]bool
+	Repos   Repos
+	Realms  *realms.Realms
+	g       graph.Graph
+	track   map[Track]bool
+	members []graph.Edge
 }
 
 func (x *Ctx) Node(n graph.Node)   { x.g.Nodes = append(x.g.Nodes, n) }
 func (x *Ctx) Edge(e graph.Edge)   { x.g.Edges = append(x.g.Edges, e) }
 func (x *Ctx) Drift(d graph.Drift) { x.g.Drift = append(x.g.Drift, d) }
 func (x *Ctx) Track(t Track)       { x.track[t] = true }
+
+// Member adds an edge to a node another extractor makes (a Pigsty cluster's VM, which terraform declares). It is kept
+// only if both ends are nodes once every extractor ran; else it is unresolved drift, never a dangling edge.
+func (x *Ctx) Member(e graph.Edge) { x.members = append(x.members, e) }
 
 // Read returns a repo file and where it came from. It opens the file through an os.Root on the checkout, so neither
 // "..", an absolute path nor a symlink can reach outside it (a cloned repo is not trusted to point at the
@@ -134,12 +139,13 @@ func (x *Ctx) Walk(repo string, skip func(dir string) bool, fn func(path string,
 }
 
 // All is every extractor, in run order.
-var All = []Extractor{gitopsExtractor, machinesExtractor, adrExtractor}
+var All = []Extractor{gitopsExtractor, machinesExtractor, kubesprayExtractor, pigstyExtractor, adrExtractor}
 
 // Run runs the extractors over repos, places every component in its realm and checks the result.
 func Run(repos Repos, rl *realms.Realms, exs []Extractor) (Result, error) {
 	res := Result{Versions: map[string]int{}}
 	track := map[Track]bool{}
+	var members []graph.Edge
 	for _, ex := range exs {
 		if missing := slices.DeleteFunc(slices.Clone(ex.Needs), func(r string) bool { _, ok := repos[r]; return ok }); len(missing) > 0 {
 			res.Skipped = append(res.Skipped, ex.Name+" (no "+strings.Join(missing, ", ")+")")
@@ -152,12 +158,16 @@ func Run(repos Repos, rl *realms.Realms, exs []Extractor) (Result, error) {
 		if err := res.Graph.Merge(x.g); err != nil {
 			return res, fmt.Errorf("extract %s: %w", ex.Name, err)
 		}
+		members = append(members, x.members...)
 		res.Versions[ex.Name] = ex.Version
 	}
 	var x Ctx
 	declare(&x, repos, rl, res.Graph)
 	repoNodes(&x, repos, res.Graph)
 	if err := res.Graph.Merge(x.g); err != nil {
+		return res, err
+	}
+	if err := res.Graph.Merge(resolve(res.Graph, members)); err != nil {
 		return res, err
 	}
 	rehome(&res.Graph)
@@ -195,7 +205,29 @@ func branchDrift(repos Repos, track map[Track]bool) []graph.Drift {
 }
 
 // realmKinds are the kinds realms.yaml must place: components, not documents (repos, hostnames, ADRs).
-var realmKinds = map[string]bool{graph.KindHost: true, graph.KindVM: true, graph.KindCT: true, graph.KindApp: true, graph.KindSvc: true}
+var realmKinds = map[string]bool{graph.KindHost: true, graph.KindVM: true, graph.KindCT: true, graph.KindApp: true, graph.KindSvc: true,
+	graph.KindAddon: true, graph.KindDB: true}
+
+// resolve keeps the Member edges whose ends are both nodes and turns the rest into unresolved drift.
+func resolve(g graph.Graph, members []graph.Edge) graph.Graph {
+	ids := map[string]bool{}
+	for _, n := range g.Nodes {
+		ids[n.ID] = true
+	}
+	var out graph.Graph
+	for _, e := range members {
+		if ids[e.From] && ids[e.To] {
+			out.Edges = append(out.Edges, e)
+			continue
+		}
+		missing := e.To
+		if !ids[e.From] {
+			missing = e.From
+		}
+		out.Drift = append(out.Drift, graph.Drift{Kind: graph.DriftUnresolved, Subject: e.From, Detail: e.Kind + " " + missing + ": not a node", Source: e.Source})
+	}
+	return out
+}
 
 // declare adds the svc components realms.yaml lists for a checked-out repo: the parts its ADR citations attach
 // to. A6's proto and definition extractors will confirm them from code.

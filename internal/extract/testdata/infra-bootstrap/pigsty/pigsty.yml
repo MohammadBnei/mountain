@@ -1,0 +1,26 @@
+# A trimmed pigsty.yml: two Postgres members (one not in the LAN records), an etcd witness, Redis.
+all:
+  children:
+    pg-proxmox:
+      hosts:
+        192.168.1.207: { pg_seq: 1, pg_role: primary }
+        192.168.1.205: { pg_seq: 2, pg_role: replica }
+      vars:
+        pg_cluster: pg-proxmox
+        pg_users:
+          - { name: wird, password: not-a-real-value-pg }
+        pg_vip_address: 192.168.1.232/24
+    infra:
+      hosts:
+        192.168.1.205: { infra_seq: 1 }
+    etcd:
+      hosts:
+        192.168.1.207: { etcd_seq: 1 }
+        192.168.1.197: { etcd_seq: 3, ansible_user: ubuntu }
+      vars: { etcd_cluster: etcd }
+    redis-main:
+      hosts:
+        192.168.1.207: { redis_node: 1, redis_instances: { 6379: {} } }
+      vars:
+        redis_cluster: redis-main
+        redis_password: not-a-real-value-redis

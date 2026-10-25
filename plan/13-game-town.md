@@ -329,7 +329,12 @@ later, as one more source feeding the same catalog and review.
      (`shared` when several, `own` when none). metrics-server moved to Platform (it shares kube-system with the
      add-ons). Hostnames stay at atlas's Cloudflare rim, where outside traffic enters; the game draws them as doors
      from the route edges;
-   - **A7b:** the kubespray and Pigsty extractors;
+   - **A7b (built):** two new node kinds, `addon` and `db`. The kubespray extractor reads named group_vars keys only
+     (no address, pool or extra values) and draws Cilium, kube-proxy (unless Cilium replaces it), CoreDNS,
+     nodelocaldns, MetalLB and kube-vip in Platform's network group. The Pigsty extractor draws `db:pg-proxmox` and
+     `db:redis-main` in Data, with runs-on edges to their VMs (joined by IP through the LAN records; the etcd members,
+     the witness among them, as Postgres's DCS); it reads host keys and cluster names only, never `pg_role`, users or
+     passwords. pg01, pg02 and the witness are parts of `db:pg-proxmox`;
    - **A7c:** coverage, walls, `needs:` rows, `public: true`, and `model:` once ukubi-kit has ids.
 
    Its full scope:

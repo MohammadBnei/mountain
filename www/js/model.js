@@ -20,7 +20,7 @@ export const REALM = {
 export const OUTSIDE = {
   cloudflare: { label: 'Cloudflare', kind: 'dns', at: [-10.5, 0.2] },
 };
-export const KIND = { host: 'host', vm: 'VM', ct: 'container', app: 'Application', svc: 'component', repo: 'repo', dns: 'hostname', adr: 'ADR' };
+export const KIND = { host: 'host', vm: 'VM', ct: 'container', app: 'Application', svc: 'component', repo: 'repo', dns: 'hostname', adr: 'ADR', addon: 'add-on', db: 'database' };
 export const MAX_GROUPS = 7;
 
 const nameOf = (id) => id.slice(id.indexOf(':') + 1);
