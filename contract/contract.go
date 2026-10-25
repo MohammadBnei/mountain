@@ -50,11 +50,11 @@ const (
 // GitHubOwner owns every repo atlas reads.
 const GitHubOwner = "MohammadBnei"
 
-// The GitHub REST routes atlas polls (each under /repos/<GitHubOwner>/<repo>), and the Accept header each sends.
+// The GitHub REST routes atlas polls, each under /repos/<GitHubOwner>/<repo>, and the Accept header each sends.
 const (
-	GitHubHeadRoute    = "/commits/{branch}" // conditional (If-None-Match): the raw head sha
-	GitHubHeadAccept   = "application/vnd.github.sha"
-	GitHubCompareRoute = "/compare/{base}...{head}" // ?per_page=1; status: ahead | behind | identical | diverged
-	GitHubTarballRoute = "/tarball/{sha}"           // a gzip tar with one top-level directory
-	GitHubJSONAccept   = "application/vnd.github+json"
+	GitHubCommits    = "/commits/" // + <branch>, conditional (If-None-Match): the raw head sha
+	GitHubHeadAccept = "application/vnd.github.sha"
+	GitHubCompare    = "/compare/" // + <base>...<head>?per_page=1; status: ahead | behind | identical | diverged
+	GitHubTarball    = "/tarball/" // + <sha>: a gzip tar with one top-level directory
+	GitHubJSONAccept = "application/vnd.github+json"
 )
