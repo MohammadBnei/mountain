@@ -205,10 +205,20 @@ func branchDrift(repos Repos, track map[Track]bool) []graph.Drift {
 }
 
 // realmKinds are the kinds realms.yaml must place: components, not documents (repos, hostnames, ADRs).
-var realmKinds = map[string]bool{graph.KindHost: true, graph.KindVM: true, graph.KindCT: true, graph.KindApp: true, graph.KindSvc: true,
-	graph.KindAddon: true, graph.KindDB: true}
+var realmKinds = func() map[string]bool {
+	m := map[string]bool{}
+	for _, k := range realms.ComponentKinds {
+		m[k] = true
+	}
+	return m
+}()
 
-// resolve keeps the Member edges whose ends are both nodes and turns the rest into unresolved drift.
+// machineKinds are what a Member edge's machine may turn out to be: a name in the LAN records is a VM, a container
+// or a host, and only terraform knows which.
+var machineKinds = []string{graph.KindVM, graph.KindCT, graph.KindHost}
+
+// resolve keeps the Member edges whose ends are both nodes (a machine end matched by name across machineKinds) and
+// turns the rest into unresolved drift.
 func resolve(g graph.Graph, members []graph.Edge) graph.Graph {
 	ids := map[string]bool{}
 	for _, n := range g.Nodes {
@@ -216,6 +226,14 @@ func resolve(g graph.Graph, members []graph.Edge) graph.Graph {
 	}
 	var out graph.Graph
 	for _, e := range members {
+		if kind, name, _ := strings.Cut(e.To, ":"); !ids[e.To] && slices.Contains(machineKinds, kind) {
+			for _, k := range machineKinds {
+				if ids[graph.ID(k, name)] {
+					e.To = graph.ID(k, name)
+					break
+				}
+			}
+		}
 		if ids[e.From] && ids[e.To] {
 			out.Edges = append(out.Edges, e)
 			continue

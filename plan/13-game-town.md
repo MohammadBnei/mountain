@@ -330,7 +330,8 @@ later, as one more source feeding the same catalog and review.
      add-ons). Hostnames stay at atlas's Cloudflare rim, where outside traffic enters; the game draws them as doors
      from the route edges;
    - **A7b (built):** two new node kinds, `addon` and `db`. The kubespray extractor reads named group_vars keys only
-     (no address, pool or extra values) and draws Cilium, kube-proxy (unless Cilium replaces it), CoreDNS,
+     (no address, pool or extra values; literals only: a template is drift, never a failed projection; kubespray's own
+     defaults where a key is absent) and draws Cilium, kube-proxy (unless Cilium replaces it), CoreDNS,
      nodelocaldns, MetalLB and kube-vip in Platform's network group. The Pigsty extractor draws `db:pg-proxmox` and
      `db:redis-main` in Data, with runs-on edges to their VMs (joined by IP through the LAN records; the etcd members,
      the witness among them, as Postgres's DCS); it reads host keys and cluster names only, never `pg_role`, users or

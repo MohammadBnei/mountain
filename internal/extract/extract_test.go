@@ -164,12 +164,12 @@ func TestFoldCode(t *testing.T) {
 func TestKubespray(t *testing.T) {
 	g := fixture(t).Graph
 	for id, want := range map[string]map[string]string{
-		"addon:cilium":       {"namespace": "kube-system", "hubble": "true", "encryption": "wireguard"},
-		"addon:kube-proxy":   {"namespace": "kube-system", "mode": "ipvs"}, // cilium chains, kube-proxy stays
-		"addon:coredns":      {"namespace": "kube-system"},
-		"addon:nodelocaldns": {"namespace": "kube-system"},
-		"addon:metallb":      {"namespace": "metallb-system"},
-		"addon:kube-vip":     {"namespace": "kube-system", "role": "control-plane"},
+		"addon:cilium":       {"into": "kube-system", "hubble": "true", "encryption": "wireguard"},
+		"addon:kube-proxy":   {"into": "kube-system", "mode": "ipvs"}, // cilium chains, kube-proxy stays
+		"addon:coredns":      {"into": "kube-system"},
+		"addon:nodelocaldns": {"into": "kube-system"},
+		"addon:metallb":      {"into": "metallb-system"},
+		"addon:kube-vip":     {"into": "kube-system", "role": "control-plane"},
 	} {
 		n := node(t, g, id)
 		if !maps.Equal(n.Attrs, want) || n.Realm != "platform" || n.Group != "network" || n.Function != realms.FnUtility {
@@ -178,6 +178,19 @@ func TestKubespray(t *testing.T) {
 	}
 	if n := node(t, g, "addon:cilium"); !strings.HasSuffix(n.Source.Path, "k8s-cluster.yml") {
 		t.Errorf("cilium's source = %+v", n.Source)
+	}
+	if n := node(t, g, "addon:metallb"); !strings.HasSuffix(n.Source.Path, "addons.yml") {
+		t.Errorf("metallb's source = %+v", n.Source)
+	}
+	// no address, pool or VIP from the group_vars or pigsty.yml reaches the graph (the LAN records' own are drift)
+	for _, n := range g.Nodes {
+		for _, v := range append([]string{n.ID}, slices.Collect(maps.Values(n.Attrs))...) {
+			for _, ip := range []string{"192.168.1.180", "192.168.1.233", "192.168.1.232", "169.254.25.10"} {
+				if strings.Contains(v, ip) {
+					t.Errorf("%s carries %s", n.ID, ip)
+				}
+			}
+		}
 	}
 }
 
@@ -494,5 +507,72 @@ func TestSymlinkOut(t *testing.T) {
 	}
 	if _, _, err := x.Read("r", "docs/adr/0001-link.md"); err == nil {
 		t.Error("Read followed a symlink")
+	}
+}
+
+// TestClusterOddInput: a template, an odd type or a clashing name in the group_vars or pigsty.yml is drift; the
+// projection never fails on it (the live poll runs Run first, and an error stalls every repo).
+func TestClusterOddInput(t *testing.T) {
+	write := func(dir, path, body string) {
+		os.MkdirAll(filepath.Join(dir, filepath.Dir(path)), 0o755)
+		os.WriteFile(filepath.Join(dir, path), []byte(body), 0o644)
+	}
+	dir := t.TempDir()
+	write(dir, groupVars+"addons.yml", "metallb_enabled: \"{{ x }}\"\nkube_vip_enabled: [a]\n")
+	write(dir, groupVars+"k8s-cluster.yml", "kube_network_plugin: \"Not An Id!\"\ndns_mode: manual\nenable_nodelocaldns: true\n")
+	write(dir, groupVars+"k8s-net-cilium.yml", "- a list\n")
+	write(dir, lanPath, "bnei_lan_hosts:\n  pg02: 192.168.1.207\n  garage-storage: 192.168.1.199\n")
+	write(dir, pigstyPath, `all:
+  children:
+    pg-a:
+      hosts: { 192.168.1.207: {}, notanip: {} }
+      vars: { pg_cluster: main }
+    redis-a:
+      hosts: { 192.168.1.199: {} }
+      vars: { redis_cluster: main }
+    redis-b:
+      hosts: { 192.168.1.199: {} }
+      vars: { redis_cluster: cache }
+    tpl:
+      vars: { pg_cluster: "{{ c }}" }
+    odd: [x]
+    infra:
+      hosts: { 192.168.1.207: {} }
+    minio:
+      hosts: { 192.168.1.207: {} }
+`)
+	x := &Ctx{Repos: Repos{"infra-bootstrap": {Dir: dir}}, track: map[Track]bool{}}
+	if err := kubespray(x); err != nil {
+		t.Fatalf("kubespray: %v", err)
+	}
+	if err := pigsty(x); err != nil {
+		t.Fatalf("pigsty: %v", err)
+	}
+	var ids, drift []string
+	for _, n := range x.g.Nodes {
+		ids = append(ids, n.ID)
+	}
+	for _, d := range x.g.Drift {
+		drift = append(drift, d.Subject+": "+d.Detail)
+	}
+	got := strings.Join(drift, "\n")
+	for _, want := range []string{"metallb_enabled is not a literal", "kube_vip_enabled is not a literal", "k8s-net-cilium.yml is not a YAML map",
+		"add-on name is not a valid id", "non-IP host key", "reuses the name of a postgres cluster", "tpl has a cluster name",
+		"odd is not a {hosts, vars} map", "minio has no cluster atlas draws"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no drift %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "infra has no cluster") || strings.Contains(got, "notanip") {
+		t.Errorf("pigsty's own infra group is drift, or a non-IP key's value reached it:\n%s", got)
+	}
+	// dns_mode manual: no CoreDNS, so no nodelocaldns; the defaulted kube-proxy stays
+	if !slices.Equal(ids, []string{"addon:kube-proxy", "db:main", "db:cache"}) {
+		t.Errorf("nodes = %v", ids)
+	}
+	// cache runs on garage-storage, which the LAN records name but terraform made a container
+	g := graph.Graph{Nodes: []graph.Node{{ID: "db:cache"}, {ID: "ct:garage-storage"}}}
+	if out := resolve(g, x.members); !slices.ContainsFunc(out.Edges, func(e graph.Edge) bool { return e.From == "db:cache" && e.To == "ct:garage-storage" }) {
+		t.Errorf("resolve = %+v", out)
 	}
 }

@@ -2,6 +2,7 @@ package extract
 
 import (
 	"fmt"
+	"net/netip"
 	"slices"
 	"strings"
 
@@ -11,81 +12,113 @@ import (
 )
 
 // The cluster's own software that no ArgoCD Application deploys (plan/13 §7 A7b): kubespray's add-ons, from the
-// inventory's group_vars, and Pigsty's data services, from pigsty.yml. Both read named fields only.
+// inventory's group_vars, and Pigsty's data services, from pigsty.yml. Both read named fields only, take literal
+// values only (a Jinja template or an odd type is drift, never a failed projection), and never read an address or a
+// secret.
 
 var kubesprayExtractor = Extractor{Name: "kubespray", Version: 1, Needs: []string{"infra-bootstrap"}, Run: kubespray}
 
 const groupVars = "inventory/ukubi/group_vars/k8s_cluster/"
 
-// kubesprayVars are the only group_vars keys atlas reads: which add-ons run, never an address or a secret.
-type kubesprayVars struct {
-	NetworkPlugin      string `yaml:"kube_network_plugin"`
-	ProxyMode          string `yaml:"kube_proxy_mode"`
-	DNSMode            string `yaml:"dns_mode"`
-	NodeLocalDNS       *bool  `yaml:"enable_nodelocaldns"`
-	MetalLB            *bool  `yaml:"metallb_enabled"`
-	KubeVIP            *bool  `yaml:"kube_vip_enabled"`
-	KubeVIPControl     *bool  `yaml:"kube_vip_controlplane_enabled"`
-	CiliumProxyReplace any    `yaml:"cilium_kube_proxy_replacement"` // false, true, or "strict"/"partial" in older kubespray
-	CiliumHubble       *bool  `yaml:"cilium_enable_hubble"`
-	CiliumEncryption   *bool  `yaml:"cilium_encryption_enabled"`
-	CiliumEncryptType  string `yaml:"cilium_encryption_type"`
-}
+// groupVarFiles are read in ansible's order for a group_vars directory (by name): a later file's key wins.
+var groupVarFiles = []string{"addons.yml", "k8s-cluster.yml", "k8s-net-cilium.yml"}
+
+// kubesprayKeys are the only group_vars keys atlas reads: which add-ons run, never an address, a pool or a secret.
+var kubesprayKeys = []string{"kube_network_plugin", "kube_proxy_mode", "dns_mode", "enable_nodelocaldns", "metallb_enabled",
+	"metallb_namespace", "kube_vip_enabled", "kube_vip_controlplane_enabled", "cilium_kube_proxy_replacement",
+	"cilium_enable_hubble", "cilium_encryption_enabled", "cilium_encryption_type"}
+
+// kubesprayDefaults are kubespray's own defaults (roles/kubespray_defaults) for the keys that decide what it installs
+// when the inventory leaves them out.
+var kubesprayDefaults = map[string]string{"kube_network_plugin": "calico", "kube_proxy_mode": "ipvs", "dns_mode": "coredns",
+	"enable_nodelocaldns": "true", "metallb_namespace": "metallb-system"}
+
+// noPlugin are kube_network_plugin values that install no CNI of kubespray's own.
+var noPlugin = []string{"none", "cni", "custom_cni"}
 
 func kubespray(x *Ctx) error {
-	var v kubesprayVars
-	srcs := map[string]graph.Source{}
-	for _, f := range []string{"k8s-cluster.yml", "addons.yml", "k8s-net-cilium.yml"} {
-		b, src, err := x.Read("infra-bootstrap", groupVars+f)
+	vars := map[string]string{}       // key -> literal value
+	from := map[string]graph.Source{} // key -> the file that set it
+	var cluster graph.Source          // k8s-cluster.yml: where a defaulted add-on is sourced
+	for _, f := range groupVarFiles {
+		b, s, err := x.Read("infra-bootstrap", groupVars+f)
 		if err != nil {
 			return err
 		}
-		if err := yaml.Unmarshal(b, &v); err != nil { // the three files share one key space, as in ansible
-			return fmt.Errorf("%s%s: %w", groupVars, f, err)
+		var doc map[string]yaml.Node
+		if err := yaml.Unmarshal(b, &doc); err != nil {
+			x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: groupVars + f + " is not a YAML map", Source: s})
+			continue
 		}
-		srcs[f] = src
+		for _, k := range kubesprayKeys {
+			n, ok := doc[k]
+			if !ok {
+				continue
+			}
+			if n.Kind != yaml.ScalarNode || strings.Contains(n.Value, "{{") {
+				x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: groupVars + f + ": " + k + " is not a literal", Source: s})
+				delete(vars, k)
+				continue
+			}
+			vars[k], from[k] = n.Value, s
+		}
+		if f == "k8s-cluster.yml" {
+			cluster = s
+		}
 	}
-	on := func(b *bool) bool { return b != nil && *b }
-	add := func(name, file string, attrs map[string]string) {
-		x.Node(graph.Node{ID: graph.ID(graph.KindAddon, name), Kind: graph.KindAddon, Attrs: attrs, Source: srcs[file]})
+	get := func(k string) string {
+		if v, ok := vars[k]; ok {
+			return v
+		}
+		return kubesprayDefaults[k]
 	}
-	replaced := false
-	switch r := v.CiliumProxyReplace.(type) {
-	case bool:
-		replaced = r
-	case string:
-		replaced = r == "true" || r == "strict"
+	on := func(k string) bool { v := strings.ToLower(get(k)); return v == "true" || v == "yes" }
+	add := func(name, key string, attrs map[string]string) { // key: the setting that decides it, for the source
+		src, ok := from[key]
+		if !ok {
+			src = cluster
+		}
+		id := graph.ID(graph.KindAddon, name)
+		if !graph.Valid(id) {
+			x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: "a kubespray add-on name is not a valid id", Source: src})
+			return
+		}
+		x.Node(graph.Node{ID: id, Kind: graph.KindAddon, Attrs: attrs, Source: src})
 	}
-	if v.NetworkPlugin != "" {
-		attrs := map[string]string{"namespace": "kube-system"}
-		if v.NetworkPlugin == "cilium" {
-			if on(v.CiliumHubble) {
+	// "into" is the namespace kubespray installs into, not "namespace": several add-ons share kube-system, and the
+	// page counts a namespace attr's whole usage as the node's own (plan/13: per-workload usage comes later).
+	plugin := get("kube_network_plugin")
+	replaced := plugin == "cilium" && slices.Contains([]string{"true", "strict"}, strings.ToLower(get("cilium_kube_proxy_replacement")))
+	if !slices.Contains(noPlugin, plugin) {
+		attrs := map[string]string{"into": "kube-system"}
+		if plugin == "cilium" {
+			if on("cilium_enable_hubble") {
 				attrs["hubble"] = "true"
 			}
-			if on(v.CiliumEncryption) && v.CiliumEncryptType != "" {
-				attrs["encryption"] = v.CiliumEncryptType
+			if t := get("cilium_encryption_type"); on("cilium_encryption_enabled") && t != "" {
+				attrs["encryption"] = t
 			}
 		}
-		add(v.NetworkPlugin, "k8s-cluster.yml", attrs)
+		add(plugin, "kube_network_plugin", attrs)
 	}
-	if v.ProxyMode != "" && !(v.NetworkPlugin == "cilium" && replaced) {
-		add("kube-proxy", "k8s-cluster.yml", map[string]string{"namespace": "kube-system", "mode": v.ProxyMode})
+	if !replaced {
+		add("kube-proxy", "kube_proxy_mode", map[string]string{"into": "kube-system", "mode": get("kube_proxy_mode")})
 	}
-	if v.DNSMode == "coredns" {
-		add("coredns", "k8s-cluster.yml", map[string]string{"namespace": "kube-system"})
+	if coredns := strings.HasPrefix(get("dns_mode"), "coredns"); coredns {
+		add("coredns", "dns_mode", map[string]string{"into": "kube-system"})
+		if on("enable_nodelocaldns") { // kubespray deploys nodelocaldns only in front of its CoreDNS
+			add("nodelocaldns", "enable_nodelocaldns", map[string]string{"into": "kube-system"})
+		}
 	}
-	if on(v.NodeLocalDNS) {
-		add("nodelocaldns", "k8s-cluster.yml", map[string]string{"namespace": "kube-system"})
+	if on("metallb_enabled") {
+		add("metallb", "metallb_enabled", map[string]string{"into": get("metallb_namespace")})
 	}
-	if on(v.MetalLB) {
-		add("metallb", "addons.yml", map[string]string{"namespace": "metallb-system"})
-	}
-	if on(v.KubeVIP) {
-		attrs := map[string]string{"namespace": "kube-system"}
-		if on(v.KubeVIPControl) {
+	if on("kube_vip_enabled") {
+		attrs := map[string]string{"into": "kube-system"}
+		if on("kube_vip_controlplane_enabled") {
 			attrs["role"] = "control-plane"
 		}
-		add("kube-vip", "addons.yml", attrs)
+		add("kube-vip", "kube_vip_enabled", attrs)
 	}
 	return nil
 }
@@ -94,33 +127,38 @@ var pigstyExtractor = Extractor{Name: "pigsty", Version: 1, Needs: []string{"inf
 
 const pigstyPath = "pigsty/pigsty.yml"
 
-// pigstyGroup is an inventory group as atlas reads it: its members (host keys only: their vars carry pg_role, whose
-// labels are unreconciled, and redis_instances) and the cluster names. pg_users, passwords and the rest are never
-// read.
-type pigstyGroup struct {
-	Hosts map[string]yaml.Node `yaml:"hosts"`
-	Vars  struct {
-		PG    string `yaml:"pg_cluster"`
-		Redis string `yaml:"redis_cluster"`
-		Etcd  string `yaml:"etcd_cluster"`
-	} `yaml:"vars"`
+// pigstyVars are the only group vars atlas reads: the cluster names. pg_users, pg_role (on hosts, its labels
+// unreconciled), passwords and addresses are never read.
+type pigstyVars struct {
+	PG    string `yaml:"pg_cluster"`
+	Redis string `yaml:"redis_cluster"`
+	Etcd  string `yaml:"etcd_cluster"`
 }
 
-// pigsty adds a db node per Postgres and Redis cluster, and runs-on edges to the VMs they run on, joined by IP through
-// the LAN records (pigsty keys hosts by IP). The Postgres cluster also runs on its etcd members (its DCS, the witness
-// among them). An edge whose VM is not a node becomes drift at the end of the run (Ctx.Member).
+// pigstySkipped are the groups Pigsty uses for itself, not drawn yet (its infra node: VictoriaMetrics, its Grafana);
+// any other group without a cluster name atlas knows is drift.
+var pigstySkipped = []string{"infra"}
+
+// pigsty adds a db node per Postgres and Redis cluster, and runs-on edges to the machines they run on, joined by IP
+// through the LAN records (pigsty keys hosts by IP). The Postgres clusters also run on the etcd members (Patroni's
+// DCS, the witness among them). An edge whose machine is not a node becomes drift at the end of the run (Ctx.Member).
 func pigsty(x *Ctx) error {
 	b, src, err := x.Read("infra-bootstrap", pigstyPath)
 	if err != nil {
 		return err
 	}
+	file := graph.ID(graph.KindRepo, "infra-bootstrap")
+	drift := func(subject, detail string) {
+		x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: subject, Detail: detail, Source: src})
+	}
 	var inv struct {
 		All struct {
-			Children map[string]pigstyGroup `yaml:"children"`
+			Children map[string]yaml.Node `yaml:"children"`
 		} `yaml:"all"`
 	}
 	if err := yaml.Unmarshal(b, &inv); err != nil {
-		return fmt.Errorf("%s: %w", pigstyPath, err)
+		drift(file, pigstyPath+" is not an inventory (all.children)")
+		return nil
 	}
 	lb, _, err := x.Read("infra-bootstrap", lanPath)
 	if err != nil {
@@ -136,47 +174,67 @@ func pigsty(x *Ctx) error {
 	for name, ip := range lan.Hosts {
 		byIP[ip] = name
 	}
-	type member struct{ as []string }
-	clusters := map[string]map[string]*member{} // db id -> vm id -> what it runs there
+	clusters := map[string]map[string][]string{} // db id -> machine name -> what it runs there
 	engine := map[string]string{}
 	run := func(db, host, as string) {
-		name, ok := byIP[host]
-		if !ok {
-			x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: db, Detail: "pigsty host " + host + " is not in " + lanPath, Source: src})
+		if _, err := netip.ParseAddr(host); err != nil {
+			drift(db, "pigsty has a non-IP host key")
 			return
 		}
-		vm := graph.ID(graph.KindVM, name)
-		if clusters[db][vm] == nil {
-			clusters[db][vm] = &member{}
+		name, ok := byIP[host]
+		if !ok {
+			drift(db, "pigsty host "+host+" is not in "+lanPath)
+			return
 		}
-		if m := clusters[db][vm]; !slices.Contains(m.as, as) {
-			m.as = append(m.as, as)
+		if m := clusters[db]; !slices.Contains(m[name], as) {
+			m[name] = append(m[name], as)
 		}
 	}
 	var etcd []string
 	for _, name := range sortedKeys(inv.All.Children) {
-		gr := inv.All.Children[name]
-		var db, as string
+		var gr struct {
+			Hosts map[string]yaml.Node `yaml:"hosts"`
+			Vars  pigstyVars           `yaml:"vars"`
+		}
+		node := inv.All.Children[name]
+		if err := node.Decode(&gr); err != nil {
+			drift(file, "pigsty group "+name+" is not a {hosts, vars} map")
+			continue
+		}
+		var cluster, as string
 		switch {
 		case gr.Vars.PG != "":
-			db, as = graph.ID(graph.KindDB, gr.Vars.PG), "postgres"
+			cluster, as = gr.Vars.PG, "postgres"
 		case gr.Vars.Redis != "":
-			db, as = graph.ID(graph.KindDB, gr.Vars.Redis), "redis"
+			cluster, as = gr.Vars.Redis, "redis"
 		case gr.Vars.Etcd != "":
 			etcd = append(etcd, sortedKeys(gr.Hosts)...)
 			continue
 		default:
+			if !slices.Contains(pigstySkipped, name) {
+				drift(file, "pigsty group "+name+" has no cluster atlas draws")
+			}
 			continue
 		}
-		if clusters[db] == nil {
-			clusters[db], engine[db] = map[string]*member{}, as
+		db := graph.ID(graph.KindDB, cluster)
+		if !graph.Valid(db) || strings.Contains(cluster, "{{") {
+			drift(file, "pigsty group "+name+" has a cluster name that is not a valid id")
+			continue
+		}
+		switch engine[db] {
+		case "":
+			clusters[db], engine[db] = map[string][]string{}, as
 			x.Node(graph.Node{ID: db, Kind: graph.KindDB, Attrs: map[string]string{"engine": as}, Source: src})
+		case as:
+		default:
+			drift(db, "pigsty group "+name+" reuses the name of a "+engine[db]+" cluster")
+			continue
 		}
 		for _, h := range sortedKeys(gr.Hosts) {
 			run(db, h, as)
 		}
 	}
-	for _, db := range sortedKeys(clusters) { // etcd is Patroni's DCS: every Postgres cluster runs on its members
+	for _, db := range sortedKeys(clusters) {
 		if engine[db] == "postgres" {
 			for _, h := range etcd {
 				run(db, h, "etcd")
@@ -184,9 +242,9 @@ func pigsty(x *Ctx) error {
 		}
 	}
 	for _, db := range sortedKeys(clusters) {
-		for _, vm := range sortedKeys(clusters[db]) {
-			x.Member(graph.Edge{From: db, To: vm, Kind: graph.EdgeRunsOn, Origin: graph.Declared,
-				Attrs: map[string]string{"as": strings.Join(clusters[db][vm].as, ",")}, Source: src})
+		for _, name := range sortedKeys(clusters[db]) {
+			x.Member(graph.Edge{From: db, To: graph.ID(graph.KindVM, name), Kind: graph.EdgeRunsOn, Origin: graph.Declared,
+				Attrs: map[string]string{"as": strings.Join(clusters[db][name], ",")}, Source: src})
 		}
 	}
 	return nil
