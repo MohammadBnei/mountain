@@ -44,6 +44,22 @@ on the owner's go for the agent-fleet items listed under them.
   must allow `ask` in single-shot runs: a question parks the run as a pending decision and announces it, an answer
   resumes it, and the run then ends in its typed result. The other session has been told; it starts nothing
   without the owner's go.
+- **What the ADR-0070 amendment (item c) must settle**, per the other session's check (2026-10-25):
+  1. **The pool.** A parked session holds a pod and a `MAX_DEFINITION_SESSIONS` slot. Start by keeping the pod,
+     with a per-client cap on parked sessions; pod-less parking (resume on answer) only if the cap bites.
+  2. **Timeouts.** An unanswered question ends as a typed `expired` result from `WaitForResult`, not a crash. A
+     retry with the same idempotency key returns that session. The idle sweep must spare a session blocked on a
+     question; that needs a test.
+  3. **While parked**, `WaitForResult` returns `waiting` plus the question: the same fact `session.waiting`
+     announces.
+  4. **Who answers:** the client relays the person's answer (an ADR-0066 §6 actor, tainted unless allowlisted), and
+     platform-admins answer in the console (Discord notice) for sessions no client watches. Both must work.
+  5. **Simplify:** if every session can ask, `interaction: deny` loses its reason (keep it only as an explicit
+     fail-fast mode). Permission prompts and questions park through one mechanism.
+- **Items (a) and (b) are up** as MohammadBnei/agent-fleet#327: the pack line (ask with the sidecar's
+  AskUserQuestion when blocked, else stop) and `Agent-Session` on every pod plus `Agent-Definition: <name>@<sha>`
+  on definition pods, with any model-written `Agent-*` lines stripped first. `Agent-Session` carries the raw fleet
+  session id (the ledger joins on it); raw id vs hash is still the owner's call, and only the value would change.
 - **A step closes on its checkable signal** (work merged, below), and **also on its typed result once (c) exists**.
 - **The other session's items:**
 
@@ -160,6 +176,11 @@ on the owner's go for the agent-fleet items listed under them.
     (`local/kind/30-core.yaml:90-95`);
   - sim-only definitions `game-<repo>` (`git.mode: push`, `branch: game/<repo>`, `invokers: [game]`) and
     `clients/game.yaml` (audience, `actors.allow: [MohammadBnei]`, `announceSessions: true`).
+  - the game definitions must list `AskUserQuestion` in `sidecarTools` (the pod's tool is
+    `mcp__agent-fleet-sidecar__AskUserQuestion`; the built-in one is disallowed in every pod). Without it a blocked
+    agent can only stop, which reads as idle, never as "needs you";
+  - they must also list `TodoWrite` in `tools.allow`: outside it, `canUseTool` turns every todo update into a
+    permission prompt, and the game reads progress from TodoWrite.
 - **The bridge runs locally:**
   - env: `BRIDGE_GITHUB_WEBHOOK_SECRET`, `BRIDGE_ALERT_TOKEN`, `BRIDGE_DATABASE_URL` (direct) and
     `BRIDGE_OIDC_{ISSUER,CLIENT_ID,CERT}` pointing at the sim IdP (7470);
