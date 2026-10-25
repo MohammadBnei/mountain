@@ -296,10 +296,13 @@ func place(g *graph.Graph, rl *realms.Realms) {
 	placeRepos(g)
 }
 
-// placeRepos puts every repo in the code realm as a workshop (plan/13). Its group is the realm of the apps that
-// deploy from it (git edges) when they share one, "shared" when they span several, and "own" when none does (a
-// checkout no Application deploys, like mountain's own sources before their apps are read). It runs after the
-// components are placed, so the apps' realms are known.
+// placeRepos puts every repo in the code realm as a workshop (plan/13). Its group is the realm of the placed apps
+// that deploy from it (git edges) when they share one, "shared" when they span several, and "own" when no placed
+// Application does (a checkout no Application deploys, or one whose apps realms.yaml doesn't list: those are
+// unassigned drift already). It runs after the components are placed, so the apps' realms are known. Past the load
+// rule's 7 groups, the smallest realm groups fold into "shared", so code never needs a split realms.yaml can't make.
+// A repo changes group when a second realm starts deploying from it: an accepted exception to "a building never
+// moves" (plan/13 §2), since the group follows a real edge.
 func placeRepos(g *graph.Graph) {
 	realmOf := map[string]string{}
 	for _, n := range g.Nodes {
@@ -330,6 +333,40 @@ func placeRepos(g *graph.Graph) {
 			group = "shared"
 		}
 		g.Nodes[i].Realm, g.Nodes[i].Group, g.Nodes[i].Function = realms.Code, group, realms.FnWorkshop
+	}
+	foldCode(g)
+}
+
+// maxGroups is plan/10's load rule: at most 7 groups in a view.
+const maxGroups = 7
+
+// foldCode folds code's smallest realm groups (ties: the later name) into "shared" until it has at most maxGroups.
+func foldCode(g *graph.Graph) {
+	size := map[string]int{}
+	for _, n := range g.Nodes {
+		if n.Realm == realms.Code {
+			size[n.Group]++
+		}
+	}
+	fold := map[string]bool{}
+	for len(size) > maxGroups {
+		if _, ok := size["shared"]; !ok {
+			size["shared"] = 0 // folding creates it: one more group to make room for
+		}
+		small := ""
+		for _, k := range sortedKeys(size) {
+			if k != "shared" && k != "own" && (small == "" || size[k] < size[small] || size[k] == size[small] && k > small) {
+				small = k
+			}
+		}
+		size["shared"] += size[small]
+		delete(size, small)
+		fold[small] = true
+	}
+	for i, n := range g.Nodes {
+		if n.Realm == realms.Code && fold[n.Group] {
+			g.Nodes[i].Group = "shared"
+		}
 	}
 }
 

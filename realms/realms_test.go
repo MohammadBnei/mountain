@@ -64,6 +64,10 @@ func TestParseRefuses(t *testing.T) {
 		"unknown fn":     "realms: [infra, code]\nfunctions: {infra/g: castle}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
 		"component fn":   "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g, function: castle}}",
 		"group no fn":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: h}}",
+		"repo listed":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {repo:x: {realm: infra, group: g}}",
+		"workshop fn":    "realms: [infra, code]\nfunctions: {infra/g: workshop}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
+		"workshop own":   "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g, function: workshop}}",
+		"code namespace": "realms: [infra, code]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nnamespaces: {kube-system: code}",
 		"listed in code": "realms: [infra, code]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {repo:x: {realm: code, group: g, function: workshop}}",
 		"bad namespace":  "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nnamespaces: {kube-system: nope}",
 	} {

@@ -532,7 +532,7 @@ func (g *Graphs) loadFixture(file string) error {
 // GraphIndex is what the live overlay joins on: which node a namespace, a k8s node or an ArgoCD name is.
 type GraphIndex struct {
 	Seq    int64
-	Realm  map[string]string   // node id -> realm ("" = not placed: repos, hostnames, ADRs)
+	Realm  map[string]string   // node id -> realm ("" = not placed: hostnames, ADRs)
 	NSApps map[string][]string // namespace -> app ids deploying into it, sorted
 	Has    map[string]bool     // node ids
 }

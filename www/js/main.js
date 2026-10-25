@@ -141,7 +141,7 @@ async function start() {
       }
     }
     for (const [k, o] of Object.entries(OUTSIDE)) {
-      const e = el('div', { class: 'lbl outside' }, el('b', {}, o.label), el('span', {}, `${model.outside[k].length} ${o.kind === 'repo' ? 'repos' : 'hostnames'}`));
+      const e = el('div', { class: 'lbl outside' }, el('b', {}, o.label), el('span', {}, `${model.outside[k].length} hostnames`));
       layer.append(e);
       labels.push({ key: `outside/${k}`, e, kind: 'outside' });
     }

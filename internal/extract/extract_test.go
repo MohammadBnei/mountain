@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"strings"
@@ -115,6 +116,7 @@ func TestPlace(t *testing.T) {
 		"repo:wird":            "apps",   // fed by app:wird alone
 		"repo:vos-monolith":    "apps",   // two apps, one realm
 		"repo:infra-bootstrap": "shared", // the chart and thot's paths: apps, fleet and more
+		"repo:ghost":           "own",    // deployed only by app:ghost, which realms.yaml doesn't list
 	} {
 		if n := node(t, g, id); n.Realm != realms.Code || n.Group != group || n.Function != realms.FnWorkshop {
 			t.Errorf("%s = %s/%s %s, want code/%s workshop", id, n.Realm, n.Group, n.Function, group)
@@ -127,6 +129,22 @@ func TestPlace(t *testing.T) {
 		if (n.Kind == graph.KindDNS || n.Kind == graph.KindADR) && (n.Realm != "" || n.Function != "") {
 			t.Errorf("%s is placed: %+v", n.ID, n)
 		}
+	}
+}
+
+func TestFoldCode(t *testing.T) {
+	g := graph.Graph{}
+	for i, r := range []string{"a", "b", "b", "c", "c", "d", "d", "e", "e", "f", "f", "g", "g", "h", "h", "own"} {
+		g.Nodes = append(g.Nodes, graph.Node{ID: fmt.Sprintf("repo:r%d", i), Kind: graph.KindRepo, Realm: realms.Code, Group: r})
+	}
+	foldCode(&g)
+	got := map[string]int{}
+	for _, n := range g.Nodes {
+		got[n.Group]++
+	}
+	// 9 groups, and "shared" takes a slot too: a (the smallest), then h and g (ties fold the later name) go, own stays
+	if len(got) != maxGroups || got["shared"] != 5 || got["a"]+got["g"]+got["h"] != 0 || got["b"] != 2 || got["own"] != 1 {
+		t.Errorf("folded: %v", got)
 	}
 }
 

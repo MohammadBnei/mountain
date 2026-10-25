@@ -34,8 +34,10 @@ and the sim mirrors (or, for what we own, runs) every signal the game uses.
   - 10 feed exactly one app and fold as a **workshop annex** on it;
   - agent-fleet, vos-monolith and wird feed two apps each (open question 5);
   - infra-bootstrap feeds all 44 and stays a workshop in Code.
-- **Hosts and the town centre carry no civ by design.** What is never drawn carries over: R8's list (k9s) and the
-  Audience rows.
+- **Hosts and the town centre sit in a civ for atlas** (hosts in Platform with the function `land`, atlas in
+  Operations with `town-centre`), and the game treats both by function: land is a lens, never a building, and the
+  town centre stands at the map's centre, outside every district. What is never drawn carries over: R8's list (k9s)
+  and the Audience rows.
 
 **One taxonomy, owned by atlas (owner: civs = realms).**
 - atlas's realms are **reshaped** into the civs (§2): merged, split, and one added. atlas's islands and the game's
@@ -44,21 +46,23 @@ and the sim mirrors (or, for what we own, runs) every signal the game uses.
 - **`function` is its own field** in `realms.yaml`, set per group and overridable per element. It says what a building
   does in play, which is separate from its civ: blackbox is in the Operations civ and works as a watchtower.
 - **The component → kit-model mapping** (`model:`) lives in `realms.yaml` too. ukubi-kit holds no component names.
-- An element with no civ or function is drift, except hosts and the town centre.
+- An element with no civ or function is drift. Hostnames and ADRs are never placed.
 
 **Functions** (AoE-like, not the same):
 
 | Function | Meaning | Examples |
 |---|---|---|
+| Land | the hardware: a lens, never a building | the 3 hosts |
 | Town centre | the information hub: atlas and the game as one (below) | one building at the centre |
 | Houses | the schedulable nodes, which hold the population (§3 Resources) | all 5 k8s nodes |
-| Workshops | repos, where a unit (`game-<repo>`) is trained and works | infra-bootstrap, the game, annexes |
+| Workshops | repos, where a unit (`game-<repo>`) works on its code (set by atlas, never in realms.yaml) | infra-bootstrap, the game, annexes |
+| Barracks | the fleet, which runs the units (agent sessions) | core, provisioner, thot, hermes |
 | Economy | data stores | Postgres, Redis, Garage, NFS |
 | Utilities | network, ingress, storage | Cilium, CoreDNS, MetalLB, Traefik, Longhorn |
 | Defence | identity, secrets, mesh, probes | authentik, Infisical, agent-vault, NetBird, blackbox |
 | Trade | build, ship, observe | Argo CD, zot, runners, Prometheus, Grafana, Loki |
 | Products | what people use | the apps and sites |
-| Gates | where outside traffic enters | hostnames, as doors |
+| Gates | where outside traffic enters; the game's, from route edges (atlas leaves hostnames unplaced) | hostnames, as doors |
 
 **The town centre is the information hub: atlas and the game as one (owner).**
 - **On the map** it is one central building. Its interior holds the catalog, goals, needs-you, the age and research.

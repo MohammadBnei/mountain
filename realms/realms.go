@@ -56,6 +56,9 @@ const (
 
 var functions = []string{FnLand, FnTownCentre, FnHouses, FnWorkshop, FnEconomy, FnUtility, FnDefence, FnTrade, FnBarracks, FnProduct}
 
+// componentKinds are the node kinds realms.yaml may list (extract's realmKinds); repos are atlas's, the rest unplaced.
+var componentKinds = []string{"host", "vm", "ct", "app", "svc"}
+
 // Function is what component id does in play: its own function, else its group's, or "" if it isn't listed.
 func (r *Realms) Function(id string) string {
 	c, ok := r.Components[id]
@@ -95,11 +98,14 @@ func Parse(b []byte) (*Realms, error) {
 		if !slices.Contains(r.Realms, realm) || group == "" || realm == Code {
 			return nil, fmt.Errorf("realms.yaml: functions key %q is not <realm>/<group> of a listed realm (code's are atlas's)", key)
 		}
-		if !slices.Contains(functions, fn) {
-			return nil, fmt.Errorf("realms.yaml: functions %s is %q, not one of %v", key, fn, functions)
+		if !slices.Contains(functions, fn) || fn == FnWorkshop {
+			return nil, fmt.Errorf("realms.yaml: functions %s is %q, not one of %v (workshop is the repos', set by atlas)", key, fn, functions)
 		}
 	}
 	for id, c := range r.Components {
+		if kind, _, _ := strings.Cut(id, ":"); !slices.Contains(componentKinds, kind) {
+			return nil, fmt.Errorf("realms.yaml: %s is not a component (%v); atlas places repos itself", id, componentKinds)
+		}
 		if c.Realm == Code {
 			return nil, fmt.Errorf("realms.yaml: %s is in realm %q, which only atlas fills (the repos)", id, Code)
 		}
@@ -109,7 +115,7 @@ func Parse(b []byte) (*Realms, error) {
 		if c.Group == "" {
 			return nil, fmt.Errorf("realms.yaml: %s has no group", id)
 		}
-		if c.Function != "" && !slices.Contains(functions, c.Function) {
+		if c.Function != "" && (!slices.Contains(functions, c.Function) || c.Function == FnWorkshop) {
 			return nil, fmt.Errorf("realms.yaml: %s has function %q, not one of %v", id, c.Function, functions)
 		}
 		if c.Function == "" && r.Functions[c.Realm+"/"+c.Group] == "" {
@@ -135,7 +141,7 @@ func Parse(b []byte) (*Realms, error) {
 		}
 	}
 	for ns, realm := range r.Namespaces {
-		if !slices.Contains(r.Realms, realm) {
+		if !slices.Contains(r.Realms, realm) || realm == Code {
 			return nil, fmt.Errorf("realms.yaml: namespace %s has realm %q, not one of %v", ns, realm, r.Realms)
 		}
 	}

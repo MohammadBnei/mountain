@@ -85,7 +85,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 .swatch[data-realm="code"] { background: var(--code); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--subtle); display: inline-block; align-self: center; }
 .dot.ok { background: var(--ok); } .dot.degraded { background: var(--warning); } .dot.down { background: var(--danger); }
-.wire { width: 24px; height: 0; border-top: 3px solid var(--platform); align-self: center; }
+.wire { width: 24px; height: 0; border-top: 3px solid var(--operations); align-self: center; }
 .wire.declared { border-top: 2px dotted var(--muted); }
 .alerts { list-style: none; padding: 0; margin: 4px 0; }
 .alerts li { padding: 6px 8px; margin: 4px 0; border-left: 3px solid var(--line-strong); background: var(--sunken); }
