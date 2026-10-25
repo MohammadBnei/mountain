@@ -181,5 +181,5 @@ extraManifests:
               annotations:
                 summary: "mountain: a component is not in realms.yaml"
                 description: >-
-                  The latest projection holds a component internal/realms/realms.yaml does not place, so it is on no
+                  The latest projection holds a component realms/realms.yaml does not place, so it is on no
                   island. Add it there (the map's drift list names it).

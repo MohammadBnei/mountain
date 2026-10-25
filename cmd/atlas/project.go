@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/MohammadBnei/mountain/internal/extract"
-	"github.com/MohammadBnei/mountain/internal/realms"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 // heads is where a round's checkouts come from: GitHub tarballs (fetch.go) or local directories.

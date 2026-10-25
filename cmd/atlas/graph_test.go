@@ -16,7 +16,7 @@ import (
 
 	"github.com/MohammadBnei/mountain/internal/extract"
 	"github.com/MohammadBnei/mountain/internal/graph"
-	"github.com/MohammadBnei/mountain/internal/realms"
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 // testDSN is a fresh schema on MOUNTAIN_TEST_DSN (TestDB* skip without it).
