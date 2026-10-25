@@ -140,14 +140,14 @@ try {
     }
 
     if (tier === 'desktop') {
-      // a click on an island opens its realm
+      // a click on an island opens its realm (Guard: 3 groups, so its centre is island, not a group tile)
       await page.evalJSON(`(location.hash = '#/', true)`);
       await sleep(1500);
-      const pt = await page.evalJSON(`__atlas.point('data')`);
+      const pt = await page.evalJSON(`__atlas.point('guard')`);
       for (const type of ['mousePressed', 'mouseReleased']) await page.s('Input.dispatchMouseEvent', { type, x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
-      const opened = await waitFor(page, `location.hash.startsWith('#/L1/data') && location.hash`, 3000);
-      note(`click on Data → ${opened}`);
-      if (!opened) fail('click: the Data island did not open its realm');
+      const opened = await waitFor(page, `location.hash.startsWith('#/L1/guard') && location.hash`, 3000);
+      note(`click on Guard → ${opened}`);
+      if (!opened) fail('click: the Guard island did not open its realm');
       // search, Enter, Escape
       await page.evalJSON(`(() => { const b = document.getElementById('search'); b.focus(); b.value = 'k8s-worker-02'; b.dispatchEvent(new Event('input')); return true; })()`);
       await sleep(200);

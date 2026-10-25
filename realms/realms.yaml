@@ -15,7 +15,9 @@ functions:
   platform/gpu: utility
   platform/edge: utility
   platform/metrics: utility
+  platform/network: utility
   data/postgres: economy
+  data/redis: economy
   data/s3: economy
   data/nfs: economy
   operations/delivery: trade
@@ -90,6 +92,7 @@ probes:
 # Cilium, CoreDNS and the like straight into kube-system. A namespace in neither list counts as "unattributed".
 namespaces:
   kube-system: platform
+  metallb-system: platform
 
 # Components: id -> realm and group (the L1 fold key). paths (repo-relative prefixes, "<repo>/<prefix>") attach the
 # ADR citations found under them to this component (governs edges); a citation under no listed path goes to its repo.
@@ -109,13 +112,21 @@ components:
   app:platform-nvidia-device-plugin: { realm: platform, group: gpu }
   app:platform-traefik: { realm: platform, group: edge }
   app:redirectors: { realm: platform, group: edge }
+  addon:cilium: { realm: platform, group: network }
+  addon:kube-proxy: { realm: platform, group: network }
+  addon:coredns: { realm: platform, group: network }
+  addon:nodelocaldns: { realm: platform, group: network }
+  addon:metallb: { realm: platform, group: network }
+  addon:kube-vip: { realm: platform, group: network }
   app:platform-metrics-server: { realm: platform, group: metrics } # kube-system, with the add-ons: HPA plumbing, not observability
 
   # Data: the stores
   vm:nfs-storage: { realm: data, group: nfs }
-  vm:pg01: { realm: data, group: postgres }
-  vm:pg02: { realm: data, group: postgres }
-  vm:pg-etcd-witness: { realm: data, group: postgres }
+  db:pg-proxmox: { realm: data, group: postgres }
+  vm:pg01: { realm: data, group: postgres, parent: db:pg-proxmox }
+  vm:pg02: { realm: data, group: postgres, parent: db:pg-proxmox }
+  vm:pg-etcd-witness: { realm: data, group: postgres, parent: db:pg-proxmox }
+  db:redis-main: { realm: data, group: redis }
   ct:garage-storage: { realm: data, group: s3 }
 
   # Operations: deliver, build, observe, the events bridge, and atlas (the game's town centre)

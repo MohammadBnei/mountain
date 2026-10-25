@@ -56,8 +56,9 @@ const (
 
 var functions = []string{FnLand, FnTownCentre, FnHouses, FnWorkshop, FnEconomy, FnUtility, FnDefence, FnTrade, FnBarracks, FnProduct}
 
-// componentKinds are the node kinds realms.yaml may list (extract's realmKinds); repos are atlas's, the rest unplaced.
-var componentKinds = []string{"host", "vm", "ct", "app", "svc"}
+// ComponentKinds are the node kinds realms.yaml may list and atlas must place (extract's realmKinds); repos are
+// atlas's own, hostnames and ADRs are never placed.
+var ComponentKinds = []string{"host", "vm", "ct", "app", "svc", "addon", "db"}
 
 // Function is what component id does in play: its own function, else its group's, or "" if it isn't listed.
 func (r *Realms) Function(id string) string {
@@ -103,8 +104,8 @@ func Parse(b []byte) (*Realms, error) {
 		}
 	}
 	for id, c := range r.Components {
-		if kind, _, _ := strings.Cut(id, ":"); !slices.Contains(componentKinds, kind) {
-			return nil, fmt.Errorf("realms.yaml: %s is not a component (%v); atlas places repos itself", id, componentKinds)
+		if kind, _, _ := strings.Cut(id, ":"); !slices.Contains(ComponentKinds, kind) {
+			return nil, fmt.Errorf("realms.yaml: %s is not a component (%v); atlas places repos itself", id, ComponentKinds)
 		}
 		if c.Realm == Code {
 			return nil, fmt.Errorf("realms.yaml: %s is in realm %q, which only atlas fills (the repos)", id, Code)
