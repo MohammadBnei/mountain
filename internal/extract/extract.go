@@ -266,7 +266,8 @@ func rehome(g *graph.Graph) {
 	slices.SortFunc(g.Edges, func(a, b graph.Edge) int { return cmp.Compare(a.Key(), b.Key()) })
 }
 
-// place sets each component's realm, group and parent from realms.yaml, and records the ones it doesn't list.
+// place sets each component's realm, group, function and parent from realms.yaml, and records the ones it doesn't
+// list. Repos go to the code realm (placeRepos).
 func place(g *graph.Graph, rl *realms.Realms) {
 	ids := map[string]bool{}
 	for _, n := range g.Nodes {
@@ -282,7 +283,7 @@ func place(g *graph.Graph, rl *realms.Realms) {
 			drift = append(drift, graph.Drift{Kind: graph.DriftUnassigned, Subject: n.ID, Detail: "not in realms.yaml", Source: n.Source})
 			continue
 		}
-		g.Nodes[i].Realm, g.Nodes[i].Group = c.Realm, c.Group
+		g.Nodes[i].Realm, g.Nodes[i].Group, g.Nodes[i].Function = c.Realm, c.Group, rl.Function(n.ID)
 		if c.Parent != "" {
 			if ids[c.Parent] {
 				g.Nodes[i].Parent = c.Parent
@@ -292,6 +293,44 @@ func place(g *graph.Graph, rl *realms.Realms) {
 		}
 	}
 	g.Merge(graph.Graph{Drift: drift}) // drift only: cannot fail
+	placeRepos(g)
+}
+
+// placeRepos puts every repo in the code realm as a workshop (plan/13). Its group is the realm of the apps that
+// deploy from it (git edges) when they share one, "shared" when they span several, and "own" when none does (a
+// checkout no Application deploys, like mountain's own sources before their apps are read). It runs after the
+// components are placed, so the apps' realms are known.
+func placeRepos(g *graph.Graph) {
+	realmOf := map[string]string{}
+	for _, n := range g.Nodes {
+		realmOf[n.ID] = n.Realm
+	}
+	fed := map[string]map[string]bool{} // repo -> realms of the apps it feeds
+	for _, e := range g.Edges {
+		if e.Kind != graph.EdgeGit || realmOf[e.From] == "" {
+			continue
+		}
+		if fed[e.To] == nil {
+			fed[e.To] = map[string]bool{}
+		}
+		fed[e.To][realmOf[e.From]] = true
+	}
+	for i, n := range g.Nodes {
+		if n.Kind != graph.KindRepo {
+			continue
+		}
+		group := "own"
+		switch len(fed[n.ID]) {
+		case 0:
+		case 1:
+			for r := range fed[n.ID] {
+				group = r
+			}
+		default:
+			group = "shared"
+		}
+		g.Nodes[i].Realm, g.Nodes[i].Group, g.Nodes[i].Function = realms.Code, group, realms.FnWorkshop
+	}
 }
 
 func sortedKeys[V any](m map[string]V) []string {

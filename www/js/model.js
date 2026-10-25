@@ -4,20 +4,20 @@
 // Input: an /api/graph answer {seq, nodes, edges, drift, vector} and a live frame (cmd/atlas live.go). Every count and
 // every route comes from those two; nothing here is invented.
 
-// The seven realms, in L0 order, where they sit on the map (styleboard L0, in map units) and their wire colour.
-export const REALMS = ['infra', 'platform', 'data', 'identity', 'events', 'fleet', 'apps'];
+// The seven realms (since R12 the game's civs too, plan/13), in L0 order, where they sit on the map (in map units)
+// and their wire colour. Data, the smallest, holds the centre; code holds the repos (atlas places them).
+export const REALMS = ['platform', 'data', 'operations', 'guard', 'fleet', 'apps', 'code'];
 export const REALM = {
   apps: { label: 'Apps', at: [0, -4.6], wire: '#ffd83a' },
-  identity: { label: 'Identity', at: [-5.2, -2.3], wire: '#9a8a72' },
+  guard: { label: 'Guard', at: [-5.2, -2.3], wire: '#9a8a72' },
   fleet: { label: 'Fleet', at: [5.2, -2.3], wire: '#ff7a2e' },
-  events: { label: 'Events', at: [0, 0], wire: '#9a8a72' },
-  platform: { label: 'Platform', at: [-5.2, 2.3], wire: '#3fa2ff' },
-  data: { label: 'Data', at: [5.2, 2.3], wire: '#1ff2dc' },
-  infra: { label: 'Infra', at: [0, 4.6], wire: '#b4ff3c' },
+  data: { label: 'Data', at: [0, 0], wire: '#1ff2dc' },
+  operations: { label: 'Operations', at: [-5.2, 2.3], wire: '#3fa2ff' },
+  code: { label: 'Code', at: [5.2, 2.3], wire: '#ff5cc8' },
+  platform: { label: 'Platform', at: [0, 4.6], wire: '#b4ff3c' },
 };
-// The outside (L0 rim): only what the graph names. GitHub holds the repos, Cloudflare the public hostnames.
+// The outside (L0 rim): only what the graph names. Cloudflare holds the public hostnames (the repos are in code).
 export const OUTSIDE = {
-  github: { label: 'GitHub', kind: 'repo', at: [-10.5, -3.2] },
   cloudflare: { label: 'Cloudflare', kind: 'dns', at: [-10.5, 0.2] },
 };
 export const KIND = { host: 'host', vm: 'VM', ct: 'container', app: 'Application', svc: 'component', repo: 'repo', dns: 'hostname', adr: 'ADR' };
@@ -46,15 +46,14 @@ export function buildModel(view) {
   }
   const realms = {};
   for (const r of REALMS) realms[r] = { id: r, ...REALM[r], groups: new Map(), count: 0 };
-  const outside = { github: [], cloudflare: [] }, adrs = [];
+  const outside = { cloudflare: [] }, adrs = [];
   for (const n of nodes.values()) {
     if (n.realm && realms[n.realm]) {
       const g = realms[n.realm].groups;
       if (!g.has(n.group)) g.set(n.group, { realm: n.realm, id: n.group, members: [] });
       g.get(n.group).members.push(n.id);
       realms[n.realm].count++;
-    } else if (n.kind === 'repo') outside.github.push(n.id);
-    else if (n.kind === 'dns') outside.cloudflare.push(n.id);
+    } else if (n.kind === 'dns') outside.cloudflare.push(n.id);
     else if (n.kind === 'adr') adrs.push(n.id);
   }
   for (const r of Object.values(realms)) {
@@ -67,7 +66,7 @@ export function buildModel(view) {
   return { seq: view.seq, at: view.at, vector: view.vector || {}, nodes, edges, out, inn, realms, outside, adrs, drift };
 }
 
-/** groupOf is the group a component sits in: {realm, group} or null (repos, hostnames, ADRs). */
+/** groupOf is the group a component sits in: {realm, group} or null (hostnames, ADRs). */
 export function groupOf(m, id) {
   const n = m.nodes.get(id);
   return n?.realm && m.realms[n.realm] ? { realm: n.realm, group: n.group } : null;
@@ -95,7 +94,6 @@ const endpoint = (m, id) => {
   const n = m.nodes.get(id);
   if (!n) return null;
   if (n.realm && m.realms[n.realm]) return `${n.realm}/${n.group}`;
-  if (n.kind === 'repo') return 'outside/github';
   if (n.kind === 'dns') return 'outside/cloudflare';
   return null;
 };

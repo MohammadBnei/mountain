@@ -58,13 +58,15 @@ type Source struct {
 }
 
 type Node struct {
-	ID     string            `json:"id"`
-	Kind   string            `json:"kind"`
-	Realm  string            `json:"realm,omitempty"`
-	Group  string            `json:"group,omitempty"`
-	Parent string            `json:"parent,omitempty"`
-	Attrs  map[string]string `json:"attrs,omitempty"`
-	Source Source            `json:"source"`
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	Realm  string `json:"realm,omitempty"`
+	Group  string `json:"group,omitempty"`
+	Parent string `json:"parent,omitempty"`
+	// Function is what the node does in play (realms.yaml functions, plan/13); set on placed nodes only.
+	Function string            `json:"function,omitempty"`
+	Attrs    map[string]string `json:"attrs,omitempty"`
+	Source   Source            `json:"source"`
 }
 
 type Edge struct {

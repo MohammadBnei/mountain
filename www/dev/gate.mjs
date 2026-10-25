@@ -64,8 +64,8 @@ async function start() {
 const stop = () => new Promise((r) => { srv.once('exit', r); srv.kill(); });
 
 // [name, hash, the labels it must show at least]
-const VIEWS = [['map', '#/', 7], ['land', '#/?lens=land', 7], ['routes', '#/L1', 7], ['realm', '#/L1/fleet', 7], ['card', '#/L1/infra?g=nodes&sel=vm:k8s-worker-02', 7],
-  ['city', '#/L2/platform', 4], ['district', '#/L2/platform?g=observability', 8], ['citylens', '#/L2/apps?lens=land', 3], ['building', '#/L3/svc:agent-fleet/core', 1],
+const VIEWS = [['map', '#/', 7], ['land', '#/?lens=land', 7], ['routes', '#/L1', 7], ['realm', '#/L1/fleet', 7], ['card', '#/L1/platform?g=nodes&sel=vm:k8s-worker-02', 7],
+  ['city', '#/L2/operations', 4], ['district', '#/L2/operations?g=observability', 6], ['citylens', '#/L2/apps?lens=land', 3], ['building', '#/L3/svc:agent-fleet/core', 1],
   ['reader', '#/L4/infra-bootstrap/docs/hostile.md', 0]];
 
 try {

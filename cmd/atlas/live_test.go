@@ -14,8 +14,8 @@ import (
 
 func testIndex() *GraphIndex {
 	return &GraphIndex{
-		Realm: map[string]string{"app:wird": "apps", "app:wird-adminweb": "apps", "app:platform-traefik": "platform", "app:netbird": "identity",
-			"app:mixed-a": "apps", "app:mixed-b": "fleet", "vm:k8s-cp-01": "infra", "vm:pg01": "data", "host:bnei": "infra"},
+		Realm: map[string]string{"app:wird": "apps", "app:wird-adminweb": "apps", "app:platform-traefik": "platform", "app:netbird": "guard",
+			"app:mixed-a": "apps", "app:mixed-b": "fleet", "vm:k8s-cp-01": "platform", "vm:pg01": "data", "host:bnei": "platform"},
 		NSApps: map[string][]string{"wird": {"app:wird", "app:wird-adminweb"}, "traefik": {"app:platform-traefik"}, "netbird": {"app:netbird"}, "mixed": {"app:mixed-a", "app:mixed-b"}},
 		Has:    map[string]bool{"app:wird": true, "app:wird-adminweb": true, "app:platform-traefik": true, "app:netbird": true, "vm:k8s-cp-01": true, "vm:pg01": true, "host:bnei": true},
 	}
@@ -33,7 +33,7 @@ func TestJoins(t *testing.T) {
 			t.Errorf("appOfService(%s) = %q, want %q", svc, got, want)
 		}
 	}
-	for ns, want := range map[string]string{"wird": "apps", "traefik": "platform", "kube-system": "infra", "mixed": unattrib, "nope": unattrib} {
+	for ns, want := range map[string]string{"wird": "apps", "traefik": "platform", "kube-system": "platform", "mixed": unattrib, "nope": unattrib} {
 		if got := realmOfNS(idx, rl, ns); got != want {
 			t.Errorf("realmOfNS(%s) = %q, want %q", ns, got, want)
 		}
@@ -116,13 +116,13 @@ func TestPromPoll(t *testing.T) {
 	if s.Probes["vm:pg01"] || !s.Probes["host:bnei"] || len(s.Probes) != 2 {
 		t.Errorf("probes: %v", s.Probes)
 	}
-	if lr := s.Land.Realms; lr["apps"].CPU != 0.2 || lr["infra"].CPU != 0.1 || lr[unattrib].CPU != 0.1 || lr["apps"].Mem != 0.1 || lr["apps"].Disk != 0.05 {
+	if lr := s.Land.Realms; lr["apps"].CPU != 0.2 || lr["platform"].CPU != 0.1 || lr[unattrib].CPU != 0.1 || lr["apps"].Mem != 0.1 || lr["apps"].Disk != 0.05 {
 		t.Errorf("land: %+v", lr)
 	}
 	if n := s.Land.Nodes["vm:k8s-cp-01"]; n.Capacity.CPU != 4 || n.Capacity.Mem != 8e9 || n.NS["wird"].CPU != 1.5 || n.NS["wird"].Mem != 1e9 || len(s.Land.Nodes) != 1 {
 		t.Errorf("nodes: %+v", s.Land.Nodes)
 	}
-	if s.Land.NSRealm["wird"] != "apps" || s.Land.NSRealm["kube-system"] != "infra" || s.Land.NSRealm["lost"] != unattrib {
+	if s.Land.NSRealm["wird"] != "apps" || s.Land.NSRealm["kube-system"] != "platform" || s.Land.NSRealm["lost"] != unattrib {
 		t.Errorf("nsRealm: %v", s.Land.NSRealm)
 	}
 	if len(l.events) != 1 || l.events[0].Kind != "health" || l.events[0].Node != "app:wird" {
@@ -146,8 +146,8 @@ func TestAlertPoll(t *testing.T) {
 	if err := a.poll(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if got := l.st.Alerts; len(got) != 2 || got[0].FP != "f2" || got[0].Node != "vm:k8s-cp-01" || got[0].Realm != "infra" ||
-		got[1].Node != "app:netbird" || got[1].Realm != "identity" || got[1].Summary != "crash" {
+	if got := l.st.Alerts; len(got) != 2 || got[0].FP != "f2" || got[0].Node != "vm:k8s-cp-01" || got[0].Realm != "platform" ||
+		got[1].Node != "app:netbird" || got[1].Realm != "guard" || got[1].Summary != "crash" {
 		t.Fatalf("alerts: %+v", got)
 	}
 	if len(l.events) != 0 {

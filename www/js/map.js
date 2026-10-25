@@ -59,7 +59,7 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
   const beaconGeo = new THREE.ConeGeometry(0.16, 0.5, 6), dotGeo = new THREE.SphereGeometry(0.05, 6, 4);
 
   let model = null, live = null, view = { level: -1 }, islands = {}, tiles = null, tileInfo = [], buoys = null, beacons = null, beaconInfo = [];
-  const pos = new Map(); // endpoint key ("realm/group", "outside/github", "realm") -> Vector3 on the tops
+  const pos = new Map(); // endpoint key ("realm/group", "outside/cloudflare", "realm") -> Vector3 on the tops
 
   // clear frees what a layer built: its own geometries and materials, and each InstancedMesh's instance buffers
   // (three frees those only on the mesh's own dispose()). The shared geometries above stay.
@@ -121,7 +121,7 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
     if (tiles.instanceColor) tiles.instanceColor.needsUpdate = true;
     tiles.userData = { tiles: true };
     world.add(tiles);
-    buoys = new THREE.InstancedMesh(buoyGeo, new THREE.MeshStandardMaterial({ color: SUNK, roughness: 0.9, emissive: 0x7a6a57, emissiveIntensity: 0.25 }), 2);
+    buoys = new THREE.InstancedMesh(buoyGeo, new THREE.MeshStandardMaterial({ color: SUNK, roughness: 0.9, emissive: 0x7a6a57, emissiveIntensity: 0.25 }), Object.keys(OUTSIDE).length);
     buoys.count = 0;
     for (const [k, o] of Object.entries(OUTSIDE)) {
       p.set(o.at[0], 0, o.at[1]);
@@ -332,7 +332,7 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
     camera,
     get stats() { return stats; },
     onFrame(f) { listeners.push(f); },
-    /** where an endpoint ("realm", "realm/group", "outside/github") sits, for the labels. */
+    /** where an endpoint ("realm", "realm/group", "outside/cloudflare") sits, for the labels. */
     where(key) { return pos.get(key) || null; },
     /** the back edge of a realm's island (its label's place at L1, clear of the group labels) */
     edge(r) { const is = islands[r]; return is ? is.centre.clone().add(new THREE.Vector3(0, 0.3, -is.R * 0.95)) : null; },
