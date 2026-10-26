@@ -43,6 +43,7 @@
    "summary": "hermes dashboard does not answer."
   }
  ],
+ "alertsAt": 1792857600000,
  "apps": {
   "app:agent-fleet-core": {
    "health": "Healthy",
@@ -286,6 +287,15 @@
   }
  },
  "at": 1792857600000,
+ "day": {
+  "critical": [
+   "KubeNodeNotReady"
+  ],
+  "degraded": [
+   "app:wird-adminweb"
+  ],
+  "calm": false
+ },
  "events": [
   {
    "id": 1,
@@ -312,6 +322,276 @@
    "ts": 1792856000000
   }
  ],
+ "health": {
+  "addon:cilium": {
+   "state": "unknown",
+   "why": "its workloads aren't answered"
+  },
+  "addon:coredns": {
+   "state": "unknown",
+   "why": "its workloads aren't answered"
+  },
+  "addon:kube-proxy": {
+   "state": "unknown",
+   "why": "its workloads aren't answered"
+  },
+  "addon:kube-vip": {
+   "state": "unknown",
+   "why": "its workloads aren't answered"
+  },
+  "addon:metallb": {
+   "state": "unknown",
+   "why": "its workloads aren't answered"
+  },
+  "addon:nodelocaldns": {
+   "state": "unknown",
+   "why": "its workloads aren't answered"
+  },
+  "app:agent-fleet-core": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:agent-vault": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:argocd": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:bootstrap": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:dream-analyst": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:drop": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:editable-blog": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:ente-museum": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:ente-web": {
+   "state": "ok",
+   "why": "Progressing, OutOfSync"
+  },
+  "app:has-journal": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:hq": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:mountain": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:netbird": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:netbird-dashboard": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:pgweb": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:pi-lab": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-actions-runner": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-alloy": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-authentik": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-blackbox-exporter": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-csi-driver-nfs": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-grafana": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-infisical": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-infisical-operator": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-local-path-provisioner": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-loki": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-longhorn": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-metrics-server": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-nvidia-device-plugin": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-prometheus": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-provisioner": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-thot": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:platform-traefik": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:redirectors": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:searxng": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:silverbullet": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:ukubi-bridge": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:ukubi-stt": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:vos-monolith": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:vos-monolith-dev": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:wedding-2026": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:wird": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "app:wird-adminweb": {
+   "state": "degraded",
+   "why": "Degraded, Synced"
+  },
+  "app:zot": {
+   "state": "ok",
+   "why": "Healthy, Synced"
+  },
+  "ct:build-runner": {
+   "state": "ok",
+   "why": "probe answers"
+  },
+  "ct:garage-storage": {
+   "state": "ok",
+   "why": "probe answers"
+  },
+  "ct:hermesagent": {
+   "state": "down",
+   "why": "probe not answering"
+  },
+  "db:pg-proxmox": {
+   "state": "ok",
+   "why": "3 of 3 members answer, 0 don't"
+  },
+  "db:redis-main": {
+   "state": "ok",
+   "why": "1 of 1 members answer, 0 don't"
+  },
+  "host:bnei": {
+   "state": "ok",
+   "why": "probe answers"
+  },
+  "host:ex-laptop": {
+   "state": "ok",
+   "why": "probe answers"
+  },
+  "host:server1": {
+   "state": "ok",
+   "why": "probe answers"
+  },
+  "vm:k8s-cp-01": {
+   "state": "ok",
+   "why": "node Ready"
+  },
+  "vm:k8s-cp-02": {
+   "state": "ok",
+   "why": "node Ready"
+  },
+  "vm:k8s-cp-03": {
+   "state": "ok",
+   "why": "node Ready"
+  },
+  "vm:k8s-worker-01": {
+   "state": "ok",
+   "why": "node Ready"
+  },
+  "vm:k8s-worker-02": {
+   "state": "down",
+   "why": "node not Ready"
+  },
+  "vm:nfs-storage": {
+   "state": "ok",
+   "why": "probe answers"
+  },
+  "vm:pg-etcd-witness": {
+   "state": "ok",
+   "why": "probe answers"
+  },
+  "vm:pg01": {
+   "state": "ok",
+   "why": "probe answers"
+  },
+  "vm:pg02": {
+   "state": "ok",
+   "why": "probe answers"
+  }
+ },
  "land": {
   "capacity": {
    "cpu": 40,
@@ -765,6 +1045,25 @@
    }
   }
  },
+ "pods": {
+  "vm:k8s-cp-01": 31,
+  "vm:k8s-cp-02": 28,
+  "vm:k8s-cp-03": 27,
+  "vm:k8s-worker-01": 44,
+  "vm:k8s-worker-02": 39
+ },
+ "probeDay": {
+  "ct:build-runner": 1,
+  "ct:garage-storage": 1,
+  "ct:hermesagent": 1,
+  "host:bnei": 1,
+  "host:ex-laptop": 1,
+  "host:server1": 1,
+  "vm:nfs-storage": 1,
+  "vm:pg-etcd-witness": 1,
+  "vm:pg01": 1,
+  "vm:pg02": 0.9861
+ },
  "probes": {
   "ct:build-runner": true,
   "ct:garage-storage": true,
@@ -785,33 +1084,5 @@
   "vm:k8s-worker-02": false
  },
  "stale": {},
- "t": "live",
- "probeDay": {
-  "ct:build-runner": 1,
-  "ct:garage-storage": 1,
-  "ct:hermesagent": 1,
-  "host:bnei": 1,
-  "host:ex-laptop": 1,
-  "host:server1": 1,
-  "vm:nfs-storage": 1,
-  "vm:pg-etcd-witness": 1,
-  "vm:pg01": 1,
-  "vm:pg02": 0.9861
- },
- "pods": {
-  "vm:k8s-cp-01": 31,
-  "vm:k8s-cp-02": 28,
-  "vm:k8s-cp-03": 27,
-  "vm:k8s-worker-01": 44,
-  "vm:k8s-worker-02": 39
- },
- "day": {
-  "critical": [
-   "KubeNodeNotReady"
-  ],
-  "degraded": [
-   "app:wird-adminweb"
-  ],
-  "calm": false
- }
+ "t": "live"
 }

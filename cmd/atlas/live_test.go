@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -358,5 +361,100 @@ func TestPlaceWatched(t *testing.T) {
 		if n, r := a.place(idx, c.labels); n != c.node || r != c.real {
 			t.Errorf("%v: placed on %q (%q), want %q (%q)", c.labels, n, r, c.node, c.real)
 		}
+	}
+}
+
+var updateFixtures = flag.Bool("update", false, "rewrite www/dev/fixtures/live.json's health from contract.Classify")
+
+// TestFixtureHealth: the page's tests and the game read the dev fixture's own health; it must be what atlas would
+// send for that graph and frame (go test ./cmd/atlas -run TestFixtureHealth -update rewrites it).
+func TestFixtureHealth(t *testing.T) {
+	g := &Graphs{}
+	if err := g.loadFixture("../../www/dev/fixtures/graph.json"); err != nil {
+		t.Fatal(err)
+	}
+	const file = "../../www/dev/fixtures/live.json"
+	rl, _ := realms.Load()
+	l := newLive(rl, NewHub(false, func() []byte { return nil }))
+	l.idx = g.index
+	if err := l.loadFixture(file); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(file)
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatal(err)
+	}
+	want, _ := json.Marshal(l.st.Health)
+	var have map[string]contract.Health
+	json.Unmarshal(raw["health"], &have)
+	if *updateFixtures {
+		raw["health"] = want
+		if _, ok := raw["alertsAt"]; !ok {
+			raw["alertsAt"] = raw["at"]
+		}
+		out, _ := json.MarshalIndent(raw, "", " ")
+		if err := os.WriteFile(file, append(out, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if !maps.Equal(have, l.st.Health) {
+		t.Errorf("live.json's health is not what atlas computes for it: run go test ./cmd/atlas -run TestFixtureHealth -update")
+	}
+	// spot checks against the fixture's own answers
+	for id, st := range map[string]string{"app:wird-adminweb": contract.Degraded, "vm:k8s-worker-02": contract.Down, "ct:hermesagent": contract.Down, "app:wird": contract.OK} {
+		if l.st.Health[id].State != st {
+			t.Errorf("%s = %+v, want %s", id, l.st.Health[id], st)
+		}
+	}
+	if _, ok := raw["alertsAt"]; !ok {
+		t.Error("live.json has no alertsAt: its alerts would read as no answer")
+	}
+}
+
+// TestLiveHealth: every update classifies against the latest graph; an add-on below all ready is ok while it rolls
+// and degraded after contract.AddonHold; Alertmanager's answer stamps alertsAt, which, like at, never makes a frame.
+func TestLiveHealth(t *testing.T) {
+	rl, _ := realms.Load()
+	hub := NewHub(false, func() []byte { return nil })
+	c := &Client{send: make(chan []byte, 64)}
+	hub.clients[c] = struct{}{}
+	l := newLive(rl, hub)
+	if l.update(func(s *LiveState) { s.At = 1 }); len(l.st.Health) != 0 {
+		t.Errorf("no graph yet, yet health: %v", l.st.Health)
+	}
+	idx := testIndex()
+	idx.Kind = map[string]string{"app:wird": "app", "addon:cilium": "addon"}
+	idx.Has["addon:cilium"] = true
+	l.idx = func() *GraphIndex { return idx }
+	l.update(func(s *LiveState) {
+		s.Apps = map[string]AppLive{"app:wird": {Health: "Degraded"}}
+		s.Addons = map[string]float64{"addon:cilium": 0.5}
+	})
+	if l.st.Health["app:wird"].State != contract.Degraded || l.st.Health["addon:cilium"].State != contract.OK {
+		t.Errorf("health: %+v", l.st.Health)
+	}
+	since := l.low["addon:cilium"]
+	l.mu.Lock()
+	l.classify(since + contract.AddonHold)
+	l.mu.Unlock()
+	if l.st.Health["addon:cilium"].State != contract.Degraded {
+		t.Errorf("after the hold: %+v", l.st.Health["addon:cilium"])
+	}
+	l.update(func(s *LiveState) { s.Addons = map[string]float64{"addon:cilium": 1} })
+	if _, held := l.low["addon:cilium"]; held || l.st.Health["addon:cilium"].State != contract.OK {
+		t.Errorf("back to all ready: %+v %v", l.st.Health["addon:cilium"], l.low)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`[]`)) }))
+	defer srv.Close()
+	a := &amPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex, firing: map[string]AlertLive{}}
+	n := len(c.send)
+	a.poll(context.Background(), time.Now())
+	first := l.st.AlertsAt
+	a.poll(context.Background(), time.Now().Add(time.Second))
+	// the first answer is a frame even when nothing fires: before it, [] alerts means no answer
+	if first == 0 || l.st.AlertsAt == first || len(c.send) != n+1 {
+		t.Errorf("alertsAt %d -> %d, %d frames for two equal answers (want 1: the first)", first, l.st.AlertsAt, len(c.send)-n)
 	}
 }

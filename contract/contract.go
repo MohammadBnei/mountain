@@ -1,7 +1,9 @@
 // Package contract is what atlas reads from the systems it does not own, on the wire: the PromQL it sends, the
 // Alertmanager request it makes, the labels it joins on, and the GitHub routes it polls. atlas uses it as its own
 // copy; ukubi-game's sim mirrors these sources and imports it, so a query atlas adds or changes is a query the
-// sim's mirror must answer (its coverage test fails otherwise). No imports: anything may depend on it.
+// sim's mirror must answer (its coverage test fails otherwise). It also holds the live frame atlas sends and how a
+// node's health is read from it (live.go), which the game's town draws. The standard library only: anything may
+// depend on it.
 package contract
 
 // Queries is every PromQL atlas must have from Prometheus (an instant query, no time= parameter), by name. One failed
