@@ -337,3 +337,26 @@ func TestAddonReadiness(t *testing.T) {
 		t.Errorf("addons: %v (coredns unanswered and kube-vip static: unknown)", a)
 	}
 }
+
+// TestPlaceWatched: an alert with no target or node lands on the one node whose watch names it, before its namespace
+// is tried (NetBirdUnreachable keeps blackbox's namespace); a rule three hosts watch places no building.
+func TestPlaceWatched(t *testing.T) {
+	rl, _ := realms.Load()
+	idx := testIndex()
+	idx.Watch = map[string][]string{"TraefikCertExpiringSoon": {"app:platform-traefik"}, "NetBirdUnreachable": {"app:netbird"},
+		"PVEHostProbeStale": {"host:bnei", "host:ex-laptop", "host:server1"}}
+	a := &amPoll{l: newLive(rl, NewHub(false, func() []byte { return nil }))}
+	for _, c := range []struct {
+		labels     map[string]string
+		node, real string
+	}{
+		{map[string]string{"alertname": "TraefikCertExpiringSoon", "cn": "wird.bnei.dev", "sans": "wird.bnei.dev"}, "app:platform-traefik", "platform"},
+		{map[string]string{"alertname": "NetBirdUnreachable", "target": "netbird", "namespace": "wird"}, "app:netbird", "guard"},
+		{map[string]string{"alertname": "PVEHostProbeStale", "namespace": "wird"}, "", "apps"},
+		{map[string]string{"alertname": "TraefikCertExpiringSoon", "node": "k8s-cp-01"}, "vm:k8s-cp-01", "platform"}, // a node label still wins
+	} {
+		if n, r := a.place(idx, c.labels); n != c.node || r != c.real {
+			t.Errorf("%v: placed on %q (%q), want %q (%q)", c.labels, n, r, c.node, c.real)
+		}
+	}
+}
