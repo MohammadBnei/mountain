@@ -60,6 +60,10 @@ envFrom:
   - secretRef:
       name: mountain-oidc
       optional: true
+  # The game's machine principal (cmd/atlas/machine.go, infra-bootstrap ADR-0068):
+  # MOUNTAIN_MACHINE_CERT (authentik's signing certificate, PEM), _ISSUER, _CLIENT_ID (the
+  # atlas-api provider's) and _SUB (atlas-game). None is secret. Unset until the game is
+  # deployed: the bearer path stays off. All or none: some set and atlas refuses to start.
 
 # MOUNTAIN_GITHUB_TOKEN (Infisical mountain-8c-cz, synced to the Secret mountain-infisical
 # and loaded verbatim via envFrom): the read-only token atlas polls the repos with (contents

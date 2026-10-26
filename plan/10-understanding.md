@@ -193,6 +193,18 @@ drawn red. That mismatch is drift, and often the most useful thing to see.
   - `/ws` refuses any role but admin.
   - A test registers every route and calls each one as a visitor.
   - In infra-bootstrap, `mountain-gate` narrows to `platform-admins`.
+- **One machine principal (R12, slice 4e1).** The game reads the town through `atlas-game`, an authentik service
+  account (infra-bootstrap ADR-0068), never a person's session.
+  - Only `GET /api/graph` and `GET /ws` admit its bearer token; every other gated route answers it 401.
+  - A request carrying `Authorization` is judged by it alone, never by a cookie too.
+  - The token is checked offline, as the bridge checks its clients (ADR-0066): RS256 only, decided before any key is
+    used, against the pinned certificate (`MOUNTAIN_MACHINE_CERT`, one or more during a rotation), never a JWKS
+    fetched over the pod network; `iss`, `aud` and `azp` the `atlas-api` provider's; `sub` the one principal; `exp`
+    with no leeway.
+  - Its socket needs no browser Origin (no cookie rides it) and ends at the token's `exp`; a token with under 5 s
+    left opens nothing.
+  - Unset, the path is off; partly set, atlas refuses to start.
+  - It reaches atlas by its in-cluster Service: `mountain.bnei.dev`'s forwardAuth stops a machine at Traefik.
 - **Git access.** A new read-only App `ukubi-atlas`: contents, metadata, pull_requests, checks and actions read.
   `actions:read` replaces the PAT's build reads.
   - It is installed on an explicit repo list, never "all".

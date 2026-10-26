@@ -71,7 +71,9 @@ and the sim mirrors (or, for what we own, runs) every signal the game uses.
 - **On the map** it is one central building. Its interior holds the catalog, goals, needs-you, the age and research.
 - **Rendering:** the town renders in the game client, under a CSP matching atlas's.
 - **Reading atlas:** the client reads atlas through a **server-side machine credential**, an authentik service account
-  `atlas-game` declared as a blueprint in infra-bootstrap. It is read-only, never sent to the page.
+  `atlas-game` declared as a blueprint in infra-bootstrap. It is read-only, never sent to the page. Its shape (slice
+  4e1): a `client_credentials` token from the `atlas-api` provider, admitted on `GET /api/graph` and `GET /ws` only
+  (plan/10 Security, infra-bootstrap ADR-0068).
 - **Admins only:** the game client is admins-only too. It gets the same `platform-admins` check and a
   call-every-route-as-visitor test, and **until it has them it stays loopback-only**. This amends Audience R10: atlas
   admits one machine principal, read-only, for the town centre.

@@ -8,7 +8,9 @@
 // Env: DATABASE_URL (Postgres; empty = memory-only: the latest projection only, no history),
 // MOUNTAIN_GITHUB_TOKEN (read-only token for the repo poll; empty = no poll, --repos or the stored projection only),
 // MOUNTAIN_OIDC_ISSUER / _CLIENT_ID / _CLIENT_SECRET + MOUNTAIN_SESSION_KEY (sign-in; any unset = every route but
-// /healthz refuses, except under --dev on a loopback address).
+// /healthz refuses a person, except under --dev on a loopback address),
+// MOUNTAIN_MACHINE_CERT / _ISSUER / _CLIENT_ID / _SUB (the game's machine principal on the town's two reads,
+// machine.go; all or none: unset = off).
 //
 // Read side only: atlas never writes a repo or a live store (CQRS, plan/10).
 package main
@@ -106,9 +108,12 @@ func serve(o Opts) error {
 	}
 	www, _ := fs.Sub(mountain.WWW, "www")
 	auth = authFromEnv(o.Dev)
+	if machine, err = machineFromEnv(); err != nil {
+		return err
+	}
 	devOpen = o.Dev && auth == nil && loopback(o.Listen)
 	if auth == nil && !devOpen {
-		log.Printf("atlas: sign-in is not configured: every route but /healthz refuses")
+		log.Printf("atlas: sign-in is not configured: every route but /healthz refuses a person (the machine principal, if configured, still reads its two routes)")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -203,7 +208,7 @@ func routes(a *App, www fs.FS) http.Handler {
 	for _, r := range routeTable(a, www) {
 		h := r.h
 		if !r.open {
-			h = adminOnly(h)
+			h = bearerFirst(r.pattern, h, adminOnly(h)) // a bearer is judged alone: the machine principal (machine.go)
 		}
 		mux.Handle(r.pattern, h)
 	}

@@ -88,7 +88,10 @@ func originOK(o string, dev bool) bool {
 }
 
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !originOK(r.Header.Get("Origin"), h.dev) {
+	// the machine principal (machine.go) carries no cookie a page could ride: no browser origin to check, and its
+	// socket ends with its token
+	mexp, isMachine := machineExp(r.Context())
+	if !isMachine && !originOK(r.Header.Get("Origin"), h.dev) {
 		http.Error(w, "forbidden origin", http.StatusForbidden)
 		return
 	}
@@ -131,7 +134,9 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	end := exp // the session's end is the socket's end: a lost group stops the overlay within the TTL
-	if end.IsZero() {
+	if isMachine {
+		end = mexp // the token's: a deactivated account loses the feed within the token's 10 minutes
+	} else if end.IsZero() {
 		end = time.Now().Add(100 * 365 * 24 * time.Hour) // devOpen: no session
 	}
 	ctx, cancel := context.WithDeadline(r.Context(), end)
