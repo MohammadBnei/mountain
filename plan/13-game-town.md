@@ -500,8 +500,10 @@ later, as one more source feeding the same catalog and review.
          open mode, and with neither mode the game refuses to start.
        - The CSP matches atlas's, and no kit model carries an embedded image.
        - Every admin plays as the one `--actor`.
-       - Deploying the game is the owner's to decide: its image, its hostname, its OIDC app and whether a forwardAuth
-         gate fronts it. Until then the real world runs a local `atlas --dev` against port-forwarded sources.
+       - One lock (owner, 2026-10-26): the game's own OIDC sign-in, with no forwardAuth in front. On the map that makes
+         it a gate, not a wall.
+       - Deploying it waits for the cluster, which should be up around 2026-10-30: its image, its hostname and its
+         authentik OIDC app. Until then the real world runs a local `atlas --dev` against port-forwarded sources.
 5. **The age**, once every signal from slice 2 is live and `goal.closed(done)` is tightened.
 
 ## Open questions (owner)
