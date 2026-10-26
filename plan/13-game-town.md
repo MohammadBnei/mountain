@@ -269,21 +269,29 @@ later, as one more source feeding the same catalog and review.
 **Render:**
 - BatchedMesh per civ material (R8 Engine), never InstancedMesh per kind.
 - 220 draws, 350k tris on desktop and 200k on phone-low.
-- Buildings alone are about 200k tris on the fixture, so the map draws banners only, and dressed buildings show from
-  district zoom.
+- ~~Buildings alone are about 200k tris on the fixture, so the map draws banners only.~~ Measured in slice 3: the map
+  draws dressed buildings within budget (the age-2 overview: 178k tris on desktop, 135k on phone-low, 23 draws), so
+  banners are not needed yet. Shadows are on at district zoom only (all on, the overview was 374k); the heaviest
+  district view with shadows is 244k.
 - A gate case covers the heaviest civ, at its top age, on phone-low.
 - Skinned characters are one draw each, and the small unit counts keep that cheap.
 
 **Grid:**
-- Hex terrain comes from the Hexagon tiles, repainted per biome.
-- Square kits are scaled to fit a hex: City and Space are 2×2, and Halloween is about 3× the scale. There is a scale
-  per kit and a footprint validator.
+- Hex terrain comes from the Hexagon tiles, repainted per biome; every district keeps them (owner, 2026-10-26).
+- **One kit per civ** (owner, 2026-10-26): a civ's buildings, plot and dressing come from its own kit, and the kit's
+  build refuses anything else. A civ's biome is its tiles' ground colour, a floor of its kit under each building (the
+  square kits' floors cannot tile a hex) and its kit's props on the free land. The construction scaffold is the one
+  piece still shared by every civ, painted in each civ's style.
+- Square kits are scaled to fit a hex (City 0.7, Space 0.66, Halloween, Dungeon and Prototype 0.32 on their 4-unit
+  grid). There is a scale and a turn count per kit, and a footprint validator: per-vertex hex reach, ≤ 0.9 for a
+  building on a plot, ≤ 1.0 for a plot, a 4500-triangle cap per building.
 - Only `KHR_mesh_quantization` is used, since the CSP blocks WASM decoders.
 
 **Home:**
 - A **public `ukubi-kit` repo** (CC0, GitHub-hosted runners only), holding:
   - the catalog `{id, source, licence, civ, role, age, state, footprint, variants}`;
-  - palettes, kitbash recipes and generators;
+  - palettes, kitbash recipes and generators: **procgen**, a reusable library for kits we make (primitives,
+    composition, palette and atlas, seeded randomness, tests), with a how-to in the kit's `docs/procedural.md`;
   - a Go package that embeds `dist/`.
 - The game gains no second private dependency.
 - Builds are pinned: Node, a lockfile, glTF-Transform 4.5.1, and a sha256 per fetched file.
@@ -356,13 +364,28 @@ later, as one more source feeding the same catalog and review.
      mirror (the access-log stream for the counter);
    - correlated failures and real rule names in the sim;
    - **stability's query waits for open question 3.**
-3. **ukubi-kit plus a real-data diorama:**
-   - the fixture graph with 3 contrasting civs (fortress, space base, modern city) dressed at district zoom, the rest
-     in clay, and the map with banners;
-   - 2 ages and one construction state;
-   - measured on both tiers with the existing gate harness.
+3. **ukubi-kit plus a real-data diorama (built, 2026-10-26):** ukubi-kit #1 and ukubi-game #6.
+   - Seven civs in two ages, one kit each:
 
-   This is the owner's sign-off artifact.
+     | Civ | Kit |
+     |---|---|
+     | Platform | Medieval Hexagon |
+     | Data | Dungeon |
+     | Operations | Prototype |
+     | Guard | Halloween |
+     | Fleet | Space Base |
+     | Apps | City |
+     | Code | `ukubi`, made by procgen |
+
+     The town centre is the Hexagon keep, the town's own.
+   - The diorama draws atlas's fixture graph (78 buildings, 7 districts) at `/town` in ukubi-game, with:
+     - each civ's plots and dressing;
+     - the scaffold frame for a goal's work in progress;
+     - the age as a preview.
+   - The gate measures the map and every district on both tiers.
+   - Open:
+     - Fleet draws 7 buildings, not 4: atlas leaves the sidecar, worker and executor services unparented (A7c);
+     - the town page needs a CSP before slice 4 takes it off loopback.
 4. **The live town:**
    - placement, districts, zoom levels;
    - supply lines, defence;
