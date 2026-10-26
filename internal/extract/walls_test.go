@@ -115,3 +115,42 @@ func TestWalls(t *testing.T) {
 		}
 	}
 }
+
+// TestModelFacts: a building asks for its group's shapes; a landmark is leaned on by five reviewed needs, or made of
+// three parts; an unproven needs edge does not count, and a part asks for nothing (its building is drawn).
+func TestModelFacts(t *testing.T) {
+	rl := &realms.Realms{Shapes: map[string][]string{"data/postgres": {"tower", "vault"}}}
+	g := graph.Graph{Nodes: []graph.Node{
+		{ID: "db:pg", Realm: "data", Group: "postgres"},
+		{ID: "vm:a", Realm: "data", Group: "postgres", Parent: "db:pg"}, {ID: "vm:b", Parent: "db:pg"}, {ID: "vm:c", Parent: "db:pg"},
+		{ID: "app:auth", Realm: "guard", Group: "authentik"},
+	}}
+	for i := range 6 {
+		checked := "yes"
+		if i == 0 {
+			checked = "no"
+		}
+		g.Edges = append(g.Edges, graph.Edge{From: "app:" + string(rune('m'+i)), To: "app:auth", Kind: EdgeNeeds, Attrs: map[string]string{"checked": checked}})
+	}
+	modelFacts(rl, &g)
+	at := func(id, k string) string {
+		for _, n := range g.Nodes {
+			if n.ID == id {
+				return n.Attrs[k]
+			}
+		}
+		return "?"
+	}
+	if at("db:pg", "shapes") != "tower, vault" || at("db:pg", "landmark") != "true" || at("vm:a", "shapes") != "" || at("app:auth", "shapes") != "" {
+		t.Errorf("pg %q %q, part %q, auth %q", at("db:pg", "shapes"), at("db:pg", "landmark"), at("vm:a", "shapes"), at("app:auth", "shapes"))
+	}
+	if at("app:auth", "landmark") != "true" {
+		t.Error("five reviewed needs make a landmark")
+	}
+	g.Edges[1].Attrs["checked"] = "no" // now four reviewed
+	g.Nodes[4].Attrs = nil
+	modelFacts(rl, &g)
+	if at("app:auth", "landmark") != "" {
+		t.Error("an unproven needs edge does not count")
+	}
+}

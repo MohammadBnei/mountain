@@ -40,6 +40,7 @@ type Realms struct {
 	Needs        map[string][]string  `yaml:"needs"`     // node -> what it depends on, each with its evidence (Need)
 	Addons       map[string][]string  `yaml:"addons"`    // addon node -> its workloads: daemonset/<n>, deployment/<n>, static
 	Walls        map[string][]string  `yaml:"walls"`     // door (dns:<host>) -> what the sources can't show of its gate (WallKinds)
+	Shapes       map[string][]string  `yaml:"shapes"`    // "<realm>/<group>" -> the kit shapes its buildings ask for (ukubi-kit catalog/shapes.yaml)
 }
 
 // WallKinds are what a walls row may say of a door: a mark (public: meant for everyone; own: the app authenticates
@@ -194,6 +195,16 @@ func Parse(b []byte) (*Realms, error) {
 			}
 			if _, ok := r.Components[n.On]; !ok || n.On == id {
 				return nil, fmt.Errorf("realms.yaml: needs %s: %s is not another listed component", id, n.On)
+			}
+		}
+	}
+	for g, list := range r.Shapes {
+		if _, ok := r.Functions[g]; !ok {
+			return nil, fmt.Errorf("realms.yaml: shapes %s is not a <realm>/<group> with a function", g)
+		}
+		for _, s := range list {
+			if s == "" || strings.Trim(s, "abcdefghijklmnopqrstuvwxyz") != "" {
+				return nil, fmt.Errorf("realms.yaml: shapes %s: %q is not a shape word", g, s)
 			}
 		}
 	}
