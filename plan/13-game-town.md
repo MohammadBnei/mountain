@@ -218,7 +218,9 @@ and the sim mirrors (or, for what we own, runs) every signal the game uses.
   - ages, construction and wonders never use the health looks.
 
 **Units: live sessions only (owner).**
-- **One unit per live session of the game's client:** `MAX_EXTERNAL_SESSIONS`, which is 1 in production.
+- **One unit per live session of the game's client:** `MAX_EXTERNAL_SESSIONS`, which is 1 in production. Live means a
+  turn in flight (core's loading, working, waiting): core's `idle` is both "no pod" and "its turn ended", so an idle
+  session is asleep, no unit, and the building's card says so (4d2's reading, 2026-10-26).
   - kind-local needs `MAX_DEFINITION_SESSIONS` ≥ 3 for 2: core requires the external cap below the definition pool.
   - Console, thot and other sessions are not units.
 - **Unit types follow agent definitions:** a builder for `game-<repo>`, and later a scout for research and a guard
@@ -231,10 +233,15 @@ and the sim mirrors (or, for what we own, runs) every signal the game uses.
   padding.
 
 **Wonders:** a big multi-goal project (a new product, a platform migration), rising in stages and visible from the
-whole map.
+whole map. Built (4d3): on one of the town centre's six ring hexes, its slot recorded; a stage per goal closed done,
+never going down; standing as the kit's monument once the player finishes it (two goals done at least); its label is
+what makes it visible from the whole map.
 
 **Construction:** a new building rises through stages. A goal's work shows as scaffolding beside the standing
-building, never by rebuilding a live app from dirt.
+building, never by rebuilding a live app from dirt. Built (4d3): new means after the town's founding (the game's first
+whole graph, in its log); a newcomer rises until atlas first calls it ok (recorded built). The stage is its own channel,
+the model: health stays atlas's (down lies in grey foundations, degraded rises smoking), so atlas's page and the town
+agree, and the town alone adds "not built yet".
 
 **Three visual channels that never mix:**
 - **at risk:** a supplier is down;
@@ -470,11 +477,16 @@ later, as one more source feeding the same catalog and review.
        by its fingerprint), and "can train". The town centre's card adds its interior: the catalog, goals and needs by
        building, the game's own workshop (`repo:ukubi-game`, not in atlas's graph yet), the age and research (none
        yet). Read only: commands stay in the panels;
-     - **4d2, units:** KayKit's characters in ukubi-kit (one rig, one clip file); a unit per live session of the
-       game's client at its goal's building, and the hero;
-     - **4d3, construction and wonders:** a new building's stages need a real signal (an unpinned building is a review
-       artefact, and ArgoCD Missing is atlas's down), found in its own plan; a wonder is a multi-goal project rising a
-       stage per goal closed done;
+     - **4d2, units (built: ukubi-kit #3, ukubi-game #15):** KayKit's Adventurers in ukubi-kit, one skinned draw each
+       (hat and cape baked into the skin, nothing held), one clip file on their shared rig. A builder per agent step's
+       session with a turn in flight (arriving, at work, needing you), unknown when its status can't be read; the hero
+       at your most recently started open step's building, else at the town centre saying so; units walk when they
+       move, are labelled in words, and hide on the map;
+     - **4d3, construction and wonders (built: ukubi-kit #4, ukubi-game #16):** the founding and what is built
+       since in the game log (recorded by the game's loop, never a GET; `--refound` for a bad founding); newcomers in
+       foundations or rising with atlas's health on them; the sim mirrors a new app's arrival (`app.new`: Missing,
+       then Progressing, then Healthy); wonders on the centre's ring, opened, finished and dropped in the panels, the
+       kit's monument when standing; `goal.closed(done)` records its rule, for slice 5's tightening;
    - **4e, off loopback:** the town page's CSP, and the game client's admins-only gate with its machine credential for
      atlas (`atlas-game`); until then the real world runs a local `atlas --dev` against port-forwarded sources.
 5. **The age**, once every signal from slice 2 is live and `goal.closed(done)` is tightened.
