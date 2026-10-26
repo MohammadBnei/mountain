@@ -49,6 +49,29 @@ function liveFacts(m, live, ids) {
   return facts;
 }
 
+/** signalFacts: a node's optional signals (slice 2), the known ones only: an unknown signal is left out, never a 0. */
+function signalFacts(live, id) {
+  const a = live?.apps?.[id], f = [];
+  if (a?.err != null) f.push(`${rps(a.err)} errors/s`);
+  if (a?.lat != null) f.push(`p95 ${a.lat < 1 ? `${Math.round(a.lat * 1000)} ms` : `${a.lat.toFixed(2)} s`}`);
+  if (a?.reqDay != null) f.push(`${a.reqDay >= 1000 ? `${(a.reqDay / 1000).toFixed(1)}k` : a.reqDay} requests in 24 h`);
+  if (a?.avail != null) f.push(`${(a.avail * 100).toFixed(a.avail < 1 ? 2 : 0)}% answered without error`);
+  const pd = live?.probeDay?.[id];
+  if (pd != null) f.push(`probe up ${(pd * 100).toFixed(pd < 1 ? 1 : 0)}% of 24 h`);
+  const pods = live?.pods?.[id];
+  if (pods != null) f.push(`${pods} pods`);
+  return f;
+}
+
+/** dayLine: the town's last 24 h: calm, or what broke it; unknown when its signals are. */
+function dayLine(m, live) {
+  const d = live?.day;
+  if (!d) return el('p', { class: 'meta' }, 'Last 24 h: unknown (no answer yet, or the alert rules did not run).');
+  if (d.calm) return el('p', { class: 'meta' }, 'Last 24 h: calm. No critical alert fired, no app was Degraded.');
+  const deg = d.degraded.map((id) => label(m.nodes.get(id)) || id);
+  return el('p', { class: 'meta' }, 'Last 24 h: not calm. ', d.critical.length ? `Critical: ${d.critical.join(', ')}. ` : '', deg.length ? `Degraded: ${deg.join(', ')}.` : '');
+}
+
 function stateCount(m, live, ids) {
   const c = { down: 0, degraded: 0 };
   for (const id of ids) { const s = health(m, live, id).state; if (s in c) c[s]++; }
@@ -79,6 +102,7 @@ function mapPanel(m, live, v) {
   return el('div', {},
     el('h2', {}, 'ukubi'),
     el('p', { class: 'meta' }, `${m.nodes.size} nodes · ${m.edges.length} edges · ${m.adrs.length} ADRs · projection ${m.seq}`),
+    dayLine(m, live),
     realms,
     land ? el('p', { class: 'meta' }, `Unattributed (namespaces no realm claims): cpu ${pct(un?.cpu)} ram ${pct(un?.mem)} disk ${pct(un?.disk)}. Shares are of allocatable CPU and RAM and of provisioned volume capacity, per pod, by namespace.`) : null,
     el('h3', {}, 'The outside'),
@@ -154,6 +178,7 @@ function card(m, live, v) {
     el('h2', {}, label(n)),
     n.kind !== 'adr' && n.kind !== 'repo' && n.kind !== 'dns' ? el('p', {}, dot(h.state), ' ', h.why) : null,
     a?.rps ? el('p', { class: 'meta' }, `${rps(a.rps)} req/s through Traefik`) : null,
+    signalFacts(live, n.id).length ? el('p', { class: 'meta' }, signalFacts(live, n.id).join(' · ')) : null,
     n.kind === 'app' ? el('p', { class: 'meta' }, liveFacts(m, live, [n.id]).join(' · ') || null, n.attrs?.namespace ? ` (namespace ${n.attrs.namespace})` : '') : null,
     attrs.length ? el('dl', {}, attrs.flatMap(([k, val]) => [el('dt', {}, k), el('dd', { class: 'mono' }, val)])) : null,
     el('p', { class: 'actions' },
@@ -208,6 +233,7 @@ export function buildingCards(m, live, events, v) {
     attrs.length ? el('dl', {}, attrs.flatMap(([k, val]) => [el('dt', {}, k), el('dd', { class: 'mono' }, val)])) : null,
     docOf(n) ? el('p', {}, 'Read at ', link({ level: 4, doc: docOf(n), from: n.id, lens: v.lens }, `${n.source.repo}/${n.source.path}`), n.source.sha ? el('span', { class: 'mono faint' }, ` @${n.source.sha.slice(0, 12)}`) : null) : null);
   card('live', 'Live', el('p', {}, dot(h.state), ' ', h.why), a?.rps ? el('p', { class: 'mono' }, `${rps(a.rps)} req/s through Traefik`) : null,
+    ...signalFacts(live, n.id).map((f) => el('p', { class: 'mono' }, f)),
     ...liveFacts(m, live, [n.id]).map((f) => el('p', { class: 'mono' }, f)));
   const trade = (list, dir) => list.filter((e) => TRADE[e.kind]).map((e) => el('li', {}, `${TRADE[e.kind]} ${dir === 'out' ? '→' : '←'} `, nodeLink(m, v, dir === 'out' ? e.to : e.from)));
   const ins = trade(m.inn.get(n.id) || [], 'in'), outs = trade(m.out.get(n.id) || [], 'out');

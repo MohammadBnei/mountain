@@ -47,7 +47,11 @@
   "app:agent-fleet-core": {
    "health": "Healthy",
    "rps": 1.85,
-   "sync": "Synced"
+   "sync": "Synced",
+   "err": 0,
+   "lat": 0.41,
+   "reqDay": 159840,
+   "avail": 1.0
   },
   "app:agent-vault": {
    "health": "Healthy",
@@ -57,7 +61,11 @@
   "app:argocd": {
    "health": "Healthy",
    "rps": 0,
-   "sync": "Synced"
+   "sync": "Synced",
+   "err": 0,
+   "lat": 0.062,
+   "reqDay": 3120,
+   "avail": 1
   },
   "app:bootstrap": {
    "health": "Healthy",
@@ -77,7 +85,11 @@
   "app:editable-blog": {
    "health": "Healthy",
    "rps": 6.11,
-   "sync": "Synced"
+   "sync": "Synced",
+   "err": 0.03,
+   "lat": 0.29,
+   "reqDay": 527904,
+   "avail": 0.9951
   },
   "app:ente-museum": {
    "health": "Healthy",
@@ -252,12 +264,20 @@
   "app:wird": {
    "health": "Healthy",
    "rps": 5.16,
-   "sync": "Synced"
+   "sync": "Synced",
+   "err": 0.002,
+   "lat": 0.184,
+   "reqDay": 445824,
+   "avail": 0.9996
   },
   "app:wird-adminweb": {
    "health": "Degraded",
    "rps": 7.05,
-   "sync": "Synced"
+   "sync": "Synced",
+   "err": 0.9,
+   "lat": 1.7,
+   "reqDay": 609120,
+   "avail": 0.8723
   },
   "app:zot": {
    "health": "Healthy",
@@ -288,7 +308,7 @@
    "kind": "health",
    "node": "app:wird-adminweb",
    "t": "ev",
-   "text": "wird-adminweb: Healthy → Degraded",
+   "text": "wird-adminweb: Healthy \u2192 Degraded",
    "ts": 1792856000000
   }
  ],
@@ -765,5 +785,33 @@
   "vm:k8s-worker-02": false
  },
  "stale": {},
- "t": "live"
+ "t": "live",
+ "probeDay": {
+  "ct:build-runner": 1,
+  "ct:garage-storage": 1,
+  "ct:hermesagent": 1,
+  "host:bnei": 1,
+  "host:ex-laptop": 1,
+  "host:server1": 1,
+  "vm:nfs-storage": 1,
+  "vm:pg-etcd-witness": 1,
+  "vm:pg01": 1,
+  "vm:pg02": 0.9861
+ },
+ "pods": {
+  "vm:k8s-cp-01": 31,
+  "vm:k8s-cp-02": 28,
+  "vm:k8s-cp-03": 27,
+  "vm:k8s-worker-01": 44,
+  "vm:k8s-worker-02": 39
+ },
+ "day": {
+  "critical": [
+   "KubeNodeNotReady"
+  ],
+  "degraded": [
+   "app:wird-adminweb"
+  ],
+  "calm": false
+ }
 }

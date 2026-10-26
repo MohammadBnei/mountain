@@ -10,6 +10,10 @@ package main
 //     plus an explicit "unattributed" share for namespaces no realm claims. Per pod, summed by namespace, never
 //     summed per host, so a DaemonSet or a replicated volume counts once.
 //   - alerts: what Alertmanager has firing, placed on the node (and realm) its labels name.
+//   - signals (optional, contract.Signals, each on its own cadence): per app its 5xx rate, p95 latency, the last
+//     24 h of requests and its availability; per probed node its availability; pods per k8s node; and the town's day
+//     (which critical alerts fired, which apps were Degraded, calm when neither). A signal that fails or answers
+//     nothing is unknown: absent from the frame, never a zero.
 //
 // The whole live frame (a few kB) goes out when it changed, never when only its timestamp did; changes also become
 // events (the "Last event" key). A source that fails keeps its last answer and is marked stale in the frame, so the
@@ -53,12 +57,29 @@ type LiveState struct {
 	Land   Land               `json:"land"`
 	Alerts []AlertLive        `json:"alerts"`
 	Stale  map[string]int64   `json:"stale"` // source -> failing since (unix ms)
+	// signals: absent = unknown
+	ProbeDay map[string]float64 `json:"probeDay,omitempty"` // probed node id -> share of its probes that succeeded, last 24 h
+	Pods     map[string]int     `json:"pods,omitempty"`     // vm node id -> pods on its k8s node
+	Day      *Day               `json:"day,omitempty"`      // the town's last 24 h, when both its signals are known
+}
+
+// Day is the town's last 24 h (rolling): stability's calm day (plan/13 §3, owner 2026-10-26: calm days for the town,
+// availability per app).
+type Day struct {
+	Critical []string `json:"critical"` // critical alerts that fired (Prometheus-evaluated: Grafana's own rules don't reach here)
+	Degraded []string `json:"degraded"` // apps that were Degraded at any time
+	Calm     bool     `json:"calm"`     // neither
 }
 
 type AppLive struct {
 	Health string  `json:"health,omitempty"`
 	Sync   string  `json:"sync,omitempty"`
 	RPS    float64 `json:"rps"`
+	// signals, summed over the app's Traefik services (latency: the slowest service's p95); nil = unknown
+	Err    *float64 `json:"err,omitempty"`    // 5xx per second
+	Lat    *float64 `json:"lat,omitempty"`    // p95 response time, seconds
+	ReqDay *float64 `json:"reqDay,omitempty"` // requests in the last 24 h
+	Avail  *float64 `json:"avail,omitempty"`  // share of those that were not 5xx (unknown with no requests)
 }
 
 // Use is what a namespace (or the cluster's capacity) holds: CPU cores, bytes of RAM, bytes of disk.
@@ -248,6 +269,14 @@ type promPoll struct {
 	url string
 	hc  *http.Client
 	idx func() *GraphIndex
+	sig map[string]signalAnswer // the last answer to each signal
+}
+
+// signalAnswer is a signal's last answer: asked when, and what it said (ok false: failed or empty, so unknown).
+type signalAnswer struct {
+	at time.Time
+	ok bool
+	s  []sample
 }
 
 // promQ: name -> PromQL (contract.Queries: the sim mirrors exactly these).
@@ -297,6 +326,7 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 		}
 		r[name] = s
 	}
+	p.signals(ctx, now)
 	idx := p.idx()
 	if idx == nil {
 		idx = &GraphIndex{Realm: map[string]string{}, NSApps: map[string][]string{}, Has: map[string]bool{}}
@@ -418,6 +448,8 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 		land.Realms[k] = Use{CPU: round3(u.CPU), Mem: round3(u.Mem), Disk: round3(u.Disk)}
 	}
 
+	sig := p.joinSignals(idx, apps)
+
 	// changes become events, then the frame goes out whole
 	p.l.mu.Lock()
 	old := p.l.st
@@ -442,8 +474,115 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	}
 	p.l.update(func(s *LiveState) {
 		s.At, s.Apps, s.Ready, s.Probes, s.Land = now.UnixMilli(), apps, ready, probes, land
+		s.ProbeDay, s.Pods, s.Day = sig.probeDay, sig.pods, sig.day
 	})
 	return nil
+}
+
+// signals asks each optional query whose time has come (contract.Signals' cadence). A failure is counted and makes
+// the signal unknown until its next answer; it never fails the poll.
+func (p *promPoll) signals(ctx context.Context, now time.Time) {
+	if p.sig == nil {
+		p.sig = map[string]signalAnswer{}
+	}
+	for _, name := range slices.Sorted(maps.Keys(contract.Signals)) {
+		sg := contract.Signals[name]
+		// half a tick of slack: the ticker's wake-ups jitter, and a 15 s signal must not skip every other tick
+		if last, ok := p.sig[name]; ok && now.Sub(last.at) < time.Duration(sg.Every)*time.Second-liveEvery/2 {
+			continue
+		}
+		s, err := query(ctx, p.hc, p.url, sg.Query)
+		if err != nil {
+			QueryFailed.Add(name, 1)
+		}
+		p.sig[name] = signalAnswer{at: now, ok: err == nil && len(s) > 0, s: s}
+	}
+}
+
+type joined struct {
+	probeDay map[string]float64
+	pods     map[string]int
+	day      *Day
+}
+
+// joinSignals puts the known signals on their nodes: per app (into apps), per probed node, per k8s node, and the
+// town's day. Only a known signal writes anything.
+func (p *promPoll) joinSignals(idx *GraphIndex, apps map[string]AppLive) joined {
+	known := func(name string) ([]sample, bool) { a := p.sig[name]; return a.s, a.ok }
+	perApp := func(name string, merge func(a, v float64) float64) map[string]float64 {
+		out := map[string]float64{}
+		s, ok := known(name)
+		if !ok {
+			return nil
+		}
+		for _, x := range s {
+			if id := appOfService(idx, x.L[contract.LabelExportedService]); id != "" {
+				if v, seen := out[id]; seen {
+					out[id] = merge(v, x.V)
+				} else {
+					out[id] = x.V
+				}
+			}
+		}
+		return out
+	}
+	sum := func(a, v float64) float64 { return a + v }
+	ptr := func(v float64) *float64 { return &v }
+	errs, lat, reqDay, errDay := perApp("err", sum), perApp("lat", math.Max), perApp("reqday", sum), perApp("errday", sum)
+	for id := range apps {
+		a := apps[id]
+		if v, ok := errs[id]; ok {
+			a.Err = ptr(math.Round(v*1000) / 1000)
+		}
+		if v, ok := lat[id]; ok {
+			a.Lat = ptr(math.Round(v*10000) / 10000)
+		}
+		if v, ok := reqDay[id]; ok {
+			a.ReqDay = ptr(math.Round(v))
+			if e, ok := errDay[id]; ok && v > 0 {
+				a.Avail = ptr(math.Round((1-e/v)*10000) / 10000)
+			}
+		}
+		apps[id] = a
+	}
+
+	var j joined
+	if s, ok := known("probeday"); ok {
+		j.probeDay = map[string]float64{}
+		for _, x := range s {
+			if id := p.l.rl.ProbeNode(x.L[contract.LabelTarget]); id != "" {
+				j.probeDay[id] = math.Round(x.V*10000) / 10000
+			}
+		}
+	}
+	if s, ok := known("pods"); ok {
+		j.pods = map[string]int{}
+		for _, x := range s {
+			if id := "vm:" + strings.ToLower(x.L[contract.LabelNode]); idx.Has[id] {
+				j.pods[id] = int(x.V)
+			}
+		}
+	}
+	crit, okC := known("critday")
+	deg, okD := known("degradedday")
+	if okC && okD {
+		d := &Day{Critical: []string{}, Degraded: []string{}}
+		for _, x := range crit {
+			if n := x.L[contract.LabelAlertName]; n != "" && x.V > 0 {
+				d.Critical = append(d.Critical, n)
+			}
+		}
+		for _, x := range deg {
+			if id := "app:" + strings.ToLower(x.L[contract.LabelName]); x.V > 0 && idx.Has[id] {
+				d.Degraded = append(d.Degraded, id)
+			}
+		}
+		slices.Sort(d.Critical)
+		slices.Sort(d.Degraded)
+		d.Calm = len(d.Critical) == 0 && len(d.Degraded) == 0
+		j.day = d
+	}
+	return j
 }
 
 func round3(x float64) float64 { return math.Round(x*1000) / 1000 }
