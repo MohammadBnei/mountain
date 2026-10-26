@@ -372,10 +372,11 @@ later, as one more source feeding the same catalog and review.
      names the sources declare, stored as node attributes (no rule nodes); curated `needs:` rows with the evidence
      that proves each (forwardAuth refs, OIDC redirect hosts, the Infisical block, a Pigsty database by name only,
      Garage S3), drift both ways, `declared` for evidence outside the sources; add-ons' workload lists and their
-     readiness (kube-vip, a static pod, stays unknown); the chart version pin for the default rule names;
+     readiness (kube-vip, a static pod, stays unknown);
    - **S2i (infra-bootstrap, built: #374):** Traefik's request-duration buckets (the defaults 0.1/0.3/1.2/5 s make p95 an
      interpolation);
-   - **S2b (ukubi-game):** the mirrors of every signal; real rule names with their real severities and labels only;
+   - **S2b (ukubi-game, with a small mountain PR for the default rule names at the chart's pinned version):** the
+     mirrors of every signal; real rule names with their real severities and labels only;
      correlated failures along `needs:` (a supplier down raises its dependents' errors and latency, never marks them
      Degraded), derived purely, never logged.
    - Limits recorded: Grafana-managed rules never reach Alertmanager or `ALERTS`, so a calm day counts the
