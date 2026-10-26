@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/MohammadBnei/mountain/contract"
 	"github.com/MohammadBnei/mountain/realms"
 )
 
@@ -45,6 +48,9 @@ func fakeProm(t *testing.T, answers func() map[string]string) *httptest.Server {
 	byQ := map[string]string{}
 	for n, q := range promQ {
 		byQ[q] = n
+	}
+	for n, sg := range contract.Signals {
+		byQ[sg.Query] = n
 	}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := byQ[r.URL.Query().Get("query")]
@@ -199,5 +205,99 @@ func TestLiveQuiet(t *testing.T) {
 	a.poll(context.Background(), time.Now())
 	if !strings.Contains(string(mustJSON(l.st)), `"alerts":[]`) {
 		t.Errorf("no alerts: %s", mustJSON(l.st))
+	}
+}
+
+// TestSignals: optional signals join onto apps, probed nodes, k8s nodes and the town's day; a signal that answers
+// nothing (or fails) is unknown, never zero, and never fails the poll; the day signals are asked on their own cadence.
+func TestSignals(t *testing.T) {
+	rl, _ := realms.Load()
+	l := newLive(rl, NewHub(false, func() []byte { return nil }))
+	var mu sync.Mutex
+	asked := map[string]int{}
+	answers := map[string]string{
+		"info": pvec(`{"name":"wird","health_status":"Healthy","sync_status":"Synced"}`, "1", `{"name":"netbird","health_status":"Healthy"}`, "1"),
+		"req":  pvec(`{"exported_service":"wird-wird-80@kubernetescrd"}`, "2"),
+		// wird has two services: errors and requests sum, latency is the slowest
+		"err":         pvec(`{"exported_service":"wird-wird-80@kubernetescrd"}`, "0.5", `{"exported_service":"wird-wird-adminweb-80@kubernetescrd"}`, "0", `{"exported_service":"wird-wird-81@kubernetescrd"}`, "0.25"),
+		"lat":         pvec(`{"exported_service":"wird-wird-80@kubernetescrd"}`, "0.2", `{"exported_service":"wird-wird-81@kubernetescrd"}`, "0.45"),
+		"reqday":      pvec(`{"exported_service":"wird-wird-80@kubernetescrd"}`, "900", `{"exported_service":"wird-wird-81@kubernetescrd"}`, "100"),
+		"errday":      pvec(`{"exported_service":"wird-wird-80@kubernetescrd"}`, "5", `{"exported_service":"wird-wird-81@kubernetescrd"}`, "0"),
+		"probeday":    pvec(`{"target":"guest-archive-h2"}`, "0.75"),
+		"critday":     pvec(`{}`, "0"), // none fired, and the Watchdog did: calm
+		"degradedday": pvec(`{"name":"wird"}`, "0", `{"name":"netbird"}`, "0"),
+		"pods":        pvec(`{"node":"k8s-cp-01"}`, "31"),
+	}
+	srv := fakeProm(t, func() map[string]string { mu.Lock(); defer mu.Unlock(); return answers })
+	counting := srv.Config.Handler
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("query")
+		mu.Lock()
+		for n, sg := range contract.Signals {
+			if sg.Query == q {
+				asked[n]++
+			}
+		}
+		mu.Unlock()
+		counting.ServeHTTP(w, r)
+	})
+	p := &promPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex}
+	ctx, t0 := context.Background(), time.Now()
+	if err := p.poll(ctx, t0); err != nil {
+		t.Fatal(err)
+	}
+	s := l.st
+	w := s.Apps["app:wird"]
+	if w.Err == nil || *w.Err != 0.75 || w.Lat == nil || *w.Lat != 0.45 || w.ReqDay == nil || *w.ReqDay != 1000 || w.Avail == nil || *w.Avail != 0.995 {
+		t.Errorf("wird's signals: err %v lat %v reqDay %v avail %v", w.Err, w.Lat, w.ReqDay, w.Avail)
+	}
+	if nb := s.Apps["app:netbird"]; nb.Err != nil || nb.Lat != nil || nb.ReqDay != nil || nb.Avail != nil {
+		t.Errorf("an app with no Traefik series has unknown signals, not zeros: %+v", nb)
+	}
+	if s.ProbeDay["vm:pg01"] != 0.75 || s.Pods["vm:k8s-cp-01"] != 31 {
+		t.Errorf("probeDay %v pods %v", s.ProbeDay, s.Pods)
+	}
+	if s.Day == nil || !s.Day.Calm || len(s.Day.Critical) != 0 {
+		t.Errorf("a day with no critical alert, nothing Degraded and a Watchdog is calm: %+v", s.Day)
+	}
+
+	// a critical alert and a Degraded app today; the latency histogram goes away (unknown, not zero); the day
+	// signals are not asked again before their 5 minutes
+	mu.Lock()
+	answers["critday"] = pvec(`{"alertname":"KubePersistentVolumeFillingUp"}`, "1")
+	answers["degradedday"] = pvec(`{"name":"wird"}`, "1", `{"name":"netbird"}`, "0")
+	delete(answers, "lat")
+	mu.Unlock()
+	if err := p.poll(ctx, t0.Add(15*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if l.st.Apps["app:wird"].Lat != nil {
+		t.Errorf("a signal that answers nothing is unknown: lat %v", *l.st.Apps["app:wird"].Lat)
+	}
+	if !l.st.Day.Calm {
+		t.Error("the day signals were asked again within their 5 minutes")
+	}
+	mu.Lock()
+	n := asked["critday"]
+	mu.Unlock()
+	if n != 1 {
+		t.Errorf("critday asked %d times in 15 s, want 1", n)
+	}
+	if err := p.poll(ctx, t0.Add(5*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if d := l.st.Day; d == nil || d.Calm || !slices.Equal(d.Critical, []string{"KubePersistentVolumeFillingUp"}) || !slices.Equal(d.Degraded, []string{"app:wird"}) {
+		t.Errorf("day: %+v", d)
+	}
+
+	// no Watchdog over the day (the rules did not run): critday answers nothing, so the day is unknown, not calm
+	mu.Lock()
+	delete(answers, "critday")
+	mu.Unlock()
+	if err := p.poll(ctx, t0.Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if l.st.Day != nil {
+		t.Errorf("a day without the Watchdog's proof is unknown: %+v", l.st.Day)
 	}
 }

@@ -344,7 +344,9 @@ later, as one more source feeding the same catalog and review.
      `db:redis-main` in Data, with runs-on edges to their VMs (joined by IP through the LAN records; the etcd members,
      the witness among them, as Postgres's DCS); it reads host keys and cluster names only, never `pg_role`, users or
      passwords. pg01, pg02 and the witness are parts of `db:pg-proxmox`;
-   - **A7c:** coverage, walls, `needs:` rows, `public: true`, and `model:` once ukubi-kit has ids.
+   - **A7c:** coverage and `needs:` rows moved into slice 2 (owner, 2026-10-26: "the same topic": they are the
+     static half of its real rule names and correlated failures);
+   - **A7d (before slice 4):** walls, `public: true`, `model:`, and the fleet services' parents.
 
    Its full scope:
    - the realms reshaped into civs, `function`, `model:`, the folds, `needs:` rows, `public: true`;
@@ -358,12 +360,29 @@ later, as one more source feeding the same catalog and review.
      - **coverage** (rules and probes, as in §3 Defence);
      - **walls** (forwardAuth middlewares, authentik blueprints).
    - The `realms.yaml` namespaces include `metallb-system`.
-2. **Signals:**
-   - the infra-bootstrap ADR for unique users;
-   - contract queries for daily requests, latency, add-on health, per-workload usage and pods, each with its sim
-     mirror (the access-log stream for the counter);
-   - correlated failures and real rule names in the sim;
-   - **stability's query waits for open question 3.**
+2. **Signals** (owner, 2026-10-26: requests only for now; stability is both calm days and per-app availability;
+   `needs:` curated and checked; coverage only from rules that name a building), in four PRs:
+   - **S2a1 (mountain):** `contract.Signals`, optional queries on their own cadence: an unknown answer is absent,
+     never 0, and never fails the poll; a healthy state is an explicit 0 (from the request counter, from
+     `argocd_app_info`, and from the always-firing Watchdog, without which the day is unknown, not calm). Per app:
+     5xx/s, p95 latency, the last 24 h of requests and the share answered without error; per probed node its
+     availability; pods per k8s node; the town's day (critical alerts that fired, apps that were Degraded, calm when
+     neither). The day windows are rolling 24 h, asked every 5 min. Shown on the map panel and the building cards;
+   - **S2a2 (mountain):** curated `watch:` rows (node → rule names, Prometheus or Grafana), checked against the rule
+     names the sources declare, stored as node attributes (no rule nodes); curated `needs:` rows with the evidence
+     that proves each (forwardAuth refs, OIDC redirect hosts, the Infisical block, a Pigsty database by name only,
+     Garage S3), drift both ways, `declared` for evidence outside the sources; add-ons' workload lists and their
+     readiness (kube-vip, a static pod, stays unknown); the chart version pin for the default rule names;
+   - **S2i (infra-bootstrap):** Traefik's request-duration buckets (the defaults 0.1/0.3/1.2/5 s make p95 an
+     interpolation);
+   - **S2b (ukubi-game):** the mirrors of every signal; real rule names with their real severities and labels only;
+     correlated failures along `needs:` (a supplier down raises its dependents' errors and latency, never marks them
+     Degraded), derived purely, never logged.
+   - Limits recorded: Grafana-managed rules never reach Alertmanager or `ALERTS`, so a calm day counts the
+     Prometheus-evaluated critical alerts only (a Grafana rule still makes a watchtower: it notifies); with real
+     rules, most incidents reach warning only, so the game's needs-you (critical only) is revisited in S2b; the sim's
+     latency moves with incidents, so the age (slice 5) must not read it as stability there.
+   - **Unique users and their infra-bootstrap ADR are deferred**; the age waits on them (no staged age).
 3. **ukubi-kit plus a real-data diorama (built, 2026-10-26):** ukubi-kit #1 and ukubi-game #6.
    - Seven civs in two ages, one kit each:
 
@@ -396,12 +415,15 @@ later, as one more source feeding the same catalog and review.
 ## Open questions (owner)
 1. The age thresholds, and how long each must be held.
 2. Each civ's style and look.
-3. What "stability" counts exactly.
+3. ~~What "stability" counts exactly.~~ Answered 2026-10-26: both, the town's calm days (no critical alert fired, no
+   app Degraded, over the rolling 24 h) and each app's availability (requests answered without a 5xx, probes up).
 4. Users: unique users only (the draft's default), or daily requests as a stated exception to "no staged age".
+   2026-10-26: requests only for now; unique users and their ADR come later, and the age waits for them.
 5. Repos that feed two apps (agent-fleet, vos-monolith, wird): an annex on one of them, or a workshop in Code
    (default: a workshop in Code).
-6. kube-prometheus-stack's generic default rules: do they cover every k8s building, or nothing? (default: they make
-   the warning rung visible on every k8s building, but don't count as coverage of a building's own risks)
+6. ~~kube-prometheus-stack's generic default rules: do they cover every k8s building, or nothing?~~ Answered
+   2026-10-26: only a rule that names a building is its watchtower; the defaults are the town's general watch. A
+   probe alone (the guest probes have no rule) is not coverage either.
 7. Pressure's drain, now that the score is gone: does waiting slow the hold clock, or have no effect? (default: no
    effect, look only)
 8. How a research result is shared with similar buildings, beyond a citing PR.

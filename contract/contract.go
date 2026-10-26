@@ -4,8 +4,8 @@
 // sim's mirror must answer (its coverage test fails otherwise). No imports: anything may depend on it.
 package contract
 
-// Queries is every PromQL atlas sends to Prometheus (an instant query, no time= parameter), by name. One failed
-// query fails the whole poll.
+// Queries is every PromQL atlas must have from Prometheus (an instant query, no time= parameter), by name. One failed
+// query fails the whole poll. The optional ones are Signals.
 var Queries = map[string]string{
 	"info":    `argocd_app_info`,
 	"ready":   `kube_node_status_condition{condition="Ready",status="true"}`,
@@ -22,6 +22,36 @@ var Queries = map[string]string{
 	"memnode":    `sum by (namespace, node) (container_memory_working_set_bytes{container!="",image!=""})`,
 	"cpucapnode": `sum by (node) (kube_node_status_allocatable{resource="cpu"})`,
 	"memcapnode": `sum by (node) (kube_node_status_allocatable{resource="memory"})`,
+}
+
+// Signal is an optional query: what it measures may be missing (a metric not scraped yet, a histogram not configured),
+// so a failed or empty answer is *unknown*, never zero, and never fails the poll. A healthy state is never empty:
+// each signal fills its quiet case with an explicit zero from a series that exists whenever the measured thing does
+// (the request counter for errors, argocd_app_info for degraded apps, Alertmanager's always-firing Watchdog for
+// critical alerts: no Watchdog means the rules did not run, so the day is unknown, not calm). Every seconds is how
+// often it is asked: the day windows are rolling 24 h ([1d]) and heavy, so they are asked every 5 min.
+type Signal struct {
+	Query string
+	Every int // seconds
+}
+
+// Signals is every optional query (plan/13 slice 2), by name. The sim's mirror answers these too.
+var Signals = map[string]Signal{
+	// per Traefik service: 5xx per second (0 when none, from the request counter), and the p95 response time
+	"err": {`sum by (exported_service) (rate(traefik_service_requests_total{code=~"5.."}[2m])) or 0 * sum by (exported_service) (rate(traefik_service_requests_total[2m]))`, 15},
+	"lat": {`histogram_quantile(0.95, sum by (exported_service, le) (rate(traefik_service_request_duration_seconds_bucket[5m])))`, 15},
+	// the last 24 h per Traefik service: requests, and the 5xx among them (an app's availability is 1 - errday/reqday)
+	"reqday": {`sum by (exported_service) (increase(traefik_service_requests_total[1d]))`, 300},
+	"errday": {`sum by (exported_service) (increase(traefik_service_requests_total{code=~"5.."}[1d])) or 0 * sum by (exported_service) (increase(traefik_service_requests_total[1d]))`, 300},
+	// the last 24 h per probe target: the share of probes that succeeded
+	"probeday": {`avg by (target) (avg_over_time(probe_success{target=~"guest-.*|pve-.*"}[1d]))`, 300},
+	// the town's calm day: each critical alert that fired in the last 24 h (one series per alert name), or a single 0
+	// when none did and the Watchdog proves the rules were evaluated
+	"critday": {`count by (alertname) (max_over_time(ALERTS{alertstate="firing",severity="critical"}[1d])) or on () (0 * max(max_over_time(ALERTS{alertname="Watchdog"}[1d])))`, 300},
+	// the last 24 h per Application: 1 if it was Degraded at any time, else 0
+	"degradedday": {`max by (name) (max_over_time(argocd_app_info{health_status="Degraded"}[1d])) or 0 * max by (name) (argocd_app_info)`, 300},
+	// pods per k8s node: a house's population
+	"pods": {`count by (node) (kube_pod_info)`, 15},
 }
 
 // PromQueryPath is the Prometheus HTTP API route the queries go to (as ?query=<url-escaped PromQL>).
