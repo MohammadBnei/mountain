@@ -283,6 +283,16 @@ func TestSignals(t *testing.T) {
 	if n != 1 {
 		t.Errorf("critday asked %d times in 15 s, want 1", n)
 	}
+	// a tick that wakes a little early still asks the 15 s signals (the ticker jitters)
+	if err := p.poll(ctx, t0.Add(29*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	n = asked["err"]
+	mu.Unlock()
+	if n != 3 {
+		t.Errorf("err asked %d times at 0, 15 and 29 s, want 3", n)
+	}
 	if err := p.poll(ctx, t0.Add(5*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
