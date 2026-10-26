@@ -58,6 +58,8 @@ function signalFacts(live, id) {
   if (a?.avail != null) f.push(`${(a.avail * 100).toFixed(a.avail < 1 ? 2 : 0)}% answered without error`);
   const pd = live?.probeDay?.[id];
   if (pd != null) f.push(`probe up ${(pd * 100).toFixed(pd < 1 ? 1 : 0)}% of 24 h`);
+  const ready = live?.addons?.[id];
+  if (ready != null) f.push(`${(ready * 100).toFixed(0)}% of its pods ready (its least ready workload)`);
   const pods = live?.pods?.[id];
   if (pods != null) f.push(`${pods} pods`);
   return f;

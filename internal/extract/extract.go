@@ -172,6 +172,7 @@ func Run(repos Repos, rl *realms.Realms, exs []Extractor) (Result, error) {
 	}
 	rehome(&res.Graph)
 	place(&res.Graph, rl)
+	watchNeeds(repos, rl, &res.Graph)
 	for t := range track {
 		res.Tracked = append(res.Tracked, t)
 	}

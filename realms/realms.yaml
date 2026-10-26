@@ -181,3 +181,65 @@ components:
   app:ente-museum: { realm: apps, group: products }
   app:ente-web: { realm: apps, group: products }
   app:ukubi-stt: { realm: apps, group: ai }
+
+# Watchtowers (plan/13 §3 Defence; owner 2026-10-26: only a rule that names a building watches it): node -> its alert
+# rules, by where they are evaluated: prometheus (alert names: they reach Alertmanager, so atlas and the sim see them
+# fire) or grafana (rule uids: they notify, but nothing atlas reads sees them fire). atlas checks both ways: a rule a
+# row names must be declared in a source, and a declared rule must be in a row or under general. A probe with no rule
+# (the guest probes) is not a watchtower: its node says so.
+watch:
+  app:platform-traefik: { prometheus: [TraefikCertExpiringSoon, TraefikCertMetricsMissing] }
+  app:netbird: { prometheus: [NetBirdUnreachable, NetBirdServerDown] }
+  app:mountain: { prometheus: [MountainSourceStale, MountainTokenExpiring, MountainUnassigned] }
+  host:bnei: { prometheus: [PVEHostUnreachable, PVEHostProbeStale] }
+  host:server1: { prometheus: [PVEHostUnreachable, PVEHostProbeStale] }
+  host:ex-laptop: { prometheus: [PVEHostUnreachable, PVEHostProbeStale] }
+  db:pg-proxmox: { grafana: [postgres-replica-not-streaming] }
+  app:platform-prometheus: { grafana: [monitoring-blind] }
+  app:agent-fleet-core: { grafana: [high-error-log-rate] }
+  app:ukubi-bridge: { grafana: [dead-letter-uncleared, retention-failing] }
+# The town's general watch: rules over every namespace at once (not a building's watchtower).
+general: { grafana: [log-error-rate-spike] }
+
+# Supply lines (plan/13 §3; owner 2026-10-26: curated, checked): node -> what it depends on, each written as the
+# evidence that proves it: oidc (its OIDC client's redirect URL is one of its hostnames), forwardauth (its ingress
+# names an authentik forwardAuth middleware), infisical (its values have an infisical: block), s3 (its values name
+# Garage's S3 endpoint), postgres:<db> (that database is in Pigsty's pg_databases; which app owns it is this row's
+# word), declared:<node> (the evidence lives outside the sources atlas reads: shown as unverified). atlas checks both
+# ways: a row's evidence must be found, and evidence for an app with no row naming it is drift.
+needs:
+  app:mountain: [oidc, forwardauth, infisical, postgres:mountaindb]
+  app:agent-fleet-core: [oidc, postgres:agentfleetdb]
+  app:ukubi-bridge: [postgres:bridge]
+  app:platform-authentik: [postgres:authentik]
+  app:platform-infisical: [postgres:infisicaldb]
+  app:netbird: [postgres:netbirddb]
+  app:netbird-dashboard: [oidc]
+  app:hq: [oidc, postgres:hqdb]
+  app:wird: [oidc, postgres:wirddb]
+  app:wird-adminweb: ["declared:app:platform-authentik"] # wird-admin-forwardauth, named in wird's own values
+  app:silverbullet: [oidc]
+  app:drop: ["declared:app:platform-authentik"] # drop-forwardauth, named in drop's own values
+  app:redirectors: [forwardauth, s3] # hermes behind authentik; the S3 redirector is Garage's door
+  app:ente-museum: [infisical, s3, postgres:entedb]
+  app:ente-web: [infisical]
+  app:agent-vault: [infisical]
+  app:pgweb: [infisical]
+  app:zot: [infisical, "declared:ct:garage-storage"] # its blobs on Garage, by address in its storage config
+  app:editable-blog: [postgres:editableblogdb]
+  app:dream-analyst: [postgres:dream_analyst_db]
+  app:vos-monolith: [postgres:vos-monolith]
+  app:vos-monolith-dev: [postgres:vos-monolith-dev]
+  app:wedding-2026: [postgres:weddingdb]
+  app:argocd: ["declared:app:platform-authentik"] # native OIDC: its hostname has no route atlas sees
+  app:platform-grafana: ["declared:app:platform-authentik"] # native OIDC: its hostname has no route atlas sees
+
+# The add-ons' workloads (kubespray's names, in the namespace each add-on's node says it is installed into): an
+# add-on's health is its least ready workload. static: a static pod (no DaemonSet or Deployment): always unknown.
+addons:
+  addon:cilium: [daemonset/cilium, deployment/cilium-operator]
+  addon:kube-proxy: [daemonset/kube-proxy]
+  addon:coredns: [deployment/coredns]
+  addon:nodelocaldns: [daemonset/nodelocaldns]
+  addon:metallb: [deployment/controller, daemonset/speaker]
+  addon:kube-vip: [static]

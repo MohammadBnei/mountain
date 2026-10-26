@@ -535,10 +535,11 @@ type GraphIndex struct {
 	Realm  map[string]string   // node id -> realm ("" = not placed: hostnames, ADRs)
 	NSApps map[string][]string // namespace -> app ids deploying into it, sorted
 	Has    map[string]bool     // node ids
+	Into   map[string]string   // addon node id -> the namespace kubespray installs it into
 }
 
 func buildIndex(v *atlasView) *GraphIndex {
-	x := &GraphIndex{Seq: v.Seq, Realm: map[string]string{}, NSApps: map[string][]string{}, Has: map[string]bool{}}
+	x := &GraphIndex{Seq: v.Seq, Realm: map[string]string{}, NSApps: map[string][]string{}, Has: map[string]bool{}, Into: map[string]string{}}
 	for _, raw := range v.Nodes {
 		var n graph.Node
 		if json.Unmarshal(raw, &n) != nil {
@@ -546,6 +547,9 @@ func buildIndex(v *atlasView) *GraphIndex {
 		}
 		x.Has[n.ID] = true
 		x.Realm[n.ID] = n.Realm
+		if n.Kind == graph.KindAddon && n.Attrs["into"] != "" {
+			x.Into[n.ID] = n.Attrs["into"]
+		}
 		if n.Kind == graph.KindApp && n.Attrs["namespace"] != "" {
 			x.NSApps[n.Attrs["namespace"]] = append(x.NSApps[n.Attrs["namespace"]], n.ID)
 		}

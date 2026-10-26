@@ -50,29 +50,60 @@ func TestFunction(t *testing.T) {
 
 func TestParseRefuses(t *testing.T) {
 	for name, y := range map[string]string{
-		"unknown realm":  "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: nope, group: g}}",
-		"no group":       "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra}}",
-		"bad path":       "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g, paths: [nope]}}",
-		"bad placement":  "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nk8sPlacement: {n: b}",
-		"bad pve name":   "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: b",
-		"bad sources":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [mountain]",
-		"no sources":     "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a",
-		"bad probe":      "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nprobes: {guest-x: vm:nope}",
-		"no code realm":  "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
-		"bad fn key":     "realms: [infra, code]\nfunctions: {nope/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
-		"code fn key":    "realms: [infra, code]\nfunctions: {code/g: workshop}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
-		"unknown fn":     "realms: [infra, code]\nfunctions: {infra/g: castle}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
-		"component fn":   "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g, function: castle}}",
-		"group no fn":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: h}}",
-		"repo listed":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {repo:x: {realm: infra, group: g}}",
-		"workshop fn":    "realms: [infra, code]\nfunctions: {infra/g: workshop}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
-		"workshop own":   "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g, function: workshop}}",
-		"code namespace": "realms: [infra, code]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nnamespaces: {kube-system: code}",
-		"listed in code": "realms: [infra, code]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {repo:x: {realm: code, group: g, function: workshop}}",
-		"bad namespace":  "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nnamespaces: {kube-system: nope}",
+		"unknown realm":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: nope, group: g}}",
+		"no group":         "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra}}",
+		"bad path":         "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g, paths: [nope]}}",
+		"bad placement":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nk8sPlacement: {n: b}",
+		"bad pve name":     "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: b",
+		"bad sources":      "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [mountain]",
+		"no sources":       "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a",
+		"bad probe":        "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nprobes: {guest-x: vm:nope}",
+		"no code realm":    "realms: [infra]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
+		"bad fn key":       "realms: [infra, code]\nfunctions: {nope/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
+		"code fn key":      "realms: [infra, code]\nfunctions: {code/g: workshop}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
+		"unknown fn":       "realms: [infra, code]\nfunctions: {infra/g: castle}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
+		"component fn":     "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g, function: castle}}",
+		"group no fn":      "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: h}}",
+		"repo listed":      "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {repo:x: {realm: infra, group: g}}",
+		"workshop fn":      "realms: [infra, code]\nfunctions: {infra/g: workshop}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]",
+		"workshop own":     "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g, function: workshop}}",
+		"code namespace":   "realms: [infra, code]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nnamespaces: {kube-system: code}",
+		"listed in code":   "realms: [infra, code]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {repo:x: {realm: code, group: g, function: workshop}}",
+		"bad namespace":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\nnamespaces: {kube-system: nope}",
+		"watch unknown":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g}, app:platform-authentik: {realm: infra, group: g}, addon:c: {realm: infra, group: g}}\nwatch: {app:nope: {prometheus: [A]}}",
+		"watch empty":      "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g}, app:platform-authentik: {realm: infra, group: g}, addon:c: {realm: infra, group: g}}\nwatch: {app:x: {}}",
+		"needs unknown":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g}, app:platform-authentik: {realm: infra, group: g}, addon:c: {realm: infra, group: g}}\nneeds: {app:nope: [oidc]}",
+		"needs bad kind":   "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g}, app:platform-authentik: {realm: infra, group: g}, addon:c: {realm: infra, group: g}}\nneeds: {app:x: [smtp]}",
+		"needs bare pg":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g}, app:platform-authentik: {realm: infra, group: g}, addon:c: {realm: infra, group: g}}\nneeds: {app:x: [postgres]}",
+		"needs no node":    "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g}, app:platform-authentik: {realm: infra, group: g}, addon:c: {realm: infra, group: g}}\nneeds: {app:x: [\"declared:app:nope\"]}",
+		"needs itself":     "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g}, app:platform-authentik: {realm: infra, group: g}, addon:c: {realm: infra, group: g}}\nneeds: {app:platform-authentik: [oidc]}",
+		"addons not addon": "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g}, app:platform-authentik: {realm: infra, group: g}, addon:c: {realm: infra, group: g}}\naddons: {app:x: [static]}",
+		"addons bad":       "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\ncomponents: {app:x: {realm: infra, group: g}, app:platform-authentik: {realm: infra, group: g}, addon:c: {realm: infra, group: g}}\naddons: {addon:c: [statefulset/x]}",
 	} {
 		if _, err := Parse([]byte(y)); err == nil {
 			t.Errorf("%s: parsed", name)
 		}
+	}
+}
+
+func TestNeedsRows(t *testing.T) {
+	y := "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\n" +
+		"components: {app:x: {realm: infra, group: g}, app:platform-authentik: {realm: infra, group: g}, db:pg-proxmox: {realm: infra, group: g}, addon:c: {realm: infra, group: g}}\n" +
+		"needs: {app:x: [oidc, postgres:xdb, \"declared:db:pg-proxmox\"]}\nwatch: {app:x: {grafana: [u]}}\naddons: {addon:c: [daemonset/c, deployment/c-op, static]}"
+	p, err := Parse([]byte(y))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for s, want := range map[string]Need{
+		"oidc":                   {On: "app:platform-authentik", Via: "oidc"},
+		"postgres:xdb":           {On: "db:pg-proxmox", Via: "postgres", Arg: "xdb"},
+		"declared:db:pg-proxmox": {On: "db:pg-proxmox", Via: "declared"},
+	} {
+		if got, err := ParseNeed(s); err != nil || got != want {
+			t.Errorf("ParseNeed(%s) = %+v %v", s, got, err)
+		}
+	}
+	if len(p.Needs["app:x"]) != 3 || len(p.Watch["app:x"].Grafana) != 1 || len(p.Addons["addon:c"]) != 3 {
+		t.Errorf("rows: %+v %+v %+v", p.Needs, p.Watch, p.Addons)
 	}
 }

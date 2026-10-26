@@ -362,18 +362,18 @@ later, as one more source feeding the same catalog and review.
    - The `realms.yaml` namespaces include `metallb-system`.
 2. **Signals** (owner, 2026-10-26: requests only for now; stability is both calm days and per-app availability;
    `needs:` curated and checked; coverage only from rules that name a building), in four PRs:
-   - **S2a1 (mountain):** `contract.Signals`, optional queries on their own cadence: an unknown answer is absent,
+   - **S2a1 (mountain, built: #36):** `contract.Signals`, optional queries on their own cadence: an unknown answer is absent,
      never 0, and never fails the poll; a healthy state is an explicit 0 (from the request counter, from
      `argocd_app_info`, and from the always-firing Watchdog, without which the day is unknown, not calm). Per app:
      5xx/s, p95 latency, the last 24 h of requests and the share answered without error; per probed node its
      availability; pods per k8s node; the town's day (critical alerts that fired, apps that were Degraded, calm when
      neither). The day windows are rolling 24 h, asked every 5 min. Shown on the map panel and the building cards;
-   - **S2a2 (mountain):** curated `watch:` rows (node → rule names, Prometheus or Grafana), checked against the rule
+   - **S2a2 (mountain, built):** curated `watch:` rows (node → rule names, Prometheus or Grafana), checked against the rule
      names the sources declare, stored as node attributes (no rule nodes); curated `needs:` rows with the evidence
      that proves each (forwardAuth refs, OIDC redirect hosts, the Infisical block, a Pigsty database by name only,
      Garage S3), drift both ways, `declared` for evidence outside the sources; add-ons' workload lists and their
      readiness (kube-vip, a static pod, stays unknown); the chart version pin for the default rule names;
-   - **S2i (infra-bootstrap):** Traefik's request-duration buckets (the defaults 0.1/0.3/1.2/5 s make p95 an
+   - **S2i (infra-bootstrap, built: #374):** Traefik's request-duration buckets (the defaults 0.1/0.3/1.2/5 s make p95 an
      interpolation);
    - **S2b (ukubi-game):** the mirrors of every signal; real rule names with their real severities and labels only;
      correlated failures along `needs:` (a supplier down raises its dependents' errors and latency, never marks them

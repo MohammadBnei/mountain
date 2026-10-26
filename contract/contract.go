@@ -53,6 +53,10 @@ var Signals = map[string]Signal{
 	"critday": {`count by (alertname) (max_over_time(ALERTS{alertstate="firing",severity="critical"}[1d])) or on () (0 * max(max_over_time(ALERTS{alertname="Watchdog"}[1d])))`, 300},
 	// the last 24 h per Application: 1 if it was Degraded at any time, else 0
 	"degradedday": {`max by (name) (max_over_time(argocd_app_info{health_status="Degraded"}[1d])) or 0 * max by (name) (argocd_app_info)`, 300},
+	// the add-ons' workloads (kubespray's, in kube-system and metallb-system): the share of each one's pods that are
+	// ready; an add-on's health is its least ready workload
+	"dsready":     {`min by (namespace, daemonset) (kube_daemonset_status_number_ready{namespace=~"kube-system|metallb-system"} / kube_daemonset_status_desired_number_scheduled{namespace=~"kube-system|metallb-system"})`, 15},
+	"deployready": {`min by (namespace, deployment) (kube_deployment_status_replicas_available{namespace=~"kube-system|metallb-system"} / kube_deployment_spec_replicas{namespace=~"kube-system|metallb-system"})`, 15},
 	// running pods per k8s node (finished Jobs' pods left out): a house's population
 	"pods": {`count by (node) (kube_pod_info * on (namespace, pod) group_left () (kube_pod_status_phase{phase="Running"} == 1))`, 15},
 }
@@ -75,6 +79,8 @@ const (
 	LabelNamespace       = "namespace"        // land, and an alert's app when one app owns the namespace
 	LabelTarget          = "target"           // a blackbox probe target (guest-*, pve-*), through realms.ProbeNode
 	LabelExportedService = "exported_service" // Traefik's <ns>-<svc>-<port>@<provider>, → its app
+	LabelDaemonSet       = "daemonset"        // kube-state-metrics: a DaemonSet's name
+	LabelDeployment      = "deployment"       // kube-state-metrics: a Deployment's name
 	LabelAlertName       = "alertname"
 	LabelSeverity        = "severity" // only warning and critical are drawn
 	AnnotationSummary    = "summary"
