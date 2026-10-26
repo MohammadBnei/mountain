@@ -444,9 +444,17 @@ later, as one more source feeding the same catalog and review.
      answer, no alerts is no answer. The town draws the frame's states with the world's looks (down grey, degraded
      smoke, a critical alert firing on it fire), unknown as is (R7.1) with a count, at risk (a `needs` supplier down,
      one hop; a supplier unknown is risk unknown) as a ring on the plot, and raiders by the Watchtowers rule exactly
-     (the watched rule at the warning rung, others once the damage shows). A Grafana-only watch (Postgres's) never
-     reaches Alertmanager: that watchtower is blind until a Prometheus rule watches it;
-   - **4b, placement held:** the game log keeps each building's hex and each district's centre;
+     (the watched rule at the warning rung, others once the damage shows, its own or a part's). A Grafana-only watch
+     (Postgres's) never reaches Alertmanager: that watchtower is blind until a Prometheus rule watches it. Built:
+     mountain #42, ukubi-game #11. Open (owner, 2026-10-26: decided once seen): fire follows the Watchtowers rule (a
+     critical alert on an unwatched, undamaged building lights nothing and is counted unseen), or fire is a health look
+     lit by any critical alert placed on the building;
+   - **4b, placement pinned:** §2's rule as written: `town/placement.json` in ukubi-game (embedded, shared by both
+     worlds, never written by the game) pins each district's centre and each building's hex; a building it doesn't pin
+     stands where its (civ, id) hashes among the free hexes of its district and moves nobody, a reclassified one is
+     placed in its new district (its old hex kept for it), a departed one keeps its hex, a new civ lies outside every
+     district; the town says what isn't pinned, and `cmd/townpin` pins it for review in a PR (`--prune` drops the
+     departed; a partial graph pins nothing);
    - **4c, lenses:** supply lines, walls and doors, watchtowers, the land lens;
    - **4d, zoom, units, construction:** map, district and building levels; units; a new building's stages; wonders;
    - **4e, off loopback:** the town page's CSP, and the game client's admins-only gate with its machine credential for
