@@ -145,25 +145,11 @@ export function use(live, nss) {
   return { ...u, share: { cpu: share('cpu'), mem: share('mem'), disk: share('disk') } };
 }
 
-/** Health of a component from the live frame: 'down' | 'degraded' | 'ok' | 'unknown', and why, in words. */
+/** Health of a component from the live frame: 'down' | 'degraded' | 'ok' | 'unknown', and why, in words. atlas
+ * classifies it (contract.Classify, the game's town reads the same); a node it doesn't measure is unknown. */
 export function health(m, live, id) {
-  const n = m.nodes.get(id);
-  if (!n || !live) return { state: 'unknown', why: 'no live data yet' };
-  if (n.kind === 'app') {
-    const a = live.apps?.[id];
-    if (!a?.health) return { state: 'unknown', why: 'not in ArgoCD\'s answer' };
-    const bad = { Degraded: 'degraded', Missing: 'down', Unknown: 'unknown', Progressing: 'ok', Suspended: 'ok', Healthy: 'ok' }[a.health] || 'unknown';
-    return { state: bad, why: `${a.health}${a.sync ? `, ${a.sync}` : ''}` };
-  }
-  if (id in (live.probes || {})) return live.probes[id] ? { state: 'ok', why: 'probe answers' } : { state: 'down', why: 'probe not answering' };
-  if (id in (live.ready || {})) return live.ready[id] ? { state: 'ok', why: 'node Ready' } : { state: 'down', why: 'node not Ready' };
-  if (n.kind === 'host') {
-    const vms = (m.inn.get(id) || []).filter((e) => e.kind === 'runs-on').map((e) => e.from).filter((v) => v in (live.ready || {}));
-    if (!vms.length) return { state: 'unknown', why: 'no k8s node on it' };
-    const down = vms.filter((v) => !live.ready[v]);
-    return down.length ? { state: 'degraded', why: `${down.length} of ${vms.length} k8s nodes not Ready` } : { state: 'ok', why: `${vms.length} k8s nodes Ready` };
-  }
-  return { state: 'unknown', why: 'nothing live measures it' };
+  if (!m.nodes.get(id) || !live) return { state: 'unknown', why: 'no live data yet' };
+  return live.health?.[id] || { state: 'unknown', why: 'nothing live measures it' };
 }
 
 /** Alerts firing on a node, a group or a realm. */

@@ -434,11 +434,23 @@ later, as one more source feeding the same catalog and review.
    - Open:
      - Fleet drew 7 buildings, not 4, while atlas left the sidecar, worker and executor unparented (fixed in A7d1);
      - the town page needs a CSP before slice 4 takes it off loopback.
-4. **The live town:**
-   - placement, districts, zoom levels;
-   - supply lines, defence;
-   - units, construction, wonders;
-   - the game client's admins-only gate before it leaves loopback.
+4. **The live town**, in five PRs:
+   - **4a, the town lives:** the live frame's shape moves into `contract` (`contract.Live`), and atlas classifies each
+     node's health server-side (`contract.Classify`, the rules its page had: ArgoCD Missing is down, a failed probe or
+     NotReady is down, a host degraded when some of its k8s nodes aren't Ready), sending `health` in the frame, which
+     the page and the game's town both read. New in the classifier, so atlas shows them too: Postgres by a three-state
+     majority of its members (`contract.Majority`, which the sim's supplier rule also uses) and add-ons degraded only
+     after 2 minutes below all ready (a rollout is not damage). The frame gains `alertsAt`: before Alertmanager's first
+     answer, no alerts is no answer. The town draws the frame's states with the world's looks (down grey, degraded
+     smoke, a critical alert firing on it fire), unknown as is (R7.1) with a count, at risk (a `needs` supplier down,
+     one hop; a supplier unknown is risk unknown) as a ring on the plot, and raiders by the Watchtowers rule exactly
+     (the watched rule at the warning rung, others once the damage shows). A Grafana-only watch (Postgres's) never
+     reaches Alertmanager: that watchtower is blind until a Prometheus rule watches it;
+   - **4b, placement held:** the game log keeps each building's hex and each district's centre;
+   - **4c, lenses:** supply lines, walls and doors, watchtowers, the land lens;
+   - **4d, zoom, units, construction:** map, district and building levels; units; a new building's stages; wonders;
+   - **4e, off loopback:** the town page's CSP, and the game client's admins-only gate with its machine credential for
+     atlas (`atlas-game`); until then the real world runs a local `atlas --dev` against port-forwarded sources.
 5. **The age**, once every signal from slice 2 is live and `goal.closed(done)` is tightened.
 
 ## Open questions (owner)

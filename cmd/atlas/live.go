@@ -47,103 +47,64 @@ const (
 	unattrib  = "unattributed"
 )
 
-// LiveState is the live frame and hello.live.
-type LiveState struct {
-	T      string             `json:"t"`  // "live"
-	At     int64              `json:"at"` // unix ms of the last good Prometheus answer
-	Apps   map[string]AppLive `json:"apps"`
-	Ready  map[string]bool    `json:"ready"`  // vm node id -> its k8s node is Ready
-	Probes map[string]bool    `json:"probes"` // node id -> its blackbox probe succeeds
-	Land   Land               `json:"land"`
-	Alerts []AlertLive        `json:"alerts"`
-	Stale  map[string]int64   `json:"stale"` // source -> failing since (unix ms)
-	// signals: absent = unknown
-	ProbeDay map[string]float64 `json:"probeDay,omitempty"` // probed node id -> share of its probes that succeeded, last 24 h
-	Pods     map[string]int     `json:"pods,omitempty"`     // vm node id -> pods on its k8s node
-	Addons   map[string]float64 `json:"addons,omitempty"`   // addon node id -> its least ready workload's share of ready pods
-	Day      *Day               `json:"day,omitempty"`      // the town's last 24 h, when both its signals are known
-}
-
-// Day is the town's last 24 h (rolling): stability's calm day (plan/13 §3, owner 2026-10-26: calm days for the town,
-// availability per app).
-type Day struct {
-	Critical []string `json:"critical"` // critical alerts that fired (Prometheus-evaluated: Grafana's own rules don't reach here)
-	Degraded []string `json:"degraded"` // apps that were Degraded at any time
-	Calm     bool     `json:"calm"`     // neither
-}
-
-type AppLive struct {
-	Health string  `json:"health,omitempty"`
-	Sync   string  `json:"sync,omitempty"`
-	RPS    float64 `json:"rps"`
-	// signals, summed over the app's Traefik services (latency: the slowest service's p95); nil = unknown
-	Err    *float64 `json:"err,omitempty"`    // 5xx per second
-	Lat    *float64 `json:"lat,omitempty"`    // p95 response time, seconds
-	ReqDay *float64 `json:"reqDay,omitempty"` // requests in the last 24 h
-	Avail  *float64 `json:"avail,omitempty"`  // share of those that were not 5xx (unknown with no requests)
-}
-
-// Use is what a namespace (or the cluster's capacity) holds: CPU cores, bytes of RAM, bytes of disk.
-type Use struct {
-	CPU  float64 `json:"cpu"`
-	Mem  float64 `json:"mem"`
-	Disk float64 `json:"disk"`
-}
-
-type Land struct {
-	Capacity Use                 `json:"capacity"` // allocatable CPU and RAM, provisioned volume capacity
-	Realms   map[string]Use      `json:"realms"`   // realm (or "unattributed") -> share of Capacity, 0..1 per field
-	NS       map[string]Use      `json:"ns"`       // namespace -> use, absolute
-	NSRealm  map[string]string   `json:"nsRealm"`  // namespace -> the realm its pods count toward
-	Nodes    map[string]NodeLand `json:"nodes"`    // k8s node (vm id) -> what runs on it: a city's worked tiles
-}
-
-// NodeLand is one k8s node's allocatable CPU and RAM and what each namespace uses of it (disk is not per node:
-// volumes are replicated).
-type NodeLand struct {
-	Capacity Use            `json:"capacity"`
-	NS       map[string]Use `json:"ns"`
-}
-
-type AlertLive struct {
-	FP       string            `json:"fp"`
-	Name     string            `json:"name"`
-	Severity string            `json:"severity"`
-	StartsAt int64             `json:"startsAt"`
-	Summary  string            `json:"summary,omitempty"`
-	Node     string            `json:"node,omitempty"`  // the node its labels name
-	Realm    string            `json:"realm,omitempty"` // that node's realm, or its namespace's
-	Labels   map[string]string `json:"labels"`
-}
-
-// Event is one change worth flying to: {t:"ev"}.
-type Event struct {
-	T    string `json:"t"` // "ev"
-	ID   int64  `json:"id"`
-	TS   int64  `json:"ts"`
-	Kind string `json:"kind"` // alert.fire | alert.resolve | health | ready | probe | graph
-	Node string `json:"node,omitempty"`
-	Text string `json:"text"`
-}
+// The frame's shape is contract's (the game's town reads it too).
+type (
+	LiveState = contract.Live
+	Day       = contract.Day
+	AppLive   = contract.AppLive
+	Use       = contract.Use
+	Land      = contract.Land
+	NodeLand  = contract.NodeLand
+	AlertLive = contract.AlertLive
+	Event     = contract.Event
+)
 
 type Live struct {
 	rl  *realms.Realms
 	hub *Hub
+	idx func() *GraphIndex // the graph Classify reads (nil: none yet)
 
 	mu     sync.Mutex
 	st     LiveState
 	events []Event
 	nextID int64
-	sent   string // the last frame broadcast, without its timestamp
+	sent   string           // the last frame broadcast, without its timestamps
+	low    map[string]int64 // add-on id -> since when it is below all ready (unix ms)
 }
 
 func newLive(rl *realms.Realms, hub *Hub) *Live {
 	return &Live{rl: rl, hub: hub, st: LiveState{T: "live", Apps: map[string]AppLive{}, Ready: map[string]bool{}, Probes: map[string]bool{},
-		Land: Land{Realms: map[string]Use{}, NS: map[string]Use{}, NSRealm: map[string]string{}, Nodes: map[string]NodeLand{}}, Alerts: []AlertLive{}, Stale: map[string]int64{}}, events: []Event{}}
+		Land: Land{Realms: map[string]Use{}, NS: map[string]Use{}, NSRealm: map[string]string{}, Nodes: map[string]NodeLand{}}, Alerts: []AlertLive{}, Stale: map[string]int64{},
+		Health: map[string]contract.Health{}}, events: []Event{}, low: map[string]int64{}}
+}
+
+// classify sets the frame's health from its answers and the latest graph (contract.Classify), keeping since when
+// each add-on is below all ready. Called under mu.
+func (l *Live) classify(now int64) {
+	var idx *GraphIndex
+	if l.idx != nil {
+		idx = l.idx()
+	}
+	if idx == nil {
+		l.st.Health = map[string]contract.Health{}
+		return
+	}
+	for id, share := range l.st.Addons {
+		if _, ok := l.low[id]; share < 1 && !ok {
+			l.low[id] = now
+		}
+	}
+	for id := range l.low {
+		if share, ok := l.st.Addons[id]; !ok || share >= 1 {
+			delete(l.low, id)
+		}
+	}
+	l.st.Health = contract.Classify(contract.Topology{Kind: idx.Kind, RunsOn: idx.RunsOn}, &l.st, l.low, now)
 }
 
 // hello is the frame a client gets on connect: the build, the latest projection's seq, the live state and the recent
-// events. Lock order: hub.mu (the caller) -> Graphs.mu, Live.mu; nothing broadcasts while holding either.
+// events. Lock order: hub.mu (the caller) -> Graphs.mu, Live.mu -> Graphs.mu (classify reads the index); nothing
+// broadcasts while holding either, and nothing holding Graphs.mu takes Live.mu.
 func (a *App) hello() []byte {
 	var seq int64
 	if v := a.Graph.Latest(); v != nil {
@@ -165,15 +126,17 @@ func (l *Live) event(kind, node, text string) {
 	l.hub.Broadcast(mustJSON(e))
 }
 
-// update changes the state under the lock, then broadcasts the whole frame if anything but its timestamp changed
-// (a page rebuilds its panel on each frame: an unchanged one would close what the reader opened, every 15 s).
+// update changes the state under the lock, classifies it, then broadcasts the whole frame if anything but its
+// timestamps' values changed (a page rebuilds its panel on each frame: an unchanged one would close what the reader opened,
+// every 15 s).
 func (l *Live) update(f func(*LiveState)) {
 	l.mu.Lock()
 	f(&l.st)
-	at := l.st.At
-	l.st.At = 0
+	l.classify(time.Now().UnixMilli())
+	at, alertsAt := l.st.At, l.st.AlertsAt
+	l.st.At, l.st.AlertsAt = min(at, 1), min(alertsAt, 1) // whether each source has answered is a change; when is not
 	key := string(mustJSON(l.st))
-	l.st.At = at
+	l.st.At, l.st.AlertsAt = at, alertsAt
 	var b []byte
 	if key != l.sent {
 		l.sent, b = key, mustJSON(l.st)
@@ -214,6 +177,7 @@ func (l *Live) loadFixture(file string) error {
 	f.LiveState.T = "live"
 	l.mu.Lock()
 	l.st, l.events = f.LiveState, append([]Event{}, f.Events...)
+	l.classify(time.Now().UnixMilli()) // the fixture's own health is the page tests' copy; the server's is computed
 	for _, e := range l.events {
 		l.nextID = max(l.nextID, e.ID)
 	}
@@ -726,7 +690,7 @@ func (a *amPoll) poll(ctx context.Context, now time.Time) error {
 	list := append([]AlertLive{}, slices.SortedFunc(maps.Values(cur), func(x, y AlertLive) int {
 		return cmp.Or(cmp.Compare(x.StartsAt, y.StartsAt), strings.Compare(x.FP, y.FP))
 	})...) // [] when nothing fires, never null
-	a.l.update(func(s *LiveState) { s.Alerts = list })
+	a.l.update(func(s *LiveState) { s.Alerts, s.AlertsAt = list, now.UnixMilli() })
 	return nil
 }
 

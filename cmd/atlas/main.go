@@ -117,6 +117,7 @@ func serve(o Opts) error {
 	a.Hub = NewHub(o.Dev, a.hello)
 	a.Graph = openGraphs(ctx, os.Getenv("DATABASE_URL"))
 	a.Live = newLive(rl, a.Hub)
+	a.Live.idx = a.Graph.index
 	app = a
 	if o.GraphFixture != "" {
 		if err := a.Graph.loadFixture(o.GraphFixture); err != nil {

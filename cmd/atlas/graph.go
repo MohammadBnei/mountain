@@ -537,16 +537,20 @@ type GraphIndex struct {
 	Has    map[string]bool     // node ids
 	Into   map[string]string   // addon node id -> the namespace kubespray installs it into
 	Watch  map[string][]string // Prometheus alert name -> the nodes whose watch names it, sorted
+	Kind   map[string]string   // node id -> kind (contract.Classify)
+	RunsOn map[string][]string // runs-on edges, from -> to (contract.Classify)
 }
 
 func buildIndex(v *atlasView) *GraphIndex {
-	x := &GraphIndex{Seq: v.Seq, Realm: map[string]string{}, NSApps: map[string][]string{}, Has: map[string]bool{}, Into: map[string]string{}, Watch: map[string][]string{}}
+	x := &GraphIndex{Seq: v.Seq, Realm: map[string]string{}, NSApps: map[string][]string{}, Has: map[string]bool{}, Into: map[string]string{}, Watch: map[string][]string{},
+		Kind: map[string]string{}, RunsOn: map[string][]string{}}
 	for _, raw := range v.Nodes {
 		var n graph.Node
 		if json.Unmarshal(raw, &n) != nil {
 			continue
 		}
 		x.Has[n.ID] = true
+		x.Kind[n.ID] = n.Kind
 		x.Realm[n.ID] = n.Realm
 		if n.Kind == graph.KindAddon && n.Attrs["into"] != "" {
 			x.Into[n.ID] = n.Attrs["into"]
@@ -558,6 +562,12 @@ func buildIndex(v *atlasView) *GraphIndex {
 			if r = strings.TrimSpace(r); r != "" {
 				x.Watch[r] = append(x.Watch[r], n.ID)
 			}
+		}
+	}
+	for _, raw := range v.Edges {
+		var e graph.Edge
+		if json.Unmarshal(raw, &e) == nil && e.Kind == graph.EdgeRunsOn && x.Has[e.From] && x.Has[e.To] {
+			x.RunsOn[e.From] = append(x.RunsOn[e.From], e.To)
 		}
 	}
 	for _, l := range x.NSApps {
