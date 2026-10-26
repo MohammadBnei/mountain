@@ -307,6 +307,7 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 		}
 	}
 	edges = merged
+	drift = append(drift, walls(x, rl, files, forwardAuthNames(files), g)...)
 	g.Merge(graph.Graph{Edges: edges, Drift: drift}) // both ends checked above: cannot fail
 }
 

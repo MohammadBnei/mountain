@@ -158,9 +158,10 @@ components:
   ct:hermesagent: { realm: fleet, group: hermes }
   svc:agent-fleet/core: { realm: fleet, group: control, parent: app:agent-fleet-core, paths: [agent-fleet/core/] }
   svc:agent-fleet/provisioner: { realm: fleet, group: control, parent: app:platform-provisioner, paths: [agent-fleet/provisioner/] }
-  svc:agent-fleet/sidecar: { realm: fleet, group: session-pod, paths: [agent-fleet/sidecar/] }
-  svc:agent-fleet/worker: { realm: fleet, group: session-pod, paths: [agent-fleet/worker/] }
-  svc:agent-fleet/executor: { realm: fleet, group: cluster-access, paths: [agent-fleet/executor/] }
+  # the session pods' two containers, which the provisioner spawns, are its parts; the executor is thot's
+  svc:agent-fleet/sidecar: { realm: fleet, group: session-pod, parent: app:platform-provisioner, paths: [agent-fleet/sidecar/] }
+  svc:agent-fleet/worker: { realm: fleet, group: session-pod, parent: app:platform-provisioner, paths: [agent-fleet/worker/] }
+  svc:agent-fleet/executor: { realm: fleet, group: cluster-access, parent: app:platform-thot, paths: [agent-fleet/executor/] }
   svc:agent-fleet/dashboard: { realm: fleet, group: control, parent: app:agent-fleet-core, paths: [agent-fleet/dashboard/] }
 
   # Apps: products, sites, AI, tools
@@ -224,7 +225,8 @@ needs:
   app:ente-museum: [infisical, s3, postgres:entedb]
   app:ente-web: [infisical]
   app:agent-vault: [infisical]
-  app:pgweb: [infisical]
+  app:pgweb: [infisical, forwardauth]
+  app:has-journal: ["declared:app:platform-authentik"] # authentik-forwardauth, named in has-journal's own values
   app:zot: [infisical, "declared:ct:garage-storage"] # its blobs on Garage, by address in its storage config
   app:editable-blog: [postgres:editableblogdb]
   app:dream-analyst: [postgres:dream_analyst_db]
@@ -233,6 +235,24 @@ needs:
   app:wedding-2026: [postgres:weddingdb]
   app:argocd: ["declared:app:platform-authentik"] # native OIDC: its hostname has no route atlas sees
   app:platform-grafana: ["declared:app:platform-authentik"] # native OIDC: its hostname has no route atlas sees
+
+# Walls on the doors (plan/13 §3 Defence, owner 2026-10-26): what the sources can't show of a hostname's gate. The
+# gates atlas reads itself need no row (a forwardAuth middleware on the route, a forward_single provider for the host,
+# an OIDC redirect URL). A row says: public (meant for everyone), own (the app authenticates its own callers), or a
+# gate declared because it lives in a repo atlas does not read (forwardauth: the whole host; forwardauth-path: a part
+# of it; oidc). A door with nothing is open: shown, not drift. Drift: a mark on a walled door, a declared gate the
+# sources show, a row on a hostname that is no door.
+walls:
+  dns:blog.bnei.dev: [public, forwardauth-path] # /linkedin behind authentik-forwardauth (ADR-0039 status)
+  dns:wedding.bnei.dev: [public, forwardauth-path] # /admin behind authentik-forwardauth (ADR-0039 status)
+  dns:dreamer.bnei.dev: [public] # ADR-0039's Public tier
+  dns:searxng.bnei.dev: [public] # ADR-0039's Public tier
+  dns:api.voconsteroid.com: [public] # ADR-0039's Public tier
+  dns:pi-lab.bnei.dev: [public] # "Public page: no forwardAuth" (pi-lab's helm/values.yaml)
+  dns:ente.bnei.dev: [own] # Ente's own accounts
+  dns:api.ente.bnei.dev: [own] # Ente's own accounts
+  dns:events.bnei.dev: [own] # one path, /webhook/github, signature-checked (ukubi-bridge's values)
+  dns:has-journal.bnei.dev: [forwardauth] # authentik-forwardauth, named in has-journal's own values
 
 # The add-ons' workloads (kubespray's names, in the namespace each add-on's node says it is installed into): an
 # add-on's health is its least ready workload. static: a static pod (no DaemonSet or Deployment): always unknown.

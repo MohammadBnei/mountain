@@ -107,3 +107,16 @@ func TestNeedsRows(t *testing.T) {
 		t.Errorf("rows: %+v %+v %+v", p.Needs, p.Watch, p.Addons)
 	}
 }
+
+// TestWallsRows: a walls row is a door with known kinds, and never both marks.
+func TestWallsRows(t *testing.T) {
+	base := "realms: [infra, code]\nfunctions: {infra/g: utility}\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\n"
+	if _, err := Parse([]byte(base + "walls: {dns:x.example: [public, forwardauth-path]}")); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"walls: {app:x: [public]}", "walls: {dns:x.example: [basic]}", "walls: {dns:x.example: [public, own]}"} {
+		if _, err := Parse([]byte(base + bad)); err == nil {
+			t.Errorf("accepted %q", bad)
+		}
+	}
+}
