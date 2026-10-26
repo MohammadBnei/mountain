@@ -455,8 +455,26 @@ later, as one more source feeding the same catalog and review.
      placed in its new district (its old hex kept for it), a departed one keeps its hex, a new civ lies outside every
      district; the town says what isn't pinned, and `cmd/townpin` pins it for review in a PR (`--prune` drops the
      departed; a partial graph pins nothing);
-   - **4c, lenses:** supply lines, walls and doors, watchtowers, the land lens;
-   - **4d, zoom, units, construction:** map, district and building levels; units; a new building's stages; wonders;
+   - **4c, lenses (built: ukubi-game #13):** one at a time, in colours of their own (at risk, damage and pressure keep
+     their channels): supply lines by what they are needed for (dashed where only declared), roads from each workshop
+     (a workshop feeding 8 or more is one trunk per district), walls and doors (a post per door by its kind, mesh
+     peers apart), watchtowers (blind where only Grafana watches, a post where a probe has no rule), and atlas's own
+     land lens. Gaps: doors are read from ApplicationSet hostnames only, and Postgres's tower stays blind;
+   - **4d, zoom, units, construction,** in three PRs:
+     - **4d1, zoom levels and the building card (built: ukubi-game #14):** the level is read from how much ground the
+       camera sees (map, district, building); the map's banners carry each district's live marks; shadows follow the
+       level. A building is picked by a click or `?b=`; its card (`/api/town/card`) shows its live state with the
+       alerts it doesn't see listed apart, atlas's signals, parts, supply both ways, roads, doors, watch and
+       technologies (the ADRs its files cite; a workshop's, what its code cites and the ADRs written in it), and the
+       game's half: goals and units at work (each session as core reports it), the needs-you on it (an alert placed
+       by its fingerprint), and "can train". The town centre's card adds its interior: the catalog, goals and needs by
+       building, the game's own workshop (`repo:ukubi-game`, not in atlas's graph yet), the age and research (none
+       yet). Read only: commands stay in the panels;
+     - **4d2, units:** KayKit's characters in ukubi-kit (one rig, one clip file); a unit per live session of the
+       game's client at its goal's building, and the hero;
+     - **4d3, construction and wonders:** a new building's stages need a real signal (an unpinned building is a review
+       artefact, and ArgoCD Missing is atlas's down), found in its own plan; a wonder is a multi-goal project rising a
+       stage per goal closed done;
    - **4e, off loopback:** the town page's CSP, and the game client's admins-only gate with its machine credential for
      atlas (`atlas-game`); until then the real world runs a local `atlas --dev` against port-forwarded sources.
 5. **The age**, once every signal from slice 2 is live and `goal.closed(done)` is tightened.
