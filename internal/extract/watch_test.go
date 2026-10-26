@@ -23,8 +23,8 @@ func TestWatchNeeds(t *testing.T) {
 		}
 	}
 	// rules: two Prometheus alerts (one in a templated string), one Grafana rule, one logAlerts rule in another repo
-	write("infra-bootstrap", "gitops/platform/values/traefik/values.yaml", "prometheusRule:\n  groups:\n    - rules:\n        - alert: CertExpiring\n          expr: x\n")
-	write("infra-bootstrap", "gitops/platform/values/netbird/values.yaml", "extraManifests:\n  - |\n    spec:\n      groups:\n        - rules:\n            - alert: ServerDown\n              expr: up{namespace=\"{{ .Release.Namespace }}\"} == 0\n")
+	write("infra-bootstrap", "gitops/platform/values/traefik/values.yaml", "prometheusRule:\n  groups:\n    - rules:\n        - alert: CertExpiring\n          # severity: critical in a comment is not its severity\n          expr: x\n          keep_firing_for: 5m\n          for: 1h\n          labels:\n            severity: warning\n        - alert: Other\n          for: 2m\n")
+	write("infra-bootstrap", "gitops/platform/values/netbird/values.yaml", "extraManifests:\n  - |\n    spec:\n      groups:\n        - rules:\n            - alert: ServerDown\n              expr: up{namespace=\"{{ .Release.Namespace }}\"} == 0\n              labels:\n                severity: critical\n")
 	write("infra-bootstrap", "gitops/platform/values/grafana/values.yaml", "alerting:\n  rules.yaml:\n    groups:\n      - rules:\n          - uid: blind\n            title: Prometheus not answering\n          - uid: orphan\n            title: Nobody watches this\n")
 	write("other", "helm/values.yaml", "logAlerts:\n  rules:\n    - uid: dead-letter\n      title: Dead letter\n")
 	// evidence: a blueprint naming x.example's redirect, a forwardAuth middleware and its use, an infisical block,
@@ -54,6 +54,7 @@ components:
   vm:guest: {realm: infra, group: g}
 watch:
   app:traefik: {prometheus: [CertExpiring, Gone]}
+  app:vault: {prometheus: [Other]}
   app:netbird: {prometheus: [ServerDown]}
   app:prom: {grafana: [blind]}
 general: {grafana: [dead-letter]}
@@ -84,6 +85,10 @@ needs:
 	if attr("app:traefik", "watch") != "CertExpiring, Gone" || attr("app:netbird", "watch") != "ServerDown" || attr("app:prom", "watch-grafana") != "blind" {
 		t.Errorf("watch attrs: %q %q %q", attr("app:traefik", "watch"), attr("app:netbird", "watch"), attr("app:prom", "watch-grafana"))
 	}
+	// the rule's own block only: a comment, keep_firing_for and the next rule's for: are not CertExpiring's; no for: is 0
+	if attr("app:traefik", "watch-rules") != "CertExpiring=warning/3600" || attr("app:netbird", "watch-rules") != "ServerDown=critical/0" {
+		t.Errorf("watch-rules: %q %q", attr("app:traefik", "watch-rules"), attr("app:netbird", "watch-rules"))
+	}
 	if attr("vm:guest", "probe") != "guest-x, no alert rule" {
 		t.Errorf("a probe with no rule: %q", attr("vm:guest", "probe"))
 	}
@@ -93,6 +98,7 @@ needs:
 	}
 	for _, want := range []string{
 		"app:traefik: watch: prometheus rule Gone is declared in no source",
+		`app:vault: watch: prometheus rule Other has no literal severity ("")`,
 		"repo:infra-bootstrap: grafana rule orphan watches nothing in realms.yaml (watch: or general:)",
 		"app:x: needs postgres:nodb: no such database in pigsty's pg_databases",
 		"app:vault: needs s3: no evidence of it in the sources",
@@ -102,8 +108,8 @@ needs:
 			t.Errorf("missing drift %q in\n%s", want, strings.Join(details, "\n"))
 		}
 	}
-	if len(details) != 5 {
-		t.Errorf("drift: %d, want 5:\n%s", len(details), strings.Join(details, "\n"))
+	if len(details) != 6 {
+		t.Errorf("drift: %d, want 6:\n%s", len(details), strings.Join(details, "\n"))
 	}
 	var edges []string
 	for _, e := range g.Edges {
@@ -124,6 +130,9 @@ func TestChartPin(t *testing.T) {
 	p := filepath.Join(dir, "infra-bootstrap", "gitops/bootstrap/platform.applicationset.yaml")
 	os.MkdirAll(filepath.Dir(p), 0o755)
 	os.WriteFile(p, []byte("spec:\n  generators:\n    - list:\n        elements:\n          - name: other\n            chartName: x\n            chartRevision: \"9\"\n          - name: prometheus\n            chartName: kube-prometheus-stack\n            chartRevision: \"1.2.3\"\n"), 0o644)
+	v := filepath.Join(dir, "infra-bootstrap", promValues)
+	os.MkdirAll(filepath.Dir(v), 0o755)
+	os.WriteFile(v, []byte("defaultRules:\n  create: true\n  keepFiringFor: 5m\ncustomRules: {}\n"), 0o644)
 	x := &Ctx{Repos: Repos{"infra-bootstrap": {Dir: filepath.Join(dir, "infra-bootstrap")}}}
 	if pin, _ := chartPin(x, "kube-prometheus-stack"); pin != "1.2.3" {
 		t.Errorf("pin = %q", pin)
@@ -131,7 +140,7 @@ func TestChartPin(t *testing.T) {
 	rl, _ := realms.Parse([]byte("realms: [infra, code]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\n"))
 	g := graph.Graph{}
 	watchNeeds(x.Repos, rl, &g)
-	if len(g.Drift) != 1 || g.Drift[0].Kind != graph.DriftMirror || !strings.Contains(g.Drift[0].Detail, "1.2.3") {
+	if len(g.Drift) != 2 || g.Drift[0].Kind != graph.DriftMirror || !strings.Contains(g.Drift[0].Detail, "1.2.3") || !strings.Contains(g.Drift[1].Detail, "defaultRules.keepFiringFor") {
 		t.Errorf("drift: %+v", g.Drift)
 	}
 }

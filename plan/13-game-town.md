@@ -375,13 +375,19 @@ later, as one more source feeding the same catalog and review.
      readiness (kube-vip, a static pod, stays unknown);
    - **S2i (infra-bootstrap, built: #374):** Traefik's request-duration buckets (the defaults 0.1/0.3/1.2/5 s make p95 an
      interpolation);
-   - **S2b (ukubi-game, with a small mountain PR for the default rule names at the chart's pinned version):** the
-     mirrors of every signal; real rule names with their real severities and labels only;
-     correlated failures along `needs:` (a supplier down raises its dependents' errors and latency, never marks them
-     Degraded), derived purely, never logged.
+   - **S2b (ukubi-game, with small mountain PRs for the default rules at the chart's pinned version):**
+     - **S2b1 (built: ukubi-game #7):** the mirrors of every signal. A day window integrates the full 24 h of the pure
+       world (a restart answers the same day), and a Prometheus gap is skipped where the real `*_over_time` would.
+     - **S2b2:** real rule names with their real severities, `for:` and label shapes only; correlated failures along
+       `needs:` (a supplier down raises its dependents' errors and latency, never marks them Degraded), derived purely,
+       never logged. mountain carries each default rule's severity and `for:` (`contract.DefaultRules`) and each
+       watched rule's (`watch-rules`), and places a watched rule's alert on its one watchtower.
+     - **Needs-you (owner, 2026-10-26):** every critical alert, plus a warning from a watched rule; in the sim, its own
+       incidents stay needs too (the director's stakes, answered by the player), and the alerts an incident causes are
+       linked to it through the sim's API (no invented label), so nothing counts twice.
    - Limits recorded: Grafana-managed rules never reach Alertmanager or `ALERTS`, so a calm day counts the
      Prometheus-evaluated critical alerts only (a Grafana rule still makes a watchtower: it notifies); with real
-     rules, most incidents reach warning only, so the game's needs-you (critical only) is revisited in S2b; the sim's
+     rules, most incidents reach warning only, so the game's needs-you (critical only) was revisited in S2b2 (above); the sim's
      latency moves with incidents, so the age (slice 5) must not read it as stability there.
    - **Unique users and their infra-bootstrap ADR are deferred**; the age waits on them (no staged age).
 3. **ukubi-kit plus a real-data diorama (built, 2026-10-26):** ukubi-kit #1 and ukubi-game #6.

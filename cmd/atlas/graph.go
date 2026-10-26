@@ -536,10 +536,11 @@ type GraphIndex struct {
 	NSApps map[string][]string // namespace -> app ids deploying into it, sorted
 	Has    map[string]bool     // node ids
 	Into   map[string]string   // addon node id -> the namespace kubespray installs it into
+	Watch  map[string][]string // Prometheus alert name -> the nodes whose watch names it, sorted
 }
 
 func buildIndex(v *atlasView) *GraphIndex {
-	x := &GraphIndex{Seq: v.Seq, Realm: map[string]string{}, NSApps: map[string][]string{}, Has: map[string]bool{}, Into: map[string]string{}}
+	x := &GraphIndex{Seq: v.Seq, Realm: map[string]string{}, NSApps: map[string][]string{}, Has: map[string]bool{}, Into: map[string]string{}, Watch: map[string][]string{}}
 	for _, raw := range v.Nodes {
 		var n graph.Node
 		if json.Unmarshal(raw, &n) != nil {
@@ -553,8 +554,16 @@ func buildIndex(v *atlasView) *GraphIndex {
 		if n.Kind == graph.KindApp && n.Attrs["namespace"] != "" {
 			x.NSApps[n.Attrs["namespace"]] = append(x.NSApps[n.Attrs["namespace"]], n.ID)
 		}
+		for _, r := range strings.Split(n.Attrs["watch"], ",") {
+			if r = strings.TrimSpace(r); r != "" {
+				x.Watch[r] = append(x.Watch[r], n.ID)
+			}
+		}
 	}
 	for _, l := range x.NSApps {
+		slices.Sort(l)
+	}
+	for _, l := range x.Watch {
 		slices.Sort(l)
 	}
 	return x

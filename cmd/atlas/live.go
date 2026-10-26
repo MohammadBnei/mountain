@@ -739,6 +739,11 @@ func (a *amPoll) place(idx *GraphIndex, l map[string]string) (node, realm string
 	if id := "vm:" + strings.ToLower(l[contract.LabelNode]); l[contract.LabelNode] != "" && idx.Has[id] {
 		return id, idx.Realm[id]
 	}
+	// a watched rule's alert is its watchtower's, when one node watches it: a rule like TraefikCertExpiringSoon
+	// carries only cn/sans, and NetBirdUnreachable keeps blackbox's own namespace (monitoring), not NetBird's
+	if w := idx.Watch[l[contract.LabelAlertName]]; len(w) == 1 {
+		return w[0], idx.Realm[w[0]]
+	}
 	if ns := l[contract.LabelNamespace]; ns != "" {
 		if apps := idx.NSApps[ns]; len(apps) == 1 {
 			return apps[0], idx.Realm[apps[0]]

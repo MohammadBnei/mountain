@@ -21,7 +21,9 @@ import (
 //   - watch: a node's alert rules. Every rule a row names must be declared in a source (a Prometheus `alert:` name,
 //     a Grafana rule's uid), and every declared rule must be in a row or under general (the town's general watch):
 //     drift both ways. A row becomes the node's `watch` (Prometheus) and `watch-grafana` attributes; a probed node
-//     with no row gets `probe: <target>, no alert rule`.
+//     with no row gets `probe: <target>, no alert rule`. A watched Prometheus rule's severity and for: (seconds) go
+//     into `watch-rules` (`<name>=<severity>/<for>, ...`), read as text from its rule block (a rule can sit inside a
+//     templated string); a watched rule with no literal severity is drift.
 //   - needs: what a node depends on, each written as its evidence. A row's evidence must be found (else drift), and
 //     evidence found for an app with no row naming it is drift too. A row becomes a needs edge (attrs: via, checked).
 //
@@ -35,6 +37,54 @@ var (
 	urlHost   = regexp.MustCompile(`(?m)^\s*-?\s*url:\s*["']?https://([a-z0-9.-]+)`)
 	s3Ref     = regexp.MustCompile(`garage-s3|s3\.bnei\.dev`)
 )
+
+// ruleSeverities are the severities a watched rule may carry (mountain's own rules use notice).
+var ruleSeverities = []string{"critical", "warning", "notice", "info", "none"}
+
+type ruleMeta struct {
+	severity string
+	forSec   int
+}
+
+var (
+	ruleFor   = regexp.MustCompile(`^\s*for:\s*["']?([0-9a-z]+)["']?\s*$`)
+	ruleSev   = regexp.MustCompile(`^\s*severity:\s*["']?([^"'\s]+)["']?\s*$`)
+	promDur   = regexp.MustCompile(`([0-9]+)(ms|s|m|h|d|w|y)`)
+	durFactor = map[string]float64{"ms": 0.001, "s": 1, "m": 60, "h": 3600, "d": 86400, "w": 7 * 86400, "y": 365 * 86400}
+)
+
+// ruleBlock reads the severity and for: of the rule whose `alert:` line spans b[start:end]: the lines after it that are
+// indented deeper than the list item it belongs to, comments skipped. An unparseable for: reads as 0.
+func ruleBlock(b []byte, start, end int) ruleMeta {
+	lineStart := bytes.LastIndexByte(b[:start+1], '\n') + 1
+	line := string(b[lineStart:end])
+	ind := len(line) - len(strings.TrimLeft(line, " "))
+	dash := strings.HasPrefix(strings.TrimLeft(line, " "), "-")
+	var m ruleMeta
+	for _, l := range strings.Split(string(b[min(end+1, len(b)):]), "\n") {
+		t := strings.TrimLeft(l, " ")
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		li := len(l) - len(t)
+		if (dash && li <= ind) || (!dash && (li < ind || (li <= ind && strings.HasPrefix(t, "-")))) {
+			break
+		}
+		if x := ruleSev.FindStringSubmatch(l); x != nil && m.severity == "" {
+			m.severity = x[1]
+		}
+		if x := ruleFor.FindStringSubmatch(l); x != nil && promDur.ReplaceAllString(x[1], "") == "" {
+			var sec float64
+			for _, p := range promDur.FindAllStringSubmatch(x[1], -1) {
+				var n float64
+				fmt.Sscan(p[1], &n)
+				sec += n * durFactor[p[2]]
+			}
+			m.forSec = int(sec)
+		}
+	}
+	return m
+}
 
 // sourceFile is a YAML file of a source, with the app it belongs to ("" when none).
 type sourceFile struct {
@@ -60,9 +110,14 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 
 	// ---- watch
 	declared := map[string]graph.Source{} // "prometheus/<name>" | "grafana/<uid>" -> where
+	meta := map[string]ruleMeta{}         // a Prometheus rule's severity and for:, from its first declaration
 	for _, f := range files {
-		for _, m := range alertName.FindAllSubmatch(f.b, -1) {
-			declared["prometheus/"+string(m[1])] = f.src
+		for _, m := range alertName.FindAllSubmatchIndex(f.b, -1) {
+			name := string(f.b[m[2]:m[3]])
+			declared["prometheus/"+name] = f.src
+			if _, ok := meta[name]; !ok {
+				meta[name] = ruleBlock(f.b, m[0], m[1])
+			}
 		}
 		for _, uid := range grafanaRules(f.b) {
 			declared["grafana/"+uid] = f.src
@@ -93,6 +148,10 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 	if pin, src := chartPin(x, "kube-prometheus-stack"); pin != "" && pin != contract.DefaultRulesChart {
 		d(graph.DriftMirror, graph.ID(graph.KindRepo, "infra-bootstrap"), "kube-prometheus-stack is pinned at "+pin+", but contract.DefaultRules was read from "+contract.DefaultRulesChart+": regenerate it (contract/gen/defaultrules)", src)
 	}
+	// ... and from the chart's defaults: values that change a rule's severity, for:, labels or set make it stale too
+	for _, k := range ruleOverrides(x) {
+		d(graph.DriftMirror, graph.ID(graph.KindRepo, "infra-bootstrap"), "kube-prometheus-stack's values set "+k+": contract.DefaultRules holds the chart's defaults, so the sim's rules no longer match", graph.Source{Repo: "infra-bootstrap", Path: promValues})
+	}
 	probed := map[string]string{}
 	for target, id := range rl.Probes {
 		probed[id] = target
@@ -107,6 +166,20 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 		}
 		if ok && len(w.Prometheus) > 0 {
 			set("watch", strings.Join(w.Prometheus, ", "))
+			var rules []string
+			for _, r := range w.Prometheus {
+				mt, found := meta[r]
+				switch {
+				case !found: // declared in no source: drift above
+				case !slices.Contains(ruleSeverities, mt.severity):
+					d(graph.DriftUnresolved, n.ID, fmt.Sprintf("watch: prometheus rule %s has no literal severity (%q)", r, mt.severity), declared["prometheus/"+r])
+				default:
+					rules = append(rules, fmt.Sprintf("%s=%s/%d", r, mt.severity, mt.forSec))
+				}
+			}
+			if len(rules) > 0 {
+				set("watch-rules", strings.Join(rules, ", "))
+			}
 		}
 		if ok && len(w.Grafana) > 0 {
 			set("watch-grafana", strings.Join(w.Grafana, ", "))
@@ -426,6 +499,34 @@ func uncommented(b []byte) string {
 }
 
 // chartPin is the chartRevision infra-bootstrap's platform ApplicationSet pins for a chart ("" when it names none).
+const promValues = "gitops/platform/values/prometheus/values.yaml"
+
+// ruleOverrides is the kube-prometheus-stack values keys that change its default rules (the dig "<name>" "<key>"
+// customRules, keep_firing_for, the aggregation labels, a disabled rule or group) set in infra-bootstrap's values.
+func ruleOverrides(x *Ctx) []string {
+	b, _, err := x.Read("infra-bootstrap", promValues)
+	if err != nil {
+		return nil
+	}
+	var v struct {
+		CustomRules  map[string]any `yaml:"customRules"`
+		DefaultRules map[string]any `yaml:"defaultRules"`
+	}
+	if yaml.Unmarshal(b, &v) != nil {
+		return nil
+	}
+	var out []string
+	if len(v.CustomRules) > 0 {
+		out = append(out, "customRules")
+	}
+	for _, k := range []string{"keepFiringFor", "additionalAggregationLabels", "disabled", "rules", "additionalRuleLabels", "additionalRuleGroupLabels"} {
+		if x, ok := v.DefaultRules[k]; ok && x != nil {
+			out = append(out, "defaultRules."+k)
+		}
+	}
+	return out
+}
+
 func chartPin(x *Ctx, chart string) (string, graph.Source) {
 	b, src, err := x.Read("infra-bootstrap", "gitops/bootstrap/platform.applicationset.yaml")
 	if err != nil {

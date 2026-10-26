@@ -62,6 +62,13 @@ var Signals = map[string]Signal{
 	"pods": {`count by (node) (kube_pod_info * on (namespace, pod) group_left () (kube_pod_status_phase{phase="Running"} == 1))`, 15},
 }
 
+// Rule is one instance of an alert rule: the severity it fires at and its for: in seconds (how long its condition
+// must hold before it fires; 0 = on the first evaluation). A name may have two (a warning and a critical rung).
+type Rule struct {
+	Severity string
+	For      int
+}
+
 // PromQueryPath is the Prometheus HTTP API route the queries go to (as ?query=<url-escaped PromQL>).
 const PromQueryPath = "/api/v1/query"
 
