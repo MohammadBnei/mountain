@@ -482,7 +482,7 @@ later, as one more source feeding the same catalog and review.
        session with a turn in flight (arriving, at work, needing you), unknown when its status can't be read; the hero
        at your most recently started open step's building, else at the town centre saying so; units walk when they
        move, are labelled in words, and hide on the map;
-     - **4d3, construction and wonders (built: ukubi-kit #4, ukubi-game #PR4D3):** the founding and what is built
+     - **4d3, construction and wonders (built: ukubi-kit #4, ukubi-game #16):** the founding and what is built
        since in the game log (recorded by the game's loop, never a GET; `--refound` for a bad founding); newcomers in
        foundations or rising with atlas's health on them; the sim mirrors a new app's arrival (`app.new`: Missing,
        then Progressing, then Healthy); wonders on the centre's ring, opened, finished and dropped in the panels, the
