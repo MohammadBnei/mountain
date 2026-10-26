@@ -117,3 +117,21 @@ needs:
 		t.Errorf("needs edges: %q", edges)
 	}
 }
+
+// TestChartPin: the default rules' list is read from one chart version; infra-bootstrap pinning another is drift.
+func TestChartPin(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "infra-bootstrap", "gitops/bootstrap/platform.applicationset.yaml")
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	os.WriteFile(p, []byte("spec:\n  generators:\n    - list:\n        elements:\n          - name: other\n            chartName: x\n            chartRevision: \"9\"\n          - name: prometheus\n            chartName: kube-prometheus-stack\n            chartRevision: \"1.2.3\"\n"), 0o644)
+	x := &Ctx{Repos: Repos{"infra-bootstrap": {Dir: filepath.Join(dir, "infra-bootstrap")}}}
+	if pin, _ := chartPin(x, "kube-prometheus-stack"); pin != "1.2.3" {
+		t.Errorf("pin = %q", pin)
+	}
+	rl, _ := realms.Parse([]byte("realms: [infra, code]\nhosts: {a: h1}\npveNodeName: a\nsources: [infra-bootstrap]\n"))
+	g := graph.Graph{}
+	watchNeeds(x.Repos, rl, &g)
+	if len(g.Drift) != 1 || g.Drift[0].Kind != graph.DriftMirror || !strings.Contains(g.Drift[0].Detail, "1.2.3") {
+		t.Errorf("drift: %+v", g.Drift)
+	}
+}

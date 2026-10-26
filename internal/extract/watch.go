@@ -10,6 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/MohammadBnei/mountain/contract"
 	"github.com/MohammadBnei/mountain/internal/graph"
 	"github.com/MohammadBnei/mountain/realms"
 )
@@ -87,6 +88,10 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 			via, r, _ := strings.Cut(k, "/")
 			d(graph.DriftUnassigned, graph.ID(graph.KindRepo, declared[k].Repo), fmt.Sprintf("%s rule %s watches nothing in realms.yaml (watch: or general:)", via, r), declared[k])
 		}
+	}
+	// the default rules' list (contract.DefaultRules) is read from one chart version: another pinned makes it stale
+	if pin, src := chartPin(x, "kube-prometheus-stack"); pin != "" && pin != contract.DefaultRulesChart {
+		d(graph.DriftMirror, graph.ID(graph.KindRepo, "infra-bootstrap"), "kube-prometheus-stack is pinned at "+pin+", but contract.DefaultRules was read from "+contract.DefaultRulesChart+": regenerate it (contract/gen/defaultrules)", src)
 	}
 	probed := map[string]string{}
 	for target, id := range rl.Probes {
@@ -418,4 +423,37 @@ func uncommented(b []byte) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+// chartPin is the chartRevision infra-bootstrap's platform ApplicationSet pins for a chart ("" when it names none).
+func chartPin(x *Ctx, chart string) (string, graph.Source) {
+	b, src, err := x.Read("infra-bootstrap", "gitops/bootstrap/platform.applicationset.yaml")
+	if err != nil {
+		return "", src
+	}
+	var root any
+	if yaml.Unmarshal(b, &root) != nil {
+		return "", src
+	}
+	var pin string
+	var walk func(v any)
+	walk = func(v any) {
+		switch t := v.(type) {
+		case map[string]any:
+			if t["chartName"] == chart {
+				if r, ok := t["chartRevision"].(string); ok {
+					pin = r
+				}
+			}
+			for _, c := range t {
+				walk(c)
+			}
+		case []any:
+			for _, c := range t {
+				walk(c)
+			}
+		}
+	}
+	walk(root)
+	return pin, src
 }
