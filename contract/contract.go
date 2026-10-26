@@ -25,17 +25,20 @@ var Queries = map[string]string{
 }
 
 // Signal is an optional query: what it measures may be missing (a metric not scraped yet, a histogram not configured),
-// so a failed or empty answer is *unknown*, never zero, and never fails the poll. A healthy state is never empty:
-// each signal fills its quiet case with an explicit zero from a series that exists whenever the measured thing does
+// so a failed or empty answer is *unknown*, never zero, and never fails the poll. A healthy state is not left empty:
+// the signals that count trouble fill their quiet case with an explicit zero from a series that exists whenever the measured thing does
 // (the request counter for errors, argocd_app_info for degraded apps, Alertmanager's always-firing Watchdog for
 // critical alerts: no Watchdog means the rules did not run, so the day is unknown, not calm). Every seconds is how
-// often it is asked: the day windows are rolling 24 h ([1d]) and heavy, so they are asked every 5 min.
+// often it is asked: the day windows are rolling 24 h ([1d]) and heavy, so they are asked every 5 min. Known
+// undercount: increase() misses a series' first count, so a 5xx series born today (Traefik creates it on its first
+// error) loses that error. Latency with no traffic is NaN: unknown, which is right.
 type Signal struct {
 	Query string
 	Every int // seconds
 }
 
-// Signals is every optional query (plan/13 slice 2), by name. The sim's mirror answers these too.
+// Signals is every optional query (plan/13 slice 2), by name. The sim's mirror must answer these too (its coverage
+// test), so a change here ships with the sim's mirror of it.
 var Signals = map[string]Signal{
 	// per Traefik service: 5xx per second (0 when none, from the request counter), and the p95 response time
 	"err": {`sum by (exported_service) (rate(traefik_service_requests_total{code=~"5.."}[2m])) or 0 * sum by (exported_service) (rate(traefik_service_requests_total[2m]))`, 15},
@@ -50,8 +53,8 @@ var Signals = map[string]Signal{
 	"critday": {`count by (alertname) (max_over_time(ALERTS{alertstate="firing",severity="critical"}[1d])) or on () (0 * max(max_over_time(ALERTS{alertname="Watchdog"}[1d])))`, 300},
 	// the last 24 h per Application: 1 if it was Degraded at any time, else 0
 	"degradedday": {`max by (name) (max_over_time(argocd_app_info{health_status="Degraded"}[1d])) or 0 * max by (name) (argocd_app_info)`, 300},
-	// pods per k8s node: a house's population
-	"pods": {`count by (node) (kube_pod_info)`, 15},
+	// running pods per k8s node (finished Jobs' pods left out): a house's population
+	"pods": {`count by (node) (kube_pod_info * on (namespace, pod) group_left () (kube_pod_status_phase{phase="Running"} == 1))`, 15},
 }
 
 // PromQueryPath is the Prometheus HTTP API route the queries go to (as ?query=<url-escaped PromQL>).

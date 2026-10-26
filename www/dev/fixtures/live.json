@@ -50,8 +50,8 @@
    "sync": "Synced",
    "err": 0,
    "lat": 0.41,
-   "reqDay": 870,
-   "avail": 1
+   "reqDay": 159840,
+   "avail": 1.0
   },
   "app:agent-vault": {
    "health": "Healthy",
@@ -86,10 +86,10 @@
    "health": "Healthy",
    "rps": 6.11,
    "sync": "Synced",
-   "err": 0.3,
-   "lat": 1.7,
-   "reqDay": 1520,
-   "avail": 0.9612
+   "err": 0.03,
+   "lat": 0.29,
+   "reqDay": 527904,
+   "avail": 0.9951
   },
   "app:ente-museum": {
    "health": "Healthy",
@@ -265,15 +265,19 @@
    "health": "Healthy",
    "rps": 5.16,
    "sync": "Synced",
-   "err": 0.02,
+   "err": 0.002,
    "lat": 0.184,
-   "reqDay": 48210,
-   "avail": 0.9993
+   "reqDay": 445824,
+   "avail": 0.9996
   },
   "app:wird-adminweb": {
    "health": "Degraded",
    "rps": 7.05,
-   "sync": "Synced"
+   "sync": "Synced",
+   "err": 0.9,
+   "lat": 1.7,
+   "reqDay": 609120,
+   "avail": 0.8723
   },
   "app:zot": {
    "health": "Healthy",
@@ -803,10 +807,10 @@
  },
  "day": {
   "critical": [
-   "KubePersistentVolumeFillingUp"
+   "KubeNodeNotReady"
   ],
   "degraded": [
-   "app:editable-blog"
+   "app:wird-adminweb"
   ],
   "calm": false
  }

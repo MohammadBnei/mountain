@@ -487,7 +487,8 @@ func (p *promPoll) signals(ctx context.Context, now time.Time) {
 	}
 	for _, name := range slices.Sorted(maps.Keys(contract.Signals)) {
 		sg := contract.Signals[name]
-		if last, ok := p.sig[name]; ok && now.Sub(last.at) < time.Duration(sg.Every)*time.Second {
+		// half a tick of slack: the ticker's wake-ups jitter, and a 15 s signal must not skip every other tick
+		if last, ok := p.sig[name]; ok && now.Sub(last.at) < time.Duration(sg.Every)*time.Second-liveEvery/2 {
 			continue
 		}
 		s, err := query(ctx, p.hc, p.url, sg.Query)
