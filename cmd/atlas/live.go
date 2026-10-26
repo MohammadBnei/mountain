@@ -60,6 +60,7 @@ type LiveState struct {
 	// signals: absent = unknown
 	ProbeDay map[string]float64 `json:"probeDay,omitempty"` // probed node id -> share of its probes that succeeded, last 24 h
 	Pods     map[string]int     `json:"pods,omitempty"`     // vm node id -> pods on its k8s node
+	Addons   map[string]float64 `json:"addons,omitempty"`   // addon node id -> its least ready workload's share of ready pods
 	Day      *Day               `json:"day,omitempty"`      // the town's last 24 h, when both its signals are known
 }
 
@@ -474,7 +475,7 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	}
 	p.l.update(func(s *LiveState) {
 		s.At, s.Apps, s.Ready, s.Probes, s.Land = now.UnixMilli(), apps, ready, probes, land
-		s.ProbeDay, s.Pods, s.Day = sig.probeDay, sig.pods, sig.day
+		s.ProbeDay, s.Pods, s.Day, s.Addons = sig.probeDay, sig.pods, sig.day, sig.addons
 	})
 	return nil
 }
@@ -500,6 +501,7 @@ func (p *promPoll) signals(ctx context.Context, now time.Time) {
 }
 
 type joined struct {
+	addons   map[string]float64
 	probeDay map[string]float64
 	pods     map[string]int
 	day      *Day
@@ -561,6 +563,36 @@ func (p *promPoll) joinSignals(idx *GraphIndex, apps map[string]AppLive) joined 
 			if id := "vm:" + strings.ToLower(x.L[contract.LabelNode]); idx.Has[id] {
 				j.pods[id] = int(x.V)
 			}
+		}
+	}
+	// an add-on's readiness: its least ready workload (realms.yaml addons); unknown when one of them isn't answered
+	// (a static pod, like kube-vip, never is)
+	ds, okDS := known("dsready")
+	dep, okDep := known("deployready")
+	if okDS || okDep {
+		ready := map[string]float64{} // "<namespace>/<kind>/<name>" -> share
+		for kind, list := range map[string][]sample{"daemonset": ds, "deployment": dep} {
+			label := map[string]string{"daemonset": contract.LabelDaemonSet, "deployment": contract.LabelDeployment}[kind]
+			for _, x := range list {
+				ready[x.L[contract.LabelNamespace]+"/"+kind+"/"+x.L[label]] = x.V
+			}
+		}
+		j.addons = map[string]float64{}
+	next:
+		for id, wl := range p.l.rl.Addons {
+			ns := idx.Into[id]
+			if !idx.Has[id] || ns == "" || len(wl) == 0 {
+				continue
+			}
+			least := 1.0
+			for _, w := range wl {
+				v, ok := ready[ns+"/"+w]
+				if !ok {
+					continue next
+				}
+				least = min(least, v)
+			}
+			j.addons[id] = math.Round(least*1000) / 1000
 		}
 	}
 	crit, okC := known("critday")

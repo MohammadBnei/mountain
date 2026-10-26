@@ -35,6 +35,47 @@ type Realms struct {
 	Namespaces   map[string]string    `yaml:"namespaces"`   // namespace without an Application -> realm
 	Components   map[string]Component `yaml:"components"`
 	Functions    map[string]string    `yaml:"functions"` // "<realm>/<group>" -> what the group does in play
+	Watch        map[string]Watch     `yaml:"watch"`     // node -> the alert rules that name it (its watchtowers)
+	General      Watch                `yaml:"general"`   // the rules that watch every building at once
+	Needs        map[string][]string  `yaml:"needs"`     // node -> what it depends on, each with its evidence (Need)
+	Addons       map[string][]string  `yaml:"addons"`    // addon node -> its workloads: daemonset/<n>, deployment/<n>, static
+}
+
+// Watch is the alert rules on a node, by where they are evaluated: prometheus (an alerting rule: it reaches
+// Alertmanager and ALERTS, so atlas and the sim see it fire) or grafana (Grafana's own rules: they notify, but nothing
+// atlas reads sees them fire). Names are the rules' alert names (Prometheus) or uids (Grafana).
+type Watch struct {
+	Prometheus []string `yaml:"prometheus"`
+	Grafana    []string `yaml:"grafana"`
+}
+
+// Suppliers are the node each kind of evidence names: a need written as its evidence kind depends on that node.
+var Suppliers = map[string]string{
+	"oidc":        "app:platform-authentik", // its OIDC client's redirect URL is one of the app's hostnames
+	"forwardauth": "app:platform-authentik", // its ingress goes through an authentik forwardAuth middleware
+	"infisical":   "app:platform-infisical", // its values have an infisical: block (secrets synced at run time)
+	"postgres":    "db:pg-proxmox",          // postgres:<db>: that database is in Pigsty's pg_databases
+	"s3":          "ct:garage-storage",      // its values name Garage's S3 endpoint
+}
+
+// Need is one row of needs: "<kind>" or "postgres:<db>" (checked against the sources), or "declared:<node>" (the
+// evidence lives outside the sources atlas reads: shown, unverified).
+type Need struct {
+	On, Via, Arg string // the supplier node, the evidence kind, its argument (the database)
+}
+
+// ParseNeed reads one needs entry.
+func ParseNeed(s string) (Need, error) {
+	kind, arg, _ := strings.Cut(s, ":")
+	switch {
+	case kind == "declared" && arg != "":
+		return Need{On: arg, Via: kind}, nil
+	case kind == "postgres" && arg != "":
+		return Need{On: Suppliers[kind], Via: kind, Arg: arg}, nil
+	case Suppliers[kind] != "" && arg == "" && kind != "postgres":
+		return Need{On: Suppliers[kind], Via: kind}, nil
+	}
+	return Need{}, fmt.Errorf("need %q is not oidc, forwardauth, infisical, s3, postgres:<db> or declared:<node>", s)
 }
 
 // Code is the realm atlas places the repos in itself (extract's place), by the realms of the apps they feed.
@@ -125,6 +166,39 @@ func Parse(b []byte) (*Realms, error) {
 		for _, p := range c.Paths {
 			if !strings.Contains(p, "/") {
 				return nil, fmt.Errorf("realms.yaml: %s path %q is not <repo>/<prefix>", id, p)
+			}
+		}
+	}
+	for id, w := range r.Watch {
+		if _, ok := r.Components[id]; !ok {
+			return nil, fmt.Errorf("realms.yaml: watch %s is not a listed component", id)
+		}
+		if len(w.Prometheus)+len(w.Grafana) == 0 {
+			return nil, fmt.Errorf("realms.yaml: watch %s names no rule", id)
+		}
+	}
+	for id, list := range r.Needs {
+		if _, ok := r.Components[id]; !ok {
+			return nil, fmt.Errorf("realms.yaml: needs %s is not a listed component", id)
+		}
+		for _, s := range list {
+			n, err := ParseNeed(s)
+			if err != nil {
+				return nil, fmt.Errorf("realms.yaml: needs %s: %w", id, err)
+			}
+			if _, ok := r.Components[n.On]; !ok || n.On == id {
+				return nil, fmt.Errorf("realms.yaml: needs %s: %s is not another listed component", id, n.On)
+			}
+		}
+	}
+	for id, wl := range r.Addons {
+		if kind, _, _ := strings.Cut(id, ":"); kind != "addon" {
+			return nil, fmt.Errorf("realms.yaml: addons %s is not an addon node", id)
+		}
+		for _, w := range wl {
+			kind, name, _ := strings.Cut(w, "/")
+			if !(w == "static" || (kind == "daemonset" || kind == "deployment") && name != "") {
+				return nil, fmt.Errorf("realms.yaml: addons %s: %q is not daemonset/<name>, deployment/<name> or static", id, w)
 			}
 		}
 	}

@@ -311,3 +311,29 @@ func TestSignals(t *testing.T) {
 		t.Errorf("a day without the Watchdog's proof is unknown: %+v", l.st.Day)
 	}
 }
+
+// TestAddonReadiness: an add-on's readiness is its least ready workload (realms.yaml addons, in the namespace its node
+// is installed into); one workload unanswered makes it unknown, and a static pod (kube-vip) is always unknown.
+func TestAddonReadiness(t *testing.T) {
+	rl, _ := realms.Load()
+	l := newLive(rl, NewHub(false, func() []byte { return nil }))
+	idx := testIndex()
+	idx.Into = map[string]string{"addon:cilium": "kube-system", "addon:metallb": "metallb-system", "addon:coredns": "kube-system", "addon:kube-vip": "kube-system"}
+	for id := range idx.Into {
+		idx.Has[id] = true
+	}
+	srv := fakeProm(t, func() map[string]string {
+		return map[string]string{
+			"dsready":     pvec(`{"namespace":"kube-system","daemonset":"cilium"}`, "1", `{"namespace":"metallb-system","daemonset":"speaker"}`, "0.8"),
+			"deployready": pvec(`{"namespace":"kube-system","deployment":"cilium-operator"}`, "0.5", `{"namespace":"kube-system","deployment":"hubble-relay"}`, "1", `{"namespace":"metallb-system","deployment":"controller"}`, "1"),
+		}
+	})
+	p := &promPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: func() *GraphIndex { return idx }}
+	if err := p.poll(context.Background(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	a := l.st.Addons
+	if a["addon:cilium"] != 0.5 || a["addon:metallb"] != 0.8 || len(a) != 2 {
+		t.Errorf("addons: %v (coredns unanswered and kube-vip static: unknown)", a)
+	}
+}
