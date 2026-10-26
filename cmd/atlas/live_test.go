@@ -325,7 +325,7 @@ func TestAddonReadiness(t *testing.T) {
 	srv := fakeProm(t, func() map[string]string {
 		return map[string]string{
 			"dsready":     pvec(`{"namespace":"kube-system","daemonset":"cilium"}`, "1", `{"namespace":"metallb-system","daemonset":"speaker"}`, "0.8"),
-			"deployready": pvec(`{"namespace":"kube-system","deployment":"cilium-operator"}`, "0.5", `{"namespace":"metallb-system","deployment":"controller"}`, "1"),
+			"deployready": pvec(`{"namespace":"kube-system","deployment":"cilium-operator"}`, "0.5", `{"namespace":"kube-system","deployment":"hubble-relay"}`, "1", `{"namespace":"metallb-system","deployment":"controller"}`, "1"),
 		}
 	})
 	p := &promPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: func() *GraphIndex { return idx }}

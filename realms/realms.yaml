@@ -209,7 +209,7 @@ general: { grafana: [log-error-rate-spike] }
 # ways: a row's evidence must be found, and evidence for an app with no row naming it is drift.
 needs:
   app:mountain: [oidc, forwardauth, infisical, postgres:mountaindb]
-  app:agent-fleet-core: [oidc, postgres:agentfleetdb]
+  app:agent-fleet-core: [oidc, infisical, postgres:agentfleetdb]
   app:ukubi-bridge: [postgres:bridge]
   app:platform-authentik: [postgres:authentik]
   app:platform-infisical: [postgres:infisicaldb]
@@ -237,7 +237,7 @@ needs:
 # The add-ons' workloads (kubespray's names, in the namespace each add-on's node says it is installed into): an
 # add-on's health is its least ready workload. static: a static pod (no DaemonSet or Deployment): always unknown.
 addons:
-  addon:cilium: [daemonset/cilium, deployment/cilium-operator]
+  addon:cilium: [daemonset/cilium, deployment/cilium-operator, deployment/hubble-relay] # hubble is on (k8s-net-cilium.yml)
   addon:kube-proxy: [daemonset/kube-proxy]
   addon:coredns: [deployment/coredns]
   addon:nodelocaldns: [daemonset/nodelocaldns]

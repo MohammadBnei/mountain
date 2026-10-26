@@ -32,7 +32,7 @@ func TestWatchNeeds(t *testing.T) {
 	write("infra-bootstrap", "gitops/bootstrap/authentik-blueprint-x.yaml", "entries:\n  - attrs:\n      redirect_uris:\n        - url: https://x.example/callback\n")
 	write("infra-bootstrap", "gitops/bootstrap/gate-forwardauth-middleware.yaml", "kind: Middleware\nmetadata:\n  name: gate-forwardauth\n")
 	write("other", "helm/values.yaml.extra.yaml", "ingress:\n  middlewares:\n    - name: gate-forwardauth\n")
-	write("infra-bootstrap", "gitops/platform/values/vault/values.yaml", "infisical:\n  projectSlug: v\n# endpoint: s3.bnei.dev\n")
+	write("infra-bootstrap", "gitops/platform/values/vault/values.yaml", "infisical:\n  enabled: true\n  projectSlug: v\n# endpoint: s3.bnei.dev\nother: x # s3.bnei.dev in a trailing comment\n")
 	write("infra-bootstrap", "pigsty/pigsty.yml", "all:\n  children:\n    pg-proxmox:\n      vars:\n        pg_cluster: pg-proxmox\n        pg_databases:\n          - { name: xdb, owner: dbuser_secret }\n")
 
 	rl, err := realms.Parse([]byte(`realms: [infra, code]
@@ -108,12 +108,12 @@ needs:
 	var edges []string
 	for _, e := range g.Edges {
 		if e.Kind == EdgeNeeds {
-			edges = append(edges, e.From+">"+e.To+" "+e.Attrs["via"]+" "+e.Attrs["checked"])
+			edges = append(edges, e.From+">"+e.To+" "+e.Attrs["via"]+" "+e.Attrs["checked"]+" "+e.Attrs["db"])
 		}
 	}
-	// oidc and forwardauth both name authentik: one edge (the first); the two postgres rows: one edge, the first; an
-	// unproven row is still an edge, marked checked: no
-	if want := []string{"app:vault>ct:garage-storage s3 no", "app:x>app:platform-authentik oidc yes", "app:x>db:pg-proxmox postgres yes"}; !slices.Equal(edges, want) {
-		t.Errorf("needs edges: %v", edges)
+	// one edge per (from, to): oidc and forwardauth both name authentik; the two postgres rows join, checked the
+	// weakest (nodb is not a database); an unproven row is still an edge, marked checked: no
+	if want := []string{"app:vault>ct:garage-storage s3 no ", "app:x>app:platform-authentik oidc, forwardauth yes ", "app:x>db:pg-proxmox postgres, postgres no xdb, nodb"}; !slices.Equal(edges, want) {
+		t.Errorf("needs edges: %q", edges)
 	}
 }

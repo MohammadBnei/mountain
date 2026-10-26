@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"bytes"
 	"fmt"
 	"path"
 	"regexp"
@@ -49,7 +50,7 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 	for _, n := range g.Nodes {
 		has[n.ID] = true
 	}
-	files := yamlFiles(x, rl, has)
+	files := yamlFiles(x, rl, has, deployPaths(g))
 	var drift []graph.Drift
 	d := func(kind, subject, detail string, src graph.Source) {
 		drift = append(drift, graph.Drift{Kind: kind, Subject: subject, Detail: detail, Source: src})
@@ -129,7 +130,10 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 			routes[strings.TrimPrefix(e.From, graph.KindDNS+":")] = append(routes[strings.TrimPrefix(e.From, graph.KindDNS+":")], e.To)
 		}
 	}
-	middlewares := forwardAuthNames(files)
+	var useMW []*regexp.Regexp // a list item naming one of the forwardAuth middlewares
+	for _, mw := range forwardAuthNames(files) {
+		useMW = append(useMW, regexp.MustCompile(`(?m)^\s*-?\s*name:\s*["']?`+regexp.QuoteMeta(mw)+`["']?\s*$`))
+	}
 	for _, f := range files {
 		if strings.HasPrefix(f.path, "gitops/bootstrap/authentik-blueprint-") {
 			for _, m := range urlHost.FindAllSubmatch(f.b, -1) {
@@ -142,8 +146,8 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 			continue
 		}
 		code := uncommented(f.b)
-		for _, mw := range middlewares {
-			if regexp.MustCompile(`(?m)^\s*-?\s*name:\s*["']?` + regexp.QuoteMeta(mw) + `["']?\s*$`).MatchString(code) {
+		for _, re := range useMW {
+			if re.MatchString(code) {
 				found("forwardauth", f.app, f.src)
 			}
 		}
@@ -151,8 +155,8 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 			found("s3", f.app, f.src)
 		}
 		var top map[string]any
-		if yaml.Unmarshal(f.b, &top) == nil {
-			if inf, ok := top["infisical"].(map[string]any); ok && inf["enabled"] != false {
+		if yaml.Unmarshal(f.b, &top) == nil { // the first document: a values file has one
+			if inf, ok := top["infisical"].(map[string]any); ok && inf["enabled"] == true { // the chart's default is off
 				found("infisical", f.app, f.src)
 			}
 		}
@@ -202,21 +206,74 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 			}
 		}
 	}
-	// a needs edge may repeat (oidc and forwardauth both name authentik): keep the first per (from, to)
-	seen := map[string]bool{}
-	edges = slices.DeleteFunc(edges, func(e graph.Edge) bool { k := e.From + ">" + e.To; dup := seen[k]; seen[k] = true; return dup })
+	// a needs edge may repeat (oidc and forwardauth both name authentik, three databases on one cluster): one edge
+	// per (from, to), its via and databases joined, checked the weakest of its rows (no < declared < yes)
+	rank := map[string]int{"no": 0, "declared": 1, "yes": 2}
+	at := map[string]int{}
+	var merged []graph.Edge
+	for _, e := range edges {
+		k := e.From + ">" + e.To
+		i, ok := at[k]
+		if !ok {
+			at[k] = len(merged)
+			merged = append(merged, e)
+			continue
+		}
+		m := merged[i].Attrs
+		m["via"] += ", " + e.Attrs["via"]
+		if e.Attrs["db"] != "" {
+			m["db"] = strings.TrimPrefix(m["db"]+", "+e.Attrs["db"], ", ")
+		}
+		if rank[e.Attrs["checked"]] < rank[m["checked"]] {
+			m["checked"] = e.Attrs["checked"]
+		}
+	}
+	edges = merged
 	g.Merge(graph.Graph{Edges: edges, Drift: drift}) // both ends checked above: cannot fail
 }
 
-// yamlFiles is every YAML file of the sources, minus the vendored directories (pigsty's own tree, the submodules),
-// each with the app it belongs to.
-func yamlFiles(x *Ctx, rl *realms.Realms, has map[string]bool) []sourceFile {
+// deployPaths is repo -> path -> the app an ArgoCD Application deploys it for (its git edges' paths: a values file, a
+// chart directory). A path two apps deploy (the common chart) belongs to neither.
+func deployPaths(g *graph.Graph) map[string]map[string]string {
+	out := map[string]map[string]string{}
+	for _, e := range g.Edges {
+		// bootstrap (ADR-0021's self-sync) deploys every app's wiring (middlewares, secrets, blueprints): its files
+		// say nothing about bootstrap itself
+		if e.Kind != graph.EdgeGit || e.Attrs["paths"] == "" || e.From == "app:bootstrap" {
+			continue
+		}
+		repo := strings.TrimPrefix(e.To, graph.KindRepo+":")
+		if out[repo] == nil {
+			out[repo] = map[string]string{}
+		}
+		for _, p := range strings.Split(e.Attrs["paths"], ",") {
+			if p = strings.Trim(strings.TrimSpace(p), "/"); p == "" {
+				continue
+			}
+			if prev, ok := out[repo][p]; ok && prev != e.From {
+				out[repo][p] = "" // shared
+			} else {
+				out[repo][p] = e.From
+			}
+		}
+	}
+	return out
+}
+
+// skipDirs are directories never read: dependencies and test fixtures anywhere, and at a repo's root the vendored
+// trees and submodules (pigsty's own tree, kubespray, the agent-fleet and k8s-cluster submodules).
+func skipDir(rl *realms.Realms, repo, dir string) bool {
+	if base := path.Base(dir); base == "node_modules" || base == "testdata" || base == "vendor" {
+		return true
+	}
+	return slices.Contains(rl.Skip[repo], dir) || dir == "pigsty" || dir == "kubespray" || dir == "agent-fleet" || dir == "k8s-cluster"
+}
+
+// yamlFiles is every YAML file of the sources, minus the directories skipDir names, each with the app it belongs to.
+func yamlFiles(x *Ctx, rl *realms.Realms, has map[string]bool, deploys map[string]map[string]string) []sourceFile {
 	var out []sourceFile
 	for _, repo := range rl.Sources {
-		skip := rl.Skip[repo]
-		x.Walk(repo, func(dir string) bool {
-			return slices.Contains(skip, dir) || dir == "pigsty" || dir == "kubespray" || dir == "agent-fleet" || dir == "k8s-cluster" || dir == "node_modules"
-		}, func(p string, size int64) error {
+		x.Walk(repo, func(dir string) bool { return skipDir(rl, repo, dir) }, func(p string, size int64) error {
 			if ext := path.Ext(p); (ext != ".yaml" && ext != ".yml") || size > 1<<20 {
 				return nil
 			}
@@ -224,16 +281,26 @@ func yamlFiles(x *Ctx, rl *realms.Realms, has map[string]bool) []sourceFile {
 			if err != nil {
 				return nil
 			}
-			out = append(out, sourceFile{repo: repo, path: p, app: fileApp(rl, has, repo, p), b: b, src: src})
+			out = append(out, sourceFile{repo: repo, path: p, app: fileApp(rl, has, deploys, repo, p), b: b, src: src})
 			return nil
 		})
 	}
 	return out
 }
 
-// fileApp is the app a source file belongs to: the component realms.yaml gives its path, else for infra-bootstrap's
-// per-app values (gitops/platform/values/<x>/) the app named <x> or platform-<x>, and the redirectors' files.
-func fileApp(rl *realms.Realms, has map[string]bool, repo, p string) string {
+// fileApp is the app a source file belongs to: the app an Application deploys it for (its git edge's paths, the
+// longest match), else the component realms.yaml gives its path, else for infra-bootstrap's per-app values
+// (gitops/platform/values/<x>/) the app named <x> or platform-<x>, and the redirectors' files.
+func fileApp(rl *realms.Realms, has map[string]bool, deploys map[string]map[string]string, repo, p string) string {
+	best, n := "", 0
+	for prefix, app := range deploys[repo] {
+		if (p == prefix || strings.HasPrefix(p, prefix+"/")) && len(prefix) > n {
+			best, n = app, len(prefix)
+		}
+	}
+	if n > 0 {
+		return best // "" when two apps deploy it
+	}
 	if id := rl.Owner(repo, p); id != "" {
 		return id
 	}
@@ -257,10 +324,6 @@ func fileApp(rl *realms.Realms, has map[string]bool, repo, p string) string {
 // grafanaRules is the uids of the Grafana alert rules in a YAML file: any list under a `rules` key whose items have a
 // uid and a title (Grafana's provisioning, and common-app-chart's logAlerts). A file that isn't plain YAML has none.
 func grafanaRules(b []byte) []string {
-	var root any
-	if yaml.Unmarshal(b, &root) != nil {
-		return nil
-	}
 	var out []string
 	var walk func(v any, key string)
 	walk = func(v any, key string) {
@@ -282,7 +345,14 @@ func grafanaRules(b []byte) []string {
 			}
 		}
 	}
-	walk(root, "")
+	dec := yaml.NewDecoder(bytes.NewReader(b)) // every document of the file
+	for {
+		var root any
+		if dec.Decode(&root) != nil {
+			break
+		}
+		walk(root, "")
+	}
 	slices.Sort(out)
 	return out
 }
@@ -335,10 +405,14 @@ func pigstyDatabases(x *Ctx) map[string]bool {
 	return out
 }
 
-// uncommented is a YAML file without its comment lines, so prose about a middleware or an endpoint isn't evidence.
+// uncommented is a YAML file without its comments (whole lines, and the rest of a line after " #"), so prose about a
+// middleware or an endpoint isn't evidence.
 func uncommented(b []byte) string {
 	var out []string
 	for _, l := range strings.Split(string(b), "\n") {
+		if i := strings.Index(l, " #"); i >= 0 {
+			l = l[:i]
+		}
 		if t := strings.TrimSpace(l); t != "" && !strings.HasPrefix(t, "#") {
 			out = append(out, l)
 		}

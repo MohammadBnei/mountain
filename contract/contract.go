@@ -54,7 +54,8 @@ var Signals = map[string]Signal{
 	// the last 24 h per Application: 1 if it was Degraded at any time, else 0
 	"degradedday": {`max by (name) (max_over_time(argocd_app_info{health_status="Degraded"}[1d])) or 0 * max by (name) (argocd_app_info)`, 300},
 	// the add-ons' workloads (kubespray's, in kube-system and metallb-system): the share of each one's pods that are
-	// ready; an add-on's health is its least ready workload
+	// ready; an add-on's health is its least ready workload. An add-on installed into another namespace (a changed
+	// metallb_namespace) is not asked for, so it reads unknown: widen these selectors with it.
 	"dsready":     {`min by (namespace, daemonset) (kube_daemonset_status_number_ready{namespace=~"kube-system|metallb-system"} / kube_daemonset_status_desired_number_scheduled{namespace=~"kube-system|metallb-system"})`, 15},
 	"deployready": {`min by (namespace, deployment) (kube_deployment_status_replicas_available{namespace=~"kube-system|metallb-system"} / kube_deployment_spec_replicas{namespace=~"kube-system|metallb-system"})`, 15},
 	// running pods per k8s node (finished Jobs' pods left out): a house's population
