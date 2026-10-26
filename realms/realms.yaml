@@ -236,6 +236,30 @@ needs:
   app:argocd: ["declared:app:platform-authentik"] # native OIDC: its hostname has no route atlas sees
   app:platform-grafana: ["declared:app:platform-authentik"] # native OIDC: its hostname has no route atlas sees
 
+# The kit shapes each group's buildings ask for (plan/13 §1: a model is derived, never pinned). ukubi-kit tags its
+# variants with shapes (what a model looks like: catalog/shapes.yaml) and draws a building among the variants with a
+# shape it asks for, else the untagged ones. This mapping is ours, never the public kit's. A group with no row asks
+# for none: its buildings draw the untagged variants.
+shapes:
+  platform/storage: [pit]
+  platform/gpu: [mill]
+  platform/edge: [tower]
+  data/postgres: [tower, vault]
+  data/redis: [vault]
+  data/s3: [yard]
+  data/nfs: [yard]
+  operations/delivery: [bay]
+  operations/build: [bay]
+  operations/observability: [tower]
+  operations/events: [yard]
+  guard/authentik: [gate]
+  guard/secrets: [vault]
+  guard/mesh: [tower]
+  fleet/cluster-access: [rig]
+  fleet/hermes: [mill]
+  apps/sites: [wide]
+  apps/ai: [tower]
+
 # Walls on the doors (plan/13 §3 Defence, owner 2026-10-26): what the sources can't show of a hostname's gate. The
 # gates atlas reads itself need no row (a forwardAuth middleware on the route, a forward_single provider for the host,
 # an OIDC redirect URL). A row says: public (meant for everyone), own (the app authenticates its own callers), or a

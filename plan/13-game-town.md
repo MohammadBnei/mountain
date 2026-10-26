@@ -363,7 +363,12 @@ later, as one more source feeding the same catalog and review.
        moved pgweb and Alertmanager behind their own forwardAuth gates (owner: "move all old forward Auth to the new
        one"). Gaps: doors come only from ApplicationSet hostnames, so bootstrap and redirector routes (Alertmanager,
        ArgoCD, Grafana, hermes, Proxmox) have no door yet; ukubi-stt and dev.api.voconsteroid.com read open;
-     - **A7d2:** derived models (above).
+     - **A7d2 (owner, 2026-10-26: shapes, mapped privately):** ukubi-kit tags variants with **shapes** (what a model
+       looks like: tower, gate, yard, vault, mill, bay, rig, pit, wide) and draws a building among the variants with a
+       shape it asks for, else the untagged ones, else all (`PickFor`). atlas maps each group to the shapes its
+       buildings ask for (`realms.yaml` `shapes:`, ours, never the public kit's) as the `shapes` attribute, and marks a
+       **landmark** (5 reviewed dependents, or 3 parts: Postgres, authentik, Infisical, the provisioner), which the
+       world draws larger, never a model of its own. A model changes only when a building's group or size class does.
 
    Its full scope:
    - the realms reshaped into civs, `function`, the folds, `needs:` rows, `walls:` rows;

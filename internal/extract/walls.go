@@ -234,3 +234,37 @@ func walls(x *Ctx, rl *realms.Realms, files []sourceFile, fa []string, g *graph.
 	}
 	return drift
 }
+
+// landmark is how many reviewed things must lean on a building (checked needs edges) or be its parts for it to be a
+// landmark: drawn larger by the world (plan/13 §1), never by a model of its own.
+const landmarkDependents, landmarkParts = 5, 3
+
+// modelFacts writes the facts the game derives a building's model from: its group's shapes (realms.yaml shapes:)
+// and landmark. Called once the needs edges are in.
+func modelFacts(rl *realms.Realms, g *graph.Graph) {
+	deps, parts := map[string]int{}, map[string]int{}
+	for _, e := range g.Edges {
+		if e.Kind == EdgeNeeds && e.Attrs["checked"] != "no" {
+			deps[e.To]++
+		}
+	}
+	for _, n := range g.Nodes {
+		if n.Parent != "" {
+			parts[n.Parent]++
+		}
+	}
+	for i, n := range g.Nodes {
+		set := func(k, v string) {
+			if g.Nodes[i].Attrs == nil {
+				g.Nodes[i].Attrs = map[string]string{}
+			}
+			g.Nodes[i].Attrs[k] = v
+		}
+		if s := rl.Shapes[n.Realm+"/"+n.Group]; len(s) > 0 && n.Parent == "" {
+			set("shapes", strings.Join(s, ", "))
+		}
+		if deps[n.ID] >= landmarkDependents || parts[n.ID] >= landmarkParts {
+			set("landmark", "true")
+		}
+	}
+}
