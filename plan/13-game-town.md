@@ -489,8 +489,19 @@ later, as one more source feeding the same catalog and review.
        foundations or rising with atlas's health on them; the sim mirrors a new app's arrival (`app.new`: Missing,
        then Progressing, then Healthy); wonders on the centre's ring, opened, finished and dropped in the panels, the
        kit's monument when standing; `goal.closed(done)` records its rule, for slice 5's tightening;
-   - **4e, off loopback:** the town page's CSP, and the game client's admins-only gate with its machine credential for
-     atlas (`atlas-game`); until then the real world runs a local `atlas --dev` against port-forwarded sources.
+   - **4e, off loopback,** in two PRs:
+     - **4e1, the machine credential (built: mountain #46, ukubi-game #17; infra-bootstrap #377, ADR-0068, open until
+       its Infisical key exists):**
+       - atlas admits `atlas-game` on `GET /api/graph` and `GET /ws` only. The token is a 10-minute
+         `client_credentials` token from the `atlas-api` provider, checked offline against a pinned certificate.
+       - The game grants it, sends it to atlas only, and hands its socket over before the token lapses;
+     - **4e2, the game's own lock (built: ukubi-game #18, ukubi-kit #5):**
+       - atlas's sign-in, ported: `platform-admins` only, on every route but the sign-in's. `--dev` is the loopback
+         open mode, and with neither mode the game refuses to start.
+       - The CSP matches atlas's, and no kit model carries an embedded image.
+       - Every admin plays as the one `--actor`.
+       - Deploying the game is the owner's to decide: its image, its hostname, its OIDC app and whether a forwardAuth
+         gate fronts it. Until then the real world runs a local `atlas --dev` against port-forwarded sources.
 5. **The age**, once every signal from slice 2 is live and `goal.closed(done)` is tightened.
 
 ## Open questions (owner)
