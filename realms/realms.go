@@ -39,7 +39,13 @@ type Realms struct {
 	General      Watch                `yaml:"general"`   // the rules that watch every building at once
 	Needs        map[string][]string  `yaml:"needs"`     // node -> what it depends on, each with its evidence (Need)
 	Addons       map[string][]string  `yaml:"addons"`    // addon node -> its workloads: daemonset/<n>, deployment/<n>, static
+	Walls        map[string][]string  `yaml:"walls"`     // door (dns:<host>) -> what the sources can't show of its gate (WallKinds)
 }
+
+// WallKinds are what a walls row may say of a door: a mark (public: meant for everyone; own: the app authenticates
+// its own callers), or a gate declared because it lives in a repo atlas does not read (forwardauth: the whole host;
+// forwardauth-path: a part of it; oidc: its login goes through authentik).
+var WallKinds = []string{"public", "own", "forwardauth", "forwardauth-path", "oidc"}
 
 // Watch is the alert rules on a node, by where they are evaluated: prometheus (an alerting rule: it reaches
 // Alertmanager and ALERTS, so atlas and the sim see it fire) or grafana (Grafana's own rules: they notify, but nothing
@@ -189,6 +195,19 @@ func Parse(b []byte) (*Realms, error) {
 			if _, ok := r.Components[n.On]; !ok || n.On == id {
 				return nil, fmt.Errorf("realms.yaml: needs %s: %s is not another listed component", id, n.On)
 			}
+		}
+	}
+	for id, list := range r.Walls {
+		if !strings.HasPrefix(id, "dns:") {
+			return nil, fmt.Errorf("realms.yaml: walls %s is not a door (dns:<host>)", id)
+		}
+		for _, k := range list {
+			if !slices.Contains(WallKinds, k) {
+				return nil, fmt.Errorf("realms.yaml: walls %s: %q is not one of %v", id, k, WallKinds)
+			}
+		}
+		if slices.Contains(list, "public") && slices.Contains(list, "own") {
+			return nil, fmt.Errorf("realms.yaml: walls %s: public and own both", id)
 		}
 	}
 	for id, wl := range r.Addons {

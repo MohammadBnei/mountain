@@ -45,7 +45,10 @@ and the sim mirrors (or, for what we own, runs) every signal the game uses.
   rim, where outside traffic enters; the game draws them as doors.
 - **`function` is its own field** in `realms.yaml`, set per group and overridable per element. It says what a building
   does in play, which is separate from its civ: blackbox is in the Operations civ and works as a watchtower.
-- **The component → kit-model mapping** (`model:`) lives in `realms.yaml` too. ukubi-kit holds no component names.
+- **A building's model is derived, never pinned** (owner, 2026-10-26: "a system, so we can derive instead of
+  pinning"; this replaces a `model:` field in `realms.yaml`). The game reads a building's static facts from atlas's graph
+  (its doors, its parts, what depends on it) and the kit tags its variants with generic traits; the facts choose among
+  the eligible variants. ukubi-kit holds no component names. Its design (A7d2) has its own plan and doubt cycle.
 - An element with no civ or function is drift. Hostnames and ADRs are never placed.
 
 **Functions** (AoE-like, not the same):
@@ -144,8 +147,14 @@ and the sim mirrors (or, for what we own, runs) every signal the game uses.
   is open question 6.
 - **Watchtowers:** a covered building sees raiders at the warning rung. An uncovered one first sees them when the
   damage shows (Degraded, NotReady).
-- **Walls come from Guard:** buildings behind authentik or the mesh get walls and gates. A `public: true` mark in
-  `realms.yaml` keeps the blog and the wedding site from reading as unguarded.
+- **Walls come from Guard** (owner, 2026-10-26), on the **doors** (a hostname routing to an app), summed on the app:
+  - a **wall** is forwardAuth on the whole host: nothing reaches the app before authentik;
+  - a **gate** is an OIDC login through authentik, or forwardAuth on part of the host (`forwardauth-path`);
+  - two marks in `realms.yaml` `walls:` rows: **public** (meant for everyone: the blog, the wedding site, ADR-0039's
+    Public tier) and **own** (the app authenticates its own callers: Ente, the bridge's signed webhook);
+  - a door with none of them reads **open**: a finding, shown, not drift;
+  - a machine enrolled in NetBird is a **mesh peer**; it becomes a mesh wall at ADR-0055's cutover, when its sshd
+    stops answering on the LAN.
 - **Weapons fight back:** answering an incident sends a unit out, on a live session only (Units).
 
 **Research is real research (owner).**
@@ -311,7 +320,7 @@ later, as one more source feeding the same catalog and review.
   - named players and watchers stay parked.
 - **mountain (atlas):**
   - the realms reshaped into civs;
-  - the `function` and `model:` fields;
+  - the `function` field (models are derived, §1);
   - the folds and `needs:` rows;
   - the extractors (slice 1);
   - the town centre's machine-credential route.
@@ -346,10 +355,18 @@ later, as one more source feeding the same catalog and review.
      passwords. pg01, pg02 and the witness are parts of `db:pg-proxmox`;
    - **A7c:** coverage and `needs:` rows moved into slice 2 (owner, 2026-10-26: "the same topic": they are the
      static half of its real rule names and correlated failures);
-   - **A7d (before slice 4):** walls, `public: true`, `model:`, and the fleet services' parents.
+   - **A7d (before slice 4):**
+     - **A7d1 (built):** walls on the doors, read from the sources (a forwardAuth middleware on a values file's host or
+       on an IngressRoute route, a `forward_single` provider's host, an OIDC redirect host), `walls:` rows for the
+       marks and the gates atlas can't read, `mesh: peer` from the NetBird inventory's keys; the fleet's session-pod
+       containers are the provisioner's parts and the executor thot's (Fleet draws 4 buildings). infra-bootstrap #375
+       moved pgweb and Alertmanager behind their own forwardAuth gates (owner: "move all old forward Auth to the new
+       one"). Gaps: doors come only from ApplicationSet hostnames, so bootstrap and redirector routes (Alertmanager,
+       ArgoCD, Grafana, hermes, Proxmox) have no door yet; ukubi-stt and dev.api.voconsteroid.com read open;
+     - **A7d2:** derived models (above).
 
    Its full scope:
-   - the realms reshaped into civs, `function`, `model:`, the folds, `needs:` rows, `public: true`;
+   - the realms reshaped into civs, `function`, the folds, `needs:` rows, `walls:` rows;
    - ukubi-game added to `sources`;
    - extractors, reading allowlisted fields only and keeping the never-draw list:
      - **kubespray** (`addons.yml`, `k8s-cluster.yml`, `k8s-net-cilium.yml`): Cilium, CoreDNS, nodelocaldns,
@@ -378,7 +395,7 @@ later, as one more source feeding the same catalog and review.
    - **S2b (ukubi-game, with small mountain PRs for the default rules at the chart's pinned version):**
      - **S2b1 (built: ukubi-game #7):** the mirrors of every signal. A day window integrates the full 24 h of the pure
        world (a restart answers the same day), and a Prometheus gap is skipped where the real `*_over_time` would.
-     - **S2b2:** real rule names with their real severities, `for:` and label shapes only; correlated failures along
+     - **S2b2 (built: mountain #39, ukubi-game #8, #9):** real rule names with their real severities, `for:` and label shapes only; correlated failures along
        `needs:` (a supplier down raises its dependents' errors and latency, never marks them Degraded), derived purely,
        never logged. mountain carries each default rule's severity and `for:` (`contract.DefaultRules`) and each
        watched rule's (`watch-rules`), and places a watched rule's alert on its one watchtower.
@@ -410,7 +427,7 @@ later, as one more source feeding the same catalog and review.
      - the age as a preview.
    - The gate measures the map and every district on both tiers.
    - Open:
-     - Fleet draws 7 buildings, not 4: atlas leaves the sidecar, worker and executor services unparented (A7c);
+     - Fleet drew 7 buildings, not 4, while atlas left the sidecar, worker and executor unparented (fixed in A7d1);
      - the town page needs a CSP before slice 4 takes it off loopback.
 4. **The live town:**
    - placement, districts, zoom levels;
