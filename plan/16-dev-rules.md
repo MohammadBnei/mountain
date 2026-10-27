@@ -36,8 +36,9 @@ Every non-trivial change (any feature or refactor, or a fix that crosses a modul
 
 ## 2. Planning
 - **Check every fact against the code before writing it.** Plans have said tests swapped `liveEvery` (they only read
-  it), that atlas spoke Connect's error body (it has no Connect dependency), three@0.186.0 (vendored: 0.186.1), and
-  "a status check" in a client that checks no HTTP status (the atlas live seams' doubt cycle).
+  it; mountain #51), that atlas spoke Connect's error body (it has no Connect dependency), three@0.186.0 (vendored:
+  0.186.1; game #31), and "a status check" in a client that checks no HTTP status (plan/15 step 5's first doubt
+  cycle).
 - **"Behaviour unchanged" and "tests unedited" are claims to prove, not defaults.** List every test the change
   edits, with what each edit touches. A refactor may edit a test's setup, package clauses, imports and renamed
   identifiers, each listed in the PR; never an assertion (plan/15's "unedited" means this). If the design can't keep
@@ -113,7 +114,7 @@ Every non-trivial change (any feature or refactor, or a fix that crosses a modul
   yourself, in one written-down order (ukubi-kit #6).
 - **Math is the platform's.** Bun calls the host's libm, Node ships its own. Only quantization hides the
   difference, so CI checks dist under each engine on Linux and macOS.
-- **Bundlers change code (Bun 1.4):**
+- **Bun 1.4 (the bundler and the CLI):**
   - `const`/`let` become `var` (TDZ errors disappear);
   - tree-shaking shifts three.js object ids;
   - `--chunk-naming '[name].[ext]'` fails the build when a chunk and an entry share a name (keep `[hash]`);
