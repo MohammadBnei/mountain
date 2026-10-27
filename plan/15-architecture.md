@@ -238,6 +238,20 @@ These already follow the standard:
    - `Classify` as a map of classifiers;
    - `realms` checks as a list;
    - access as a `Gate`.
+
+   These refactors don't wait for the extraction: they change no exported API (`contract.Classify`'s signature and
+   results are unchanged, and ukubi-game's suite and integration test pass against it), and the seams give the later
+   error model one place to go (an unavailable source is one client's error). **Started** (2026-10-27):
+   - `Classify` is a registry of classifiers (`contract`), one per measurable kind, so the list of measurable kinds
+     is no longer kept twice;
+   - atlas's two live sources sit behind `promAPI` and `alertsAPI`, built in `main`, and the Prometheus join is an
+     ordered list of joiners. The joiners carry no version: the live frame is never stored, so there is nowhere to
+     record one (§2's "wherever the output is stored").
+   
+   Each seam's contract suite runs the real client against a local server answering in the API's wire format
+   (hand-written bodies, not recordings), and a map fake. §1's other two legs are missing: the recorded leg waits for
+   a reachable cluster, as the game's `AlertSource` does, and the sim's mirror lives in ukubi-game, which imports
+   this module, so its leg is ukubi-game's integration test (the real atlas against the mirror), not the same cases.
 6. **The sim:**
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;
