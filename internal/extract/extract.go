@@ -35,7 +35,7 @@ type Track struct {
 type Result struct {
 	Graph    graph.Graph
 	Tracked  []Track
-	Versions map[string]int // extractor -> version (a stored projection records them)
+	Versions map[string]int // extractor -> version, "pass:<name>" -> version, "realms" -> its digest (a stored projection records them)
 	Skipped  []string       // extractors whose repos were missing
 }
 
@@ -161,24 +161,51 @@ func Run(repos Repos, rl *realms.Realms, exs []Extractor) (Result, error) {
 		members = append(members, x.members...)
 		res.Versions[ex.Name] = ex.Version
 	}
-	var x Ctx
-	declare(&x, repos, rl, res.Graph)
-	repoNodes(&x, repos, res.Graph)
-	if err := res.Graph.Merge(x.g); err != nil {
-		return res, err
+	for _, p := range passes() {
+		x := &Ctx{Repos: repos, Realms: rl, track: track, members: members}
+		if err := p.run(x, &res.Graph); err != nil {
+			return res, fmt.Errorf("pass %s: %w", p.name, err)
+		}
+		if err := res.Graph.Merge(x.g); err != nil {
+			return res, fmt.Errorf("pass %s: %w", p.name, err)
+		}
+		res.Versions["pass:"+p.name] = p.version
 	}
-	if err := res.Graph.Merge(resolve(res.Graph, members)); err != nil {
-		return res, err
-	}
-	rehome(&res.Graph)
-	place(&res.Graph, rl)
-	watchNeeds(repos, rl, &res.Graph)
+	res.Versions["realms"] = rl.Digest
 	for t := range track {
 		res.Tracked = append(res.Tracked, t)
 	}
-	res.Graph.Merge(graph.Graph{Drift: branchDrift(repos, track)}) // drift only: cannot fail
 	slices.SortFunc(res.Tracked, func(a, b Track) int { return cmp.Or(cmp.Compare(a.Repo, b.Repo), cmp.Compare(a.Branch, b.Branch)) })
 	return res, res.Graph.Check()
+}
+
+// pass is one step over the merged graph, after the extractors. Its version is recorded in Result.Versions as
+// "pass:<name>", so a stored projection names the logic that made it: bump it when the pass's output changes. It
+// adds through x (merged after it runs) or changes g in place; x carries the run's sources, realms.yaml, the
+// extractors' tracked branches and their Member edges.
+type pass struct {
+	name    string
+	version int
+	run     func(x *Ctx, g *graph.Graph) error
+}
+
+// passes are run in this order, each on what the ones before it made:
+//   - declare and repoNodes add the svc components realms.yaml lists and the repo nodes;
+//   - resolve keeps the Member edges whose ends are both nodes, so it needs every node;
+//   - rehome moves governs edges onto a node that exists, before place reads the edges;
+//   - place gives every component its realm and group (and the repos theirs, from what they feed);
+//   - watch adds the watch, needs and walls rows and the model facts (watch.go and walls.go, which share its files);
+//   - branchDrift reports a checkout on a branch ArgoCD does not deploy.
+func passes() []pass {
+	return []pass{
+		{"declare", 1, func(x *Ctx, g *graph.Graph) error { declare(x, x.Repos, x.Realms, *g); return nil }},
+		{"repoNodes", 1, func(x *Ctx, g *graph.Graph) error { repoNodes(x, x.Repos, *g); return nil }},
+		{"resolve", 1, func(x *Ctx, g *graph.Graph) error { return g.Merge(resolve(*g, x.members)) }},
+		{"rehome", 1, func(_ *Ctx, g *graph.Graph) error { rehome(g); return nil }},
+		{"place", 1, func(x *Ctx, g *graph.Graph) error { place(g, x.Realms); return nil }},
+		{"watch", 1, func(x *Ctx, g *graph.Graph) error { watchNeeds(x.Repos, x.Realms, g); return nil }},
+		{"branchDrift", 1, func(x *Ctx, g *graph.Graph) error { return g.Merge(graph.Graph{Drift: branchDrift(x.Repos, x.track)}) }},
+	}
 }
 
 // branchDrift reports a checkout that is not on a branch ArgoCD deploys from: atlas would be projecting work in

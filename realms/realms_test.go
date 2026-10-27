@@ -1,6 +1,9 @@
 package realms
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestEmbedded(t *testing.T) {
 	r, err := Load()
@@ -118,5 +121,21 @@ func TestWallsRows(t *testing.T) {
 		if _, err := Parse([]byte(base + bad)); err == nil {
 			t.Errorf("accepted %q", bad)
 		}
+	}
+}
+
+// TestDigest: the digest is the file's: the same bytes give the same one, a changed byte another.
+func TestDigest(t *testing.T) {
+	a, err := Parse(embedded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := Parse(embedded)
+	c, err := Parse(append(slices.Clone(embedded), []byte("\n# a comment\n")...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Digest == 0 || a.Digest != b.Digest || a.Digest == c.Digest {
+		t.Errorf("digests %d %d %d", a.Digest, b.Digest, c.Digest)
 	}
 }

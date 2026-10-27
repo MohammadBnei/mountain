@@ -1,0 +1,870 @@
+{
+ "Graph": {
+  "nodes": [
+   {
+    "id": "addon:cilium",
+    "kind": "addon",
+    "realm": "platform",
+    "group": "network",
+    "function": "utility",
+    "attrs": {
+     "encryption": "wireguard",
+     "hubble": "true",
+     "into": "kube-system"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "inventory/ukubi/group_vars/k8s_cluster/k8s-cluster.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "addon:coredns",
+    "kind": "addon",
+    "realm": "platform",
+    "group": "network",
+    "function": "utility",
+    "attrs": {
+     "into": "kube-system"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "inventory/ukubi/group_vars/k8s_cluster/k8s-cluster.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "addon:kube-proxy",
+    "kind": "addon",
+    "realm": "platform",
+    "group": "network",
+    "function": "utility",
+    "attrs": {
+     "into": "kube-system",
+     "mode": "ipvs"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "inventory/ukubi/group_vars/k8s_cluster/k8s-cluster.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "addon:kube-vip",
+    "kind": "addon",
+    "realm": "platform",
+    "group": "network",
+    "function": "utility",
+    "attrs": {
+     "into": "kube-system",
+     "role": "control-plane"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "inventory/ukubi/group_vars/k8s_cluster/addons.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "addon:metallb",
+    "kind": "addon",
+    "realm": "platform",
+    "group": "network",
+    "function": "utility",
+    "attrs": {
+     "into": "metallb-system"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "inventory/ukubi/group_vars/k8s_cluster/addons.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "addon:nodelocaldns",
+    "kind": "addon",
+    "realm": "platform",
+    "group": "network",
+    "function": "utility",
+    "attrs": {
+     "into": "kube-system"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "inventory/ukubi/group_vars/k8s_cluster/k8s-cluster.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "adr:infra-bootstrap/0001",
+    "kind": "adr",
+    "attrs": {
+     "number": "0001",
+     "repo": "infra-bootstrap",
+     "status": "Accepted",
+     "title": "The first decision"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "docs/adr/0001-first.md",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "adr:infra-bootstrap/0002",
+    "kind": "adr",
+    "attrs": {
+     "number": "0002",
+     "repo": "infra-bootstrap",
+     "status": "Superseded",
+     "title": "The second one"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "docs/adr/0002-second.md",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "app:ghost",
+    "kind": "app",
+    "attrs": {
+     "namespace": "ghost"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "app:platform-authentik",
+    "kind": "app",
+    "realm": "guard",
+    "group": "authentik",
+    "function": "defence",
+    "attrs": {
+     "chart": "https://charts.goauthentik.io/authentik@2026.8.4",
+     "namespace": "authentik"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/platform.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "app:platform-second",
+    "kind": "app",
+    "realm": "fleet",
+    "group": "cluster-access",
+    "function": "trade",
+    "attrs": {
+     "namespace": "second"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/some-secret.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "app:platform-thot",
+    "kind": "app",
+    "realm": "fleet",
+    "group": "cluster-access",
+    "function": "barracks",
+    "attrs": {
+     "namespace": "thot"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/thot-application.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "app:vos-monolith-dev",
+    "kind": "app",
+    "realm": "apps",
+    "group": "products",
+    "function": "product",
+    "attrs": {
+     "namespace": "vos-dev",
+     "open": "true"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "app:wird",
+    "kind": "app",
+    "realm": "apps",
+    "group": "products",
+    "function": "product",
+    "attrs": {
+     "namespace": "wird",
+     "open": "true"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "ct:build-runner",
+    "kind": "ct",
+    "realm": "operations",
+    "group": "build",
+    "function": "trade",
+    "attrs": {
+     "ip": "192.168.1.111",
+     "resource": "proxmox_virtual_environment_container.build_runner"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "terraform/guests.tf",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "db:pg-proxmox",
+    "kind": "db",
+    "realm": "data",
+    "group": "postgres",
+    "function": "economy",
+    "attrs": {
+     "engine": "postgres"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "pigsty/pigsty.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "db:redis-main",
+    "kind": "db",
+    "realm": "data",
+    "group": "redis",
+    "function": "economy",
+    "attrs": {
+     "engine": "redis"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "pigsty/pigsty.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "dns:dev.api.other.com",
+    "kind": "dns",
+    "attrs": {
+     "open": "true"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "dns:wird.bnei.dev",
+    "kind": "dns",
+    "attrs": {
+     "open": "true"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "host:bnei",
+    "kind": "host",
+    "realm": "platform",
+    "group": "hosts",
+    "function": "land",
+    "attrs": {
+     "ip": "192.168.1.165",
+     "island": "h1"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "ansible/playbooks/vars/bnei-lan-records.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "host:ex-laptop",
+    "kind": "host",
+    "realm": "platform",
+    "group": "hosts",
+    "function": "land",
+    "attrs": {
+     "ip": "192.168.1.161",
+     "island": "h3"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "ansible/playbooks/vars/bnei-lan-records.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "host:server1",
+    "kind": "host",
+    "realm": "platform",
+    "group": "hosts",
+    "function": "land",
+    "attrs": {
+     "ip": "192.168.1.200",
+     "island": "h2"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "ansible/playbooks/vars/bnei-lan-records.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "repo:ghost",
+    "kind": "repo",
+    "realm": "code",
+    "group": "own",
+    "function": "workshop",
+    "attrs": {
+     "url": "https://github.com/MohammadBnei/ghost"
+    },
+    "source": {
+     "repo": "ghost",
+     "path": ""
+    }
+   },
+   {
+    "id": "repo:infra-bootstrap",
+    "kind": "repo",
+    "realm": "code",
+    "group": "shared",
+    "function": "workshop",
+    "attrs": {
+     "url": "https://github.com/MohammadBnei/infra-bootstrap"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "repo:vos-monolith",
+    "kind": "repo",
+    "realm": "code",
+    "group": "apps",
+    "function": "workshop",
+    "attrs": {
+     "url": "https://github.com/MohammadBnei/vos-monolith"
+    },
+    "source": {
+     "repo": "vos-monolith",
+     "path": ""
+    }
+   },
+   {
+    "id": "repo:wird",
+    "kind": "repo",
+    "realm": "code",
+    "group": "apps",
+    "function": "workshop",
+    "attrs": {
+     "url": "https://github.com/MohammadBnei/wird"
+    },
+    "source": {
+     "repo": "wird",
+     "path": ""
+    }
+   },
+   {
+    "id": "vm:k8s-cp-01",
+    "kind": "vm",
+    "realm": "platform",
+    "group": "nodes",
+    "function": "houses",
+    "attrs": {
+     "ip": "192.168.1.201",
+     "k8s": "control-plane,etcd"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "inventory/ukubi/hosts.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "vm:k8s-worker-01",
+    "kind": "vm",
+    "realm": "platform",
+    "group": "nodes",
+    "function": "houses",
+    "attrs": {
+     "k8s": "worker"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "inventory/ukubi/hosts.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "vm:mystery",
+    "kind": "vm",
+    "attrs": {
+     "resource": "proxmox_virtual_environment_vm.mystery"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "terraform/guests.tf",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "vm:pg02",
+    "kind": "vm",
+    "realm": "data",
+    "group": "postgres",
+    "parent": "db:pg-proxmox",
+    "function": "economy",
+    "attrs": {
+     "ip": "192.168.1.207",
+     "resource": "proxmox_virtual_environment_vm.pg02"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "terraform/guests.tf",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   }
+  ],
+  "edges": [
+   {
+    "from": "adr:infra-bootstrap/0001",
+    "to": "adr:infra-bootstrap/0002",
+    "kind": "related",
+    "origin": "declared",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "docs/adr/0001-first.md",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "app:ghost",
+    "to": "repo:ghost",
+    "kind": "git",
+    "origin": "declared",
+    "attrs": {
+     "branch": "main",
+     "paths": "helm/values.yaml"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "app:ghost",
+    "to": "repo:infra-bootstrap",
+    "kind": "git",
+    "origin": "declared",
+    "attrs": {
+     "branch": "main",
+     "paths": "gitops/platform/common-app-chart"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "app:platform-authentik",
+    "to": "repo:infra-bootstrap",
+    "kind": "git",
+    "origin": "declared",
+    "attrs": {
+     "branch": "main",
+     "paths": "gitops/platform/values/authentik/values.yaml"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/platform.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "app:platform-second",
+    "to": "repo:infra-bootstrap",
+    "kind": "git",
+    "origin": "declared",
+    "attrs": {
+     "branch": "main",
+     "paths": "gitops/second"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/some-secret.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "app:platform-thot",
+    "to": "repo:infra-bootstrap",
+    "kind": "git",
+    "origin": "declared",
+    "attrs": {
+     "branch": "main",
+     "paths": "gitops/platform/thot"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/thot-application.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "app:vos-monolith-dev",
+    "to": "repo:infra-bootstrap",
+    "kind": "git",
+    "origin": "declared",
+    "attrs": {
+     "branch": "main",
+     "paths": "gitops/platform/common-app-chart"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "app:vos-monolith-dev",
+    "to": "repo:vos-monolith",
+    "kind": "git",
+    "origin": "declared",
+    "attrs": {
+     "branch": "dev",
+     "paths": "back/helm/values.yaml,back/helm/values-dev.yaml"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "app:wird",
+    "to": "repo:infra-bootstrap",
+    "kind": "git",
+    "origin": "declared",
+    "attrs": {
+     "branch": "main",
+     "paths": "gitops/platform/common-app-chart"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "app:wird",
+    "to": "repo:wird",
+    "kind": "git",
+    "origin": "declared",
+    "attrs": {
+     "branch": "main",
+     "paths": "helm/values.yaml"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "ct:build-runner",
+    "to": "host:server1",
+    "kind": "runs-on",
+    "origin": "declared",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "terraform/guests.tf",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "db:pg-proxmox",
+    "to": "vm:pg02",
+    "kind": "runs-on",
+    "origin": "declared",
+    "attrs": {
+     "as": "postgres,etcd"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "pigsty/pigsty.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "db:redis-main",
+    "to": "vm:pg02",
+    "kind": "runs-on",
+    "origin": "declared",
+    "attrs": {
+     "as": "redis"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "pigsty/pigsty.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "dns:dev.api.other.com",
+    "to": "app:vos-monolith-dev",
+    "kind": "route",
+    "origin": "declared",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "dns:wird.bnei.dev",
+    "to": "app:wird",
+    "kind": "route",
+    "origin": "declared",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "repo:infra-bootstrap",
+    "to": "adr:infra-bootstrap/0001",
+    "kind": "governs",
+    "origin": "declared",
+    "attrs": {
+     "count": "3"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "repo:infra-bootstrap",
+    "to": "adr:infra-bootstrap/0002",
+    "kind": "governs",
+    "origin": "declared",
+    "attrs": {
+     "count": "1"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "vm:k8s-cp-01",
+    "to": "host:bnei",
+    "kind": "runs-on",
+    "origin": "declared",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "inventory/ukubi/hosts.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "vm:pg02",
+    "to": "host:bnei",
+    "kind": "runs-on",
+    "origin": "declared",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "terraform/guests.tf",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   }
+  ],
+  "drift": [
+   {
+    "kind": "mirror",
+    "subject": "adr:infra-bootstrap/0002",
+    "detail": "not in docs/adr/README.md",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "docs/adr/0002-second.md",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "mirror",
+    "subject": "app:ghost",
+    "detail": "in apps.applicationset.yaml, not in the registry",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/apps/registry.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "mirror",
+    "subject": "app:vos-monolith-dev",
+    "detail": "registry namespace=vos-dev repo=vos-monolith branch=dev values=back/helm/values.yaml,back/helm/values-dev.yaml host=dev.api.example.com vs appset namespace=vos-dev repo=vos-monolith branch=dev values=back/helm/values.yaml,back/helm/values-dev.yaml host=dev.api.other.com",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/apps/registry.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "unassigned",
+    "subject": "app:ghost",
+    "detail": "not in realms.yaml",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/apps.applicationset.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "unassigned",
+    "subject": "vm:mystery",
+    "detail": "not in realms.yaml",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "terraform/guests.tf",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "unresolved",
+    "subject": "adr:infra-bootstrap/0003",
+    "detail": "in docs/adr/README.md, no file",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "docs/adr/README.md",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "unresolved",
+    "subject": "adr:infra-bootstrap/0099",
+    "detail": "cited 1 times from infra-bootstrap, no such ADR",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "unresolved",
+    "subject": "db:pg-proxmox",
+    "detail": "pigsty host 192.168.1.197 is not in ansible/playbooks/vars/bnei-lan-records.yml",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "pigsty/pigsty.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "unresolved",
+    "subject": "db:pg-proxmox",
+    "detail": "pigsty host 192.168.1.205 is not in ansible/playbooks/vars/bnei-lan-records.yml",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "pigsty/pigsty.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "unresolved",
+    "subject": "repo:infra-bootstrap",
+    "detail": "gitops/bootstrap/gitgen.applicationset.yml: ApplicationSet gitgen has a generator atlas cannot expand",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "gitops/bootstrap/gitgen.applicationset.yml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "unresolved",
+    "subject": "vm:k8s-worker-01",
+    "detail": "k8s node with no host in realms.yaml k8sPlacement",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "inventory/ukubi/hosts.yaml",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "unresolved",
+    "subject": "vm:mystery",
+    "detail": "node_name is not a literal or var.pve_node_name",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "terraform/guests.tf",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   }
+  ]
+ },
+ "Tracked": [
+  {
+   "repo": "ghost",
+   "branch": "main"
+  },
+  {
+   "repo": "infra-bootstrap",
+   "branch": "main"
+  },
+  {
+   "repo": "vos-monolith",
+   "branch": "dev"
+  },
+  {
+   "repo": "wird",
+   "branch": "main"
+  }
+ ],
+ "Versions": {
+  "adr": 1,
+  "gitops": 1,
+  "kubespray": 1,
+  "machines": 1,
+  "pass:branchDrift": 1,
+  "pass:declare": 1,
+  "pass:place": 1,
+  "pass:rehome": 1,
+  "pass:repoNodes": 1,
+  "pass:resolve": 1,
+  "pass:watch": 1,
+  "pigsty": 1,
+  "realms": 1115609892
+ },
+ "Skipped": null
+}
