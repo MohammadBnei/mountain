@@ -28,11 +28,15 @@ doesn't.
       Compare(ctx context.Context, repo, base, head string) (string, error)
   }
   ```
+- **A seam reads or commands, never both.** A source whose read also writes stays out of a registry of reads. The
+  fleet's tick dispatches steps, so it is not one of the game's need sources.
 - **Sources we own** (atlas, fleet core, the bridge) **get no fakes.** Tests run the real service, as the game's
   integration tests already run the real atlas. This keeps the game's rule: "never a fake of something we own".
 - **Sources we don't own** get **one contract suite per seam**, run against three implementations:
   1. **The real client, replaying golden responses recorded from the live cluster.** They are recorded with the
-     dev-pod skill and refreshed by a nightly live job whenever the self-hosted runner is up.
+     dev-pod skill and refreshed by a nightly live job whenever the self-hosted runner is up. A public service
+     needs no cluster: GitHub's leg is recorded from api.github.com, and its nightly live check runs on a
+     GitHub-hosted runner (ukubi-game `live.yml`).
   2. **The sim's mirror,** so the sim can never drift from what the real client expects.
   3. **A map fake,** for fast unit tests.
 - **Kubernetes:**
@@ -206,6 +210,16 @@ These already follow the standard:
    - the sim `Control` seam, which replaces two partial decoders and the scattered world checks;
    - the Forge and NeedSource seams;
    - then the console's slices (`14-console.md`).
+
+   **Done up to the console** (ukubi-game #21–#27, 2026-10-27):
+   - `internal/` (gate, play, control), the error model and the one Config per binary;
+   - the upgrade check and the session id;
+   - `simctl`, the game's one client of the sim, behind a `Control` each consumer owns;
+   - `game.Forge`, its contract on the recorded GitHub leg, the sim's mirror and a map, with a nightly live check;
+   - the need sources as a registry, and `game.AlertSource`. Its contract runs on the mirror and a map, and its
+     recorded leg waits for a reachable cluster to record from.
+
+   The console's slices are next. C1's Kubernetes reads need the same recorded leg, so C1 waits for the cluster too.
 4. **The front end:**
    - `town.js` into registries;
    - Bun and TypeScript;
