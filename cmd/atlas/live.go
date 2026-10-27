@@ -363,8 +363,9 @@ func (p *promPoll) signals(ctx context.Context, now time.Time) {
 // ---- the joins: one poll's answers onto the graph's nodes
 
 // join is one poll's answers (contract.Queries' and the signals' last), the graph they land on, and what the
-// joiners make of them. apps, ready, probes and land are always set (the frame says {} for none); probeDay, pods,
-// addons and day stay nil while their signals are unknown (absent from the frame, never a zero).
+// joiners make of them. apps, ready, probes and land are always set (the frame says {} for none). probeDay and pods
+// stay nil while their signal is unknown, addons while both of its are, and day while either of its is: absent
+// from the frame, never a zero.
 type join struct {
 	r   map[string][]sample
 	sig map[string]signalAnswer
@@ -390,7 +391,8 @@ type joiner struct {
 	run  func(j *join)
 }
 
-// joiners is the join, in order: rps and appsignals add to the apps that apps found.
+// joiners is the join, in order: rps adds to the apps that apps found (and may add one ArgoCD didn't report),
+// and appsignals reads what both left.
 func joiners() []joiner {
 	return []joiner{
 		{"apps", joinApps},

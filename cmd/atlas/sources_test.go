@@ -1,9 +1,9 @@
 package main
 
 // The live overlay's two seams (plan/15 §1): one contract suite per seam, run on the real client against a local
-// server speaking the API's wire format, and on a map fake. Two legs of the standard's three are missing here, and
-// plan/15 step 5 records why: the recorded leg waits for a reachable cluster to record from, and the sim's mirror
-// lives in ukubi-game, which imports this module (its integration test runs the real atlas on the mirror).
+// server answering in the API's wire format (hand-written bodies), and on a map fake. §1's other two legs are
+// missing, and plan/15 step 5 records why: the recorded leg waits for a reachable cluster to record from, and the
+// sim's mirror lives in ukubi-game, which imports this module (its integration test runs the real atlas on it).
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -38,8 +37,8 @@ func queryName(q string) (string, bool) {
 	return "", false
 }
 
-// promMap is the map fake: each contract query's answer by name ([] when it has none); any other query is refused,
-// as the sim's mirror refuses it; err fails every query.
+// promMap is the map fake: each contract query's answer by name ([] when it has none), its NaN and ±Inf values
+// dropped as the seam promises; any other query is refused, as the sim's mirror refuses it; err fails every query.
 type promMap struct {
 	ans map[string][]sample
 	err error
@@ -53,10 +52,17 @@ func (m promMap) Query(_ context.Context, q string) ([]sample, error) {
 	case !ok:
 		return nil, fmt.Errorf("query %.40q: not a contract query", q)
 	}
-	return append([]sample{}, m.ans[name]...), nil
+	out := []sample{}
+	for _, x := range m.ans[name] {
+		if !math.IsNaN(x.V) && !math.IsInf(x.V, 0) {
+			out = append(out, x)
+		}
+	}
+	return out, nil
 }
 
-// promMapOf builds the fake from result JSON (name -> Prometheus vector), keeping only numbers, as the client does.
+// promMapOf builds the fake from result JSON (name -> Prometheus vector). A value that isn't a numeric string is
+// held as NaN, so the fake's own filter drops it.
 func promMapOf(t *testing.T, results map[string]string) promMap {
 	m := promMap{ans: map[string][]sample{}}
 	for name, res := range results {
@@ -70,9 +76,11 @@ func promMapOf(t *testing.T, results map[string]string) promMap {
 		m.ans[name] = []sample{}
 		for _, x := range r {
 			str, _ := x.Value[1].(string)
-			if v, err := strconv.ParseFloat(str, 64); err == nil && !math.IsNaN(v) && !math.IsInf(v, 0) {
-				m.ans[name] = append(m.ans[name], sample{x.Metric, v})
+			v, err := strconv.ParseFloat(str, 64)
+			if err != nil {
+				v = math.NaN()
 			}
+			m.ans[name] = append(m.ans[name], sample{x.Metric, v})
 		}
 	}
 	return m
@@ -167,9 +175,12 @@ func TestAlertsContract(t *testing.T) {
 		t.Cleanup(srv.Close)
 		return amHTTP{base: srv.URL, hc: srv.Client()}
 	}
-	b, _ := json.Marshal(firing)
+	// Alertmanager's v2 body, written by hand: its own key names, and fields atlas doesn't read
+	body := `[{"fingerprint":"a","startsAt":"2026-10-27T11:00:00Z","endsAt":"2026-10-27T12:00:00Z","updatedAt":"2026-10-27T11:00:05Z",
+		"status":{"state":"active","silencedBy":[],"inhibitedBy":[]},"receivers":[{"name":"discord"}],"generatorURL":"http://prometheus/graph",
+		"labels":{"alertname":"NodeDown"},"annotations":{"summary":"down"}}]`
 	legs := map[string]struct{ firing, none, failing alertsAPI }{
-		"http": {server(200, string(b)), server(200, "[]"), server(500, "boom")},
+		"http": {server(200, body), server(200, "[]"), server(500, "boom")},
 		"map":  {alertsMap{alerts: firing}, alertsMap{}, alertsMap{err: errors.New("down")}},
 	}
 	for leg, l := range legs {
@@ -190,15 +201,22 @@ func TestAlertsContract(t *testing.T) {
 	}
 }
 
-// TestJoinerOrder: the join's stages run in this order (rps and appsignals add to what apps found).
+// TestJoinerOrder: the join's stages run in this order, each name on its own function (rps adds to what apps
+// found, appsignals reads what both left).
 func TestJoinerOrder(t *testing.T) {
-	var names []string
-	for _, j := range joiners() {
-		names = append(names, j.name)
+	want := []joiner{{"apps", joinApps}, {"rps", joinRPS}, {"ready", joinReady}, {"probes", joinProbes}, {"land", joinLand},
+		{"appsignals", joinAppSignals}, {"probeday", joinProbeDay}, {"pods", joinPods}, {"addons", joinAddons}, {"day", joinDay}}
+	got := joiners()
+	same := len(got) == len(want)
+	for i := 0; same && i < len(got); i++ {
+		same = got[i].name == want[i].name && reflect.ValueOf(got[i].run).Pointer() == reflect.ValueOf(want[i].run).Pointer()
 	}
-	want := []string{"apps", "rps", "ready", "probes", "land", "appsignals", "probeday", "pods", "addons", "day"}
-	if !slices.Equal(names, want) {
-		t.Errorf("joiners = %v, want %v", names, want)
+	if !same {
+		var names []string
+		for _, j := range got {
+			names = append(names, j.name)
+		}
+		t.Errorf("joiners = %v, want %d stages in plan order, each on its own function", names, len(want))
 	}
 }
 
