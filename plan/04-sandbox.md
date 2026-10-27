@@ -41,9 +41,12 @@
 
 Go tests (`sanitize_test`, `validators_test`, `plots_test`) and the selftest assert that none of it reaches `/ws`.
 
-**CI:**
-- `app.yml` runs `core.test.mjs`, the schema check and the Go tests.
-- The self-hosted runner has no Chrome, so **`gate.mjs page` and `selftest` are a required local pre-merge step**.
-- To run them with Chrome as root: `CHROME=<wrapper adding --no-sandbox>`.
-- The runner options from the mountain era still hold (`mountain-final`: 04): add `chromium` to the runner's apt list,
-  or run the gate in a podman container.
+**CI (since mountain#50, 2026-10-27):**
+- **A PR is tested on GitHub-hosted runners, whatever state the cluster is in.** `app.yml`'s `test` (promtool, go vet
+  and test, the schema check, `core.test.mjs`, and `gate.mjs selftest` with the image's Chrome) and `db-test`
+  (Postgres 17 in a service container) both run on `ubuntu-latest`. A PR goes green or red on its own, and is
+  merged on that.
+- **Only `build-push` needs ukubi** (the `build-runner` LXC: buildah and the LAN registry). It runs on a push to
+  main only, so while the cluster is down it sits queued after the merge, and the image is built and deployed when
+  the runner comes back (plan/11). A queued `build-push` on main never blocks a PR.
+- `gate.mjs page` is still a local step. Locally as root, Chrome needs `CHROME=<wrapper adding --no-sandbox>`.

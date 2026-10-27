@@ -221,16 +221,17 @@ func TestRoundCache(t *testing.T) {
 	h := fakeHeads{"infra-bootstrap": "a1", "agent-fleet": "b1"}
 	c := &roundCache{}
 	ctx := context.Background()
-	res, repos, err := round(ctx, h, rl, c)
+	unread := map[string]string{} // the projector's, kept across its rounds
+	res, repos, err := round(ctx, h, rl, c, unread)
 	if err != nil || len(res.Graph.Nodes) == 0 || len(repos) != 2 || c.infra != "a1" {
 		t.Fatalf("first: %v %d nodes %v", err, len(res.Graph.Nodes), repos)
 	}
 	c.vector = vectorKey(repos)
-	if _, _, err := round(ctx, h, rl, c); err != errUnchanged {
+	if _, _, err := round(ctx, h, rl, c, unread); err != errUnchanged {
 		t.Errorf("same heads: %v", err)
 	}
 	h["agent-fleet"] = "b2"
-	if res, _, err := round(ctx, h, rl, c); err != nil || len(res.Graph.Nodes) == 0 {
+	if res, _, err := round(ctx, h, rl, c, unread); err != nil || len(res.Graph.Nodes) == 0 {
 		t.Errorf("a moved head: %v", err)
 	}
 }

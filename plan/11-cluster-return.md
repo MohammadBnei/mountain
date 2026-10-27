@@ -23,7 +23,8 @@ This file covers both sessions' work: mine (mountain/atlas, the bridge's I-steps
 - [ ] Pigsty: Patroni has a leader (`pg-proxmox`), `postgres.bnei.lan:5432` answers.
 - [ ] authentik answers at https://authentik.bnei.dev.
 - [ ] The `build-runner` LXC is up and its runner instances are online (GitHub → each repo → Settings → Actions →
-      Runners: `Idle`). `build-runner-ops` skill if one is offline.
+      Runners: `Idle`). `build-runner-ops` skill if one is offline. mountain's `build-push` jobs queued on main
+      while it was down then run on their own and deploy the latest merge (04 "CI").
 
 ## 2. The gate narrows to platform-admins (infra-bootstrap #373, ADR-0067)
 ArgoCD applies the two changed blueprint ConfigMaps on its own; authentik does not reload them by itself

@@ -78,7 +78,7 @@ on the owner's go for the agent-fleet items listed under them.
 ## Slice 1a (start now, before the cluster returns 2026-10-26)
 **mountain: a PR exporting the contract.**
 - **New package `github.com/MohammadBnei/mountain/contract`** (no imports) holding:
-  - the 14 PromQL queries, by name (today `promQ` in `cmd/atlas/live.go:253-269`);
+  - the 14 PromQL queries, by name (then `promQ` in `cmd/atlas/live.go`);
   - the Alertmanager request (path and params, live.go:525) and the skipped names `Watchdog`/`InfoInhibitor`
     (live.go:547);
   - the label keys atlas reads: `name`, `health_status`, `sync_status`, `node`, `namespace`, `target`,

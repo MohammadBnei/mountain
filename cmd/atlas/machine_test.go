@@ -44,8 +44,8 @@ func certPEM(t *testing.T, key any, pub any) string {
 	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
 }
 
-// withMachine configures the machine principal on the given certificates, as serve does from the env.
-func withMachine(t *testing.T, certs string) {
+// withMachine is the machine principal on the given certificates, configured as serve does from the env.
+func withMachine(t *testing.T, certs string) *Machine {
 	t.Helper()
 	for k, v := range map[string]string{"MOUNTAIN_MACHINE_CERT": certs, "MOUNTAIN_MACHINE_ISSUER": mIss, "MOUNTAIN_MACHINE_CLIENT_ID": mAud, "MOUNTAIN_MACHINE_SUB": mSub} {
 		t.Setenv(k, v)
@@ -54,8 +54,7 @@ func withMachine(t *testing.T, certs string) {
 	if err != nil || m == nil {
 		t.Fatalf("machineFromEnv: %v %v", m, err)
 	}
-	machine = m
-	t.Cleanup(func() { machine = nil })
+	return m
 }
 
 // mint signs claims as authentik's client_credentials grant would (RS256), or with the header's alg as given.
@@ -135,7 +134,7 @@ func TestMachineVerify(t *testing.T) {
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
 	next, _ := rsa.GenerateKey(rand.Reader, 2048)
 	other, _ := rsa.GenerateKey(rand.Reader, 2048)
-	withMachine(t, certPEM(t, key, &key.PublicKey)+certPEM(t, next, &next.PublicKey)) // a rotation: both pinned
+	machine := withMachine(t, certPEM(t, key, &key.PublicKey)+certPEM(t, next, &next.PublicKey)) // a rotation: both pinned
 	rs := `{"alg":"RS256","typ":"JWT"}`
 	now := time.Now()
 	if exp, err := machine.verify(mint(t, key, rs, good(10*time.Minute)), now); err != nil || exp.Before(now.Add(9*time.Minute)) {
@@ -191,24 +190,23 @@ func TestMachineVerify(t *testing.T) {
 // routes and is refused on every other gated route; a bad token is a 401 everywhere, an admin's cookie beside it
 // changes nothing; with the machine path off, a bearer is refused.
 func TestMachineRoutes(t *testing.T) {
-	p := withAuth(t)
-	admin := adminCookie(t, p)
-	a, _ := testApp(t)
+	a, p := withAuth(t)
+	admin := adminCookie(t, a, p)
 	www, _ := fs.Sub(mountain.WWW, "www")
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
-	withMachine(t, certPEM(t, key, &key.PublicKey))
+	a.gate.machine = withMachine(t, certPEM(t, key, &key.PublicKey))
 	tok := "Bearer " + mint(t, key, `{"alg":"RS256"}`, good(10*time.Minute))
 	bad := "Bearer " + mint(t, key, `{"alg":"RS256"}`, with(good(10*time.Minute), "sub", "someone"))
 	refused := func(r *http.Response) bool {
 		return r.StatusCode == http.StatusUnauthorized && strings.HasPrefix(r.Header.Get("WWW-Authenticate"), "Bearer") && r.Header.Get("Cache-Control") == "no-store"
 	}
 	seen := 0
-	for _, rt := range routeTable(a, www) {
+	for _, rt := range routeTable(a.App, www) {
 		if rt.open {
 			continue
 		}
 		method, path, _ := strings.Cut(rt.pattern, " ")
-		r := serveReq(method, path, nil, "Authorization", tok)
+		r := a.serveReq(method, path, nil, "Authorization", tok)
 		switch rt.pattern {
 		case "GET /api/graph":
 			seen++
@@ -226,7 +224,7 @@ func TestMachineRoutes(t *testing.T) {
 			}
 		}
 		for name, h := range map[string]string{"bad token": bad, "basic": "Basic YTpi", "empty bearer": "Bearer ", "lowercase scheme": strings.Replace(tok, "Bearer", "bearer", 1)} {
-			if r := serveReq(method, path, []*http.Cookie{admin}, "Authorization", h, "Origin", origin); !refused(r) {
+			if r := a.serveReq(method, path, []*http.Cookie{admin}, "Authorization", h, "Origin", origin); !refused(r) {
 				t.Errorf("%s with an admin's cookie on %s: %d, want 401 (judged by the header alone)", name, rt.pattern, r.StatusCode)
 			}
 		}
@@ -236,39 +234,39 @@ func TestMachineRoutes(t *testing.T) {
 		r.AddCookie(admin)
 		r.Header["Authorization"] = vals
 		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, r)
+		a.h.ServeHTTP(w, r)
 		if !refused(w.Result()) {
 			t.Errorf("%s with an admin's cookie: %d, want 401 (never the cookie)", name, w.Code)
 		}
 	}
-	if r := serveReq("HEAD", "/api/graph", nil, "Authorization", tok); r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden {
+	if r := a.serveReq("HEAD", "/api/graph", nil, "Authorization", tok); r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden {
 		t.Errorf("HEAD /api/graph: %d (a read)", r.StatusCode)
 	}
 	for _, m := range [][2]string{{"HEAD", "/api/read"}, {"GET", "/api/graph/"}, {"GET", "/ws/"}, {"GET", "/"}} {
-		if r := serveReq(m[0], m[1], nil, "Authorization", tok); !refused(r) {
+		if r := a.serveReq(m[0], m[1], nil, "Authorization", tok); !refused(r) {
 			t.Errorf("machine %s %s: %d, want 401", m[0], m[1], r.StatusCode)
 		}
 	}
 	if seen != 2 {
 		t.Errorf("the machine's routes are gone from the table: %d of 2 seen", seen)
 	}
-	if r := serveReq("GET", "/api/graph?access_token="+strings.TrimPrefix(tok, "Bearer "), nil); r.StatusCode != http.StatusForbidden {
+	if r := a.serveReq("GET", "/api/graph?access_token="+strings.TrimPrefix(tok, "Bearer "), nil); r.StatusCode != http.StatusForbidden {
 		t.Errorf("a token in the query: %d, want the cookie path's 403", r.StatusCode)
 	}
-	machine = nil
-	if r := serveReq("GET", "/api/graph", nil, "Authorization", tok); !refused(r) {
+	a.gate.machine = nil
+	if r := a.serveReq("GET", "/api/graph", nil, "Authorization", tok); !refused(r) {
 		t.Errorf("machine path off, a bearer: %d", r.StatusCode)
 	}
 }
 
 // TestMachineSocket: the machine principal's socket needs no Origin, gets the hello, and ends at the token's exp.
 func TestMachineSocket(t *testing.T) {
-	admin := adminCookie(t, withAuth(t)) // ridden along: a bearer is judged alone, so the socket still ends at the token's exp
-	_, h := testApp(t)
-	srv := httptest.NewServer(h)
+	a, p := withAuth(t)
+	admin := adminCookie(t, a, p) // ridden along: a bearer is judged alone, so the socket still ends at the token's exp
+	srv := httptest.NewServer(a.h)
 	defer srv.Close()
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
-	withMachine(t, certPEM(t, key, &key.PublicKey))
+	a.gate.machine = withMachine(t, certPEM(t, key, &key.PublicKey))
 	exp := time.Unix(time.Now().Add(10*time.Second).Unix(), 0)
 	tok := mint(t, key, `{"alg":"RS256"}`, with(good(time.Minute), "exp", exp.Unix()))
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

@@ -61,10 +61,24 @@ type Auth struct {
 	verifier *oidc.IDTokenVerifier // nil until the first successful discovery
 }
 
-var (
-	auth    *Auth // set by serve (authFromEnv) before routes run
-	devOpen bool  // --dev on loopback with sign-in unset: everyone is an admin (local work only)
-)
+// gate is what decides who gets in. serve builds it once, before the hub and the routes; handlers read its fields on
+// each request and never copy them.
+type gate struct {
+	auth    *Auth    // people's sign-in (authFromEnv); nil = not configured
+	machine *Machine // the machine principal (machineFromEnv); nil = the machine path is off
+	devOpen bool     // --dev on loopback with sign-in unset: everyone is an admin (local work only)
+}
+
+// openEnd is a devOpen request's session end: it has no session, so its socket never lapses.
+const openEnd = 100 * 365 * 24 * time.Hour
+
+type sessionEndKey struct{}
+
+// sessionEnd is when the person's access ends, put in the context by adminOnly once it has admitted the request.
+func sessionEnd(ctx context.Context) (time.Time, bool) {
+	t, ok := ctx.Value(sessionEndKey{}).(time.Time)
+	return t, ok && !t.IsZero()
+}
 
 func authFromEnv(dev bool) *Auth {
 	iss, id, sec, key := os.Getenv("MOUNTAIN_OIDC_ISSUER"), os.Getenv("MOUNTAIN_OIDC_CLIENT_ID"), os.Getenv("MOUNTAIN_OIDC_CLIENT_SECRET"), os.Getenv("MOUNTAIN_SESSION_KEY")
@@ -146,24 +160,30 @@ type Session struct {
 
 // sessionOf is r's session ({} = none: no auth, no cookie, a bad MAC or expired) and its expiry: a socket closes
 // when it lapses (hub.go), so a lost group ends access within the 1 h TTL.
-func sessionOf(r *http.Request) (Session, time.Time) {
+func (g *gate) sessionOf(r *http.Request) (Session, time.Time) {
 	var s Session
-	if auth == nil {
+	if g.auth == nil {
 		return s, time.Time{}
 	}
-	if exp, ok := auth.get(r, sessionCookie, &s); ok {
+	if exp, ok := g.auth.get(r, sessionCookie, &s); ok {
 		return s, exp
 	}
 	return Session{}, time.Time{}
 }
 
-// isAdmin: r carries a platform admin's session, or the page runs locally with sign-in off (devOpen).
-func isAdmin(r *http.Request) bool {
-	if devOpen {
-		return true
+// admitted: r carries a platform admin's session, or the page runs locally with sign-in off (devOpen); and when that
+// access ends. One decode of the cookie answers both, so the end is never that of a later read.
+func (g *gate) admitted(r *http.Request) (time.Time, bool) {
+	if g.devOpen {
+		return time.Now().Add(openEnd), true
 	}
-	s, _ := sessionOf(r)
-	return s.Admin && s.Sub != ""
+	s, exp := g.sessionOf(r)
+	return exp, s.Admin && s.Sub != ""
+}
+
+func (g *gate) isAdmin(r *http.Request) bool {
+	_, ok := g.admitted(r)
+	return ok
 }
 
 // authFail answers a failed or refused sign-in with a page a person can read, not a bare status line.
@@ -174,13 +194,13 @@ func authFail(w http.ResponseWriter, msg string, code int) {
 	fmt.Fprintf(w, `<!doctype html><meta name="viewport" content="width=device-width"><title>mountain</title><p>%s</p>`, html.EscapeString(msg))
 }
 
-func onAuth(h func(*Auth, http.ResponseWriter, *http.Request)) http.HandlerFunc {
+func (g *gate) onAuth(h func(*Auth, http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if auth == nil {
+		if g.auth == nil {
 			http.NotFound(w, r)
 			return
 		}
-		h(auth, w, r)
+		h(g.auth, w, r)
 	}
 }
 
@@ -252,10 +272,10 @@ func (au *Auth) logout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/auth/me", http.StatusSeeOther)
 }
 
-func me(w http.ResponseWriter, r *http.Request) {
-	s, _ := sessionOf(r)
-	admin := isAdmin(r)
-	m := map[string]any{"enabled": auth != nil, "admin": admin}
+func (g *gate) me(w http.ResponseWriter, r *http.Request) {
+	s, _ := g.sessionOf(r)
+	admin := g.isAdmin(r)
+	m := map[string]any{"enabled": g.auth != nil, "admin": admin}
 	if admin && s.Name != "" {
 		m["name"] = s.Name
 	}

@@ -176,10 +176,8 @@ func TestRefWithSlash(t *testing.T) {
 // TestRead: the endpoint reads a file of a held checkout at its sha; it refuses paths that leave the checkout,
 // symlinks, binaries and repos atlas does not hold.
 func TestRead(t *testing.T) {
-	a, h := testApp(t)
-	devOpen = true
-	t.Cleanup(func() { devOpen = false })
-	mux = h
+	a := testApp(t)
+	a.gate.devOpen = true
 	base := t.TempDir()
 	dir := filepath.Join(base, "infra-bootstrap")
 	os.MkdirAll(filepath.Join(dir, "docs"), 0o755)
@@ -188,7 +186,7 @@ func TestRead(t *testing.T) {
 	os.WriteFile(filepath.Join(base, "outside.md"), []byte("secret"), 0o644)
 	os.Symlink(filepath.Join(base, "outside.md"), filepath.Join(dir, "link.md"))
 	a.Files.update(extract.Repos{"infra-bootstrap": {Dir: dir, SHA: "s1"}})
-	r := serveReq("GET", "/api/read?repo=infra-bootstrap&path=docs/a.md", nil)
+	r := a.serveReq("GET", "/api/read?repo=infra-bootstrap&path=docs/a.md", nil)
 	var d Doc
 	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&d) != nil || d.SHA != "s1" || d.Kind != "md" || len(d.Blocks) != 2 || r.Header.Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("read: %d %+v", r.StatusCode, d)
@@ -203,7 +201,7 @@ func TestRead(t *testing.T) {
 		"repo=agent-fleet&path=README.md":           http.StatusNotFound,
 		"repo=&path=x":                              http.StatusBadRequest,
 	} {
-		if r := serveReq("GET", "/api/read?"+q, nil); r.StatusCode != want {
+		if r := a.serveReq("GET", "/api/read?"+q, nil); r.StatusCode != want {
 			t.Errorf("%s: %d, want %d", q, r.StatusCode, want)
 		}
 	}

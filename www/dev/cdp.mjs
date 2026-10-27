@@ -34,16 +34,25 @@ export async function serveStatic(root = ROOT) {
 export async function launch({ w = 1280, h = 800, mobile = false, dpr = 1, args = [] } = {}) {
   const profileDir = await mkdtemp(join(tmpdir(), 'mountain-chrome-'));
   const chrome = spawn(CHROME, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profileDir}`, '--no-first-run', '--no-default-browser-check',
-    '--hide-scrollbars', '--mute-audio', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${w},${h}`, ...args, 'about:blank'], { stdio: 'ignore' });
+    '--hide-scrollbars', '--mute-audio', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${w},${h}`, ...args, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  // stderr is drained (a full pipe would stall Chrome) and its tail kept, to say why a start failed
+  let errTail = '', exited = null;
+  chrome.stderr.on('data', (b) => { errTail = (errTail + b).slice(-2000); });
+  chrome.on('exit', (code, sig) => { exited = sig || code; });
   let ws;
   const close = async () => { try { ws?.close(); } catch {} chrome.kill('SIGKILL'); await rm(profileDir, { recursive: true, force: true }).catch(() => {}); };
   let port;
-  for (let i = 0; i < 100 && !port; i++) {
+  // up to 30 s: the first start on a fresh CI runner can take more than 10 (an exit ends the wait at once)
+  for (let i = 0; i < 300 && !port && exited === null; i++) {
     const f = join(profileDir, 'DevToolsActivePort');
     if (existsSync(f)) port = (await readFile(f, 'utf8')).split('\n')[0].trim();
     if (!port) await sleep(100);
   }
-  if (!port) { await close(); throw new Error(`Chrome did not start (${CHROME}; set CHROME)`); }
+  if (!port) {
+    const why = exited === null ? 'no debugging port after 30 s' : `exited ${exited}`;
+    await close();
+    throw new Error(`Chrome did not start (${CHROME}: ${why}; set CHROME)\n${errTail.trim()}`);
+  }
   const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
   ws = new WebSocket(webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });

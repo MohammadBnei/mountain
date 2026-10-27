@@ -605,18 +605,18 @@ func cleanRel(p string) string {
 }
 
 // serveRead is GET /api/read (admin-only by the route table).
-func serveRead(w http.ResponseWriter, r *http.Request) {
+func (a *App) serveRead(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("Cache-Control", "private, no-store")
 	h.Set("Vary", "Cookie")
 	h.Set("X-Content-Type-Options", "nosniff")
 	q := r.URL.Query()
 	repo, p := q.Get("repo"), cleanRel(q.Get("path"))
-	if app == nil || repo == "" || p == "" || p != q.Get("path") { // only a path already clean and relative
+	if repo == "" || p == "" || p != q.Get("path") { // only a path already clean and relative
 		http.Error(w, "repo and a clean repo-relative path are required", http.StatusBadRequest)
 		return
 	}
-	rp, ok := app.Files.get(repo)
+	rp, ok := a.Files.get(repo)
 	if !ok {
 		http.Error(w, "atlas does not hold that repo", http.StatusNotFound)
 		return
@@ -634,27 +634,23 @@ func serveRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := repo + "@" + rp.SHA + ":" + p
-	out, ok := reads.get(key)
+	out, ok := a.reads.get(key)
 	if !ok {
 		select { // at most two renders at once: a pathological file costs seconds of CPU, once per sha (then cached)
-		case readSlots <- struct{}{}:
+		case a.readSlots <- struct{}{}:
 		case <-r.Context().Done():
 			return
 		}
-		d := renderIn(repo, p, rp.SHA, b, func(name string) bool { _, ok := app.Files.get(name); return ok }, app.Files.exists)
-		<-readSlots
+		d := renderIn(repo, p, rp.SHA, b, func(name string) bool { _, ok := a.Files.get(name); return ok }, a.Files.exists)
+		<-a.readSlots
 		out = mustJSON(d)
-		reads.put(key, out)
+		a.reads.put(key, out)
 	}
 	h.Set("Content-Type", "application/json")
 	w.Write(out)
 }
 
-var readSlots = make(chan struct{}, 2)
-
-// reads caches rendered documents by repo, sha and path (a file at a sha never changes): the last 64, by insertion.
-var reads = &readCache{m: map[string][]byte{}}
-
+// readCache holds rendered documents by repo, sha and path (a file at a sha never changes): the last 64, by insertion.
 type readCache struct {
 	mu    sync.Mutex
 	m     map[string][]byte

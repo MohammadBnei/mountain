@@ -167,11 +167,9 @@ func TestDBAtlasProject(t *testing.T) {
 // TestGraphsMemory: without a database the latest projection lives in memory: the same result is no change, a new
 // one is seq+1, a lost repo is refused, and GET /api/graph serves it (an older seq is a 404: no history).
 func TestGraphsMemory(t *testing.T) {
-	a, h := testApp(t)
-	devOpen = true
-	t.Cleanup(func() { devOpen = false })
-	mux = h
-	if r := serveReq("GET", "/api/graph", nil); r.StatusCode != http.StatusNotFound {
+	a := testApp(t)
+	a.gate.devOpen = true
+	if r := a.serveReq("GET", "/api/graph", nil); r.StatusCode != http.StatusNotFound {
 		t.Errorf("no projection: %d", r.StatusCode)
 	}
 	ctx := context.Background()
@@ -195,14 +193,14 @@ func TestGraphsMemory(t *testing.T) {
 	}
 	a.Graph.put(ctx, res2, repos, nil)
 	var v atlasView
-	r := serveReq("GET", "/api/graph", nil)
+	r := a.serveReq("GET", "/api/graph", nil)
 	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&v) != nil || v.Seq != a.Graph.Latest().Seq || len(v.Nodes) != 1 || r.Header.Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("serve: %d %+v", r.StatusCode, v)
 	}
-	if r := serveReq("GET", "/api/graph?seq=1", nil); r.StatusCode != http.StatusNotFound {
+	if r := a.serveReq("GET", "/api/graph?seq=1", nil); r.StatusCode != http.StatusNotFound {
 		t.Errorf("seq=1 without history: %d", r.StatusCode)
 	}
-	if r := serveReq("GET", "/api/graph?seq=-1", nil); r.StatusCode != http.StatusBadRequest {
+	if r := a.serveReq("GET", "/api/graph?seq=-1", nil); r.StatusCode != http.StatusBadRequest {
 		t.Errorf("bad seq: %d", r.StatusCode)
 	}
 }
@@ -212,10 +210,8 @@ func TestGraphsMemory(t *testing.T) {
 func TestDBGraphsServe(t *testing.T) {
 	dsn := testDSN(t)
 	ctx := context.Background()
-	a, h := testApp(t)
-	devOpen = true
-	t.Cleanup(func() { devOpen = false })
-	mux = h
+	a := testApp(t)
+	a.gate.devOpen = true
 	a.Graph = openGraphs(ctx, dsn)
 	t.Cleanup(a.Graph.close)
 	if a.Graph.db() == nil {
@@ -231,7 +227,7 @@ func TestDBGraphsServe(t *testing.T) {
 		t.Fatalf("latest: %v %+v", err, a.Graph.Latest())
 	}
 	var v atlasView
-	if r := serveReq("GET", fmt.Sprintf("/api/graph?seq=%d", s1), nil); r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&v) != nil || len(v.Nodes) != 1 {
+	if r := a.serveReq("GET", fmt.Sprintf("/api/graph?seq=%d", s1), nil); r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&v) != nil || len(v.Nodes) != 1 {
 		t.Fatalf("old seq: %d %+v", r.StatusCode, v)
 	}
 	// atlas project stores a newer projection behind the service's back (--drop-repos): the service's next round,
@@ -268,7 +264,7 @@ func TestDBAtlasReal(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	res, repos, err := round(ctx, localHeads(dir), rl, nil)
+	res, repos, err := round(ctx, localHeads(dir), rl, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

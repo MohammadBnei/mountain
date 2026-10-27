@@ -90,10 +90,20 @@ func originOK(o string, dev bool) bool {
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// the machine principal (machine.go) carries no cookie a page could ride: no browser origin to check, and its
 	// socket ends with its token
-	mexp, isMachine := machineExp(r.Context())
+	end, isMachine := machineExp(r.Context())
 	if !isMachine && !originOK(r.Header.Get("Origin"), h.dev) {
 		http.Error(w, "forbidden origin", http.StatusForbidden)
 		return
+	}
+	if !isMachine {
+		var ok bool
+		// the session's end is the socket's end: a lost group stops the overlay within the TTL. adminOnly put it
+		// there when it admitted the request (the cookie's expiry, or openEnd under devOpen); none (the hub mounted
+		// without the gate) is no socket, never an endless one
+		if end, ok = sessionEnd(r.Context()); !ok {
+			http.Error(w, "platform admins only", http.StatusForbidden)
+			return
+		}
 	}
 	ip := clientIP(r)
 	h.mu.Lock()
@@ -112,7 +122,6 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.mu.Unlock()
 	}()
 
-	_, exp := sessionOf(r)
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true}) // origin checked above
 	if err != nil {
 		return
@@ -133,12 +142,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		conn.CloseNow()
 	}()
 
-	end := exp // the session's end is the socket's end: a lost group stops the overlay within the TTL
-	if isMachine {
-		end = mexp // the token's: a deactivated account loses the feed within the token's 10 minutes
-	} else if end.IsZero() {
-		end = time.Now().Add(100 * 365 * 24 * time.Hour) // devOpen: no session
-	}
+	// a machine socket ends with its token: a deactivated account loses the feed within the token's 10 minutes
 	ctx, cancel := context.WithDeadline(r.Context(), end)
 	defer cancel()
 	go func() { // reader: drops what it reads; also what lets Ping return

@@ -187,8 +187,9 @@ These already follow the standard:
 1. **mountain CI:** the `test` job moves to `ubuntu-latest`, and `build-push` stays self-hosted. Mountain's PRs are
    then tested while the runner is down.
 2. **atlas, small and urgent:**
-   - its globals move onto the injected app (`auth`, `machine`, `devOpen`, `app`, `liveEvery`, `promQ`, the read
-     cache, the metric vecs);
+   - its globals go: `auth`, `machine` and `devOpen` into a `gate` the app holds; `app` itself; the read cache, the
+     render slots and `unread` onto the app; `liveEvery` becomes a const and `promQ` gives way to `contract.Queries`.
+     The metric vecs stay global until the OTel step replaces them: moving them twice is churn;
    - the post-extraction passes become a versioned ordered list.
    
    **This fixes a real bug.** Those passes carry no version today, so a change to the watch, needs or walls logic

@@ -30,9 +30,6 @@ type heads interface {
 	checkout(ctx context.Context, repo, branch string) (extract.Repo, error)
 }
 
-// unread is each source's last read failure (the projector goroutine and projectCmd only, never both at once).
-var unread = map[string]string{}
-
 // errUnchanged: every head is where the last stored round read it, so the extractors are not run again (a projection
 // is a pure function of the extractor versions and the vector).
 var errUnchanged = errors.New("unchanged")
@@ -54,8 +51,12 @@ func vectorKey(repos extract.Repos) string {
 }
 
 // round reads every source at its tracked branch and runs the extractors over them; with a cache, it returns
-// errUnchanged (and the repos) when no head moved since the last stored round.
-func round(ctx context.Context, src heads, rl *realms.Realms, c *roundCache) (extract.Result, extract.Repos, error) {
+// errUnchanged (and the repos) when no head moved since the last stored round. unread is each source's last read
+// failure, kept by the caller across rounds so a failure is logged once per change (nil: a map for this round only).
+func round(ctx context.Context, src heads, rl *realms.Realms, c *roundCache, unread map[string]string) (extract.Result, extract.Repos, error) {
+	if unread == nil {
+		unread = map[string]string{}
+	}
 	repos := extract.Repos{}
 	infra, err := src.checkout(ctx, rl.Sources[0], "main")
 	if err != nil && infra.Dir == "" {
@@ -158,7 +159,7 @@ func (a *App) project(ctx context.Context) {
 }
 
 func (a *App) projectOnce(ctx context.Context, src heads, c *roundCache) error {
-	res, repos, err := round(ctx, src, a.Realms, c)
+	res, repos, err := round(ctx, src, a.Realms, c, a.unread)
 	if repos != nil {
 		a.Files.update(repos) // what the reader serves: the trees this round read, at their shas; a repo it did not read keeps the last
 	}
@@ -220,7 +221,7 @@ func projectCmd(args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	res, repos, err := round(ctx, localHeads(*dir), rl, nil)
+	res, repos, err := round(ctx, localHeads(*dir), rl, nil, nil)
 	if err != nil {
 		return err
 	}

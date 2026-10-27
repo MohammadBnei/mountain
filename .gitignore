@@ -1,5 +1,6 @@
 # build outputs (go build ./cmd/atlas, go test -c) and local scratch
 /atlas
+/cmd/atlas/atlas
 *.test
 .DS_Store
 # gate input built from a restored DB snapshot (W2 pose check), never committed

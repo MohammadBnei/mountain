@@ -94,4 +94,5 @@ The **Ukubi design system** (00):
 | Excluded paths | `helm/**`, `plan/**`, so the tag-bump commit cannot retrigger CI |
 | Checks | `test`: promtool, go vet + test, the schema check on a Go-generated hello, the core test and the gate selftest if Chrome is present; `db-test` (Postgres 17) |
 | Tag bump | CI writes the image `:sha` into `helm/values.yaml` and pushes with `GITHUB_TOKEN` |
-| Gate | `gate.mjs page` and `selftest` need Chrome, which the self-hosted runner lacks, so they are a **required local pre-merge step** (04) |
+| Runners | `test` and `db-test` run on GitHub-hosted `ubuntu-latest`, so a PR is tested while ukubi is down; only `build-push` (main pushes) needs the self-hosted `build-runner` (04) |
+| Gate | `selftest` runs in `test` with the image's Chrome; `gate.mjs page` stays a local pre-merge step (04) |
