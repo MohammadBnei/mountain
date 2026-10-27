@@ -46,8 +46,10 @@ env:
   INFISICAL_IDENTITY_ID: 19807471-d73a-48d4-9e58-1dc34255ef77
 
 jobs:
+  # GitHub-hosted (15-architecture.md): PRs are tested even while the build runner is down. Only build-push
+  # needs the runner (buildah and the LAN registry).
   test:
-    runs-on: [self-hosted, ukubi-build]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -77,8 +79,8 @@ jobs:
           set -euo pipefail
           go vet ./...
           go test ./...
-      # Chrome is not installed on ukubi-build and is not apt-installed here (04): the gate
-      # selftest runs only where a Chrome already exists; otherwise it is a local pre-merge step.
+      # GitHub's Ubuntu image ships Chrome, so the gate selftest runs here; without a Chrome (another
+      # runner) it stays a local pre-merge step (04).
       - name: www core test + gate selftest (if Chrome)
         run: |
           set -euo pipefail
@@ -90,8 +92,8 @@ jobs:
             echo "::notice::no Chrome on this runner: run 'node www/dev/gate.mjs selftest' locally before merge (04)"
           fi
 
-  # Persistence tests need a real Postgres: TestDB* skip without MOUNTAIN_TEST_DSN (the self-hosted
-  # test job above has none). GitHub-hosted, so the service container needs no runner change.
+  # Persistence tests need a real Postgres: TestDB* skip without MOUNTAIN_TEST_DSN (the test job above
+  # has none), so they run here, against a service container.
   db-test:
     runs-on: ubuntu-latest
     permissions:
