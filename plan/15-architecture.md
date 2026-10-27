@@ -225,7 +225,9 @@ These already follow the standard:
 4. **The front end:**
    - `town.js` into registries (done, ukubi-game #28–#30: the card, the lenses, the live looks; each proven
      identical to main's, in its cards, its page and one frame's WebGL draw sequence);
-   - Bun and TypeScript;
+   - Bun and TypeScript (done, ukubi-game #31–#32: bundled into a committed dist with no importmap, so the CSP
+     carries no hash; then TypeScript with typed registries, each entry and the page it reads checked; the bundle
+     differs from the JS one only in Bun's path comments);
    - slice 4f;
    - atlas's L0–L3 retired.
 5. **Extraction:** once atlas adopts the gate, the error model and OTel, they move to `mountain/pkg`. The rest of
@@ -240,8 +242,13 @@ These already follow the standard:
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;
    - one list of the sources that can go down.
+
+   **Done** (ukubi-game #33–#34): the three, and no mutable package-level state in the whole module (the check
+   now covers every package). The sim's frames for 38 worlds, seeds and intensities are byte-identical; the one
+   difference the doubt cycle found, an empty supplier counted down, was fixed first, apart (#33).
 7. **ukubi-kit:**
-   - Bun;
+   - Bun (done, ukubi-kit #6, with dist unchanged: the one engine-dependent step, gltf-transform's sort of tied skin
+     weights, is done by the kit in V8's order; CI checks dist under Bun on Linux and macOS, and under Node);
    - sources keyed by kind;
    - the world kit as data (no kit names in `build.mjs`);
    - checks as a list;
