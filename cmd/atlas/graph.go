@@ -581,7 +581,7 @@ func buildIndex(v *atlasView) *GraphIndex {
 
 // serveGraph is GET /api/graph[?seq=N] (admin-only by the route table): the latest projection from memory, or an
 // older one from the database.
-func serveGraph(w http.ResponseWriter, r *http.Request) {
+func (a *App) serveGraph(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("Cache-Control", "private, no-store")
 	h.Set("Vary", "Cookie")
@@ -595,11 +595,7 @@ func serveGraph(w http.ResponseWriter, r *http.Request) {
 		}
 		seq = n
 	}
-	if app == nil {
-		http.Error(w, "atlas: not started", http.StatusServiceUnavailable)
-		return
-	}
-	g := app.Graph
+	g := a.Graph
 	cur := g.Latest()
 	var v atlasView
 	switch {

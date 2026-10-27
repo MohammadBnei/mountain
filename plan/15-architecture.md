@@ -188,7 +188,7 @@ These already follow the standard:
    then tested while the runner is down.
 2. **atlas, small and urgent:**
    - its globals move onto the injected app (`auth`, `machine`, `devOpen`, `app`, `liveEvery`, `promQ`, the read
-     cache, the metric vecs);
+     cache). The metric vecs stay global until the OTel step replaces them: moving them twice is churn;
    - the post-extraction passes become a versioned ordered list.
    
    **This fixes a real bug.** Those passes carry no version today, so a change to the watch, needs or walls logic

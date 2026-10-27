@@ -43,8 +43,6 @@ type Machine struct {
 	issuer, aud, sub string
 }
 
-var machine *Machine // set by serve (machineFromEnv); nil = the machine path is off
-
 // machineRoutes are the routes the machine principal may read: the town's.
 var machineRoutes = []string{"GET /api/graph", "GET /ws"}
 
@@ -211,7 +209,7 @@ func unauthorized(w http.ResponseWriter, why string) {
 // bearerFirst judges a request that carries Authorization by it alone: on a machine route, a verified token goes on
 // (its exp in the context); anywhere else, or unverified, it is a 401. A request without one goes to next (the
 // cookie's path).
-func bearerFirst(pattern string, h, next http.Handler) http.Handler {
+func (g *gate) bearerFirst(pattern string, h, next http.Handler) http.Handler {
 	allowed := slices.Contains(machineRoutes, pattern)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		vals, present := r.Header["Authorization"] // present, even empty or twice: judged by it, never the cookie
@@ -226,12 +224,12 @@ func bearerFirst(pattern string, h, next http.Handler) http.Handler {
 		switch {
 		case !ok || tok == "":
 			unauthorized(w, "a Bearer token only")
-		case machine == nil:
+		case g.machine == nil:
 			unauthorized(w, "no machine principal is configured")
 		case !allowed:
 			unauthorized(w, "the machine principal reads the town's routes only")
 		default:
-			exp, err := machine.verify(tok, time.Now())
+			exp, err := g.machine.verify(tok, time.Now())
 			if err != nil {
 				unauthorized(w, err.Error())
 				return

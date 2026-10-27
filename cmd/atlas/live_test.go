@@ -46,10 +46,10 @@ func TestJoins(t *testing.T) {
 	}
 }
 
-// fakeProm answers each promQ query from a table (name -> result JSON); an unknown query is an error.
+// fakeProm answers each contract.Queries query from a table (name -> result JSON); an unknown query is an error.
 func fakeProm(t *testing.T, answers func() map[string]string) *httptest.Server {
 	byQ := map[string]string{}
-	for n, q := range promQ {
+	for n, q := range contract.Queries {
 		byQ[q] = n
 	}
 	for n, sg := range contract.Signals {

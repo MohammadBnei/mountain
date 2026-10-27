@@ -97,9 +97,22 @@ type App struct {
 	Live   *Live
 	Files  *repoSet // the checkouts the last round read: the reader's files (read.go)
 	Build  string   // the served www's build id (/v/<build>/); hello.build
+
+	gate      *gate
+	unread    map[string]string // each source's last read failure (the projector goroutine's, project.go)
+	reads     *readCache        // rendered documents (read.go)
+	readSlots chan struct{}     // at most two renders at once (read.go)
 }
 
-var app *App // set by serve (and tests) before routes run
+// newApp builds what the App owns, for serve and the tests alike; the caller starts the projector and the polls.
+func newApp(o Opts, rl *realms.Realms, www fs.FS, g *gate, gr *Graphs) *App {
+	a := &App{Opts: o, Realms: rl, Build: buildID(www), Graph: gr, Files: &repoSet{}, gate: g, unread: map[string]string{},
+		reads: &readCache{m: map[string][]byte{}}, readSlots: make(chan struct{}, 2)}
+	a.Hub = NewHub(o.Dev, a.hello)
+	a.Live = newLive(rl, a.Hub)
+	a.Live.idx = func() *GraphIndex { return a.Graph.index() }
+	return a
+}
 
 func serve(o Opts) error {
 	rl, err := realms.Load()
@@ -107,23 +120,18 @@ func serve(o Opts) error {
 		return err
 	}
 	www, _ := fs.Sub(mountain.WWW, "www")
-	auth = authFromEnv(o.Dev)
-	if machine, err = machineFromEnv(); err != nil {
+	g := &gate{auth: authFromEnv(o.Dev)}
+	if g.machine, err = machineFromEnv(); err != nil {
 		return err
 	}
-	devOpen = o.Dev && auth == nil && loopback(o.Listen)
-	if auth == nil && !devOpen {
+	g.devOpen = o.Dev && g.auth == nil && loopback(o.Listen)
+	if g.auth == nil && !g.devOpen {
 		log.Printf("atlas: sign-in is not configured: every route but /healthz refuses a person (the machine principal, if configured, still reads its two routes)")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	a := &App{Opts: o, Realms: rl, Build: buildID(www), Files: &repoSet{}}
-	a.Hub = NewHub(o.Dev, a.hello)
-	a.Graph = openGraphs(ctx, os.Getenv("DATABASE_URL"))
-	a.Live = newLive(rl, a.Hub)
-	a.Live.idx = a.Graph.index
-	app = a
+	a := newApp(o, rl, www, g, openGraphs(ctx, os.Getenv("DATABASE_URL")))
 	if o.GraphFixture != "" {
 		if err := a.Graph.loadFixture(o.GraphFixture); err != nil {
 			return err
@@ -154,7 +162,7 @@ func serve(o Opts) error {
 	for _, s := range []*http.Server{pub, met} {
 		go func() { errc <- s.ListenAndServe() }()
 	}
-	log.Printf("atlas: %s public, %s metrics, dev=%v open=%v", o.Listen, o.Metrics, o.Dev, devOpen)
+	log.Printf("atlas: %s public, %s metrics, dev=%v open=%v", o.Listen, o.Metrics, o.Dev, g.devOpen)
 	select {
 	case err = <-errc:
 	case <-ctx.Done():
@@ -192,13 +200,13 @@ func routeTable(a *App, www fs.FS) []route {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	return []route{
 		{"GET /healthz", true, ok},
-		{"GET /auth/login", true, onAuth((*Auth).login)},
-		{"GET /auth/callback", true, onAuth((*Auth).callback)},
-		{"POST /auth/logout", true, onAuth((*Auth).logout)},
-		{"GET /auth/me", true, http.HandlerFunc(me)},
+		{"GET /auth/login", true, a.gate.onAuth((*Auth).login)},
+		{"GET /auth/callback", true, a.gate.onAuth((*Auth).callback)},
+		{"POST /auth/logout", true, a.gate.onAuth((*Auth).logout)},
+		{"GET /auth/me", true, http.HandlerFunc(a.gate.me)},
 		{"GET /ws", false, a.Hub},
-		{"GET /api/graph", false, http.HandlerFunc(serveGraph)},
-		{"GET /api/read", false, http.HandlerFunc(serveRead)},
+		{"GET /api/graph", false, http.HandlerFunc(a.serveGraph)},
+		{"GET /api/read", false, http.HandlerFunc(a.serveRead)},
 		{"GET /", false, static(www, a.Opts.Dev)},
 	}
 }
@@ -208,7 +216,7 @@ func routes(a *App, www fs.FS) http.Handler {
 	for _, r := range routeTable(a, www) {
 		h := r.h
 		if !r.open {
-			h = bearerFirst(r.pattern, h, adminOnly(h)) // a bearer is judged alone: the machine principal (machine.go)
+			h = a.gate.bearerFirst(r.pattern, h, a.gate.adminOnly(h)) // a bearer is judged alone: the machine principal (machine.go)
 		}
 		mux.Handle(r.pattern, h)
 	}
@@ -217,18 +225,19 @@ func routes(a *App, www fs.FS) http.Handler {
 
 // adminOnly answers anyone but a signed-in platform admin with 403, or, for the page itself, a redirect to the
 // sign-in (the forwardAuth gate has already signed them in to authentik, so it is one round trip, no form). The
-// hash route survives the trip: the browser keeps a fragment across redirects that carry none.
-func adminOnly(h http.Handler) http.Handler {
+// hash route survives the trip: the browser keeps a fragment across redirects that carry none. An admitted request
+// carries its session's end in the context (sessionEnd): the socket's end.
+func (g *gate) adminOnly(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isAdmin(r) {
-			h.ServeHTTP(w, r)
+		if end, ok := g.admitted(r); ok {
+			h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), sessionEndKey{}, end)))
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		// Only an admin ever holds a session (a non-admin's callback ends on a refusal page, not here), so the
 		// sign-in cannot loop; a town-era cookie is not a session and signs in again.
-		if r.Method == http.MethodGet && r.URL.Path == "/" && auth != nil {
+		if r.Method == http.MethodGet && r.URL.Path == "/" && g.auth != nil {
 			ret := "/"
 			if q := "/?" + r.URL.RawQuery; r.URL.RawQuery != "" && returnRE.MatchString(q) {
 				ret = q // the page's own query (?q=low) survives the sign-in

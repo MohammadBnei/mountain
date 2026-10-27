@@ -40,7 +40,7 @@ import (
 	"github.com/MohammadBnei/mountain/realms"
 )
 
-var liveEvery = 15 * time.Second
+const liveEvery = 15 * time.Second
 
 const (
 	maxEvents = 50
@@ -244,9 +244,6 @@ type signalAnswer struct {
 	s  []sample
 }
 
-// promQ: name -> PromQL (contract.Queries: the sim mirrors exactly these).
-var promQ = contract.Queries
-
 func query(ctx context.Context, hc *http.Client, base, q string) ([]sample, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", base+contract.PromQueryPath+"?query="+url.QueryEscape(q), nil)
 	if err != nil {
@@ -283,7 +280,7 @@ func query(ctx context.Context, hc *http.Client, base, q string) ([]sample, erro
 
 func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	r := map[string][]sample{}
-	for name, q := range promQ {
+	for name, q := range contract.Queries { // the sim mirrors exactly these
 		s, err := query(ctx, p.hc, p.url, q)
 		if err != nil {
 			QueryFailed.Add(name, 1)
