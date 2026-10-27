@@ -123,6 +123,15 @@ func TestDBAtlasProject(t *testing.T) {
 	if seq, changed, err := projectGraph(ctx, pool, r1, repos, nil); err != nil || changed || seq != seq1 {
 		t.Fatalf("same again: %d %v %v", seq, changed, err)
 	}
+	r1v := r1
+	r1v.Versions = map[string]int{"gitops": 1, "pass:watch": 2} // the same graph, made by new pass logic
+	seqV, changed, err := projectGraph(ctx, pool, r1v, repos, nil)
+	if err != nil || !changed || seqV <= seq1 {
+		t.Fatalf("new versions: %d %v %v", seqV, changed, err)
+	}
+	if c := rows(t, pool, "SELECT count(*) FROM atlas_node_ver WHERE valid_from = $1", seqV); c != 0 {
+		t.Errorf("new versions opened %d node versions, want none (the graph is the same)", c)
+	}
 	repos2 := extract.Repos{"infra-bootstrap": {SHA: strings.Repeat("2", 40)}}
 	r1b := atlasResult([]graph.Node{n("app:a", "1", "s2"), n("app:b", "1", "s2")}, []graph.Edge{e})
 	seq2, changed, err := projectGraph(ctx, pool, r1b, repos2, nil)
@@ -202,6 +211,12 @@ func TestGraphsMemory(t *testing.T) {
 	}
 	if r := a.serveReq("GET", "/api/graph?seq=-1", nil); r.StatusCode != http.StatusBadRequest {
 		t.Errorf("bad seq: %d", r.StatusCode)
+	}
+	res3 := res2
+	res3.Versions = map[string]int{"gitops": 1, "pass:watch": 2} // the same graph, made by new pass logic
+	cur := a.Graph.Latest().Seq
+	if seq, changed, err := a.Graph.put(ctx, res3, repos, nil); seq != cur+1 || !changed || err != nil {
+		t.Errorf("new versions over the same graph: %d %v %v, want a new projection", seq, changed, err)
 	}
 }
 

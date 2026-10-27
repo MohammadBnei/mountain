@@ -91,7 +91,7 @@ func versionHash[T graph.Node | graph.Edge](v T) string {
 }
 
 // projectGraph stores res as the next projection: it closes the versions that changed or went away and opens the
-// new ones, in one transaction. When nothing changed (graph, drift, vector) it writes nothing and returns the latest
+// new ones, in one transaction. When nothing changed (graph, drift, vector, versions) it writes nothing and returns the latest
 // seq with changed=false.
 // counted is the repos whose absence from a round is a loss (a checkout that could not be read): nil = every repo
 // the last projection read, an empty set = none (atlas project --drop-repos). A repo dropped from realms.yaml sources
@@ -122,9 +122,9 @@ func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, r
 		}
 		drift := mustJSON(res.Graph.Drift)
 		var last int64
-		var lastDrift []byte
+		var lastDrift, lastVersions []byte
 		lastVector := map[string]string{}
-		if err := tx.QueryRow(ctx, "SELECT p.seq, d.body FROM atlas_projection p JOIN atlas_drift d USING (seq) ORDER BY p.seq DESC LIMIT 1").Scan(&last, &lastDrift); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.QueryRow(ctx, "SELECT p.seq, p.extractors, d.body FROM atlas_projection p JOIN atlas_drift d USING (seq) ORDER BY p.seq DESC LIMIT 1").Scan(&last, &lastVersions, &lastDrift); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		if last > 0 {
@@ -138,7 +138,10 @@ func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, r
 			if lost := lostRepos(lastVector, vector, counted); len(lost) > 0 {
 				return fmt.Errorf("%w: %s", errLostRepos, strings.Join(lost, ", "))
 			}
-			if same(curNodes, newNodes) && same(curEdges, newEdges) && same(lastVector, vector) && jsonEqual(lastDrift, drift) {
+			// the versions too: a projection records what made it, so new pass or extractor logic is a new projection
+			// even when its graph is the same
+			if same(curNodes, newNodes) && same(curEdges, newEdges) && same(lastVector, vector) && jsonEqual(lastDrift, drift) &&
+				jsonEqual(lastVersions, mustJSON(res.Versions)) {
 				seq = last
 				return nil
 			}
@@ -495,7 +498,7 @@ func (g *Graphs) put(ctx context.Context, res extract.Result, repos extract.Repo
 		}
 	}
 	v := viewOf(1, res, repos)
-	sig := string(mustJSON([]any{v.Vector, v.Nodes, v.Edges, v.Drift}))
+	sig := string(mustJSON([]any{v.Vector, v.Nodes, v.Edges, v.Drift, v.Extractors}))
 	g.mu.Lock()
 	same := sig == g.sig
 	g.mu.Unlock()

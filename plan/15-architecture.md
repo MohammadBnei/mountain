@@ -193,10 +193,12 @@ These already follow the standard:
    - the post-extraction passes become a versioned ordered list.
    
    **The gap was metadata only** (corrected in step 3). The passes carried no version, so a change to the watch,
-   needs or walls logic didn't show in a projection's recorded versions. No stale graph ever resulted: a restart
-   clears the round cache, and the store compares the graph's content. Now each pass records `pass:<name>`, and
-   `realms` records the digest of the realms.yaml the binary embeds, so a projection is a pure function of what it
-   records (plan/10 "Rebuilds").
+   needs or walls logic didn't show in a projection's recorded versions. The deployed service never served a stale
+   graph: a restart clears the round cache, and the store compares the graph's content. Now each pass records
+   `pass:<name>`, `realms` records the digest of the realms.yaml the binary embeds, and new versions over the same
+   graph store a new projection, so a projection is a pure function of what it records (plan/10 "Rebuilds"). One
+   case stays: an `atlas project` run from another binary at the same vector is not replaced by the service until a
+   head moves (its round cache keys on the vector).
 3. **The game:**
    - `internal/`;
    - the error model and config;

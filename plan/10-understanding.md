@@ -111,8 +111,8 @@ services, and 67 + 79 + 21 ADRs.
   - Any extractor reads app values at the same vector's `repo@targetRevision`.
 - **Rebuilds.** A snapshot is a pure function of what it records: the extractor and pass versions (`pass:<name>`),
   the digest of the realms.yaml atlas was built with (`realms`: read from the binary, not the checkout), and the
-  vector. mountain's `contract` tables are an input too, read by the extractors and the watch pass; a change there
-  must bump their versions. A fixed extractor or pass re-projects into a new epoch rather than patching rows.
+  vector. mountain's `contract` tables are an input too, read by the watch pass; a change there must bump
+  `pass:watch`. New versions over the same graph store a new projection, so the latest records what made it. A fixed extractor or pass re-projects into a new epoch rather than patching rows.
 
 **Read side (mountain's Pigsty DB, a new migration series).**
 - `vector(seq, repo, branch, declared_sha, deployed_sha, at)`.
