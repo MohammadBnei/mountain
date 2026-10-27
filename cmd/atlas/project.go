@@ -31,7 +31,8 @@ type heads interface {
 }
 
 // errUnchanged: every head is where the last stored round read it, so the extractors are not run again (a projection
-// is a pure function of the extractor versions and the vector).
+// is a pure function of the extractor and pass versions, the realms digest and the vector, and only the vector moves
+// while the process runs).
 var errUnchanged = errors.New("unchanged")
 
 // roundCache carries what the last round learned: the branches infra-bootstrap's registry names (at its sha) and the

@@ -192,9 +192,11 @@ These already follow the standard:
      The metric vecs stay global until the OTel step replaces them: moving them twice is churn;
    - the post-extraction passes become a versioned ordered list.
    
-   **This fixes a real bug.** Those passes carry no version today, so a change to the watch, needs or walls logic
-   doesn't show in the projection's recorded versions, which breaks "a projection is a pure function of the
-   extractor versions" (`cmd/atlas/project.go`).
+   **The gap was metadata only** (corrected in step 3). The passes carried no version, so a change to the watch,
+   needs or walls logic didn't show in a projection's recorded versions. No stale graph ever resulted: a restart
+   clears the round cache, and the store compares the graph's content. Now each pass records `pass:<name>`, and
+   `realms` records the digest of the realms.yaml the binary embeds, so a projection is a pure function of what it
+   records (plan/10 "Rebuilds").
 3. **The game:**
    - `internal/`;
    - the error model and config;

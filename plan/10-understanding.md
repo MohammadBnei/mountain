@@ -109,8 +109,10 @@ services, and 67 + 79 + 21 ADRs.
   - Vendored trees (`pigsty/conf`, `pigsty/roles`) and submodule paths are skipped; a submodule pointer is a `git`
     edge only.
   - Any extractor reads app values at the same vector's `repo@targetRevision`.
-- **Rebuilds.** A snapshot is a pure function of (extractor versions, vector). A fixed extractor re-projects into a
-  new epoch rather than patching rows.
+- **Rebuilds.** A snapshot is a pure function of what it records: the extractor and pass versions (`pass:<name>`),
+  the digest of the realms.yaml atlas was built with (`realms`: read from the binary, not the checkout), and the
+  vector. mountain's `contract` tables are an input too, read by the extractors and the watch pass; a change there
+  must bump their versions. A fixed extractor or pass re-projects into a new epoch rather than patching rows.
 
 **Read side (mountain's Pigsty DB, a new migration series).**
 - `vector(seq, repo, branch, declared_sha, deployed_sha, at)`.

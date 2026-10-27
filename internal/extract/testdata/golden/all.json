@@ -1114,7 +1114,15 @@
   "gitops": 1,
   "kubespray": 1,
   "machines": 1,
-  "pigsty": 1
+  "pass:branchDrift": 1,
+  "pass:declare": 1,
+  "pass:place": 1,
+  "pass:rehome": 1,
+  "pass:repoNodes": 1,
+  "pass:resolve": 1,
+  "pass:watch": 1,
+  "pigsty": 1,
+  "realms": 1115609892
  },
  "Skipped": null
 }

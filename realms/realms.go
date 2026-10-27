@@ -3,7 +3,9 @@
 package realms
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"encoding/binary"
 	"fmt"
 	"slices"
 	"strings"
@@ -41,6 +43,10 @@ type Realms struct {
 	Addons       map[string][]string  `yaml:"addons"`    // addon node -> its workloads: daemonset/<n>, deployment/<n>, static
 	Walls        map[string][]string  `yaml:"walls"`     // door (dns:<host>) -> what the sources can't show of its gate (WallKinds)
 	Shapes       map[string][]string  `yaml:"shapes"`    // "<realm>/<group>" -> the kit shapes its buildings ask for (ukubi-kit catalog/shapes.yaml)
+
+	// Digest is the first 32 bits of the file's sha256: a projection records it, since atlas reads realms.yaml from
+	// its binary, not from the mountain checkout it projects.
+	Digest int `yaml:"-"`
 }
 
 // WallKinds are what a walls row may say of a door: a mark (public: meant for everyone; own: the app authenticates
@@ -139,6 +145,8 @@ func Parse(b []byte) (*Realms, error) {
 	if err := yaml.Unmarshal(b, &r); err != nil {
 		return nil, fmt.Errorf("realms.yaml: %w", err)
 	}
+	sum := sha256.Sum256(b)
+	r.Digest = int(binary.BigEndian.Uint32(sum[:4]))
 	if !slices.Contains(r.Realms, Code) {
 		return nil, fmt.Errorf("realms.yaml: realms must include %q (atlas places the repos there)", Code)
 	}

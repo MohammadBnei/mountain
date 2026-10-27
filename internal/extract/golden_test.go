@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -54,5 +55,20 @@ func TestGolden(t *testing.T) {
 				t.Errorf("%s changed: run with -update and review the diff", path)
 			}
 		})
+	}
+}
+
+// TestPasses: the passes keep their documented order (each runs on what the ones before made), and each has a name
+// and a version, which a stored projection records.
+func TestPasses(t *testing.T) {
+	var names []string
+	for _, p := range passes() {
+		if p.name == "" || p.version < 1 || p.run == nil {
+			t.Errorf("pass %q: version %d", p.name, p.version)
+		}
+		names = append(names, p.name)
+	}
+	if want := []string{"declare", "repoNodes", "resolve", "rehome", "place", "watch", "branchDrift"}; !slices.Equal(names, want) {
+		t.Errorf("passes %v, want %v (a new order is a new version of every pass it moves)", names, want)
 	}
 }
