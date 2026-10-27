@@ -105,7 +105,7 @@ func TestPromPoll(t *testing.T) {
 			"memcapnode": pvec(`{"node":"k8s-cp-01"}`, "8e9"),
 		}
 	})
-	p := &promPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex}
+	p := &promPoll{l: l, prom: promHTTP{base: srv.URL, hc: http.DefaultClient}, idx: testIndex}
 	ctx := context.Background()
 	t0 := time.Now()
 	if err := p.poll(ctx, t0); err != nil {
@@ -150,7 +150,7 @@ func TestAlertPoll(t *testing.T) {
 	code := 200
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(code); w.Write([]byte(body)) }))
 	defer srv.Close()
-	a := &amPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex, firing: map[string]AlertLive{}}
+	a := &amPoll{l: l, am: amHTTP{base: srv.URL, hc: http.DefaultClient}, idx: testIndex, firing: map[string]AlertLive{}}
 	ctx := context.Background()
 	if err := a.poll(ctx, time.Now()); err != nil {
 		t.Fatal(err)
@@ -204,7 +204,7 @@ func TestLiveQuiet(t *testing.T) {
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`[]`)) }))
 	defer srv.Close()
-	a := &amPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex, firing: map[string]AlertLive{}}
+	a := &amPoll{l: l, am: amHTTP{base: srv.URL, hc: http.DefaultClient}, idx: testIndex, firing: map[string]AlertLive{}}
 	a.poll(context.Background(), time.Now())
 	if !strings.Contains(string(mustJSON(l.st)), `"alerts":[]`) {
 		t.Errorf("no alerts: %s", mustJSON(l.st))
@@ -244,7 +244,7 @@ func TestSignals(t *testing.T) {
 		mu.Unlock()
 		counting.ServeHTTP(w, r)
 	})
-	p := &promPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex}
+	p := &promPoll{l: l, prom: promHTTP{base: srv.URL, hc: http.DefaultClient}, idx: testIndex}
 	ctx, t0 := context.Background(), time.Now()
 	if err := p.poll(ctx, t0); err != nil {
 		t.Fatal(err)
@@ -331,7 +331,7 @@ func TestAddonReadiness(t *testing.T) {
 			"deployready": pvec(`{"namespace":"kube-system","deployment":"cilium-operator"}`, "0.5", `{"namespace":"kube-system","deployment":"hubble-relay"}`, "1", `{"namespace":"metallb-system","deployment":"controller"}`, "1"),
 		}
 	})
-	p := &promPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: func() *GraphIndex { return idx }}
+	p := &promPoll{l: l, prom: promHTTP{base: srv.URL, hc: http.DefaultClient}, idx: func() *GraphIndex { return idx }}
 	if err := p.poll(context.Background(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +448,7 @@ func TestLiveHealth(t *testing.T) {
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`[]`)) }))
 	defer srv.Close()
-	a := &amPoll{l: l, url: srv.URL, hc: http.DefaultClient, idx: testIndex, firing: map[string]AlertLive{}}
+	a := &amPoll{l: l, am: amHTTP{base: srv.URL, hc: http.DefaultClient}, idx: testIndex, firing: map[string]AlertLive{}}
 	n := len(c.send)
 	a.poll(context.Background(), time.Now())
 	first := l.st.AlertsAt

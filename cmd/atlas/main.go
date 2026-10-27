@@ -151,7 +151,10 @@ func serve(o Opts) error {
 			return err
 		}
 	} else {
-		a.Live.start(ctx, o.PromURL, o.AMURL, func() *GraphIndex { return a.Graph.index() })
+		hc := &http.Client{Timeout: 10 * time.Second}
+		prom := promHTTP{base: strings.TrimRight(o.PromURL, "/"), hc: hc}
+		alerts := amHTTP{base: strings.TrimRight(o.AMURL, "/"), hc: hc}
+		a.Live.start(ctx, prom, alerts, func() *GraphIndex { return a.Graph.index() })
 	}
 
 	pub := &http.Server{Addr: o.Listen, Handler: routes(a, www), ReadHeaderTimeout: 10 * time.Second}

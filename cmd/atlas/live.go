@@ -185,10 +185,10 @@ func (l *Live) loadFixture(file string) error {
 	return nil
 }
 
-func (l *Live) start(ctx context.Context, promURL, amURL string, idx func() *GraphIndex) {
-	hc := &http.Client{Timeout: 10 * time.Second}
-	p := &promPoll{l: l, url: strings.TrimRight(promURL, "/"), hc: hc, idx: idx}
-	am := &amPoll{l: l, url: strings.TrimRight(amURL, "/"), hc: hc, idx: idx, firing: map[string]AlertLive{}}
+// start polls both sources every liveEvery, each in its own goroutine.
+func (l *Live) start(ctx context.Context, prom promAPI, alerts alertsAPI, idx func() *GraphIndex) {
+	p := &promPoll{l: l, prom: prom, idx: idx}
+	am := &amPoll{l: l, am: alerts, idx: idx, firing: map[string]AlertLive{}}
 	for name, run := range map[string]func(context.Context, time.Time) error{"prom": p.poll, "alerts": am.poll} {
 		SourceLastSuccess.Set(name, float64(time.Now().Unix())) // seeded: a source that never answers still ages into the alert
 		go func() {
@@ -229,27 +229,25 @@ type sample struct {
 	V float64
 }
 
-type promPoll struct {
-	l   *Live
-	url string
-	hc  *http.Client
-	idx func() *GraphIndex
-	sig map[string]signalAnswer // the last answer to each signal
+// promAPI is what the live overlay asks of Prometheus: one instant query's samples. A value that isn't a number
+// (NaN, ±Inf, not a string) is no sample.
+type promAPI interface {
+	Query(ctx context.Context, q string) ([]sample, error)
 }
 
-// signalAnswer is a signal's last answer: asked when, and what it said (ok false: failed or empty, so unknown).
-type signalAnswer struct {
-	at time.Time
-	ok bool
-	s  []sample
+// promHTTP is Prometheus' HTTP API (contract.PromQueryPath). An answer is an error when its body doesn't decode or
+// its status isn't "success"; the HTTP status is only reported.
+type promHTTP struct {
+	base string // no trailing slash
+	hc   *http.Client
 }
 
-func query(ctx context.Context, hc *http.Client, base, q string) ([]sample, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", base+contract.PromQueryPath+"?query="+url.QueryEscape(q), nil)
+func (c promHTTP) Query(ctx context.Context, q string) ([]sample, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.base+contract.PromQueryPath+"?query="+url.QueryEscape(q), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := hc.Do(req)
+	resp, err := c.hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -278,10 +276,24 @@ func query(ctx context.Context, hc *http.Client, base, q string) ([]sample, erro
 	return s, nil
 }
 
+type promPoll struct {
+	l    *Live
+	prom promAPI
+	idx  func() *GraphIndex
+	sig  map[string]signalAnswer // the last answer to each signal
+}
+
+// signalAnswer is a signal's last answer: asked when, and what it said (ok false: failed or empty, so unknown).
+type signalAnswer struct {
+	at time.Time
+	ok bool
+	s  []sample
+}
+
 func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	r := map[string][]sample{}
 	for name, q := range contract.Queries { // the sim mirrors exactly these
-		s, err := query(ctx, p.hc, p.url, q)
+		s, err := p.prom.Query(ctx, q)
 		if err != nil {
 			QueryFailed.Add(name, 1)
 			return err
@@ -293,46 +305,163 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	if idx == nil {
 		idx = &GraphIndex{Realm: map[string]string{}, NSApps: map[string][]string{}, Has: map[string]bool{}}
 	}
+	j := &join{r: r, sig: p.sig, idx: idx, rl: p.l.rl}
+	for _, jn := range joiners() {
+		jn.run(j)
+	}
+	apps, ready, probes := j.apps, j.ready, j.probes
+
+	// changes become events, then the frame goes out whole
+	p.l.mu.Lock()
+	old := p.l.st
+	p.l.mu.Unlock()
+	if old.At != 0 {
+		for _, id := range slices.Sorted(maps.Keys(apps)) {
+			if o, ok := old.Apps[id]; ok && o.Health != apps[id].Health && apps[id].Health != "" {
+				p.l.event("health", id, fmt.Sprintf("%s: %s → %s", strings.TrimPrefix(id, "app:"), o.Health, apps[id].Health))
+			}
+		}
+		for _, id := range slices.Sorted(maps.Keys(ready)) {
+			if o, ok := old.Ready[id]; ok && o != ready[id] {
+				p.l.event("ready", id, fmt.Sprintf("%s %s", strings.TrimPrefix(id, "vm:"), map[bool]string{true: "is Ready again", false: "is not Ready"}[ready[id]]))
+			}
+		}
+		for _, id := range slices.Sorted(maps.Keys(probes)) {
+			if o, ok := old.Probes[id]; ok && o != probes[id] {
+				_, name, _ := strings.Cut(id, ":")
+				p.l.event("probe", id, fmt.Sprintf("%s %s", name, map[bool]string{true: "answers again", false: "stopped answering"}[probes[id]]))
+			}
+		}
+	}
+	p.l.update(func(s *LiveState) {
+		s.At, s.Apps, s.Ready, s.Probes, s.Land = now.UnixMilli(), apps, ready, probes, j.land
+		s.ProbeDay, s.Pods, s.Day, s.Addons = j.probeDay, j.pods, j.day, j.addons
+	})
+	return nil
+}
+
+// signals asks each optional query whose time has come (contract.Signals' cadence). A failure is counted and makes
+// the signal unknown until its next answer; it never fails the poll.
+func (p *promPoll) signals(ctx context.Context, now time.Time) {
+	if p.sig == nil {
+		p.sig = map[string]signalAnswer{}
+	}
+	for _, name := range slices.Sorted(maps.Keys(contract.Signals)) {
+		sg := contract.Signals[name]
+		// half a tick of slack: the ticker's wake-ups jitter, and a 15 s signal must not skip every other tick
+		if last, ok := p.sig[name]; ok && now.Sub(last.at) < time.Duration(sg.Every)*time.Second-liveEvery/2 {
+			continue
+		}
+		s, err := p.prom.Query(ctx, sg.Query)
+		if err != nil {
+			QueryFailed.Add(name, 1)
+		}
+		p.sig[name] = signalAnswer{at: now, ok: err == nil && len(s) > 0, s: s}
+	}
+}
+
+// ---- the joins: one poll's answers onto the graph's nodes
+
+// join is one poll's answers (contract.Queries' and the signals' last), the graph they land on, and what the
+// joiners make of them. apps, ready, probes and land are always set (the frame says {} for none); probeDay, pods,
+// addons and day stay nil while their signals are unknown (absent from the frame, never a zero).
+type join struct {
+	r   map[string][]sample
+	sig map[string]signalAnswer
+	idx *GraphIndex
+	rl  *realms.Realms
+
+	apps     map[string]AppLive
+	ready    map[string]bool
+	probes   map[string]bool
+	land     Land
+	probeDay map[string]float64
+	pods     map[string]int
+	addons   map[string]float64
+	day      *Day
+}
+
+// known is a signal's samples, and whether it is known (answered, and not empty).
+func (j *join) known(name string) ([]sample, bool) { a := j.sig[name]; return a.s, a.ok }
+
+// joiner is one ordered stage of the join (plan/15 §2). It has no version: the live frame is never stored.
+type joiner struct {
+	name string
+	run  func(j *join)
+}
+
+// joiners is the join, in order: rps and appsignals add to the apps that apps found.
+func joiners() []joiner {
+	return []joiner{
+		{"apps", joinApps},
+		{"rps", joinRPS},
+		{"ready", joinReady},
+		{"probes", joinProbes},
+		{"land", joinLand},
+		{"appsignals", joinAppSignals},
+		{"probeday", joinProbeDay},
+		{"pods", joinPods},
+		{"addons", joinAddons},
+		{"day", joinDay},
+	}
+}
+
+// joinApps: ArgoCD's health and sync per Application, by its name.
+func joinApps(j *join) {
+	j.apps = map[string]AppLive{}
+	for _, s := range j.r["info"] {
+		id := "app:" + strings.ToLower(s.L[contract.LabelName])
+		if j.idx.Has[id] {
+			j.apps[id] = AppLive{Health: s.L[contract.LabelHealth], Sync: s.L[contract.LabelSync]}
+		}
+	}
+}
+
+// joinRPS: Traefik's requests per second per Application, from the exported service
+// "<namespace>-<service>-<port>@<provider>".
+func joinRPS(j *join) {
+	for _, s := range j.r["req"] {
+		if id := appOfService(j.idx, s.L[contract.LabelExportedService]); id != "" {
+			a := j.apps[id]
+			a.RPS += s.V
+			j.apps[id] = a
+		}
+	}
+	for id, a := range j.apps {
+		a.RPS = math.Round(a.RPS*100) / 100
+		j.apps[id] = a
+	}
+}
+
+// joinReady: each k8s node's Ready condition, as its vm node.
+func joinReady(j *join) {
+	j.ready = map[string]bool{}
+	for _, s := range j.r["ready"] {
+		if id := "vm:" + strings.ToLower(s.L[contract.LabelNode]); j.idx.Has[id] {
+			j.ready[id] = s.V == 1
+		}
+	}
+}
+
+// joinProbes: blackbox targets as the node they probe.
+func joinProbes(j *join) {
+	j.probes = map[string]bool{}
+	for _, s := range j.r["probes"] {
+		if id := j.rl.ProbeNode(s.L[contract.LabelTarget]); id != "" {
+			j.probes[id] = s.V == 1
+		}
+	}
+}
+
+// joinLand: the land lens. Capacity, use per namespace and per k8s node, and each realm's share of the capacity.
+func joinLand(j *join) {
+	r, idx := j.r, j.idx
 	one := func(n string) float64 {
 		if len(r[n]) > 0 {
 			return r[n][0].V
 		}
 		return 0
 	}
-
-	apps := map[string]AppLive{}
-	for _, s := range r["info"] {
-		id := "app:" + strings.ToLower(s.L[contract.LabelName])
-		if idx.Has[id] {
-			apps[id] = AppLive{Health: s.L[contract.LabelHealth], Sync: s.L[contract.LabelSync]}
-		}
-	}
-	// Traefik: requests per second per Application, from the exported service "<namespace>-<service>-<port>@<provider>"
-	for _, s := range r["req"] {
-		if id := appOfService(idx, s.L[contract.LabelExportedService]); id != "" {
-			a := apps[id]
-			a.RPS += s.V
-			apps[id] = a
-		}
-	}
-	for id, a := range apps {
-		a.RPS = math.Round(a.RPS*100) / 100
-		apps[id] = a
-	}
-
-	ready := map[string]bool{}
-	for _, s := range r["ready"] {
-		if id := "vm:" + strings.ToLower(s.L[contract.LabelNode]); idx.Has[id] {
-			ready[id] = s.V == 1
-		}
-	}
-	probes := map[string]bool{}
-	for _, s := range r["probes"] {
-		if id := p.l.rl.ProbeNode(s.L[contract.LabelTarget]); id != "" {
-			probes[id] = s.V == 1
-		}
-	}
-
 	land := Land{Capacity: Use{CPU: one("cpucap"), Mem: one("memcap"), Disk: one("diskcap")}, Realms: map[string]Use{}, NS: map[string]Use{},
 		NSRealm: map[string]string{}, Nodes: map[string]NodeLand{}}
 	node := func(name string) (NodeLand, string, bool) {
@@ -394,11 +523,11 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	}
 	for _, n := range land.Nodes {
 		for ns := range n.NS {
-			land.NSRealm[ns] = realmOfNS(idx, p.l.rl, ns)
+			land.NSRealm[ns] = realmOfNS(idx, j.rl, ns)
 		}
 	}
 	for ns, u := range land.NS {
-		realm := realmOfNS(idx, p.l.rl, ns)
+		realm := realmOfNS(idx, j.rl, ns)
 		land.NSRealm[ns] = realm
 		t := land.Realms[realm]
 		t.CPU += share(u.CPU, land.Capacity.CPU)
@@ -409,77 +538,20 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	for k, u := range land.Realms {
 		land.Realms[k] = Use{CPU: round3(u.CPU), Mem: round3(u.Mem), Disk: round3(u.Disk)}
 	}
-
-	sig := p.joinSignals(idx, apps)
-
-	// changes become events, then the frame goes out whole
-	p.l.mu.Lock()
-	old := p.l.st
-	p.l.mu.Unlock()
-	if old.At != 0 {
-		for _, id := range slices.Sorted(maps.Keys(apps)) {
-			if o, ok := old.Apps[id]; ok && o.Health != apps[id].Health && apps[id].Health != "" {
-				p.l.event("health", id, fmt.Sprintf("%s: %s → %s", strings.TrimPrefix(id, "app:"), o.Health, apps[id].Health))
-			}
-		}
-		for _, id := range slices.Sorted(maps.Keys(ready)) {
-			if o, ok := old.Ready[id]; ok && o != ready[id] {
-				p.l.event("ready", id, fmt.Sprintf("%s %s", strings.TrimPrefix(id, "vm:"), map[bool]string{true: "is Ready again", false: "is not Ready"}[ready[id]]))
-			}
-		}
-		for _, id := range slices.Sorted(maps.Keys(probes)) {
-			if o, ok := old.Probes[id]; ok && o != probes[id] {
-				_, name, _ := strings.Cut(id, ":")
-				p.l.event("probe", id, fmt.Sprintf("%s %s", name, map[bool]string{true: "answers again", false: "stopped answering"}[probes[id]]))
-			}
-		}
-	}
-	p.l.update(func(s *LiveState) {
-		s.At, s.Apps, s.Ready, s.Probes, s.Land = now.UnixMilli(), apps, ready, probes, land
-		s.ProbeDay, s.Pods, s.Day, s.Addons = sig.probeDay, sig.pods, sig.day, sig.addons
-	})
-	return nil
+	j.land = land
 }
 
-// signals asks each optional query whose time has come (contract.Signals' cadence). A failure is counted and makes
-// the signal unknown until its next answer; it never fails the poll.
-func (p *promPoll) signals(ctx context.Context, now time.Time) {
-	if p.sig == nil {
-		p.sig = map[string]signalAnswer{}
-	}
-	for _, name := range slices.Sorted(maps.Keys(contract.Signals)) {
-		sg := contract.Signals[name]
-		// half a tick of slack: the ticker's wake-ups jitter, and a 15 s signal must not skip every other tick
-		if last, ok := p.sig[name]; ok && now.Sub(last.at) < time.Duration(sg.Every)*time.Second-liveEvery/2 {
-			continue
-		}
-		s, err := query(ctx, p.hc, p.url, sg.Query)
-		if err != nil {
-			QueryFailed.Add(name, 1)
-		}
-		p.sig[name] = signalAnswer{at: now, ok: err == nil && len(s) > 0, s: s}
-	}
-}
-
-type joined struct {
-	addons   map[string]float64
-	probeDay map[string]float64
-	pods     map[string]int
-	day      *Day
-}
-
-// joinSignals puts the known signals on their nodes: per app (into apps), per probed node, per k8s node, and the
-// town's day. Only a known signal writes anything.
-func (p *promPoll) joinSignals(idx *GraphIndex, apps map[string]AppLive) joined {
-	known := func(name string) ([]sample, bool) { a := p.sig[name]; return a.s, a.ok }
+// joinAppSignals: per app, summed over its Traefik services, its 5xx rate, its p95 latency (the slowest service's),
+// its last 24 h of requests and their availability. Only a known signal writes anything.
+func joinAppSignals(j *join) {
 	perApp := func(name string, merge func(a, v float64) float64) map[string]float64 {
 		out := map[string]float64{}
-		s, ok := known(name)
+		s, ok := j.known(name)
 		if !ok {
 			return nil
 		}
 		for _, x := range s {
-			if id := appOfService(idx, x.L[contract.LabelExportedService]); id != "" {
+			if id := appOfService(j.idx, x.L[contract.LabelExportedService]); id != "" {
 				if v, seen := out[id]; seen {
 					out[id] = merge(v, x.V)
 				} else {
@@ -492,8 +564,8 @@ func (p *promPoll) joinSignals(idx *GraphIndex, apps map[string]AppLive) joined 
 	sum := func(a, v float64) float64 { return a + v }
 	ptr := func(v float64) *float64 { return &v }
 	errs, lat, reqDay, errDay := perApp("err", sum), perApp("lat", math.Max), perApp("reqday", sum), perApp("errday", sum)
-	for id := range apps {
-		a := apps[id]
+	for id := range j.apps {
+		a := j.apps[id]
 		if v, ok := errs[id]; ok {
 			a.Err = ptr(math.Round(v*1000) / 1000)
 		}
@@ -506,76 +578,91 @@ func (p *promPoll) joinSignals(idx *GraphIndex, apps map[string]AppLive) joined 
 				a.Avail = ptr(math.Round((1-e/v)*10000) / 10000)
 			}
 		}
-		apps[id] = a
+		j.apps[id] = a
 	}
+}
 
-	var j joined
-	if s, ok := known("probeday"); ok {
+// joinProbeDay: per probed node, the share of its probes that succeeded in the last 24 h.
+func joinProbeDay(j *join) {
+	if s, ok := j.known("probeday"); ok {
 		j.probeDay = map[string]float64{}
 		for _, x := range s {
-			if id := p.l.rl.ProbeNode(x.L[contract.LabelTarget]); id != "" {
+			if id := j.rl.ProbeNode(x.L[contract.LabelTarget]); id != "" {
 				j.probeDay[id] = math.Round(x.V*10000) / 10000
 			}
 		}
 	}
-	if s, ok := known("pods"); ok {
+}
+
+// joinPods: pods per k8s node.
+func joinPods(j *join) {
+	if s, ok := j.known("pods"); ok {
 		j.pods = map[string]int{}
 		for _, x := range s {
-			if id := "vm:" + strings.ToLower(x.L[contract.LabelNode]); idx.Has[id] {
+			if id := "vm:" + strings.ToLower(x.L[contract.LabelNode]); j.idx.Has[id] {
 				j.pods[id] = int(x.V)
 			}
 		}
 	}
-	// an add-on's readiness: its least ready workload (realms.yaml addons); unknown when one of them isn't answered
-	// (a static pod, like kube-vip, never is)
-	ds, okDS := known("dsready")
-	dep, okDep := known("deployready")
-	if okDS || okDep {
-		ready := map[string]float64{} // "<namespace>/<kind>/<name>" -> share
-		for kind, list := range map[string][]sample{"daemonset": ds, "deployment": dep} {
-			label := map[string]string{"daemonset": contract.LabelDaemonSet, "deployment": contract.LabelDeployment}[kind]
-			for _, x := range list {
-				ready[x.L[contract.LabelNamespace]+"/"+kind+"/"+x.L[label]] = x.V
-			}
-		}
-		j.addons = map[string]float64{}
-	next:
-		for id, wl := range p.l.rl.Addons {
-			ns := idx.Into[id]
-			if !idx.Has[id] || ns == "" || len(wl) == 0 {
-				continue
-			}
-			least := 1.0
-			for _, w := range wl {
-				v, ok := ready[ns+"/"+w]
-				if !ok {
-					continue next
-				}
-				least = min(least, v)
-			}
-			j.addons[id] = math.Round(least*1000) / 1000
+}
+
+// joinAddons: an add-on's readiness, its least ready workload (realms.yaml addons); unknown when one of them isn't
+// answered (a static pod, like kube-vip, never is).
+func joinAddons(j *join) {
+	ds, okDS := j.known("dsready")
+	dep, okDep := j.known("deployready")
+	if !okDS && !okDep {
+		return
+	}
+	ready := map[string]float64{} // "<namespace>/<kind>/<name>" -> share
+	for kind, list := range map[string][]sample{"daemonset": ds, "deployment": dep} {
+		label := map[string]string{"daemonset": contract.LabelDaemonSet, "deployment": contract.LabelDeployment}[kind]
+		for _, x := range list {
+			ready[x.L[contract.LabelNamespace]+"/"+kind+"/"+x.L[label]] = x.V
 		}
 	}
-	crit, okC := known("critday")
-	deg, okD := known("degradedday")
-	if okC && okD {
-		d := &Day{Critical: []string{}, Degraded: []string{}}
-		for _, x := range crit {
-			if n := x.L[contract.LabelAlertName]; n != "" && x.V > 0 {
-				d.Critical = append(d.Critical, n)
-			}
+	j.addons = map[string]float64{}
+next:
+	for id, wl := range j.rl.Addons {
+		ns := j.idx.Into[id]
+		if !j.idx.Has[id] || ns == "" || len(wl) == 0 {
+			continue
 		}
-		for _, x := range deg {
-			if id := "app:" + strings.ToLower(x.L[contract.LabelName]); x.V > 0 && idx.Has[id] {
-				d.Degraded = append(d.Degraded, id)
+		least := 1.0
+		for _, w := range wl {
+			v, ok := ready[ns+"/"+w]
+			if !ok {
+				continue next
 			}
+			least = min(least, v)
 		}
-		slices.Sort(d.Critical)
-		slices.Sort(d.Degraded)
-		d.Calm = len(d.Critical) == 0 && len(d.Degraded) == 0
-		j.day = d
+		j.addons[id] = math.Round(least*1000) / 1000
 	}
-	return j
+}
+
+// joinDay: the town's last 24 h, when both its signals are known: which critical alerts fired, which apps were
+// Degraded, calm when neither.
+func joinDay(j *join) {
+	crit, okC := j.known("critday")
+	deg, okD := j.known("degradedday")
+	if !okC || !okD {
+		return
+	}
+	d := &Day{Critical: []string{}, Degraded: []string{}}
+	for _, x := range crit {
+		if n := x.L[contract.LabelAlertName]; n != "" && x.V > 0 {
+			d.Critical = append(d.Critical, n)
+		}
+	}
+	for _, x := range deg {
+		if id := "app:" + strings.ToLower(x.L[contract.LabelName]); x.V > 0 && j.idx.Has[id] {
+			d.Degraded = append(d.Degraded, id)
+		}
+	}
+	slices.Sort(d.Critical)
+	slices.Sort(d.Degraded)
+	d.Calm = len(d.Critical) == 0 && len(d.Degraded) == 0
+	j.day = d
 }
 
 func round3(x float64) float64 { return math.Round(x*1000) / 1000 }
@@ -629,33 +716,56 @@ func realmOfNS(idx *GraphIndex, rl *realms.Realms, ns string) string {
 
 // ---- Alertmanager
 
+// amAlert is one alert as Alertmanager's v2 API answers it. An alias of the decoded struct, so a decode error reads as
+// it always has.
+type amAlert = struct {
+	Fingerprint string
+	StartsAt    time.Time
+	Labels      map[string]string
+	Annotations map[string]string
+}
+
+// alertsAPI is what the live overlay asks of Alertmanager: the active alerts, neither silenced nor inhibited.
+type alertsAPI interface {
+	Alerts(ctx context.Context) ([]amAlert, error)
+}
+
+// amHTTP is Alertmanager's HTTP API (contract.AlertsPath). A status other than 200, a body that doesn't decode and
+// a null body are errors: a null body is no answer, not "none firing".
+type amHTTP struct {
+	base string // no trailing slash
+	hc   *http.Client
+}
+
+func (c amHTTP) Alerts(ctx context.Context) ([]amAlert, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.base+contract.AlertsPath, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var r []amAlert
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil || resp.StatusCode != http.StatusOK || r == nil {
+		return nil, fmt.Errorf("alertmanager: status %d, %v", resp.StatusCode, err)
+	}
+	return r, nil
+}
+
 type amPoll struct {
 	l      *Live
-	url    string
-	hc     *http.Client
+	am     alertsAPI
 	idx    func() *GraphIndex
 	firing map[string]AlertLive // fingerprint -> alert
 	warm   bool
 }
 
 func (a *amPoll) poll(ctx context.Context, now time.Time) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", a.url+contract.AlertsPath, nil)
+	r, err := a.am.Alerts(ctx)
 	if err != nil {
 		return err
-	}
-	resp, err := a.hc.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	var r []struct {
-		Fingerprint string
-		StartsAt    time.Time
-		Labels      map[string]string
-		Annotations map[string]string
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil || resp.StatusCode != http.StatusOK || r == nil {
-		return fmt.Errorf("alertmanager: status %d, %v", resp.StatusCode, err) // a null body is no answer, not "none firing"
 	}
 	idx := a.idx()
 	if idx == nil {
