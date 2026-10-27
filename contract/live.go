@@ -116,127 +116,160 @@ type Topology struct {
 const AddonHold = 2 * 60 * 1000
 
 // Classify is each measured node's health from a frame (plan/13 §3 Building health; atlas's page, R8):
-//   - app: ArgoCD's health (Degraded degraded, Missing down, Progressing and Suspended ok, Unknown or absent unknown);
-//   - a probed node: down when its probe fails; a k8s node (vm): down when not Ready;
-//   - host: degraded when some of the k8s nodes on it are not Ready (its own probe, when it has one, comes first);
-//   - db: by Majority over the VMs it runs on (each by its probe, else its Ready);
-//   - add-on: degraded once below all ready for AddonHold (lowSince: since when, unix ms), unknown when its
-//     workloads aren't answered (kube-vip, a static pod, never is).
+//   - a probed node: down when its probe fails; a k8s node (vm): down when not Ready. This node rule comes first for
+//     every kind, measurable or not, unless its classifier says otherwise (app);
+//   - then the kind's classifier (classifiers): app by ArgoCD, host by the k8s nodes on it, db by Majority over the
+//     VMs it runs on, add-on by its readiness held for AddonHold.
 //
-// Only measurable kinds and measured nodes get an entry; anything else is unknown: "nothing live measures it". With
-// no Prometheus answer yet (At 0) every entry is unknown.
+// Only measurable kinds (those with a classifier) and measured nodes get an entry; anything else is unknown:
+// "nothing live measures it". With no Prometheus answer yet (At 0) every measurable entry is unknown.
 func Classify(t Topology, f *Live, lowSince map[string]int64, now int64) map[string]Health {
 	out := map[string]Health{}
 	if f == nil {
 		return out
 	}
-	under := map[string][]string{} // host -> what runs on it
+	j := &judge{t: t, f: f, low: lowSince, now: now, under: map[string][]string{}}
 	for from, tos := range t.RunsOn {
 		for _, to := range tos {
-			under[to] = append(under[to], from)
+			j.under[to] = append(j.under[to], from)
 		}
-	}
-	node := func(id string) (Health, bool) {
-		if up, ok := f.Probes[id]; ok {
-			if up {
-				return Health{OK, "probe answers"}, true
-			}
-			return Health{Down, "probe not answering"}, true
-		}
-		if up, ok := f.Ready[id]; ok {
-			if up {
-				return Health{OK, "node Ready"}, true
-			}
-			return Health{Down, "node not Ready"}, true
-		}
-		return Health{}, false
 	}
 	for id, kind := range t.Kind {
+		c, measurable := classifiers[kind]
 		if f.At == 0 {
-			if measurable(kind) {
+			if measurable {
 				out[id] = Health{Unknown, "no live data yet"}
 			}
 			continue
 		}
-		if h, ok := node(id); ok && kind != "app" {
+		if h, ok := j.node(id); ok && !c.ownRule {
 			out[id] = h
 			continue
 		}
-		switch kind {
-		case "app":
-			a, ok := f.Apps[id]
-			if !ok || a.Health == "" {
-				out[id] = Health{Unknown, "not in ArgoCD's answer"}
-				continue
-			}
-			why := a.Health
-			if a.Sync != "" {
-				why += ", " + a.Sync
-			}
-			st := map[string]string{"Degraded": Degraded, "Missing": Down, "Unknown": Unknown, "Progressing": OK, "Suspended": OK, "Healthy": OK}[a.Health]
-			if st == "" {
-				st = Unknown
-			}
-			out[id] = Health{st, why}
-		case "host":
-			var vms, down int
-			for _, vm := range under[id] {
-				if up, ok := f.Ready[vm]; ok {
-					vms++
-					if !up {
-						down++
-					}
-				}
-			}
-			switch {
-			case vms == 0:
-				out[id] = Health{Unknown, "no k8s node on it"}
-			case down > 0:
-				out[id] = Health{Degraded, fmt.Sprintf("%d of %d k8s nodes not Ready", down, vms)}
-			default:
-				out[id] = Health{OK, fmt.Sprintf("%d k8s nodes Ready", vms)}
-			}
-		case "db":
-			var st []string
-			for _, vm := range t.RunsOn[id] {
-				h, ok := node(vm)
-				if !ok {
-					h.State = Unknown
-				}
-				st = append(st, h.State)
-			}
-			if len(st) == 0 {
-				out[id] = Health{Unknown, "no member it runs on"}
-				continue
-			}
-			up, down := count(st, OK), count(st, Down)
-			out[id] = Health{Majority(st), fmt.Sprintf("%d of %d members answer, %d don't", up, len(st), down)}
-		case "addon":
-			share, ok := f.Addons[id]
-			pct := strconv.Itoa(int(share*100)) + "% ready"
-			switch since, low := lowSince[id]; {
-			case !ok:
-				out[id] = Health{Unknown, "its workloads aren't answered"}
-			case share >= 1:
-				out[id] = Health{OK, "all ready"}
-			case low && now-since >= AddonHold:
-				out[id] = Health{Degraded, pct + ", for over 2 minutes"}
-			default:
-				out[id] = Health{OK, pct + ", rolling"}
-			}
-		case "vm", "ct":
-			out[id] = Health{Unknown, "no probe and no k8s node answer for it"}
+		if measurable {
+			out[id] = c.run(j, id)
 		}
 	}
 	return out
 }
 
-func measurable(kind string) bool {
-	switch kind {
-	case "app", "vm", "ct", "host", "db", "addon":
-		return true
+// classifier is one measurable kind's health. ownRule: the node rule doesn't come first (an app's probe is not its
+// health; ArgoCD's is).
+type classifier struct {
+	ownRule bool
+	run     func(j *judge, id string) Health
+}
+
+// classifiers is the registry, one entry per measurable kind.
+var classifiers = map[string]classifier{
+	"app":   {ownRule: true, run: (*judge).app},
+	"host":  {run: (*judge).host},
+	"db":    {run: (*judge).db},
+	"addon": {run: (*judge).addon},
+	"vm":    {run: (*judge).unanswered},
+	"ct":    {run: (*judge).unanswered},
+}
+
+// judge is what the classifiers read: the topology, the frame, since when each add-on is below all ready, and what
+// runs on each node.
+type judge struct {
+	t     Topology
+	f     *Live
+	low   map[string]int64
+	now   int64
+	under map[string][]string // host -> what runs on it
+}
+
+// node is the node rule: a probe's answer, else a k8s node's Ready.
+func (j *judge) node(id string) (Health, bool) {
+	if up, ok := j.f.Probes[id]; ok {
+		if up {
+			return Health{OK, "probe answers"}, true
+		}
+		return Health{Down, "probe not answering"}, true
 	}
-	return false
+	if up, ok := j.f.Ready[id]; ok {
+		if up {
+			return Health{OK, "node Ready"}, true
+		}
+		return Health{Down, "node not Ready"}, true
+	}
+	return Health{}, false
+}
+
+// app: ArgoCD's health (Degraded degraded, Missing down, Progressing and Suspended ok, Unknown or absent unknown).
+func (j *judge) app(id string) Health {
+	a, ok := j.f.Apps[id]
+	if !ok || a.Health == "" {
+		return Health{Unknown, "not in ArgoCD's answer"}
+	}
+	why := a.Health
+	if a.Sync != "" {
+		why += ", " + a.Sync
+	}
+	st := map[string]string{"Degraded": Degraded, "Missing": Down, "Unknown": Unknown, "Progressing": OK, "Suspended": OK, "Healthy": OK}[a.Health]
+	if st == "" {
+		st = Unknown
+	}
+	return Health{st, why}
+}
+
+// host: degraded when some of the k8s nodes on it are not Ready (its own probe, when it has one, came first).
+func (j *judge) host(id string) Health {
+	var vms, down int
+	for _, vm := range j.under[id] {
+		if up, ok := j.f.Ready[vm]; ok {
+			vms++
+			if !up {
+				down++
+			}
+		}
+	}
+	switch {
+	case vms == 0:
+		return Health{Unknown, "no k8s node on it"}
+	case down > 0:
+		return Health{Degraded, fmt.Sprintf("%d of %d k8s nodes not Ready", down, vms)}
+	}
+	return Health{OK, fmt.Sprintf("%d k8s nodes Ready", vms)}
+}
+
+// db: by Majority over the VMs it runs on (each by the node rule).
+func (j *judge) db(id string) Health {
+	var st []string
+	for _, vm := range j.t.RunsOn[id] {
+		h, ok := j.node(vm)
+		if !ok {
+			h.State = Unknown
+		}
+		st = append(st, h.State)
+	}
+	if len(st) == 0 {
+		return Health{Unknown, "no member it runs on"}
+	}
+	up, down := count(st, OK), count(st, Down)
+	return Health{Majority(st), fmt.Sprintf("%d of %d members answer, %d don't", up, len(st), down)}
+}
+
+// addon: degraded once below all ready for AddonHold (low: since when, unix ms), unknown when its workloads aren't
+// answered (kube-vip, a static pod, never is).
+func (j *judge) addon(id string) Health {
+	share, ok := j.f.Addons[id]
+	pct := strconv.Itoa(int(share*100)) + "% ready"
+	switch since, low := j.low[id]; {
+	case !ok:
+		return Health{Unknown, "its workloads aren't answered"}
+	case share >= 1:
+		return Health{OK, "all ready"}
+	case low && j.now-since >= AddonHold:
+		return Health{Degraded, pct + ", for over 2 minutes"}
+	}
+	return Health{OK, pct + ", rolling"}
+}
+
+// unanswered: a vm or ct the node rule found no answer for.
+func (j *judge) unanswered(string) Health {
+	return Health{Unknown, "no probe and no k8s node answer for it"}
 }
 
 func count(st []string, s string) int {
