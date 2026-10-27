@@ -153,9 +153,11 @@ doesn't.
     exists only locally.
   - atlas keeps its reader (L4).
 - **Registries, each a typed shape:**
-  - lenses: `{id, label, build, apply, legend, labels?}`;
-  - live looks: `{init, apply, frame?, summary, status?}`;
-  - card sections, as a table;
+  - lenses: `{id, label, build, legend, apply?}`. A lens's labels are made by its `build` from atlas's data, so they
+    hang on its group (`g.userData.labels`), not on the lens;
+  - live looks: `{id, init, apply, frame?, summary}`. Each look keeps its own state, made by `init`. The status line
+    stays the page's own projection, because its words mix the looks with what isn't one (construction, staleness);
+  - card sections, as a table of rows `{k, title, items, empty, when}`;
   - levels: `{mount, panel, pick}`, from mountain's level interface;
   - the console: the command grid, the drawers (one per transport) and the confirmation.
   
@@ -221,7 +223,8 @@ These already follow the standard:
 
    The console's slices are next. C1's Kubernetes reads need the same recorded leg, so C1 waits for the cluster too.
 4. **The front end:**
-   - `town.js` into registries;
+   - `town.js` into registries (done, ukubi-game #28–#30: the card, the lenses, the live looks; each proven
+     identical to main's, in its cards, its page and one frame's WebGL draw sequence);
    - Bun and TypeScript;
    - slice 4f;
    - atlas's L0–L3 retired.
