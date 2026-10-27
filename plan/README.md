@@ -14,6 +14,9 @@
 > **Revision 12, 2026-10-25 (draft).** The game's town: everything but the hardware is a building, civs are the
 > realms reshaped, one held age paid by goals, research, users, latency and stability, AoE-style supply lines and
 > defence, kits repainted into palettes (`13-game-town.md`).
+> **Revision 13, 2026-10-27 (draft).** The console: complete control of the cluster from the game, one Go `Provider`
+> interface, direct writes bounded at the API server and audited, the sim mirroring every source (`14-console.md`); and
+> the ukubi architecture standard for every app (`15-architecture.md`).
 > From A2 on, the town sections below (Context, R7–R9, `01`–`08`) are history: the code they describe is gone, and
 > `10-understanding.md` is the live design.
 
@@ -88,6 +91,8 @@ building (it is an LXC). The owner's answers, one question at a time, are the R8
 | Atlas (R10) | The system understanding surface: realm islands, a 5-step ladder, a CQRS projector over the repos and live data, admins only (`10-understanding.md`). Joint with agent-kit | A0 + A1 merged (#28, `8d0e3ad`). A2 merged (#29, `7c8623a`): `cmd/atlas` replaces the relay, L0 map + land lens and L1 trade routes, the repo poll, the town deleted; not live until the cluster is back (`11-cluster-return.md`). A3 built: L2 cities, L3 CSS3D cards, the L4 reader with redaction; merge on the owner's word |
 | World and game (R11) | `ukubi-game` (private): an offline sim mirroring Prometheus, Alertmanager, GitHub and authentik on the wire, so atlas iterates with no cluster; a goals-per-building game on top, with agent-fleet definition sessions doing the work (`12-world-and-game.md`) | Approved 2026-10-25. mountain's slice 1a merged (#31). In `ukubi-game`: slices 1, 2, 4a, 5a and 3 merged (sim, forge, goals and Merge, the director, fleet agents on steps); the full agent loop waits on the owner's `/kind-local` run |
 | Game town (R12) | The game's look and AoE mechanics: buildings and civs from atlas's realms (reshaped), supply lines, defence, research, capacity, one held age, units as live sessions, the kit system (`13-game-town.md`) | **Draft** 2026-10-25 (four owner rounds, three doubt cycles; eight open questions). A7a built (realms reshaped into civs, functions, repos in Code); A7b built (kubespray add-ons, Pigsty's Postgres and Redis); slice 3 built (ukubi-kit: one kit per civ, the procgen library; the diorama in ukubi-game); A7c next |
+| Console (R13) | Complete control of the cluster from the game: providers per source, actions per app type, bounded writes, confirmations, audit, mirrors (`14-console.md`) | **Draft** 2026-10-27: wireframe agreed, one doubt cycle and the owner's answers folded in. Its infra-bootstrap ADR (four parts) opens once #377 has merged |
+| Architecture (R13) | The ukubi code standard: seams, stages and state machines, layout, errors, config, event log, OpenTelemetry, front end, Bun (`15-architecture.md`) | **Agreed** 2026-10-27 (architect interview, one doubt cycle). Moving the existing code is listed at its end, one PR per step |
 | Later | **The sea** (owner, 2026-10-23): water between the islands, with waves | After Deploy C; its own plan |
 
 **Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads
