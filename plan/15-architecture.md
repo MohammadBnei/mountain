@@ -256,8 +256,9 @@ These already follow the standard:
 8. **The bridge and the fleet:** the error model and OTel, in their own repos.
 
 ## Verification, for every step
-- **Unchanged behaviour:** the existing suites pass unedited (Go tests, integration tests, the kit's check, the town
-  gate, mountain's gate and promtool rules), `go vet` is clean, and a diff review confirms no behaviour change. The
+- **Unchanged behaviour:** the existing suites pass with no assertion edited (Go tests, integration tests, the kit's
+  check, the town gate, mountain's gate and promtool rules; a test's setup, package clauses, imports and renames may
+  change, each listed in the PR, `16-dev-rules.md` §2), `go vet` is clean, and a diff review confirms no behaviour change. The
   error-body PR is labelled as a behaviour change.
 - **Determinism:** where a step touches it, a golden comparison before and after. atlas's projection of the fixture
   graph and the sim's frames for a seed must be identical, except for the new version entries.
