@@ -348,6 +348,35 @@ func TestSocketEnd(t *testing.T) {
 	}
 }
 
+// TestSocketLapse: a signed-in admin's socket closes at the session's expiry, the end adminOnly admitted it with.
+func TestSocketLapse(t *testing.T) {
+	a, _ := withAuth(t)
+	srv := httptest.NewServer(a.h)
+	defer srv.Close()
+	exp := time.Unix(time.Now().Add(3*time.Second).Unix(), 0)
+	b := mustJSON(map[string]any{"v": Session{Admin: true, Sub: "u1", Name: "ana_k"}, "exp": exp.Unix()})
+	c := &http.Cookie{Name: sessionCookie, Value: base64.RawURLEncoding.EncodeToString(b) + "." + a.gate.auth.mac(sessionCookie, b)}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/ws", &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {origin}, "Cookie": {c.String()}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(-1)
+	if f := readT(t, conn); f["t"] != "hello" {
+		t.Fatalf("hello: %v", f)
+	}
+	for {
+		if _, _, err := conn.Read(ctx); err != nil {
+			break
+		}
+	}
+	if end := time.Now(); end.Before(exp.Add(-time.Second)) || end.After(exp.Add(3*time.Second)) {
+		t.Errorf("the socket ended at %v, the session at %v", end.Format(time.StampMilli), exp.Format(time.StampMilli))
+	}
+}
+
 func readT(t *testing.T, c *websocket.Conn) map[string]any {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

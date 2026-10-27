@@ -98,7 +98,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !isMachine {
 		var ok bool
 		// the session's end is the socket's end: a lost group stops the overlay within the TTL. adminOnly put it
-		// there from the cookie it admitted; none (the hub mounted without the gate) is no socket, never an endless one
+		// there when it admitted the request (the cookie's expiry, or openEnd under devOpen); none (the hub mounted
+		// without the gate) is no socket, never an endless one
 		if end, ok = sessionEnd(r.Context()); !ok {
 			http.Error(w, "platform admins only", http.StatusForbidden)
 			return
