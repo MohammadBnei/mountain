@@ -2,13 +2,14 @@ package main
 
 // Sign-in (plan/10 Security, R10 Audience row: admins only). One authentik OIDC app `mountain`, authorization code
 // with PKCE (S256) + random state + nonce. No token reaches the client and none is kept: the callback verifies the
-// ID token (iss, aud, signature, nonce) and, for a member of platform-admins only, sets a signed session cookie
-// {v: {admin, sub, name, id}, exp}, TTL 1 h; the group is re-checked at the next sign-in. Anyone else gets no session
+// ID token (iss, aud, signature, nonce) and, for a member of platform-admins only, sets a signed session cookie {v:
+// {admin, sub, name, id}, exp}, TTL 1 h; the group is re-checked at the next sign-in. Anyone else gets no session
 // and a page saying why. The return view rides a 10 min signed flow cookie. A sign-out revokes the session's id on
-// the server, which also closes its open sockets at their next ping (hub.go), with a code the page stops reconnecting
-// on. The revocation set is this replica's memory (one replica, helm/values.yaml): a restart forgets it, so a revoked
-// cookie works again until its own expiry, at most 1 h; after a rollback to a release from before ids, nothing is
-// revoked and an id-less cookie is a session again.
+// the server, which also closes its open sockets at their next ping (hub.go), with a code the page stops
+// reconnecting on, and marks the browser signed out (outCookie, 30 days, cleared by the next sign-in) so no tab's
+// page reloads itself into authentik's silent sign-in. The revocation set is this replica's memory (one replica,
+// helm/values.yaml): a restart forgets it, so a revoked cookie works again until its own expiry, at most 1 h; after
+// a rollback to a release from before ids, nothing is revoked and an id-less cookie is a session again.
 //
 // Env (Secret mountain-oidc): MOUNTAIN_OIDC_ISSUER, MOUNTAIN_OIDC_CLIENT_ID, MOUNTAIN_OIDC_CLIENT_SECRET,
 // MOUNTAIN_SESSION_KEY (HMAC key, ≥ 32 bytes). Any unset = off: every admin route refuses (main.go adminOnly),
@@ -19,7 +20,7 @@ package main
 //	POST /auth/logout               (same Origin only: CSRF) → session revoked, cookie cleared, signed-out mark set,
 //	                                   303 to /auth/me
 //	GET  /auth/me                   → {"enabled": bool, "admin": bool, "name"?: the admin's username,
-//	                                   "signedOut"?: true after a sign-out, until the next sign-in}
+//	                                   "signedOut"?: true after a sign-out, until the next sign-in or 30 days}
 
 import (
 	"context"
@@ -50,6 +51,7 @@ const (
 	flowCookie    = "__Host-mountain-flow"
 	outCookie     = "__Host-mountain-out" // signed out on purpose: the page stops signing itself back in (logout)
 	sessionTTL    = time.Hour
+	outTTL        = 30 * 24 * time.Hour // the mark carries no authority: it only stops the page signing itself back in
 	flowTTL       = 10 * time.Minute
 )
 
@@ -315,8 +317,9 @@ func (au *Auth) callback(w http.ResponseWriter, r *http.Request) {
 // logout is POST + same Origin (originOK, checked first: atlas has no router-level Origin check), so another site can
 // neither GET nor form-POST a sign-out. It revokes the session's id, but only of a cookie whose MAC holds, so a forged
 // one revokes nothing and the set stays bounded by an hour of sign-ins. The authentik session stays, so a page that
-// reloaded into the sign-in would sign straight back in: logout also sets outCookie, which /auth/me reports as
-// signedOut, and the page's lapse probe (www/js/socket.js gateLapsed) stops on it, in every tab, a restored one too.
+// reloaded into the sign-in would sign straight back in: logout also sets outCookie (with or without a session to
+// end), which /auth/me reports as signedOut, and the page stops on it instead of reloading (www/js/socket.js, its
+// socket's probe; main.js, a 403 at start).
 // A sign-in the person asks for (loading the page) clears it. It lands on /auth/me, which says who is signed in.
 func (au *Auth) logout(w http.ResponseWriter, r *http.Request) {
 	if !originOK(r.Header.Get("Origin"), au.dev) {
@@ -328,7 +331,7 @@ func (au *Auth) logout(w http.ResponseWriter, r *http.Request) {
 		au.revoke(s.ID, exp)
 	}
 	clearCookie(w, sessionCookie)
-	au.set(w, outCookie, true, sessionTTL)
+	au.set(w, outCookie, true, outTTL)
 	http.Redirect(w, r, "/auth/me", http.StatusSeeOther)
 }
 

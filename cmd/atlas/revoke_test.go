@@ -194,7 +194,7 @@ func TestSignedOutMark(t *testing.T) {
 	}
 	r := a.serveReq("POST", "/auth/logout", []*http.Cookie{adminCookie(t, a, p)}, "Origin", origin)
 	mark := cookie(r, outCookie)
-	if mark == nil || mark.MaxAge <= 0 || !mark.HttpOnly || !mark.Secure {
+	if mark == nil || mark.MaxAge != int(outTTL.Seconds()) || !mark.HttpOnly || !mark.Secure {
 		t.Fatalf("logout set no signed-out mark: %+v", mark)
 	}
 	if m := me(mark); m["signedOut"] != true || m["admin"] != false {
@@ -202,6 +202,10 @@ func TestSignedOutMark(t *testing.T) {
 	}
 	if m := me(&http.Cookie{Name: outCookie, Value: base64.RawURLEncoding.EncodeToString([]byte(`{"v":true,"exp":9999999999}`)) + ".AAAA"}); m["signedOut"] != nil {
 		t.Errorf("a forged mark: /auth/me %v", m)
+	}
+	b := mustJSON(map[string]any{"v": true, "exp": time.Now().Add(time.Hour).Unix()}) // MAC'd as another cookie
+	if m := me(&http.Cookie{Name: outCookie, Value: base64.RawURLEncoding.EncodeToString(b) + "." + a.gate.auth.mac(flowCookie, b)}); m["signedOut"] != nil {
+		t.Errorf("another cookie's MAC: /auth/me %v", m)
 	}
 	admin := adminCookie(t, a, p)
 	if m := me(admin, mark); m["signedOut"] != nil || m["admin"] != true {

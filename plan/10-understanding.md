@@ -309,7 +309,8 @@ What changed against the table above, and why:
   `--dev` admits everyone only on a loopback address with sign-in unset (the gate, `scripts/devpod.sh`).
   Since plan/15's step 5 (A4) a session carries an id and a sign-out revokes it on the server (one replica's memory;
   a restart forgets it): a copied cookie is refused, its sockets close at their next ping with code 4001, and a
-  signed-out mark keeps every tab from reloading into authentik's silent sign-in until the person loads the page.
+  signed-out mark (30 days, cleared by a sign-in) keeps the page from reloading itself into authentik's silent sign-in
+  (its socket's probe, a 403 at start); loading the page is a sign-in the person asks for.
 - **Alert rules**: MountainSourceStale (now prom, alerts, github, projection, db), MountainTokenExpiring,
   MountainUnassigned (drift `unassigned` for 1 h). MountainUnmapped and MountainTownEmpty went with the town.
 - **Rollback** is a revert, plus, before the relay image starts again, `DROP TABLE atlas_migrations, atlas_drift,

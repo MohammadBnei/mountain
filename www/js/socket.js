@@ -1,5 +1,5 @@
 // /ws: the live overlay. connect({onFrame, onStatus, probe}) → {close()}: every frame to onFrame; jittered backoff
-// 1 s → 30 s, reset by a hello. probe: called once per run of failures, at the second close without a hello. A sign-out
+// 1 s → 30 s, reset by a hello. probe: called at the second close without a hello, then every sixth. A sign-out
 // ends it for good, onStatus('signed-out') and no reconnect, since a reload would sign straight back in through
 // authentik: a close with SIGNED_OUT (the session's own socket, open at the sign-out, maybe in another tab), or a
 // probe answering 'signed-out' (a socket that was down then, or a page restored from the back/forward cache).
@@ -15,6 +15,15 @@ export const wsURL = (loc = location) => `${loc.protocol === 'https:' ? 'wss' : 
 // authentik's session holds). Anything else says nothing about either. At most one reload per 5 min. A session
 // ended by a sign-out looks the same, so /auth/me says signedOut then (cmd/atlas/auth.go logout): no reload, the
 // answer is 'signed-out'.
+// signedOut: /auth/me says this browser signed out (and holds no session since): the page stops instead of reloading.
+export async function signedOut({ fetchFn = globalThis.fetch } = {}) {
+  try {
+    const r = await fetchFn('/auth/me', { redirect: 'manual', cache: 'no-store' });
+    const me = r.ok ? await r.json() : null;
+    return me?.signedOut === true && !me.admin;
+  } catch { return false; }
+}
+
 export async function gateLapsed({ fetchFn = globalThis.fetch, reload = () => location.reload(), store = globalThis.sessionStorage, now = Date.now() } = {}) {
   let r;
   try { r = await fetchFn('/auth/me', { redirect: 'manual', cache: 'no-store' }); } catch { return false; }
