@@ -2,8 +2,9 @@ package main
 
 // The projected graph (plan/10 "Projection", "Read side"). The extractors (internal/extract) read repo checkouts;
 // projectGraph stores what changed as node and edge versions; GET /api/graph serves one projection to a platform
-// admin. Graphs stores projections through one of two stores (projections and history, below): Postgres keeps every
-// one; without a database atlas keeps the latest in memory only, so the page works and history does not.
+// admin. Graphs stores projections through two seams (projections and history, below), served by one of two stores:
+// Postgres keeps every one; without a database atlas keeps the latest in memory only, so the page works and history
+// does not.
 
 import (
 	"context"
@@ -389,7 +390,7 @@ func (s *pgStore) load(ctx context.Context, seq int64) (atlasView, error) {
 	return loadGraph(ctx, s.pool, seq)
 }
 
-// memStore keeps only the latest projection (Graphs holds it). sig is its content ([vector, nodes, edges, drift,
+// memStore holds only the latest projection's signature (Graphs holds the latest). sig is its content ([vector, nodes, edges, drift,
 // extractors]: not tracked, skipped, at or seq), to tell a change; seq counts changes since atlas started.
 type memStore struct {
 	mu  sync.Mutex
@@ -418,7 +419,7 @@ func (s *memStore) put(_ context.Context, res extract.Result, repos extract.Repo
 	if cur != nil {
 		v.Seq = cur.Seq + 1
 	}
-	// written before Graphs makes v the latest (today's order was after): one goroutine puts, so nothing reads between
+	// sig is read only by put, and one goroutine puts: writing it before Graphs.set makes v the latest is unobservable
 	s.mu.Lock()
 	s.sig = sig
 	s.mu.Unlock()
