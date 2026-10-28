@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -91,15 +91,15 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 		// the head GitHub named is the truth, so it is taken.
 		switch st, err := g.compare(ctx, repo, cur.SHA, sha); {
 		case err != nil:
-			log.Printf("projector: %s@%s: compare %s...%s: %v: taking the head", repo, branch, cur.SHA[:12], sha[:12], err)
+			slog.Warn(fmt.Sprintf("projector: %s@%s: compare %s...%s: %v: taking the head", repo, branch, cur.SHA[:12], sha[:12], err))
 		case st == "behind" && g.behind[repo] != sha:
-			log.Printf("projector: %s@%s: head %s is behind %s: held until the next round says so again", repo, branch, sha[:12], cur.SHA[:12])
+			slog.Info(fmt.Sprintf("projector: %s@%s: head %s is behind %s: held until the next round says so again", repo, branch, sha[:12], cur.SHA[:12]))
 			g.behind[repo] = sha
 			return cur, nil
 		case st == "behind":
-			log.Printf("projector: %s@%s: reset back to %s from %s: taken", repo, branch, sha[:12], cur.SHA[:12])
+			slog.Info(fmt.Sprintf("projector: %s@%s: reset back to %s from %s: taken", repo, branch, sha[:12], cur.SHA[:12]))
 		case st == "diverged":
-			log.Printf("projector: %s@%s: %s does not descend from %s (a force-push): taken", repo, branch, sha[:12], cur.SHA[:12])
+			slog.Info(fmt.Sprintf("projector: %s@%s: %s does not descend from %s (a force-push): taken", repo, branch, sha[:12], cur.SHA[:12]))
 		}
 	}
 	delete(g.behind, repo)

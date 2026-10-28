@@ -32,7 +32,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"slices"
@@ -257,7 +257,7 @@ func (g *gate) onAuth(h func(*Auth, http.ResponseWriter, *http.Request)) http.Ha
 
 func (au *Auth) login(w http.ResponseWriter, r *http.Request) {
 	if _, err := au.discover(); err != nil {
-		log.Printf("auth: discovery: %v", err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("auth: discovery: %v", err))
 		authFail(w, "Sign-in is unavailable right now. Reload to try again.", http.StatusServiceUnavailable)
 		return
 	}
@@ -287,14 +287,14 @@ func (au *Auth) callback(w http.ResponseWriter, r *http.Request) {
 	}
 	tok, err := au.oauth.Exchange(r.Context(), q.Get("code"), oauth2.VerifierOption(f.Verifier))
 	if err != nil {
-		log.Printf("auth: exchange: %v", err)
+		slog.WarnContext(r.Context(), fmt.Sprintf("auth: exchange: %v", err))
 		authFail(w, "Sign-in failed.", http.StatusForbidden)
 		return
 	}
 	raw, _ := tok.Extra("id_token").(string)
 	idt, err := v.Verify(r.Context(), raw)
 	if err != nil || subtle.ConstantTimeCompare([]byte(idt.Nonce), []byte(f.Nonce)) != 1 {
-		log.Printf("auth: id token: %v", err)
+		slog.WarnContext(r.Context(), fmt.Sprintf("auth: id token: %v", err))
 		authFail(w, "Sign-in failed.", http.StatusForbidden)
 		return
 	}

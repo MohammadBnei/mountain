@@ -333,6 +333,13 @@ These already follow the standard:
    logs an error outside the model at ERROR through slog. Each app then gives every site its level, log.Fatal's
    included, and moves to stdout. Write's line has no span yet (its signature holds no context): it gains one with
    the RecordError hook, found through w's Unwrap chain.
+
+   Then atlas's logs (L2): JSON on stdout, every one of its 24 lines with a level (source and projector hiccups
+   WARN, the projector off or failing, a read failing and sign-in's discovery ERROR, the rest INFO), log.Fatal's
+   two as ERROR before exit 1, net/http's own lines WARN; the same words, exit codes and answers over A5's 51 cases.
+   Loki's `detected_level` reads the field now instead of guessing from the words. TestLogLevels refuses the log
+   package in atlas (its Logger type aside). Bumping pkg raises golang.org/x/text, x/sync, x/mod and x/tools, and
+   links the OTel SDK (pkg/telemetry is one package): 25.7 → 36.5 MB, which atlas's traces need next anyway.
 6. **The sim:**
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;
