@@ -89,7 +89,11 @@ doesn't.
   name a real, fetchable version: ukubi-game resolves it), the root requiring pkg by version, and CI and the image
   build reading the private module with the job's own token. Built so far (A6a): the module, its own workflow, the
   token in the test jobs. With atlas's use: the require, and the image build's buildah secret mount (in no layer).
-  Until the owner tags `pkg/vX`, the version is a pseudo-version of a main commit.
+  Tags (owner, 2026-10-28): the agent may push `pkg/vX.Y.Z` tags on main after a merge that changes `pkg/`, never
+  an app's tags; until a tag exists, the version is a pseudo-version of a main commit. Each shared concern is its own
+  package (`pkg/errs`, `pkg/telemetry`), so an app that imports only the error model links no OTel package. Its
+  module graph still gains the OTel modules, and MVS may raise ones it shares (golang.org/x/text and x/sync for atlas):
+  the PR that bumps pkg lists every module that rises.
 - **The bridge and the fleet** follow these conventions in their own repos. They don't import mountain.
 
 ## 4. Errors: one model for every app
@@ -140,21 +144,26 @@ doesn't.
 
 ## 7. Observability: OpenTelemetry
 - **Every app uses the OpenTelemetry API.**
-- **Traces are pushed:** OTLP to Alloy, and on to **Tempo, stored on Garage S3**.
+- **Traces are pushed** over OTLP. The backend is open (owner, 2026-10-28: explored later; Tempo on Garage S3 was
+  the first idea), so every app's tracing is opt-in and inert until `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` (the one
+  variable for every app) is set. The wiring for atlas and the game is `pkg/telemetry`.
   - Connect's `otelconnect` instruments the fleet and the bridge.
   - An HTTP middleware instruments atlas and the game.
-  - Spans cross from the game to atlas, the fleet and ArgoCD.
+  - Spans cross from the game to atlas, the fleet and ArgoCD. Until propagation lands, every server span starts a
+    trace of its own, linked to a caller's traceparent, never its child (a public endpoint: the choice runs before
+    the gate); trusting a machine principal's context is an option added with propagation, decided after the gate.
 - **Metrics are pulled.**
   - OTel's Prometheus exporter serves today's `/metrics` port, with views that pin today's names, units and
     buckets.
   - Scrapes, their `namespace`, `pod` and `job` labels, `TargetDown`, mountain's promtool-tested rules and fleet
     core's read-back of its own metrics all stay as they are.
-- **Logs stay JSON on stdout** and gain `trace_id` and `span_id`. Alloy keeps tailing them, because the bridge's
+- **Logs are JSON on stdout** and gain `trace_id` and `span_id` (owner, 2026-10-28: atlas, the game and the bridge,
+  which log text today, move to it, each site with its level). Alloy keeps tailing them, because the bridge's
   and the fleet's Loki alerts, and fleet core's log reads, select on the labels the file tailing gives.
 - **Tests:** each app's metric names, and its log `level` and messages, are unchanged.
 - **The sim:** OTel is emitted, never read, so the sim needs no mirror for it. It exports to stdout or nowhere.
-- **The infra-bootstrap ADR** adds Tempo, Alloy's OTLP receiver and its Service, and Grafana's datasources and its
-  links between traces, logs and metrics.
+- **The infra-bootstrap ADR**, once the backend is chosen, adds it, Alloy's OTLP receiver and its Service, and
+  Grafana's datasources and its links between traces, logs and metrics.
 
 ## 8. Front end
 - **There is one 3D client: the game's.**
@@ -311,8 +320,12 @@ These already follow the standard:
    statuses change, since Connect has no code for them: not text 415 → 400 and too large 413 → 400
    (failed_precondition); the page's reader decides on the key (reader.js readError), falling back to the status for
    a body that is not the model's. The image build reads the private module through a secret mount: checked under
-   BuildKit locally (the build passes, a rewrite to a bogus host fails the download, git's error carries no token);
-   buildah's first run of it is this merge's build on the runner.
+   BuildKit locally (the build passes, a rewrite to a bogus host fails the download, git's error carries no token),
+   and under buildah with the job's own flags (the build passes, the token is in no layer or history entry, a missing
+   or empty secret fails); it merged ahead of the runner on the owner's word.
+
+   Then the traces' extraction (T1): the game's internal/telemetry moves, unchanged, to `pkg/telemetry`, for atlas's
+   use; the game moves onto it next.
 6. **The sim:**
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;
