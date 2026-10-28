@@ -57,6 +57,7 @@ type Hub struct {
 	mu      sync.Mutex
 	clients map[*Client]struct{}
 	perIP   map[string]int
+	met     *Metrics // nil = not recorded
 }
 
 func NewHub(dev bool, hello func() []byte) *Hub {
@@ -139,12 +140,12 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.send <- h.hello()
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()
-	WSConnections.Add("", 1)
+	h.met.WSConns(1)
 	defer func() {
 		h.mu.Lock()
 		delete(h.clients, c)
 		h.mu.Unlock()
-		WSConnections.Add("", -1)
+		h.met.WSConns(-1)
 		conn.CloseNow()
 	}()
 

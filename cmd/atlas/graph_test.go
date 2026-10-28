@@ -227,7 +227,7 @@ func TestDBGraphsServe(t *testing.T) {
 	ctx := context.Background()
 	a := testApp(t)
 	a.gate.devOpen = true
-	a.Graph = openGraphs(ctx, dsn)
+	a.Graph = openGraphs(ctx, dsn, nil)
 	t.Cleanup(a.Graph.close)
 	if a.Graph.db() == nil {
 		t.Fatal("no pool")
@@ -259,7 +259,7 @@ func TestDBGraphsServe(t *testing.T) {
 	if seq, _, err := a.Graph.put(ctx, atlasResult([]graph.Node{n("app:c", "1", "s1")}, nil), repos, nil); err != nil || seq != s3 || a.Graph.Latest().Seq != s3 {
 		t.Errorf("the service kept its own copy: put %d, latest %d, %v", seq, a.Graph.Latest().Seq, err)
 	}
-	again := openGraphs(ctx, dsn)
+	again := openGraphs(ctx, dsn, nil)
 	defer again.close()
 	if again.Latest() == nil || again.Latest().Seq != s3 || again.index().NSApps == nil {
 		t.Errorf("restart: %+v", again.Latest())

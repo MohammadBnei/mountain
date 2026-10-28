@@ -55,6 +55,7 @@ type ghHeads struct {
 	retired         map[string]string       // repo -> the tree replaced last round, removed when the next one is (the reader may still be serving it)
 	seq             int                     // tree directories are never reused: <repo>-<sha>-<seq>
 	pauseUntil      time.Time
+	met             *Metrics // nil = not recorded
 }
 
 func newGitHub(apiURL, token, dir string) (*ghHeads, error) {
@@ -253,7 +254,7 @@ func (g *ghHeads) get(ctx context.Context, p, accept string, conditional bool) (
 	g.limits(resp.Header)
 	switch resp.StatusCode {
 	case http.StatusNotModified:
-		SourceLastSuccess.Set("github", float64(time.Now().Unix()))
+		g.met.SourceOK("github", float64(time.Now().Unix()))
 		return g.body[p], nil
 	case http.StatusOK:
 		b, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
@@ -263,7 +264,7 @@ func (g *ghHeads) get(ctx context.Context, p, accept string, conditional bool) (
 		if conditional {
 			g.etag[p], g.body[p] = resp.Header.Get("ETag"), b
 		}
-		SourceLastSuccess.Set("github", float64(time.Now().Unix()))
+		g.met.SourceOK("github", float64(time.Now().Unix()))
 		return b, nil
 	case http.StatusNotFound:
 		return nil, errNoAccess
@@ -279,7 +280,7 @@ func (g *ghHeads) limits(h http.Header) {
 	if exp := h.Get("github-authentication-token-expiration"); exp != "" {
 		for _, layout := range []string{"2006-01-02 15:04:05 MST", "2006-01-02 15:04:05 -0700"} {
 			if t, err := time.Parse(layout, exp); err == nil {
-				TokenDaysLeft.Set("", float64(time.Until(t).Round(time.Hour).Hours())/24)
+				g.met.TokenDays(float64(time.Until(t).Round(time.Hour).Hours()) / 24)
 				break
 			}
 		}

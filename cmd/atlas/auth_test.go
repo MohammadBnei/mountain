@@ -93,7 +93,7 @@ func testApp(t *testing.T) *tapp {
 		t.Fatal(err)
 	}
 	www, _ := fs.Sub(mountain.WWW, "www")
-	a := newApp(Opts{}, rl, www, &gate{}, &Graphs{})
+	a := newApp(Opts{}, rl, www, &gate{}, &Graphs{}, nil)
 	return &tapp{a, routes(a, www)}
 }
 
