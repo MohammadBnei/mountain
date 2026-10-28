@@ -445,7 +445,7 @@ func openGraphs(ctx context.Context, dsn string) *Graphs {
 	g := &Graphs{}
 	SourceLastSuccess.Set("db", float64(time.Now().Unix())) // memory-only ages into MountainSourceStale: the alarm for a missing secret
 	if dsn == "" {
-		slog.Warn(fmt.Sprintf("db: DATABASE_URL unset: memory-only (the latest projection, no history)"))
+		slog.Warn("db: DATABASE_URL unset: memory-only (the latest projection, no history)")
 		return g
 	}
 	if err := g.attach(ctx, dsn); err != nil {
@@ -459,7 +459,7 @@ func openGraphs(ctx context.Context, dsn string) *Graphs {
 					return
 				case <-t.C:
 					if g.attach(ctx, dsn) == nil {
-						slog.Info(fmt.Sprintf("db: attached"))
+						slog.Info("db: attached")
 						return
 					}
 				}

@@ -257,7 +257,7 @@ func (g *gate) onAuth(h func(*Auth, http.ResponseWriter, *http.Request)) http.Ha
 
 func (au *Auth) login(w http.ResponseWriter, r *http.Request) {
 	if _, err := au.discover(); err != nil {
-		slog.ErrorContext(r.Context(), fmt.Sprintf("auth: discovery: %v", err))
+		slog.WarnContext(r.Context(), fmt.Sprintf("auth: discovery: %v", err)) // authentik restarting; the page says so
 		authFail(w, "Sign-in is unavailable right now. Reload to try again.", http.StatusServiceUnavailable)
 		return
 	}

@@ -3,15 +3,20 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/MohammadBnei/mountain/pkg/telemetry"
 )
 
 // logUses lists src's uses of the log package other than its Logger type: a line written through it is INFO under
@@ -103,15 +108,86 @@ func TestLogUses(t *testing.T) {
 	}
 }
 
-// TestServerLog: net/http's own error lines come through the default logger as WARN, with their words.
+// TestServerLog: net/http's own error lines come through the default logger as ERROR, with their words.
 func TestServerLog(t *testing.T) {
 	var buf bytes.Buffer
 	old := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(old) })
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
-	serverLog().Printf("http: TLS handshake error from 1.2.3.4: EOF")
+	serverLog().Printf("http: Accept error: accept tcp [::]:8080: accept4: too many open files; retrying in 1s")
 	var m map[string]any
-	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &m); err != nil || m["level"] != "WARN" || m["msg"] != "http: TLS handshake error from 1.2.3.4: EOF" {
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &m); err != nil || m["level"] != "ERROR" || m["msg"] != "http: Accept error: accept tcp [::]:8080: accept4: too many open files; retrying in 1s" {
 		t.Errorf("%s: %v", buf.Bytes(), err)
+	}
+}
+
+// TestServersLog: every http.Server atlas builds sends net/http's lines through serverLog.
+func TestServersLog(t *testing.T) {
+	files, _ := filepath.Glob("*.go")
+	servers := 0
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), f, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			lit, ok := n.(*ast.CompositeLit)
+			if !ok {
+				return true
+			}
+			if sel, ok := lit.Type.(*ast.SelectorExpr); !ok || sel.Sel.Name != "Server" {
+				return true
+			}
+			if id, ok := lit.Type.(*ast.SelectorExpr).X.(*ast.Ident); !ok || id.Name != "http" {
+				return true
+			}
+			servers++
+			for _, e := range lit.Elts {
+				if kv, ok := e.(*ast.KeyValueExpr); ok && fmt.Sprint(kv.Key) == "ErrorLog" {
+					if call, ok := kv.Value.(*ast.CallExpr); ok && fmt.Sprint(call.Fun) == "serverLog" {
+						return true
+					}
+				}
+			}
+			t.Errorf("%s: an http.Server without ErrorLog: serverLog()", f)
+			return true
+		})
+	}
+	if servers < 2 {
+		t.Errorf("%d http.Servers: the check no longer sees them", servers) // the positive control
+	}
+}
+
+// TestLogWriter: the service logs on stdout; atlas project on stderr, its stdout being its result line.
+func TestLogWriter(t *testing.T) {
+	if logWriter([]string{"atlas", "project", "--repos", "x"}) != os.Stderr || logWriter([]string{"atlas"}) != os.Stdout ||
+		logWriter([]string{"atlas", "--listen", ":8080"}) != os.Stdout {
+		t.Error("logWriter")
+	}
+}
+
+// TestFatal: fatal writes log.Fatal's words as one ERROR line through the default logger, and exits 1. It runs in a
+// child process (the test binary again), since it exits.
+func TestFatal(t *testing.T) {
+	if os.Getenv("ATLAS_TEST_FATAL") == "1" {
+		slog.SetDefault(telemetry.NewLogger(os.Stdout))
+		fatal(errors.New("listen tcp :8080: bind: address already in use"))
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestFatal$")
+	cmd.Env = append(os.Environ(), "ATLAS_TEST_FATAL=1")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) || ee.ExitCode() != 1 {
+		t.Fatalf("exit: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &m); err != nil || m["level"] != "ERROR" || m["msg"] != "listen tcp :8080: bind: address already in use" {
+		t.Errorf("%s: %v", out.Bytes(), err)
 	}
 }

@@ -334,16 +334,15 @@ These already follow the standard:
    included, and moves to stdout. Write's line has no span yet (its signature holds no context): it gains one with
    the RecordError hook, found through w's Unwrap chain.
 
-   Then atlas's logs (L2): JSON on stdout, every one of its 24 lines with a level (source and projector hiccups
-   WARN, the projector off or failing, a read failing and sign-in's discovery ERROR, the rest INFO), log.Fatal's
-   two as ERROR before exit 1, net/http's own lines WARN; the same words, exit codes and answers over A5's 51 cases.
-   Loki's `detected_level` reads the field now instead of guessing from the words. TestLogLevels refuses the log
-   package in atlas (its Logger type aside). Bumping pkg raises golang.org/x/text, x/sync, x/mod and x/tools, and
-   links the OTel SDK (pkg/telemetry is one package): 25.7 → 36.5 MB, which atlas's traces need next anyway.
-6. **The sim:**
-   - ladders as a registry;
-   - a failure `series` type shared by app health, probes and node readiness;
-   - one list of the sources that can go down.
+   Then atlas's logs (L2): JSON lines, every one of its 24 sites with a level (WARN for a source, projector, GitHub
+   or sign-in hiccup and for a missing optional setting; ERROR for the projector off, the latest projection or a
+   read failing; the rest INFO), log.Fatal's two as ERROR before exit 1, net/http's own lines (a panic, an Accept
+   error) ERROR, as Loki's detector counted them when they were text. The service logs on stdout; `atlas project`
+   on stderr, its stdout being its result line; serve's flag errors stay text on stderr. The same words, exit codes
+   and answers over A5's 51 cases. TestLogLevels refuses the log package in atlas (its Logger type aside),
+   TestServersLog the servers' ErrorLog, TestFatal fatal's line and exit. Bumping pkg raises golang.org/x/text,
+   x/sync, x/mod and x/tools, and links the OTel SDK and grpc (pkg/telemetry is one package): 25.7 → 36.5 MB,
+   which atlas's traces need next anyway.
 
    **Done** (ukubi-game #33–#34): the three, and no mutable package-level state in the whole module (the check
    now covers every package). The sim's frames for 38 worlds, seeds and intensities are byte-identical; the one

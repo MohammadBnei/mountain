@@ -125,7 +125,7 @@ func (a *App) project(ctx context.Context) {
 		src = gh
 		SourceLastSuccess.Set("github", float64(time.Now().Unix())) // seeded: a token that never works still ages into the alert
 	default:
-		slog.Warn(fmt.Sprintf("projector: MOUNTAIN_GITHUB_TOKEN unset and no --repos: serving the stored projection only"))
+		slog.Warn("projector: MOUNTAIN_GITHUB_TOKEN unset and no --repos: serving the stored projection only")
 		return
 	}
 	SourceLastSuccess.Set("projection", float64(time.Now().Unix()))
@@ -139,10 +139,10 @@ func (a *App) project(ctx context.Context) {
 		cancel()
 		switch { // logged once per change, not per round
 		case err != nil && err.Error() != lastErr:
-			slog.Error(fmt.Sprintf("projector: %v", err))
+			slog.Warn(fmt.Sprintf("projector: %v", err)) // a GitHub hiccup; MountainSourceStale alerts on a lasting one
 			lastErr = err.Error()
 		case err == nil && lastErr != "":
-			slog.Info(fmt.Sprintf("projector: recovered"))
+			slog.Info("projector: recovered")
 			lastErr = ""
 		}
 		select {

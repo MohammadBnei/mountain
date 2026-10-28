@@ -14,8 +14,10 @@
 // machine principal on the town's two reads, machine.go; all or none: unset = off). All of it is read once, in
 // config.go; the libraries' own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*) are theirs.
 //
-// Logs: JSON lines on stdout (mountain/pkg/telemetry.NewLogger), each site with its level; a flag or config error
-// still goes to stderr as text, and `atlas project` prints its result line on stdout as before.
+// Logs: JSON lines (mountain/pkg/telemetry.NewLogger), each site with its level: on stdout for the service, on stderr
+// for `atlas project`, whose stdout is its result line as before. serve's own flag errors and usage stay text on
+// stderr; every other refusal to start is a JSON ERROR line, then exit 1. The libraries' own reads, as above, plus
+// grpc's GRPC_GO_* (linked through mountain/pkg, read at init, unused).
 //
 // Read side only: atlas never writes a repo or a live store (CQRS, plan/10).
 package main
@@ -27,6 +29,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"log/slog"
@@ -57,7 +60,7 @@ type Opts struct {
 }
 
 func main() {
-	slog.SetDefault(telemetry.NewLogger(os.Stdout)) // plan/15 §7: JSON on stdout; the log package comes through it
+	slog.SetDefault(telemetry.NewLogger(logWriter(os.Args))) // plan/15 §7: JSON; the log package comes through it
 	if len(os.Args) > 1 && os.Args[1] == "project" {
 		dir, dsn, drop, err := projectFromProcess()
 		if err == nil {
@@ -117,7 +120,7 @@ func serve(c Config) error {
 	}
 	g.devOpen = o.Dev && g.auth == nil && loopback(o.Listen)
 	if g.auth == nil && !g.devOpen {
-		slog.Warn(fmt.Sprintf("atlas: sign-in is not configured: every route but /healthz refuses a person (the machine principal, if configured, still reads its two routes)"))
+		slog.Warn("atlas: sign-in is not configured: every route but /healthz refuses a person (the machine principal, if configured, still reads its two routes)")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -375,6 +378,16 @@ func fatal(err error) {
 	os.Exit(1)
 }
 
-// serverLog is net/http's own error lines (a handshake or a hijacked connection gone wrong) as WARN lines of the
-// default logger, rather than INFO through the log package.
-func serverLog() *log.Logger { return slog.NewLogLogger(slog.Default().Handler(), slog.LevelWarn) }
+// serverLog is net/http's own error lines (a handler's panic, an Accept error and its retries, a superfluous
+// WriteHeader) as ERROR lines of the default logger: each is a bug or an outage, and Loki's detector counted them as
+// errors when they were text, so the platform's log-error-rate-spike alert still sees them.
+func serverLog() *log.Logger { return slog.NewLogLogger(slog.Default().Handler(), slog.LevelError) }
+
+// logWriter is where atlas's JSON lines go: stdout for the service (what Alloy tails), stderr for `atlas project`,
+// whose stdout is its result line.
+func logWriter(args []string) io.Writer {
+	if len(args) > 1 && args[1] == "project" {
+		return os.Stderr
+	}
+	return os.Stdout
+}
