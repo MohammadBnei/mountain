@@ -202,41 +202,23 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 			evidence[kind][app] = src
 		}
 	}
-	routes := map[string][]string{} // hostname -> the apps it routes to
+	in := &evidenceIn{routes: map[string][]string{}}
 	for _, e := range g.Edges {
 		if e.Kind == graph.EdgeRoute {
-			routes[strings.TrimPrefix(e.From, graph.KindDNS+":")] = append(routes[strings.TrimPrefix(e.From, graph.KindDNS+":")], e.To)
+			in.routes[strings.TrimPrefix(e.From, graph.KindDNS+":")] = append(in.routes[strings.TrimPrefix(e.From, graph.KindDNS+":")], e.To)
 		}
 	}
-	var useMW []*regexp.Regexp // a list item naming one of the forwardAuth middlewares
 	for _, mw := range forwardAuthNames(files) {
-		useMW = append(useMW, regexp.MustCompile(`(?m)^\s*-?\s*name:\s*["']?`+regexp.QuoteMeta(mw)+`["']?\s*$`))
+		in.useMW = append(in.useMW, regexp.MustCompile(`(?m)^\s*-?\s*name:\s*["']?`+regexp.QuoteMeta(mw)+`["']?\s*$`))
 	}
+	finders := evidenceFinders()
 	for _, f := range files {
-		if strings.HasPrefix(f.path, "gitops/bootstrap/authentik-blueprint-") {
-			for _, m := range urlHost.FindAllSubmatch(f.b, -1) {
-				for _, app := range routes[string(m[1])] {
-					found("oidc", app, f.src)
-				}
-			}
+		in.code = ""
+		if f.app != "" {
+			in.code = uncommented(f.b)
 		}
-		if f.app == "" {
-			continue
-		}
-		code := uncommented(f.b)
-		for _, re := range useMW {
-			if re.MatchString(code) {
-				found("forwardauth", f.app, f.src)
-			}
-		}
-		if s3Ref.MatchString(code) {
-			found("s3", f.app, f.src)
-		}
-		var top map[string]any
-		if yaml.Unmarshal(f.b, &top) == nil { // the first document: a values file has one
-			if inf, ok := top["infisical"].(map[string]any); ok && inf["enabled"] == true { // the chart's default is off
-				found("infisical", f.app, f.src)
-			}
+		for kind, find := range finders {
+			find(in, f, func(app string) { found(kind, app, f.src) })
 		}
 	}
 	dbs := pigstyDatabases(x)
@@ -248,6 +230,8 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 			n, _ := realms.ParseNeed(s) // realms.Load validated it
 			stated[n.Via+"/"+id] = true
 			checked := "yes"
+			// declared and postgres are not found in files, so they are no finders: a postgres finder would make the
+			// database's row its own evidence (the edge's source, and "evidence of postgres" drift for every app)
 			switch n.Via {
 			case "declared":
 				checked = "declared"
@@ -310,6 +294,76 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 	drift = append(drift, walls(x, rl, files, forwardAuthNames(files), g)...)
 	g.Merge(graph.Graph{Edges: edges, Drift: drift}) // both ends checked above: cannot fail
 	modelFacts(rl, g)
+}
+
+// evidenceFinder finds one kind of needs evidence in one source file, calling found with each app it shows the need
+// for. found keeps the first source per (kind, app) and ignores an empty app.
+type evidenceFinder func(in *evidenceIn, f sourceFile, found func(app string))
+
+// evidenceIn is what the finders share: each hostname's apps (route edges), a pattern per forwardAuth middleware for
+// a name: line naming it, and the file's text with its comments removed ("" for a file with no app).
+type evidenceIn struct {
+	routes map[string][]string
+	useMW  []*regexp.Regexp
+	code   string
+}
+
+// evidenceFinders is the registry, one finder per kind of evidence a needs row can name (realms.Suppliers' keys but
+// postgres, which pigsty's pg_databases answers). Their order is not observable: each kind keeps its own evidence.
+func evidenceFinders() map[string]evidenceFinder {
+	return map[string]evidenceFinder{
+		"oidc":        findOIDC,
+		"forwardauth": findForwardAuth,
+		"s3":          findS3,
+		"infisical":   findInfisical,
+	}
+}
+
+// findOIDC: an authentik blueprint (gitops/bootstrap/authentik-blueprint-*, in any source repo, whether or not an app
+// owns it) whose redirect URL's host routes to the app. It reads the file as written.
+func findOIDC(in *evidenceIn, f sourceFile, found func(app string)) {
+	if !strings.HasPrefix(f.path, "gitops/bootstrap/authentik-blueprint-") {
+		return
+	}
+	for _, m := range urlHost.FindAllSubmatch(f.b, -1) {
+		for _, app := range in.routes[string(m[1])] {
+			found(app)
+		}
+	}
+}
+
+// findForwardAuth: an app's file whose uncommented text has a name: line (a list item or not) naming one of the
+// forwardAuth middlewares.
+func findForwardAuth(in *evidenceIn, f sourceFile, found func(app string)) {
+	if f.app == "" {
+		return
+	}
+	for _, re := range in.useMW {
+		if re.MatchString(in.code) {
+			found(f.app)
+		}
+	}
+}
+
+// findS3: an app's file whose uncommented text names Garage's S3 endpoint.
+func findS3(in *evidenceIn, f sourceFile, found func(app string)) {
+	if f.app != "" && s3Ref.MatchString(in.code) {
+		found(f.app)
+	}
+}
+
+// findInfisical: an app's file whose first YAML document (as written: a values file has one) turns infisical on;
+// the chart's default is off.
+func findInfisical(in *evidenceIn, f sourceFile, found func(app string)) {
+	if f.app == "" {
+		return
+	}
+	var top map[string]any
+	if yaml.Unmarshal(f.b, &top) == nil {
+		if inf, ok := top["infisical"].(map[string]any); ok && inf["enabled"] == true {
+			found(f.app)
+		}
+	}
 }
 
 // deployPaths is repo -> path -> the app an ArgoCD Application deploys it for (its git edges' paths: a values file, a
