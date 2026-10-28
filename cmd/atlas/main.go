@@ -229,17 +229,23 @@ func routes(a *App, www fs.FS) http.Handler {
 // adminOnly answers anyone but a signed-in platform admin with 403, or, for the page itself, a redirect to the
 // sign-in (the forwardAuth gate has already signed them in to authentik, so it is one round trip, no form). The
 // hash route survives the trip: the browser keeps a fragment across redirects that carry none. An admitted request
-// carries its session's end in the context (sessionEnd): the socket's end.
+// carries its session's end in the context (sessionEnd): the socket's end; and, for a signed-in session, whether it
+// is still live (sessionLive): a sign-out closes its sockets.
 func (g *gate) adminOnly(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if end, ok := g.admitted(r); ok {
-			h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), sessionEndKey{}, end)))
+		if end, id, ok := g.admitted(r); ok {
+			ctx := context.WithValue(r.Context(), sessionEndKey{}, end)
+			if au := g.auth; id != "" && au != nil {
+				ctx = context.WithValue(ctx, sessionLiveKey{}, func() bool { return !au.isRevoked(id) })
+			}
+			h.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		// Only an admin ever holds a session (a non-admin's callback ends on a refusal page, not here), so the
-		// sign-in cannot loop; a town-era cookie is not a session and signs in again.
+		// sign-in cannot loop; a town-era cookie, one without an id or a signed-out one is not a session and signs in
+		// again.
 		if r.Method == http.MethodGet && r.URL.Path == "/" && g.auth != nil {
 			ret := "/"
 			if q := "/?" + r.URL.RawQuery; r.URL.RawQuery != "" && returnRE.MatchString(q) {

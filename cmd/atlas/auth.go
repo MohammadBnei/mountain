@@ -3,8 +3,11 @@ package main
 // Sign-in (plan/10 Security, R10 Audience row: admins only). One authentik OIDC app `mountain`, authorization code
 // with PKCE (S256) + random state + nonce. No token reaches the client and none is kept: the callback verifies the
 // ID token (iss, aud, signature, nonce) and, for a member of platform-admins only, sets a signed session cookie
-// {v: {sub, name}, exp}, TTL 1 h; the group is re-checked at the next sign-in. Anyone else gets no session and a
-// page saying why. The return view rides a 10 min signed flow cookie.
+// {v: {admin, sub, name, id}, exp}, TTL 1 h; the group is re-checked at the next sign-in. Anyone else gets no session
+// and a page saying why. The return view rides a 10 min signed flow cookie. A sign-out revokes the session's id on
+// the server, which also closes its open sockets at their next ping (hub.go). The revocation set is this replica's
+// memory (one replica, helm/values.yaml): a restart or a rollback forgets it, so a revoked cookie works again until
+// its own expiry, at most 1 h; a sign-out handled by an older pod during a rollout revokes nothing.
 //
 // Env (Secret mountain-oidc): MOUNTAIN_OIDC_ISSUER, MOUNTAIN_OIDC_CLIENT_ID, MOUNTAIN_OIDC_CLIENT_SECRET,
 // MOUNTAIN_SESSION_KEY (HMAC key, ≥ 32 bytes). Any unset = off: every admin route refuses (main.go adminOnly),
@@ -12,7 +15,7 @@ package main
 //
 //	GET  /auth/login?return=/#view  → authentik
 //	GET  /auth/callback             → session cookie, 303 to the return view
-//	POST /auth/logout               (same Origin only: CSRF) → cookie cleared, 303 to /auth/me
+//	POST /auth/logout               (same Origin only: CSRF) → session revoked, cookie cleared, 303 to /auth/me
 //	GET  /auth/me                   → {"enabled": bool, "admin": bool, "name"?: the admin's username}
 
 import (
@@ -59,6 +62,11 @@ type Auth struct {
 
 	mu       sync.Mutex
 	verifier *oidc.IDTokenVerifier // nil until the first successful discovery
+
+	// revoked holds the sessions signed out before their cookie expires: id -> that expiry (one replica's memory).
+	rmu     sync.Mutex
+	revoked map[string]time.Time
+	pruned  time.Time
 }
 
 // gate is what decides who gets in. serve builds it once, before the hub and the routes; handlers read its fields on
@@ -152,38 +160,76 @@ func (au *Auth) get(r *http.Request, name string, v any) (time.Time, bool) {
 }
 
 // Session is the session cookie's value. Admin is set only from the groups claim at sign-in; a cookie from the town
-// (role, sub, name) decodes with Admin false and is refused until the next sign-in.
+// (role, sub, name) decodes with Admin false and is refused until the next sign-in. ID names this sign-in, so a
+// sign-out can end it on the server (revoked); a cookie without one, from before ids, is no session.
 type Session struct {
 	Admin     bool
 	Sub, Name string
+	ID        string
 }
 
-// sessionOf is r's session ({} = none: no auth, no cookie, a bad MAC or expired) and its expiry: a socket closes
-// when it lapses (hub.go), so a lost group ends access within the 1 h TTL.
+func (au *Auth) isRevoked(id string) bool {
+	au.rmu.Lock()
+	defer au.rmu.Unlock()
+	_, ok := au.revoked[id]
+	return ok
+}
+
+// revoke ends session id on the server until exp, its cookie's own end; ids past theirs are dropped (a sweep a
+// minute at most).
+func (au *Auth) revoke(id string, exp time.Time) {
+	au.rmu.Lock()
+	defer au.rmu.Unlock()
+	if now := time.Now(); now.Sub(au.pruned) >= time.Minute {
+		for k, e := range au.revoked {
+			if !now.Before(e) {
+				delete(au.revoked, k)
+			}
+		}
+		au.pruned = now
+	}
+	if au.revoked == nil {
+		au.revoked = map[string]time.Time{}
+	}
+	au.revoked[id] = exp
+}
+
+// sessionOf is r's session ({} = none: no auth, no cookie, a bad MAC, expired, without an id or revoked) and its
+// expiry: a socket closes when it lapses or is revoked (hub.go), so a lost group ends access within the 1 h TTL.
 func (g *gate) sessionOf(r *http.Request) (Session, time.Time) {
 	var s Session
 	if g.auth == nil {
 		return s, time.Time{}
 	}
-	if exp, ok := g.auth.get(r, sessionCookie, &s); ok {
+	if exp, ok := g.auth.get(r, sessionCookie, &s); ok && s.ID != "" && !g.auth.isRevoked(s.ID) {
 		return s, exp
 	}
 	return Session{}, time.Time{}
 }
 
-// admitted: r carries a platform admin's session, or the page runs locally with sign-in off (devOpen); and when that
-// access ends. One decode of the cookie answers both, so the end is never that of a later read.
-func (g *gate) admitted(r *http.Request) (time.Time, bool) {
+// admitted: r carries a platform admin's session, or the page runs locally with sign-in off (devOpen); when that
+// access ends, and its session id ("" under devOpen). One decode of the cookie answers all three, so the end is never
+// that of a later read.
+func (g *gate) admitted(r *http.Request) (time.Time, string, bool) {
 	if g.devOpen {
-		return time.Now().Add(openEnd), true
+		return time.Now().Add(openEnd), "", true
 	}
 	s, exp := g.sessionOf(r)
-	return exp, s.Admin && s.Sub != ""
+	return exp, s.ID, s.Admin && s.Sub != ""
 }
 
 func (g *gate) isAdmin(r *http.Request) bool {
-	_, ok := g.admitted(r)
+	_, _, ok := g.admitted(r)
 	return ok
+}
+
+type sessionLiveKey struct{}
+
+// sessionLive is whether the admitted session is still live (not signed out), put in the context by adminOnly with
+// its end: the hub asks it at each ping. Under devOpen there is none: nothing to sign out.
+func sessionLive(ctx context.Context) func() bool {
+	f, _ := ctx.Value(sessionLiveKey{}).(func() bool)
+	return f
 }
 
 // authFail answers a failed or refused sign-in with a page a person can read, not a bare status line.
@@ -257,16 +303,22 @@ func (au *Auth) callback(w http.ResponseWriter, r *http.Request) {
 		authFail(w, "mountain is for platform admins only.", http.StatusForbidden)
 		return
 	}
-	au.set(w, sessionCookie, Session{Admin: true, Sub: idt.Subject, Name: c.Name}, sessionTTL)
+	au.set(w, sessionCookie, Session{Admin: true, Sub: idt.Subject, Name: c.Name, ID: rand.Text()}, sessionTTL)
 	http.Redirect(w, r, f.Return, http.StatusSeeOther)
 }
 
-// logout is POST + same Origin (originOK), so another site can neither GET nor form-POST a sign-out. The authentik
-// session stays: the page would sign straight back in, so it lands on /auth/me, which says who is signed in.
+// logout is POST + same Origin (originOK, checked first: atlas has no router-level Origin check), so another site can
+// neither GET nor form-POST a sign-out. It revokes the session's id, but only of a cookie whose MAC holds, so a forged
+// one revokes nothing and the set stays bounded by an hour of sign-ins. The authentik session stays: the page would
+// sign straight back in, so it lands on /auth/me, which says who is signed in.
 func (au *Auth) logout(w http.ResponseWriter, r *http.Request) {
 	if !originOK(r.Header.Get("Origin"), au.dev) {
 		http.Error(w, "forbidden origin", http.StatusForbidden)
 		return
+	}
+	var s Session
+	if exp, ok := au.get(r, sessionCookie, &s); ok && s.ID != "" {
+		au.revoke(s.ID, exp)
 	}
 	clearCookie(w, sessionCookie)
 	http.Redirect(w, r, "/auth/me", http.StatusSeeOther)

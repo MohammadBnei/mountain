@@ -354,7 +354,7 @@ func TestSocketLapse(t *testing.T) {
 	srv := httptest.NewServer(a.h)
 	defer srv.Close()
 	exp := time.Unix(time.Now().Add(3*time.Second).Unix(), 0)
-	b := mustJSON(map[string]any{"v": Session{Admin: true, Sub: "u1", Name: "ana_k"}, "exp": exp.Unix()})
+	b := mustJSON(map[string]any{"v": Session{Admin: true, Sub: "u1", Name: "ana_k", ID: "s1"}, "exp": exp.Unix()})
 	c := &http.Cookie{Name: sessionCookie, Value: base64.RawURLEncoding.EncodeToString(b) + "." + a.gate.auth.mac(sessionCookie, b)}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

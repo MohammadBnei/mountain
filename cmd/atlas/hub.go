@@ -47,6 +47,7 @@ func (c *Client) Send(b []byte) bool {
 type Hub struct {
 	dev   bool
 	hello func() []byte
+	ping  time.Duration // pingEvery (a test shortens it)
 
 	mu      sync.Mutex
 	clients map[*Client]struct{}
@@ -54,7 +55,7 @@ type Hub struct {
 }
 
 func NewHub(dev bool, hello func() []byte) *Hub {
-	return &Hub{dev: dev, hello: hello, clients: map[*Client]struct{}{}, perIP: map[string]int{}}
+	return &Hub{dev: dev, hello: hello, ping: pingEvery, clients: map[*Client]struct{}{}, perIP: map[string]int{}}
 }
 
 // Broadcast queues b to every client (nil = nothing).
@@ -154,7 +155,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	tick := time.NewTicker(pingEvery)
+	live := sessionLive(r.Context()) // nil for the machine principal and devOpen: nothing to sign out
+	tick := time.NewTicker(h.ping)
 	defer tick.Stop()
 	for {
 		select {
@@ -169,6 +171,10 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-tick.C:
+			if live != nil && !live() { // signed out: the socket ends at the next ping, not at the cookie's expiry
+				conn.Close(websocket.StatusPolicyViolation, "session ended")
+				return
+			}
 			pctx, pc := context.WithTimeout(ctx, writeTimout)
 			err := conn.Ping(pctx)
 			pc()
