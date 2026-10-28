@@ -34,7 +34,6 @@ import (
 	"html"
 	"log"
 	"net/http"
-	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -94,12 +93,12 @@ func sessionEnd(ctx context.Context) (time.Time, bool) {
 	return t, ok && !t.IsZero()
 }
 
-func authFromEnv(dev bool) *Auth {
-	iss, id, sec, key := os.Getenv("MOUNTAIN_OIDC_ISSUER"), os.Getenv("MOUNTAIN_OIDC_CLIENT_ID"), os.Getenv("MOUNTAIN_OIDC_CLIENT_SECRET"), os.Getenv("MOUNTAIN_SESSION_KEY")
-	if iss == "" || id == "" || sec == "" || len(key) < 32 {
+// authFrom is sign-in from its configuration (config.go); nil = off.
+func authFrom(c *oidcEnv, dev bool) *Auth {
+	if c == nil {
 		return nil
 	}
-	return newAuth(iss, id, sec, origin+"/auth/callback", []byte(key), dev)
+	return newAuth(c.Issuer, c.ClientID, c.Secret, origin+"/auth/callback", []byte(c.Key), dev)
 }
 
 func newAuth(issuer, id, secret, redirect string, key []byte, dev bool) *Auth {

@@ -58,6 +58,9 @@ Every non-trivial change (any feature or refactor, or a fix that crosses a modul
 - **Find the consumers outside the repo.** A log format, a metric name, a label or a wire field may be read by
   another repo, an alert or a dashboard. *Pushing logs over OTLP would have broken the Loki alerts that match on
   Alloy's `namespace` label (plan/15's doubt cycle).*
+- **A fix covers every path to the state it guards.** List them before writing it. *A4's first sign-out fix closed
+  the open socket only; a socket down at the time, a page brought back with Back and a 403 at start reached the same
+  reload into the sign-in, found by two more reviews (mountain #61).*
 - **Owner decisions are not relitigated.** A plan that needs one changed asks the owner first.
 
 ## 3. Proving a refactor
@@ -83,6 +86,8 @@ Every non-trivial change (any feature or refactor, or a fix that crosses a modul
     imports and renames (game #24–#27);
   - **old and new binaries side by side** over every flag and env combination: same exit codes and messages
     (game #21).
+- **Run a harness that starts servers alone.** Two at once collide on ephemeral ports and fail for no reason: the
+  game's integration test failed beside atlas's binary matrix and passed alone (A4).
 - **Every new test gets a mutation.** Disable the code it guards (`if false && bad` in Go, `if (false && bad)` in
   JS), and check that the test fails for that reason. A mutation that breaks the build (an unused import) is a false
   "caught".
