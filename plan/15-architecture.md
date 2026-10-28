@@ -160,7 +160,8 @@ doesn't.
 - **Logs are JSON on stdout** and gain `trace_id` and `span_id` (owner, 2026-10-28: atlas, the game and the bridge,
   which log text today, move to it, each site with its level). Alloy keeps tailing them, because the bridge's
   and the fleet's Loki alerts, and fleet core's log reads, select on the labels the file tailing gives.
-- **Tests:** each app's metric names, and its log `level` and messages, are unchanged.
+- **Tests:** each app's metric names, and its log messages, are unchanged; a level changes only where it is labelled
+  (a site given its own, or Write's internal line at ERROR).
 - **The sim:** OTel is emitted, never read, so the sim needs no mirror for it. It exports to stdout or nowhere.
 - **The infra-bootstrap ADR**, once the backend is chosen, adds it, Alloy's OTLP receiver and its Service, and
   Grafana's datasources and its links between traces, logs and metrics.
@@ -326,6 +327,12 @@ These already follow the standard:
 
    Then the traces' extraction (T1): the game's internal/telemetry moves, unchanged, to `pkg/telemetry`, for atlas's
    use; the game moves onto it next.
+
+   Then the logs' shared half (L1): `pkg/telemetry.NewLogger`, JSON lines with trace ids from a span in the
+   context, which an app installs as slog's default (the log package then comes through it, at INFO); `errs.Write`
+   logs an error outside the model at ERROR through slog. Each app then gives every site its level, log.Fatal's
+   included, and moves to stdout. Write's line has no span yet (its signature holds no context): it gains one with
+   the RecordError hook, found through w's Unwrap chain.
 6. **The sim:**
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;
