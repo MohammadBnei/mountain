@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -60,16 +61,15 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 }
 
 // tracesEndpoint is the check of Config.Traces: "" = no tracing; else the OTLP/HTTP traces URL in full, because the
-// exporter posts to the path as given ("" or "/" would be the collector's root, not /v1/traces). A user:password in
-// the value is never echoed.
+// exporter posts to the path as given ("" or "/" would be the collector's root, not /v1/traces). A value with an "@"
+// in it (a user:password, whether it parses or not) is never echoed.
 func tracesEndpoint(v string) error {
 	if v == "" {
 		return nil
 	}
-	u, err := url.Parse(v)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Path == "" || u.Path == "/" {
-		if err == nil && u.User != nil {
-			v = u.Redacted()
+	if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Path == "" || u.Path == "/" {
+		if strings.Contains(v, "@") { // any user:password form, parsed or not, scheme or not
+			return errors.New("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT <redacted: contains @> is not an http(s) URL with its traces path (…/v1/traces)")
 		}
 		return fmt.Errorf("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT %q is not an http(s) URL with its traces path (…/v1/traces)", v)
 	}
@@ -80,7 +80,7 @@ func tracesEndpoint(v string) error {
 // without refuses the start), so a bad endpoint is one WARN line and no tracing, never a refusal.
 func tracesOrOff(v string) string {
 	if err := tracesEndpoint(v); err != nil {
-		slog.Warn(err.Error() + "; tracing is off")
+		slog.Warn("atlas: " + err.Error() + "; tracing is off")
 		return ""
 	}
 	return v

@@ -194,13 +194,16 @@ func TestConfigTraces(t *testing.T) {
 		switch {
 		case ok && (got != v || logs.Len() != 0):
 			t.Errorf("tracesOrOff(%q) = %q, logged %q", v, got, logs.String())
-		case !ok && (got != "" || json.Unmarshal(logs.Bytes(), &line) != nil || line.Level != "WARN" || line.Msg != msg+"; tracing is off"):
+		case !ok && (got != "" || json.Unmarshal(logs.Bytes(), &line) != nil || line.Level != "WARN" || line.Msg != "atlas: "+msg+"; tracing is off"):
 			t.Errorf("tracesOrOff(%q) = %q, logged %q", v, got, logs.String())
 		}
 	}
-	// A password in a bad endpoint is never echoed.
-	if err := tracesEndpoint("http://u:hunter2@c"); err == nil || strings.Contains(err.Error(), "hunter2") || !strings.Contains(err.Error(), "http://u:xxxxx@c") {
-		t.Errorf("redaction: %v", err)
+	// A password in a bad endpoint is never echoed, in any form: parsed, unparsable, or with no scheme.
+	for _, v := range []string{"http://u:hunter2@c", "http://u:hunter2@c/v1/traces\n", "http://u:hunter2@c:abc/v1/traces",
+		"http://u:hunter2@[::1/v1/traces", " http://u:hunter2@c/v1/traces", "u:hunter2@c:4318"} {
+		if err := tracesEndpoint(v); err == nil || strings.Contains(err.Error(), "hunter2") || !strings.Contains(err.Error(), "<redacted: contains @>") {
+			t.Errorf("redaction of %q: %v", v, err)
+		}
 	}
 	// serve no longer refuses a bad endpoint: with a partial machine principal, only the machine is named.
 	both := serve(Config{Machine: machineEnv{Cert: "x"}, Traces: "http://c"})
@@ -233,6 +236,10 @@ func TestTracesWiring(t *testing.T) {
 			return true
 		}
 		calls++
+		if len(c.Args) == 0 {
+			t.Errorf("telemetry.New with no arguments")
+			return true
+		}
 		if arg, ok := c.Args[0].(*ast.CallExpr); !ok {
 			t.Errorf("telemetry.New's endpoint is not tracesOrOff(...)")
 		} else if fn, ok := arg.Fun.(*ast.Ident); !ok || fn.Name != "tracesOrOff" {
