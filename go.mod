@@ -3,6 +3,7 @@ module github.com/MohammadBnei/mountain
 go 1.27
 
 require (
+	github.com/MohammadBnei/mountain/pkg v0.0.0-20261028020202-3bae476508d5
 	github.com/coder/websocket v1.8.15
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-jose/go-jose/v4 v4.1.4

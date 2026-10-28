@@ -77,6 +77,15 @@ function blocks(list, ctx) {
   });
 }
 
+const NOT_HELD = 'atlas does not hold this file at the sha it read (moved, renamed, or a repo it does not read).';
+const READ_SAYS = { 'read.repo': NOT_HELD, 'read.file': NOT_HELD, 'read.too_large': 'The file is larger than the reader reads.', 'read.not_text': 'Not a text file.' };
+
+/** readError is what the reader says for a failed /api/read: by the key of atlas's error body (cmd/atlas/errkeys.go),
+ * else by its status (a body that is not the model's: a proxy's page, the gate's plain-text 403). */
+export function readError(status, body) {
+  return (Object.hasOwn(READ_SAYS, body?.key ?? '') && READ_SAYS[body.key]) || (status === 404 && NOT_HELD) || `atlas answered ${status}.`;
+}
+
 /**
  * view builds the reader for a fetched doc (or an error), with the side column: where it was read, what governs or
  * is governed by it, and the way back.

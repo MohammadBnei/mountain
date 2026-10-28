@@ -301,6 +301,18 @@ These already follow the standard:
    download`) ships with atlas's use, after the build runner has deployed main again, so an unverified Dockerfile
    never sits in front of another change's deploy. Next: the game moves onto it behind a facade that keeps its call
    sites and its key test; then atlas speaks the model (its routes' errors; the gate's refusals stay plain text).
+
+   Then atlas speaks the model (A6b): /api/graph's and /api/read's errors are pkg/errs bodies with keys from
+   cmd/atlas/errkeys.go, today's words as each message. TestErrKeys checks it syntactically, form by form (every
+   constructor called with a registered constant, named directly; no constructor as a value; errs.Key and errs.Error
+   never named outside errkeys.go; no .Key write; no registry name declared again; no From or Down: atlas has no
+   sources); a type-checked guard like the game's TestKeys waits for its codecheck's extraction. The gate's refusals,
+   the hub's before the upgrade, the static files' 404s and the sign-in pages stay plain text, as the game's do. Two
+   statuses change, since Connect has no code for them: not text 415 → 400 and too large 413 → 400
+   (failed_precondition); the page's reader decides on the key (reader.js readError), falling back to the status for
+   a body that is not the model's. The image build reads the private module through a secret mount: checked under
+   BuildKit locally (the build passes, a rewrite to a bogus host fails the download, git's error carries no token);
+   buildah's first run of it is this merge's build on the runner.
 6. **The sim:**
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;

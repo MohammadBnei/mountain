@@ -180,16 +180,23 @@ jobs:
             --username "$REGISTRY_USER" \
             --password-stdin "$REGISTRY"
 
+      # The job's token reaches the build only as a secret mount (Dockerfile: go mod download for the private
+      # pkg module), from a 0600 file removed after: never a build arg, never in a layer.
       - name: Build and push
         env:
           TAG: ${{ steps.tag.outputs.value }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          tok="$(mktemp)"
+          trap 'rm -f "$tok"' EXIT
+          printf '%s' "$GH_TOKEN" > "$tok"
           sudo buildah bud \
             --isolation chroot \
             --format docker \
             --layers \
             --pull=newer \
+            --secret id=github_token,src="$tok" \
             -f Dockerfile \
             -t "$REGISTRY/$IMAGE:$TAG" \
             .

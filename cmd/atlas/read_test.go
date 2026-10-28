@@ -196,7 +196,7 @@ func TestRead(t *testing.T) {
 		"repo=infra-bootstrap&path=docs/../../x":    http.StatusBadRequest,
 		"repo=infra-bootstrap&path=/etc/passwd":     http.StatusBadRequest,
 		"repo=infra-bootstrap&path=link.md":         http.StatusNotFound,
-		"repo=infra-bootstrap&path=bin.dat":         http.StatusUnsupportedMediaType,
+		"repo=infra-bootstrap&path=bin.dat":         http.StatusBadRequest, // failed_precondition, read.not_text (was 415)
 		"repo=infra-bootstrap&path=docs/missing.md": http.StatusNotFound,
 		"repo=agent-fleet&path=README.md":           http.StatusNotFound,
 		"repo=&path=x":                              http.StatusBadRequest,

@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { buildModel, routes, search, fold, use, namespaces, health, alertsOn, governs, groupOf, sourceURL, label, REALMS, MAX_GROUPS, workedTiles, realmGoverns, docOf, adrOfDoc } from '../js/model.js';
 import { layout, heightOf, cardSlots, MAX_CARDS } from '../js/geometry.js';
-import { tokens } from '../js/reader.js';
+import { tokens, readError } from '../js/reader.js';
 import { parse, format, up } from '../js/router.js';
 import { gateLapsed, connect, signedOut, SIGNED_OUT } from '../js/socket.js';
 import { status } from '../js/ui.js';
@@ -198,6 +198,13 @@ ok(SIGNED_OUT === 4001, 'socket: SIGNED_OUT is the server\'s close code (cmd/atl
   } finally { Object.assign(globalThis, real); }
   ok(status(null, null, 'signed-out') === 'Signed out: reload to sign in again' && status(null, null, 'closed') === 'Live connection lost, reconnecting…', 'status: signed out is said as such');
 }
+
+// ---- reader: a failed /api/read is said by its key (atlas's error model), else by its status
+const held = 'atlas does not hold this file at the sha it read (moved, renamed, or a repo it does not read).';
+ok(readError(404, { key: 'read.repo' }) === held && readError(404, { key: 'read.file' }) === held, 'reader: a file or repo atlas does not hold');
+ok(readError(400, { key: 'read.too_large' }) === 'The file is larger than the reader reads.' && readError(400, { key: 'read.not_text' }) === 'Not a text file.', 'reader: too large, not text (400 since the model)');
+ok(readError(400, { key: 'read.path' }) === 'atlas answered 400.' && readError(403, null) === 'atlas answered 403.' && readError(502, null) === 'atlas answered 502.', 'reader: anything else says the status (the gate\'s plain 403, a proxy\'s page)');
+ok(readError(404, null) === held, 'reader: a 404 without the model\'s body still says not held');
 
 console.log(failed ? `${failed} FAILED` : 'all passed');
 process.exit(failed ? 1 : 0);

@@ -28,6 +28,7 @@ import (
 
 	"github.com/MohammadBnei/mountain/internal/extract"
 	"github.com/MohammadBnei/mountain/internal/graph"
+	"github.com/MohammadBnei/mountain/pkg/errs"
 )
 
 //go:embed migrations/*.sql
@@ -649,7 +650,7 @@ func (a *App) serveGraph(w http.ResponseWriter, r *http.Request) {
 	if q := r.URL.Query().Get("seq"); q != "" {
 		n, err := strconv.ParseInt(q, 10, 64)
 		if err != nil || n <= 0 {
-			http.Error(w, "seq is a positive integer", http.StatusBadRequest)
+			errs.Write(w, errs.Invalid(keyGraphSeq, "seq is a positive integer"))
 			return
 		}
 		seq = n
@@ -661,19 +662,22 @@ func (a *App) serveGraph(w http.ResponseWriter, r *http.Request) {
 	case cur != nil && (seq == 0 || seq == cur.Seq):
 		v = *cur
 	case seq == 0:
-		http.Error(w, errNoProjection.Error(), http.StatusNotFound)
+		errs.Write(w, errs.Missing(keyGraphNone, errNoProjection.Error()))
 		return
 	default:
 		_, hist := g.stores()
 		var err error
 		v, err = hist.load(r.Context(), seq)
 		switch {
-		case errors.Is(err, errNoHistory), errors.Is(err, errNoProjection):
-			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, errNoHistory):
+			errs.Write(w, errs.Missing(keyGraphNoHistory, err.Error()))
+			return
+		case errors.Is(err, errNoProjection):
+			errs.Write(w, errs.Missing(keyGraphSeqMissing, err.Error()))
 			return
 		case err != nil:
 			log.Printf("atlas: %v", err)
-			http.Error(w, "atlas: read failed", http.StatusInternalServerError)
+			errs.Write(w, internalError("atlas: read failed"))
 			return
 		}
 	}
