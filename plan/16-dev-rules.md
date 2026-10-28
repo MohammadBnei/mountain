@@ -21,7 +21,9 @@ Every non-trivial change (any feature or refactor, or a fix that crosses a modul
 proof-first step for the changes listed below, and the only such standing word; any other skip still needs it. The
 **full loop** below applies to security, auth, wire-format, data and schema changes, and to any "behaviour
 unchanged" claim. The **light loop** (plan, local checks, review) applies to CI, docs, pins, static content and an
-isolated single-module fix.
+isolated single-module fix. The light loop drops steps 2 and 3 only: the build, the PR and the merge on the owner's
+word (steps 4, 7 and 8) still apply. A change that fits both lists (a workflow's `permissions:` or secrets, a pinned
+auth library) takes the full loop.
 
 1. **A short plan.** What changes and what stays, each claim about today's code with its `file:line`, every test it
    edits and every behaviour it changes (§2).

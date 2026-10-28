@@ -7,6 +7,9 @@
 > file), one behaviour-preserving PR at a time.
 > Amended 2026-10-28 (owner): the standard has three tiers (cluster baseline for all apps, service, static; each
 > CLAUDE.md declares its tier), and shared Go lives in the public module `github.com/MohammadBnei/ukubi-go` (§3).
+> The "ukubi Code Standard" the 2026-10-28 rows cite by section is the owner's cross-repo document, kept outside this
+> repo as the claude.ai doc `M9GMTFRDkFi34DqugV6X9i` (§7 Observability, §9 Git and PR conventions); this file's
+> numbering is its own.
 
 ## Why
 The owner's words, on the console's `Provider` interface: "You see the usefulness of the go interface here, how it
@@ -98,11 +101,11 @@ doesn't.
   the PR that bumps pkg lists every module that rises.
 - **The bridge and the fleet** follow these conventions in their own repos. They don't import mountain.
   - **Amended 2026-10-28 (owner):** shared Go moves to the public module `github.com/MohammadBnei/ukubi-go`
-    (`errs`, `errs/connectkeys`, `telemetry` with the §7 error handler, the `ukubicheck` analyzer, the
-    `ukubi.errors.v1.ErrorKey` proto). mountain, the game, the bridge, the fleet, wird and hq import it. This
-    supersedes the nested `mountain/pkg` and the line above (the bridge and the fleet copy the shape). The text
-    above stays as the history of what was built. Order: ukubi-go v0.1.0, then the game, then mountain, then a
-    mountain PR deletes `pkg/`.
+    (`errs`, `errs/connectkeys`, `telemetry` with the ukubi Code Standard's §7 error handler, the `ukubicheck`
+    analyzer, the `ukubi.errors.v1.ErrorKey` proto). mountain, the game, the bridge, the fleet, wird and hq import
+    it. This supersedes the nested `mountain/pkg` and the line above (its old rule: the bridge and the fleet copy the
+    shape and don't import). The text above stays as the history of what was built. Order: ukubi-go v0.1.0, then the
+    game, then mountain, then a mountain PR deletes `pkg/`.
 
 ## 4. Errors: one model for every app
 - **The codes are Connect's 16** (`invalid_argument`, `failed_precondition`, `not_found`, `permission_denied`,
@@ -392,7 +395,8 @@ These already follow the standard:
    - the world kit as data (no kit names in `build.mjs`);
    - checks as a list;
    - the atlas grid constants imported from procgen.
-8. **The bridge and the fleet:** the error model and OTel, in their own repos (amended 2026-10-28: through ukubi-go, §3).
+8. **The bridge and the fleet:** the error model and OTel, in their own repos (amended 2026-10-28: through
+   ukubi-go, §3, in the adoption order above: Config, then error keys, then logs, then traces).
 
 ## Verification, for every step
 - **Unchanged behaviour:** the existing suites pass with no assertion edited (Go tests, integration tests, the kit's
