@@ -17,7 +17,8 @@ those are its condensed forms.
 Every non-trivial change (any feature or refactor, or a fix that crosses a module, changes a wire format or claims
 "behaviour unchanged") goes through these steps in order. A step is skipped only on the owner's word.
 
-**Two tiers (owner, 2026-10-28; the tiers are the owner's word for the light loop, and for nothing else).** The
+**Two tiers (owner, 2026-10-28).** The light loop is the owner's standing word to skip the doubt cycle and the
+proof-first step for the changes listed below, and the only such standing word; any other skip still needs it. The
 **full loop** below applies to security, auth, wire-format, data and schema changes, and to any "behaviour
 unchanged" claim. The **light loop** (plan, local checks, review) applies to CI, docs, pins, static content and an
 isolated single-module fix.
