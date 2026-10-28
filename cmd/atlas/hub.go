@@ -1,9 +1,10 @@
 package main
 
 // WebSocket hub: the live overlay and graph notices, out to admin sessions only (adminOnly gates the upgrade; the
-// socket closes when its session lapses). Clients send nothing: anything they write is read and dropped, which is
-// also what lets Ping return. coder/websocket's own origin check ignores the scheme and passes an empty Origin, so
-// originOK runs first and Accept gets InsecureSkipVerify.
+// socket closes when its session lapses, or at its next ping once signed out, with closeSignedOut: the page stops).
+// Clients send nothing: anything they write is read and dropped, which is also what lets Ping return.
+// coder/websocket's own origin check ignores the scheme and passes an empty Origin, so originOK runs first and
+// Accept gets InsecureSkipVerify.
 
 import (
 	"context"
@@ -26,6 +27,10 @@ const (
 	sendBuffer  = 64
 	origin      = "https://mountain.bnei.dev"
 	writeTimout = 10 * time.Second
+
+	// closeSignedOut ends a signed-out session's socket (an application code, 4000-4999): the page stops
+	// reconnecting on it (www/js/socket.js), since a reconnect would sign it straight back in through authentik.
+	closeSignedOut websocket.StatusCode = 4001
 )
 
 // Client is one /ws connection.
@@ -47,6 +52,7 @@ func (c *Client) Send(b []byte) bool {
 type Hub struct {
 	dev   bool
 	hello func() []byte
+	ping  time.Duration // pingEvery (a test shortens it)
 
 	mu      sync.Mutex
 	clients map[*Client]struct{}
@@ -54,7 +60,7 @@ type Hub struct {
 }
 
 func NewHub(dev bool, hello func() []byte) *Hub {
-	return &Hub{dev: dev, hello: hello, clients: map[*Client]struct{}{}, perIP: map[string]int{}}
+	return &Hub{dev: dev, hello: hello, ping: pingEvery, clients: map[*Client]struct{}{}, perIP: map[string]int{}}
 }
 
 // Broadcast queues b to every client (nil = nothing).
@@ -154,7 +160,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	tick := time.NewTicker(pingEvery)
+	live := sessionLive(r.Context()) // nil for the machine principal and devOpen: nothing to sign out
+	tick := time.NewTicker(h.ping)
 	defer tick.Stop()
 	for {
 		select {
@@ -169,6 +176,10 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-tick.C:
+			if live != nil && !live() { // signed out: the socket ends at the next ping, not at the cookie's expiry
+				conn.Close(closeSignedOut, "signed out")
+				return
+			}
 			pctx, pc := context.WithTimeout(ctx, writeTimout)
 			err := conn.Ping(pctx)
 			pc()

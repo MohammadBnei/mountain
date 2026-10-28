@@ -6,7 +6,8 @@ import { buildModel, routes, search, fold, use, namespaces, health, alertsOn, go
 import { layout, heightOf, cardSlots, MAX_CARDS } from '../js/geometry.js';
 import { tokens } from '../js/reader.js';
 import { parse, format, up } from '../js/router.js';
-import { gateLapsed } from '../js/socket.js';
+import { gateLapsed, connect, signedOut, SIGNED_OUT } from '../js/socket.js';
+import { status } from '../js/ui.js';
 
 let failed = 0;
 const ok = (c, m) => { if (!c) { failed++; console.log(`FAIL ${m}`); } else console.log(`ok   ${m}`); };
@@ -134,13 +135,69 @@ const store = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? 
 const probe = async (res) => { let n = 0; await gateLapsed({ fetchFn: async () => res, reload: () => n++, store: store(), now: 1e12 }); return n; };
 const json = (b, status = 200) => ({ type: 'basic', status, ok: status < 300, json: async () => b });
 ok(await probe({ type: 'opaqueredirect', status: 0, ok: false }) === 1, 'socket: the gate\'s redirect reloads');
-ok(await probe(json({ enabled: true, admin: false })) === 1, 'socket: atlas\'s session ended (signed out of atlas, gate still open) reloads');
+ok(await probe(json({ enabled: true, admin: false })) === 1, 'socket: atlas\'s session ended (expired, gate still open) reloads');
 ok(await probe(json({ enabled: true, admin: true })) === 0, 'socket: still an admin: no reload (atlas is down, not the session)');
 ok(await probe(json({ enabled: false, admin: true })) === 0 && await probe(json({}, 503)) === 0, 'socket: dev, or a 5xx: no reload');
 const st = store();
 let reloads = 0;
 for (const now of [1e12, 1e12 + 60e3]) await gateLapsed({ fetchFn: async () => json({ enabled: true, admin: false }), reload: () => reloads++, store: st, now });
 ok(reloads === 1, 'socket: at most one reload per 5 min');
+
+// ---- socket: a sign-out stops the page for good (no reload into the sign-in); any other close reconnects
+ok(await probe(json({ enabled: true, admin: false, signedOut: true })) === 0, 'socket: signed out (/auth/me says so): no reload');
+ok(await gateLapsed({ fetchFn: async () => json({ enabled: true, admin: false, signedOut: true }), reload: () => {}, store: store(), now: 1e12 }) === 'signed-out', 'socket: signed out is answered as such');
+ok(await gateLapsed({ fetchFn: async () => json({ enabled: true, admin: true, signedOut: true }), reload: () => {}, store: store(), now: 1e12 }) === false, 'socket: an admin is never signed out');
+const so = (res) => signedOut({ fetchFn: async () => { if (res instanceof Error) throw res; return res; } });
+ok(await so(json({ enabled: true, admin: false, signedOut: true })) === true, 'page: /auth/me says signed out');
+ok(await so(json({ enabled: true, admin: true, signedOut: true })) === false && await so(json({ enabled: true, admin: false })) === false, 'page: an admin, or an expiry, is not signed out');
+ok(await so(json({ signedOut: true }, 503)) === false && await so(new Error('down')) === false && await so({ type: 'basic', status: 200, ok: true, json: async () => { throw new SyntaxError('x'); } }) === false, 'page: a 5xx, no answer or no JSON says nothing');
+ok(SIGNED_OUT === 4001, 'socket: SIGNED_OUT is the server\'s close code (cmd/atlas/hub.go closeSignedOut)');
+{
+  const real = { WebSocket: globalThis.WebSocket, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, addEventListener: globalThis.addEventListener };
+  let socks, seen, on, timers, ids = 0;
+  const start = (probe) => {
+    socks = []; seen = []; on = {}; timers = new Map();
+    return connect({ url: 'ws://x/ws', onFrame: () => {}, onStatus: (s) => seen.push(s), probe });
+  };
+  const tick = () => { const due = [...timers.values()]; timers.clear(); due.forEach((f) => f()); }; // the reconnect timers fire
+  const settle = () => new Promise((r) => real.setTimeout(r, 0)); // the probe answers
+  globalThis.WebSocket = class { constructor() { this.closes = 0; socks.push(this); } close() { this.closes++; } };
+  globalThis.setTimeout = (f) => { timers.set(++ids, f); return ids; };
+  globalThis.clearTimeout = (id) => timers.delete(id);
+  globalThis.addEventListener = (type, f) => { on[type] = f; };
+  try {
+    let probes = 0;
+    start(() => probes++);
+    socks[0].onclose({ code: 1006 }); tick();
+    ok(socks.length === 2 && seen.at(-1) === 'closed', 'socket: a dropped connection reconnects');
+    socks[1].onclose({ code: SIGNED_OUT }); tick();
+    ok(socks.length === 2 && seen.at(-1) === 'signed-out' && probes === 0, 'socket: signed out: no reconnect, no probe (it would sign straight back in)');
+    on.pageshow({ persisted: true });
+    ok(socks.length === 2, 'socket: signed out: a page restored from the back/forward cache does not reconnect');
+    start(() => 0);
+    on.pagehide({ persisted: true }); on.pageshow({ persisted: true });
+    ok(socks.length === 2, 'socket: a page restored from the back/forward cache reconnects'); // the positive control
+
+    let answer;
+    start(() => new Promise((r) => { answer = r; })); // the socket was down at the sign-out: its probe finds it
+    socks[0].onclose({ code: 1006 }); tick();
+    socks[1].onclose({ code: 1006 }); // the 2nd failure probes; its reconnect timer is pending
+    answer('signed-out'); await settle();
+    ok(seen.at(-1) === 'signed-out' && socks[1].closes === 1, 'socket: a probe answering signed out stops');
+    tick();
+    ok(socks.length === 2, 'socket: ... and the pending reconnect never runs');
+    socks[1].onclose({ code: 1006 });
+    ok(seen.at(-1) === 'signed-out' && timers.size === 0, 'socket: ... nor does a late close revive it');
+    const c = start(() => new Promise((r) => { answer = r; }));
+    socks[0].onclose({ code: 1006 }); tick(); socks[1].onclose({ code: 1006 });
+    c.close(); answer('signed-out'); await settle();
+    ok(seen.at(-1) === 'closed', 'socket: a probe answering after close() says nothing');
+    start(async () => false);
+    socks[0].onclose({ code: 1006 }); tick(); socks[1].onclose({ code: 1006 }); await settle(); tick();
+    ok(seen.at(-1) === 'closed' && socks.length === 3, 'socket: a probe saying nothing keeps reconnecting');
+  } finally { Object.assign(globalThis, real); }
+  ok(status(null, null, 'signed-out') === 'Signed out: reload to sign in again' && status(null, null, 'closed') === 'Live connection lost, reconnecting…', 'status: signed out is said as such');
+}
 
 console.log(failed ? `${failed} FAILED` : 'all passed');
 process.exit(failed ? 1 : 0);

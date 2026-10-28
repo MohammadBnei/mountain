@@ -5,7 +5,7 @@
 // Dev (127.0.0.1): window.__atlas exposes the frame stats and the view for www/dev/gate.mjs.
 import { buildModel, REALM, REALMS, OUTSIDE, search, groupOf, alertsOn } from './model.js';
 import { parse, format, up } from './router.js';
-import { connect, gateLapsed } from './socket.js';
+import { connect, gateLapsed, signedOut } from './socket.js';
 import { el, crumbs, panel, results, minimap, status, pct, buildingCards } from './ui.js';
 import { readerView } from './reader.js';
 
@@ -31,6 +31,7 @@ function failed(e) {
   if (dev) globalThis.__atlas = { ready: true, error: String(e?.stack || e) };
   const loader = $('loader');
   loader.hidden = false;
+  if (e?.signedOut) { loader.textContent = 'Signed out: reload to sign in again.'; return; } // a reload would sign straight back in
   // a deploy retired this page's /v/<build>/ modules: reload once onto the current index
   if (dev || store((s) => s.getItem(RETRY)) || store((s) => (s.setItem(RETRY, '1'), true)) !== true) {
     loader.textContent = 'The map could not be drawn. Reload to try again.';
@@ -43,6 +44,7 @@ function failed(e) {
 async function fetchGraph() {
   const r = await fetch('/api/graph', { cache: 'no-store' });
   if (r.status === 404) return null;
+  if (r.status === 403 && await signedOut()) throw Object.assign(new Error('/api/graph: signed out'), { signedOut: true });
   if (!r.ok) throw new Error(`/api/graph: ${r.status}`);
   return r.json();
 }

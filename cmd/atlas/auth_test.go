@@ -190,7 +190,7 @@ func TestSignIn(t *testing.T) {
 	tampered := &http.Cookie{Name: sessionCookie, Value: strings.Replace(admin.Value, "x", "y", 1) + "A"}
 	fc := cookie(a.serveReq("GET", "/auth/login", nil), flowCookie)
 	asSession := &http.Cookie{Name: sessionCookie, Value: fc.Value} // a flow cookie's MAC is bound to its name
-	b := mustJSON(map[string]any{"v": map[string]string{"Role": "admin", "Sub": "u1", "Name": "ana_k"}, "exp": time.Now().Add(time.Hour).Unix()})
+	b := mustJSON(map[string]any{"v": map[string]string{"Role": "admin", "Sub": "u1", "Name": "ana_k", "ID": "t1"}, "exp": time.Now().Add(time.Hour).Unix()})
 	town := &http.Cookie{Name: sessionCookie, Value: base64.RawURLEncoding.EncodeToString(b) + "." + a.gate.auth.mac(sessionCookie, b)} // R7-R9 shape, same key
 	for name, c := range map[string]*http.Cookie{"forged": forged, "tampered": tampered, "flow as session": asSession, "town role": town} {
 		if isAdm(c) {
@@ -227,7 +227,7 @@ func TestRoutes(t *testing.T) {
 	a, p := withAuth(t)
 	admin := adminCookie(t, a, p)
 	www, _ := fs.Sub(mountain.WWW, "www")
-	b := mustJSON(map[string]any{"v": map[string]string{"Role": "visitor", "Sub": "u2"}, "exp": time.Now().Add(time.Hour).Unix()})
+	b := mustJSON(map[string]any{"v": map[string]string{"Role": "visitor", "Sub": "u2", "ID": "v2"}, "exp": time.Now().Add(time.Hour).Unix()})
 	visitor := &http.Cookie{Name: sessionCookie, Value: base64.RawURLEncoding.EncodeToString(b) + "." + a.gate.auth.mac(sessionCookie, b)}
 	forged := &http.Cookie{Name: sessionCookie, Value: "eyJ2Ijp7IkFkbWluIjp0cnVlfSwiZXhwIjo5OTk5OTk5OTk5fQ.AAAA"}
 	open := map[string]bool{}
@@ -354,7 +354,7 @@ func TestSocketLapse(t *testing.T) {
 	srv := httptest.NewServer(a.h)
 	defer srv.Close()
 	exp := time.Unix(time.Now().Add(3*time.Second).Unix(), 0)
-	b := mustJSON(map[string]any{"v": Session{Admin: true, Sub: "u1", Name: "ana_k"}, "exp": exp.Unix()})
+	b := mustJSON(map[string]any{"v": Session{Admin: true, Sub: "u1", Name: "ana_k", ID: "s1"}, "exp": exp.Unix()})
 	c := &http.Cookie{Name: sessionCookie, Value: base64.RawURLEncoding.EncodeToString(b) + "." + a.gate.auth.mac(sessionCookie, b)}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

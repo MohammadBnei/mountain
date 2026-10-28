@@ -263,6 +263,13 @@ These already follow the standard:
    db-test job, and memory, a production mode), so §1's legs don't apply: they run shared cases (new, same, changed,
    lost, dropped, another writer) and differ by design where the tests say (memory keeps no history, tells a change
    by content, and keeps the latest's seq on a lost repo, where Postgres answers 0).
+
+   Access as a `Gate`, first part: atlas's sign-out ends the session (a session id and a revocation set, as the
+   game's since its #22, plus the socket of a signed-out session closing at its next ping, with a code the page stops
+   reconnecting on, and a signed-out mark that stops the page reloading into the sign-in). The two gates still differ
+   (the game checks Host and Origin in its router, atlas Origin per handler; 401 against 403; the return pattern; the
+   game's 10 s discovery timeout; /auth/me's shape; cookie names; atlas's machine principal and signed-out mark), so
+   the extraction into `mountain/pkg` is its own plan.
 6. **The sim:**
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;
