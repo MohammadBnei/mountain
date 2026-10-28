@@ -230,8 +230,8 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 			n, _ := realms.ParseNeed(s) // realms.Load validated it
 			stated[n.Via+"/"+id] = true
 			checked := "yes"
-			// declared and postgres are not found in files, so they are no finders: a postgres finder would make the
-			// database's row its own evidence (the edge's source, and "evidence of postgres" drift for every app)
+			// declared and postgres have no finder: declared's evidence lives outside the sources, and postgres is
+			// checked against pigsty's pg_databases (dbs), not found in the files the finders walk
 			switch n.Via {
 			case "declared":
 				checked = "declared"
