@@ -94,6 +94,9 @@ jobs:
       # bound is scaled (cmd/atlas/race_on_test.go).
       - name: go test -race
         run: go test -race ./...
+      # The plain build too, for the one wall-clock bound the race build scales (2 s here, 30 s raced).
+      - name: TestRenderBounds, plain build
+        run: go test -count=1 -run '^TestRenderBounds$' ./cmd/atlas/
       # GitHub's Ubuntu image ships Chrome, so the gate selftest runs here; without a Chrome (another
       # runner) it stays a local pre-merge step (04).
       - name: www core test + gate selftest (if Chrome)

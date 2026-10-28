@@ -12,6 +12,10 @@ they are untrusted text. BASE_REF, if set and fetched (refs/remotes/origin/<BASE
 commits already on the base branch are history, not this PR's.
 
 A human commit with no trailers passes. Standard library only.
+
+Warning: the rules apply to the text of this PR's own title and body too. Describing them with the very strings
+they refuse (the domain, an example model id, a quoted trailer) fails the PR that does it; say "claude links"
+and "model names" in words.
 """
 import os
 import re
@@ -19,19 +23,25 @@ import subprocess
 import sys
 
 # (name, pattern), all case-insensitive. The trailers and the footer are matched at the start of a line, where
-# they are written (a sentence that merely says "generated with" passes); the link and the model names anywhere.
+# they are written, after any markdown a PR body wraps them in (quote, bullet, emphasis); a sentence that merely
+# says "generated with" passes unless it names Claude. The link, the address and the model names match anywhere.
+MD = r"^[\s>*+_`~-]*"
 RULES = [
-    ("Co-Authored-By trailer", re.compile(r"^\s*co-authored-by\s*:", re.I)),
-    ("Agent-Session trailer", re.compile(r"^\s*agent-session\s*:", re.I)),
-    ("Agent-Definition trailer", re.compile(r"^\s*agent-definition\s*:", re.I)),
-    ("Claude-Session trailer", re.compile(r"^\s*claude-session\s*:", re.I)),
-    ("'Generated with' footer", re.compile(r"^\W*generated\s+with\b", re.I)),
+    ("Co-Authored-By trailer", re.compile(MD + r"co-authored-by\s*:", re.I)),
+    ("Agent-Session trailer", re.compile(MD + r"agent-session\s*:", re.I)),
+    ("Agent-Definition trailer", re.compile(MD + r"agent-definition\s*:", re.I)),
+    ("Claude-Session trailer", re.compile(MD + r"claude-session\s*:", re.I)),
+    ("Anthropic noreply address", re.compile(r"noreply@anthropic\.com", re.I)),
+    ("'Generated with' footer", re.compile(r"^[\W_]*generated\s+(?:with|by)\b", re.I)),
+    ("'generated with Claude'", re.compile(r"\bgenerated\s+(?:with|by)\s+claude\b", re.I)),
     ("claude.ai / claude.com link", re.compile(r"(?<![\w-])(?:[\w-]+\.)*claude\.(?:ai|com)\b", re.I)),
-    # Model names: "claude-opus-...", "Claude Sonnet", "Opus 5", "Sonnet 4.6", "claude-3-5-...". Not the word
-    # "claude" alone, not ukubi-claude-<host>, not CLAUDE_MODEL / CLAUDE_CODE_OAUTH_TOKEN.
+    # Model names: "claude-opus-...", "claude_opus_5", "Claude Sonnet", "Claude 3.5 Sonnet", "Opus 5",
+    # "Sonnet 4.6", "claude-3-5-...". Not the word "claude" alone, not ukubi-claude-<host>, not CLAUDE_MODEL /
+    # CLAUDE_CODE_OAUTH_TOKEN.
     ("model name", re.compile(
-        r"\bclaude[- ](?:opus|sonnet|haiku|fable)\b"
-        r"|\b(?:opus|sonnet|haiku|fable)[ -]?\d"
+        r"\bclaude[ _-](?:opus|sonnet|haiku|fable)(?![a-z])"
+        r"|\bclaude[ _-]?\d+(?:\.\d+)?[ _-]?(?:opus|sonnet|haiku|fable)(?![a-z])"
+        r"|\b(?:opus|sonnet|haiku|fable)[ _-]?\d"
         r"|\bclaude-\d", re.I)),
 ]
 
