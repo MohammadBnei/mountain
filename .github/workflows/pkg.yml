@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: pkg/go.mod
-          cache: false # no dependencies; a shared key would leave the app jobs a near-empty cache
+          cache-dependency-path: pkg/go.sum # its own key: the root's go.sum keys the app jobs' cache
       - name: go vet + go test (pkg)
         run: |
           set -euo pipefail
