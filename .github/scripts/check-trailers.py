@@ -46,6 +46,11 @@ RULES = [
 ]
 
 
+# An author or committer that is Claude or Anthropic: "claude" as a whole word (not ukubi-claude-<host>, the identity
+# agents commit as) or "anthropic" anywhere. A message can be clean while the commit still names the model as author.
+AI_IDENTITY = re.compile(r"(?<![\w-])claude(?![\w-])|anthropic", re.I)
+
+
 def git(*args):
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
@@ -77,6 +82,10 @@ def main(argv):
     base, head = argv[1], argv[2]
     bad = 0
     for sha in commits(base, head):
+        for role, ident in zip(("author", "committer"), git("show", "-s", "--format=%an <%ae>%n%cn <%ce>", sha).splitlines()):
+            if AI_IDENTITY.search(ident):
+                print(f"commit {sha[:12]} {role}: names Claude or Anthropic: {ident} (commit as ukubi-claude-<host> <noreply@bnei.dev>)")
+                bad += 1
         for n, line, name in scan(git("show", "-s", "--format=%B", sha)):
             print(f"commit {sha[:12]} line {n}: {name}: {line}")
             bad += 1

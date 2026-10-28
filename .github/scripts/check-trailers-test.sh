@@ -80,6 +80,19 @@ commit_case fail "bulleted Agent-Session" $'feat: a\n\n* Agent-Session: abc' "Ag
 commit_case fail "anthropic noreply address" $'feat: a\n\ncc <noreply@anthropic.com>' "Anthropic noreply"
 commit_case fail "subject line offence" "feat: ask claude-sonnet-4 to do it" "model name"
 
+# The commit's identity: a Claude/Anthropic author or committer fails even with a clean message; the agents'
+# ukubi-claude-<host> identity passes.
+ident_case() { # ident_case <pass|fail> <name> <author name> <author email> <committer name> <committer email>
+  git reset -q --hard "$base"
+  GIT_AUTHOR_NAME="$3" GIT_AUTHOR_EMAIL="$4" GIT_COMMITTER_NAME="$5" GIT_COMMITTER_EMAIL="$6" git commit -q --allow-empty -m "fix: clean message"
+  expect "$1" "$2"
+}
+ident_case fail "Claude author" Claude noreply@anthropic.com t t@example.invalid
+ident_case fail "Claude committer" t t@example.invalid Claude noreply@anthropic.com
+ident_case fail "anthropic email only" t someone@anthropic.com t t@example.invalid
+ident_case pass "ukubi-claude-cloud identity" ukubi-claude-cloud noreply@bnei.dev ukubi-claude-cloud noreply@bnei.dev
+git reset -q --hard "$base"
+
 # The offending line and its commit are named; a clean commit around a bad one does not hide it.
 git reset -q --hard "$base"
 git commit -q --allow-empty -m "feat: one"
