@@ -13,6 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"maps"
 	"os"
@@ -205,34 +206,50 @@ func (d localHeads) checkout(_ context.Context, repo, _ string) (extract.Repo, e
 	return r, nil
 }
 
+// parseProject is `atlas project`'s flags. --dsn's default is DATABASE_URL, read only when --dsn is not given, so the
+// flag's help never prints the URL (it holds the database password).
+func parseProject(args []string, getenv func(string) string, out io.Writer) (dir, dsn string, drop bool, err error) {
+	f := flag.NewFlagSet("project", flag.ContinueOnError)
+	f.SetOutput(out)
+	f.StringVar(&dir, "repos", "", "directory holding the repo checkouts (one per GitHub repo name)")
+	f.StringVar(&dsn, "dsn", "", "Postgres URL (default: DATABASE_URL)")
+	f.BoolVar(&drop, "drop-repos", false, "accept that repos the last projection read are gone (their nodes close)")
+	if err = f.Parse(args); err != nil {
+		return
+	}
+	given := false
+	f.Visit(func(fl *flag.Flag) { given = given || fl.Name == "dsn" })
+	if !given {
+		dsn = getenv("DATABASE_URL")
+	}
+	if dir == "" || dsn == "" {
+		err = errors.New("project: --repos and a DSN (--dsn or DATABASE_URL) are required")
+	}
+	return
+}
+
 // projectCmd is `atlas project`: one round over local checkouts, stored.
 func projectCmd(args []string) error {
-	f := flag.NewFlagSet("project", flag.ContinueOnError)
-	dir := f.String("repos", "", "directory holding the repo checkouts (one per GitHub repo name)")
-	dsn := f.String("dsn", os.Getenv("DATABASE_URL"), "Postgres URL (default: DATABASE_URL)")
-	drop := f.Bool("drop-repos", false, "accept that repos the last projection read are gone (their nodes close)")
-	if err := f.Parse(args); err != nil {
+	dir, dsn, drop, err := parseProject(args, os.Getenv, os.Stderr)
+	if err != nil {
 		return err
-	}
-	if *dir == "" || *dsn == "" {
-		return errors.New("project: --repos and a DSN (--dsn or DATABASE_URL) are required")
 	}
 	rl, err := realms.Load()
 	if err != nil {
 		return err
 	}
 	ctx := context.Background()
-	res, repos, err := round(ctx, localHeads(*dir), rl, nil, nil)
+	res, repos, err := round(ctx, localHeads(dir), rl, nil, nil)
 	if err != nil {
 		return err
 	}
 	g := &Graphs{}
-	if err := g.attach(ctx, *dsn); err != nil {
+	if err := g.attach(ctx, dsn); err != nil {
 		return err
 	}
 	defer g.close()
 	var counted map[string]bool // every repo the last projection read
-	if *drop {
+	if drop {
 		counted = map[string]bool{}
 	}
 	seq, changed, err := g.put(ctx, res, repos, counted)
