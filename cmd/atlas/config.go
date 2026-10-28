@@ -10,8 +10,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -58,17 +60,30 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	return c, err
 }
 
-// tracesEndpoint is serve's check of Config.Traces, made with machineFrom's (a refusal to start is a JSON ERROR line, exit
-// 1, as every one but the flags'): "" = no tracing; else the OTLP/HTTP traces URL in full, because the exporter posts
-// to the path as given ("" or "/" would be the collector's root, not /v1/traces).
+// tracesEndpoint is the check of Config.Traces: "" = no tracing; else the OTLP/HTTP traces URL in full, because the
+// exporter posts to the path as given ("" or "/" would be the collector's root, not /v1/traces). A value with an "@"
+// in it (a user:password, whether it parses or not) is never echoed.
 func tracesEndpoint(v string) error {
 	if v == "" {
 		return nil
 	}
 	if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Path == "" || u.Path == "/" {
+		if strings.Contains(v, "@") { // any user:password form, parsed or not, scheme or not
+			return errors.New("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT <redacted: contains @> is not an http(s) URL with its traces path (…/v1/traces)")
+		}
 		return fmt.Errorf("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT %q is not an http(s) URL with its traces path (…/v1/traces)", v)
 	}
 	return nil
+}
+
+// tracesOrOff is the endpoint serve traces to. Tracing is optional (plan/15 §5: only a setting atlas cannot run
+// without refuses the start), so a bad endpoint is one WARN line and no tracing, never a refusal.
+func tracesOrOff(v string) string {
+	if err := tracesEndpoint(v); err != nil {
+		slog.Warn("atlas: " + err.Error() + "; tracing is off")
+		return ""
+	}
+	return v
 }
 
 // serveFlags is serve's FlagSet, writing into o.

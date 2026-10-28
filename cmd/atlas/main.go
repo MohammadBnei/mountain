@@ -13,7 +13,7 @@
 // MOUNTAIN_MACHINE_CERT, MOUNTAIN_MACHINE_ISSUER, MOUNTAIN_MACHINE_CLIENT_ID and MOUNTAIN_MACHINE_SUB (the game's
 // machine principal on the town's two reads, machine.go; all or none: unset = off), and
 // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT (the OTLP/HTTP traces URL in full, its /v1/traces path included; unset = no
-// tracer and no span, a malformed one is a refusal to start). All of it is read once, in config.go; the libraries'
+// tracer and no span; a malformed one is a WARN line and no tracing). All of it is read once, in config.go; the libraries'
 // own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*) are theirs, and so are OpenTelemetry's: the metrics
 // SDK always reads OTEL_RESOURCE_ATTRIBUTES, OTEL_SERVICE_NAME, OTEL_METRICS_EXEMPLAR_FILTER and OTEL_GO_X_* (a
 // malformed one is a JSON INFO line on stdout, from OTel's global error handler going through the log package that
@@ -133,8 +133,8 @@ func run(ctx context.Context, c Config) error {
 	g := &gate{auth: authFrom(c.OIDC, o.Dev)}
 	var merr error
 	g.machine, merr = machineFrom(c.Machine)
-	if err := errors.Join(merr, tracesEndpoint(c.Traces)); err != nil { // every refusal at once (plan/15 §5)
-		return err
+	if merr != nil {
+		return merr
 	}
 	g.devOpen = o.Dev && g.auth == nil && loopback(o.Listen)
 	if g.auth == nil && !g.devOpen {
@@ -146,7 +146,7 @@ func run(ctx context.Context, c Config) error {
 		return err
 	}
 	defer func() { _ = pm.Close() }()
-	tel, err := telemetry.New(c.Traces, "atlas")
+	tel, err := telemetry.New(tracesOrOff(c.Traces), "atlas")
 	if err != nil {
 		return err
 	}
