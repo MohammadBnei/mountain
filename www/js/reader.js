@@ -83,7 +83,7 @@ const READ_SAYS = { 'read.repo': NOT_HELD, 'read.file': NOT_HELD, 'read.too_larg
 /** readError is what the reader says for a failed /api/read: by the key of atlas's error body (cmd/atlas/errkeys.go),
  * else by its status (a body that is not the model's: a proxy's page, the gate's plain-text 403). */
 export function readError(status, body) {
-  return READ_SAYS[body?.key] || { 404: NOT_HELD }[status] || `atlas answered ${status}.`;
+  return (Object.hasOwn(READ_SAYS, body?.key ?? '') && READ_SAYS[body.key]) || (status === 404 && NOT_HELD) || `atlas answered ${status}.`;
 }
 
 /**

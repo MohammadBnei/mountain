@@ -6,12 +6,11 @@ WORKDIR /src
 ENV GOPRIVATE=github.com/MohammadBnei/mountain
 COPY go.mod go.sum ./
 RUN --mount=type=secret,id=github_token \
-    if [ -s /run/secrets/github_token ]; then \
-      export GIT_CONFIG_COUNT=1 \
-        GIT_CONFIG_KEY_0="url.https://x-access-token:$(cat /run/secrets/github_token)@github.com/MohammadBnei/mountain.insteadOf" \
-        GIT_CONFIG_VALUE_0="https://github.com/MohammadBnei/mountain"; \
-    fi; \
-    go mod download
+    [ -s /run/secrets/github_token ] || { echo "the github_token build secret is missing or empty" >&2; exit 1; }; \
+    GIT_CONFIG_COUNT=1 \
+      GIT_CONFIG_KEY_0="url.https://x-access-token:$(cat /run/secrets/github_token)@github.com/MohammadBnei/mountain.insteadOf" \
+      GIT_CONFIG_VALUE_0="https://github.com/MohammadBnei/mountain" \
+      go mod download
 COPY embed.go ./
 COPY internal ./internal
 COPY contract ./contract

@@ -4,8 +4,9 @@ import "github.com/MohammadBnei/mountain/pkg/errs"
 
 // atlas's error keys (plan/15 §4): its routes answer in mountain/pkg/errs's model, with one of these keys. The page
 // decides on the key, never on the message (www/js/reader.js readError). TestErrKeys fails on a key that is not one
-// of these constants. The gate's refusals (adminOnly's 403, the Origin and machine checks, the hub's before the
-// upgrade) stay plain text, as the game's do: they answer before any route does.
+// of these constants (each form it checks is listed there). The gate's refusals (adminOnly's 403, the Origin and
+// machine checks), the hub's before the upgrade (a failed upgrade's body is unreadable in a browser, and the game
+// reads only the status), the static files' 404s and the sign-in pages stay plain text, as the game's do.
 const (
 	keyGraphSeq        errs.Key = "graph.seq"         // ?seq= is not a positive integer
 	keyGraphNone       errs.Key = "graph.none"        // no projection yet

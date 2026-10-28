@@ -17,9 +17,15 @@ import (
 	"github.com/MohammadBnei/mountain/pkg/errs"
 )
 
-// keyUses checks src (a file of this package) against the registry: every key a constructor of mountain/pkg/errs
-// is given is one of keys; no file but errkeys.go converts to errs.Key or builds an errs.Error itself; atlas has no
-// sources, so From and Down are not called. It returns the problems and how many constructor calls it checked.
+// keyUses checks src (a file of this package) against the registry, syntactically (each form below; a type-checked
+// guard like the game's TestKeys comes with its codecheck's extraction to mountain/pkg):
+//   - every key a constructor of mountain/pkg/errs is called with is one of keys, named directly;
+//   - a constructor is only ever called, never taken as a value;
+//   - outside errkeys.go, errs.Key and errs.Error are never named (no conversion, literal, new, alias or field type),
+//     no .Key field is written, and no name of the registry is declared again (a shadowing const or variable);
+//   - atlas has no sources, so From and Down are not used.
+//
+// It returns the problems and how many constructor calls it checked.
 func keyUses(name string, src []byte, keys map[string]bool) (problems []string, checked int) {
 	f, err := parser.ParseFile(token.NewFileSet(), name, src, parser.SkipObjectResolution)
 	if err != nil {
@@ -34,40 +40,68 @@ func keyUses(name string, src []byte, keys map[string]bool) (problems []string, 
 			}
 		}
 	}
-	if pkg == "" {
-		return nil, 0
-	}
 	if pkg == "." {
 		return []string{"a dot import of pkg/errs"}, 0
 	}
+	registry := filepath.Base(name) == "errkeys.go"
 	sel := func(e ast.Expr) string {
 		if s, ok := e.(*ast.SelectorExpr); ok {
-			if id, ok := s.X.(*ast.Ident); ok && id.Name == pkg {
+			if id, ok := s.X.(*ast.Ident); ok && pkg != "" && id.Name == pkg {
 				return s.Sel.Name
 			}
 		}
 		return ""
 	}
-	registry := filepath.Base(name) == "errkeys.go"
+	ctor := map[string]bool{"Invalid": true, "Precondition": true, "Missing": true, "NotHere": true, "Conflict": true}
+	called := map[ast.Expr]bool{}
+	declared := func(id *ast.Ident) {
+		if !registry && keys[id.Name] {
+			problems = append(problems, id.Name+": a registry name declared again")
+		}
+	}
 	ast.Inspect(f, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.CallExpr:
-			switch fn := sel(x.Fun); fn {
-			case "Invalid", "Precondition", "Missing", "NotHere", "Conflict":
+			if fn := sel(x.Fun); ctor[fn] {
+				called[x.Fun] = true
 				checked++
 				if id, ok := x.Args[0].(*ast.Ident); !ok || !keys[id.Name] {
 					problems = append(problems, fn+": a key that is not one of errkeys.go's constants")
 				}
-			case "From", "Down":
-				problems = append(problems, fn+": atlas has no sources")
-			case "Key":
-				if !registry {
-					problems = append(problems, "a conversion to errs.Key")
+			}
+		case *ast.ValueSpec:
+			for _, id := range x.Names {
+				declared(id)
+			}
+		case *ast.AssignStmt:
+			for _, l := range x.Lhs {
+				if id, ok := l.(*ast.Ident); ok && x.Tok == token.DEFINE {
+					declared(id)
+				}
+				if s, ok := l.(*ast.SelectorExpr); ok && s.Sel.Name == "Key" && !registry {
+					problems = append(problems, "a write to .Key")
 				}
 			}
-		case *ast.CompositeLit:
-			if sel(x.Type) == "Error" && !registry {
-				problems = append(problems, "an errs.Error literal")
+		case *ast.Field:
+			for _, id := range x.Names {
+				declared(id)
+			}
+		case *ast.TypeSpec:
+			declared(x.Name)
+		case *ast.FuncDecl:
+			declared(x.Name)
+		}
+		return true
+	})
+	ast.Inspect(f, func(n ast.Node) bool {
+		if s, ok := n.(*ast.SelectorExpr); ok {
+			switch fn := sel(s); {
+			case ctor[fn] && !called[s]:
+				problems = append(problems, fn+": a constructor taken as a value")
+			case fn == "From" || fn == "Down":
+				problems = append(problems, fn+": atlas has no sources")
+			case (fn == "Key" || fn == "Error") && !registry:
+				problems = append(problems, "errs."+fn+" named outside errkeys.go")
 			}
 		}
 		return true
@@ -122,6 +156,11 @@ func TestErrKeys(t *testing.T) {
 func TestErrKeysForms(t *testing.T) {
 	keys := map[string]bool{"keyA": true}
 	for src, want := range map[string]int{
+		`func() { f := errs.Invalid; f(keyA, "x") }`:                    1,
+		`[]*errs.Error{{Key: "lit"}}`:                                   1,
+		`func() { e := errs.Invalid(keyA, "x"); e.Key = "lit"; _ = e }`: 1,
+		`new(errs.Error)`: 1,
+		`func() { const keyA errs.Key = "lit"; _ = errs.Missing(keyA, "x") }`: 2,
 		`errs.Invalid(keyA, "x")`:                     0,
 		`errs.Invalid(keyB, "x")`:                     1,
 		`errs.Missing("lit", "x")`:                    1,
@@ -159,7 +198,11 @@ func TestErrBodies(t *testing.T) {
 		t.Helper()
 		r := a.serveReq("GET", target, nil)
 		var b errs.Body
-		if r.StatusCode != status || r.Header.Get("Content-Type") != "application/json" || json.NewDecoder(r.Body).Decode(&b) != nil ||
+		h := r.Header
+		if h.Get("Cache-Control") != "private, no-store" || h.Get("Vary") != "Cookie" || h.Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("%s: headers %v", target, h)
+		}
+		if r.StatusCode != status || h.Get("Content-Type") != "application/json" || json.NewDecoder(r.Body).Decode(&b) != nil ||
 			b != (errs.Body{Code: code, Key: string(key), Message: msg}) {
 			t.Errorf("%s: %d %q %+v", target, r.StatusCode, r.Header.Get("Content-Type"), b)
 		}
@@ -181,7 +224,7 @@ func TestErrBodies(t *testing.T) {
 }
 
 // TestDBErrBodies: Postgres's answers for an older projection: absent, and the database failing (internal, today's
-// words, the cause logged and not sent).
+// words, the cause not sent: pgx's text stays in atlas's own log line).
 func TestDBErrBodies(t *testing.T) {
 	ctx := context.Background()
 	a := testApp(t)
