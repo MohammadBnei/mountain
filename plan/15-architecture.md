@@ -5,6 +5,8 @@
 > for every ukubi app written from here on: atlas (mountain), the game (ukubi-game), the kit (ukubi-kit), and, by
 > convention in their own repos, the bridge and the fleet. Existing code moves to it step by step (the end of this
 > file), one behaviour-preserving PR at a time.
+> Amended 2026-10-28 (owner): the standard has three tiers (cluster baseline for all apps, service, static; each
+> CLAUDE.md declares its tier), and shared Go lives in the public module `github.com/MohammadBnei/ukubi-go` (§3).
 
 ## Why
 The owner's words, on the console's `Provider` interface: "You see the usefulness of the go interface here, how it
@@ -95,6 +97,12 @@ doesn't.
   module graph still gains the OTel modules, and MVS may raise ones it shares (golang.org/x/text and x/sync for atlas):
   the PR that bumps pkg lists every module that rises.
 - **The bridge and the fleet** follow these conventions in their own repos. They don't import mountain.
+  - **Amended 2026-10-28 (owner):** shared Go moves to the public module `github.com/MohammadBnei/ukubi-go`
+    (`errs`, `errs/connectkeys`, `telemetry` with the §7 error handler, the `ukubicheck` analyzer, the
+    `ukubi.errors.v1.ErrorKey` proto). mountain, the game, the bridge, the fleet, wird and hq import it. This
+    supersedes the nested `mountain/pkg` and the line above (the bridge and the fleet copy the shape). The text
+    above stays as the history of what was built. Order: ukubi-go v0.1.0, then the game, then mountain, then a
+    mountain PR deletes `pkg/`.
 
 ## 4. Errors: one model for every app
 - **The codes are Connect's 16** (`invalid_argument`, `failed_precondition`, `not_found`, `permission_denied`,
@@ -209,6 +217,7 @@ These already follow the standard:
 - the kit's generator contract.
 
 ## Moving existing code to it (each step one PR, behaviour unchanged, through the usual loop)
+*Adoption order (owner, 2026-10-28), for every app: Config, then error keys, then logs, then traces.*
 1. **mountain CI:** the `test` job moves to `ubuntu-latest`, and `build-push` stays self-hosted. Mountain's PRs are
    then tested while the runner is down.
 2. **atlas, small and urgent:**
@@ -374,7 +383,7 @@ These already follow the standard:
    - the world kit as data (no kit names in `build.mjs`);
    - checks as a list;
    - the atlas grid constants imported from procgen.
-8. **The bridge and the fleet:** the error model and OTel, in their own repos.
+8. **The bridge and the fleet:** the error model and OTel, in their own repos (amended 2026-10-28: through ukubi-go, §3).
 
 ## Verification, for every step
 - **Unchanged behaviour:** the existing suites pass with no assertion edited (Go tests, integration tests, the kit's
