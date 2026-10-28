@@ -2,7 +2,9 @@ package main
 
 // The projected graph (plan/10 "Projection", "Read side"). The extractors (internal/extract) read repo checkouts;
 // projectGraph stores what changed as node and edge versions; GET /api/graph serves one projection to a platform
-// admin. Without a database atlas keeps the latest projection in memory only: the page works, history does not.
+// admin. Graphs stores projections through two seams (projections and history, below), served by one of two stores:
+// Postgres keeps every one; without a database atlas keeps the latest in memory only, so the page works and history
+// does not.
 
 import (
 	"context"
@@ -339,14 +341,101 @@ func nonNilDrift(d []graph.Drift) []graph.Drift {
 	return d
 }
 
-// Graphs is the read side: the database when there is one, and always the latest projection in memory (the hello,
-// the live overlay's index and GET /api/graph without ?seq read it there).
+// Graphs is the read side: the store (the database when there is one, else memory), and always the latest projection
+// in memory (the hello, the live overlay's index and GET /api/graph without ?seq read it there).
 type Graphs struct {
 	mu     sync.Mutex
-	pool   *pgxpool.Pool // nil = memory-only (or the database not reached yet: attach keeps trying)
-	latest *atlasView    // nil = no projection yet
+	pg     *pgStore   // nil = memory-only (or the database not reached yet: attach keeps trying)
+	mem    memStore   // the store until a database is attached
+	latest *atlasView // nil = no projection yet
 	idx    *GraphIndex
-	sig    string // memory-only: the latest projection's content, to tell a change
+}
+
+// The store seams (plan/15 §1), each owned by its consumer: Graphs.put stores through projections, serveGraph reads an
+// older projection through history. pgStore is both; memStore keeps only the latest, so it has no history.
+type (
+	projections interface {
+		// put stores res as the next projection; latest is memory's latest, read where the store needs it. v is the
+		// projection to make the latest, nil to keep the current one.
+		put(ctx context.Context, res extract.Result, repos extract.Repos, counted map[string]bool, latest func() *atlasView) (seq int64, changed bool, v *atlasView, err error)
+	}
+	history interface {
+		// load is projection seq: errNoProjection when none is stored, errNoHistory when the store keeps none.
+		load(ctx context.Context, seq int64) (atlasView, error)
+	}
+)
+
+var errNoHistory = errors.New("atlas: no history without a database")
+
+// pgStore keeps every projection in Postgres.
+type pgStore struct{ pool *pgxpool.Pool }
+
+func (s *pgStore) put(ctx context.Context, res extract.Result, repos extract.Repos, counted map[string]bool, latest func() *atlasView) (int64, bool, *atlasView, error) {
+	seq, changed, err := projectGraph(ctx, s.pool, res, repos, counted)
+	if err != nil {
+		return seq, changed, nil, err
+	}
+	if cur := latest(); !changed && cur != nil && cur.Seq == seq {
+		return seq, false, nil, nil
+	}
+	// changed, or the store's latest is another than memory's (atlas project stored one meanwhile): load it
+	v, err := loadGraph(ctx, s.pool, seq)
+	if err != nil {
+		return seq, changed, nil, err
+	}
+	return seq, true, &v, nil
+}
+
+func (s *pgStore) load(ctx context.Context, seq int64) (atlasView, error) {
+	return loadGraph(ctx, s.pool, seq)
+}
+
+// memStore holds only the latest projection's signature (Graphs holds the latest). sig is its content ([vector, nodes, edges, drift,
+// extractors]: not tracked, skipped, at or seq), to tell a change; seq counts changes since atlas started.
+type memStore struct {
+	mu  sync.Mutex
+	sig string
+}
+
+func (s *memStore) put(_ context.Context, res extract.Result, repos extract.Repos, counted map[string]bool, latest func() *atlasView) (int64, bool, *atlasView, error) {
+	cur := latest()
+	if cur != nil {
+		now := map[string]string{}
+		for r := range repos {
+			now[r] = ""
+		}
+		if lost := lostRepos(cur.Vector, now, counted); len(lost) > 0 {
+			return cur.Seq, false, nil, fmt.Errorf("%w: %s", errLostRepos, strings.Join(lost, ", "))
+		}
+	}
+	v := viewOf(1, res, repos)
+	sig := string(mustJSON([]any{v.Vector, v.Nodes, v.Edges, v.Drift, v.Extractors}))
+	s.mu.Lock()
+	same := sig == s.sig
+	s.mu.Unlock()
+	if cur != nil && same {
+		return cur.Seq, false, nil, nil
+	}
+	if cur != nil {
+		v.Seq = cur.Seq + 1
+	}
+	// sig is read only by put, and one goroutine puts: writing it before Graphs.set makes v the latest is unobservable
+	s.mu.Lock()
+	s.sig = sig
+	s.mu.Unlock()
+	return v.Seq, true, &v, nil
+}
+
+func (s *memStore) load(context.Context, int64) (atlasView, error) { return atlasView{}, errNoHistory }
+
+// stores is the store in use: the database's once attached, else memory.
+func (g *Graphs) stores() (projections, history) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.pg != nil {
+		return g.pg, g.pg
+	}
+	return &g.mem, &g.mem
 }
 
 // openGraphs opens dsn and loads the latest stored projection. Empty dsn = memory-only (logged). A database that
@@ -403,17 +492,20 @@ func (g *Graphs) attach(ctx context.Context, dsn string) error {
 		log.Printf("db: load the latest projection: %v", err)
 	}
 	g.mu.Lock()
-	g.pool = pool
+	g.pg = &pgStore{pool}
 	g.mu.Unlock()
 	go g.ping(ctx, pool)
 	return nil
 }
 
-// db is the database, nil while there is none.
+// db is the database, nil while there is none (close and the DB tests use it).
 func (g *Graphs) db() *pgxpool.Pool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.pool
+	if g.pg == nil {
+		return nil
+	}
+	return g.pg.pool
 }
 
 func (g *Graphs) ping(ctx context.Context, pool *pgxpool.Pool) {
@@ -471,48 +563,12 @@ func (g *Graphs) index() *GraphIndex {
 
 // put stores res as the next projection and makes it the latest; changed=false when it is the latest already.
 func (g *Graphs) put(ctx context.Context, res extract.Result, repos extract.Repos, counted map[string]bool) (int64, bool, error) {
-	if pool := g.db(); pool != nil {
-		seq, changed, err := projectGraph(ctx, pool, res, repos, counted)
-		if err != nil {
-			return seq, changed, err
-		}
-		if cur := g.Latest(); !changed && cur != nil && cur.Seq == seq {
-			return seq, false, nil
-		}
-		// changed, or the store's latest is another than memory's (atlas project stored one meanwhile): load it
-		v, err := loadGraph(ctx, pool, seq)
-		if err != nil {
-			return seq, changed, err
-		}
-		g.set(&v)
-		return seq, true, nil
+	st, _ := g.stores()
+	seq, changed, v, err := st.put(ctx, res, repos, counted, g.Latest)
+	if v != nil {
+		g.set(v)
 	}
-	cur := g.Latest()
-	if cur != nil {
-		now := map[string]string{}
-		for r := range repos {
-			now[r] = ""
-		}
-		if lost := lostRepos(cur.Vector, now, counted); len(lost) > 0 {
-			return cur.Seq, false, fmt.Errorf("%w: %s", errLostRepos, strings.Join(lost, ", "))
-		}
-	}
-	v := viewOf(1, res, repos)
-	sig := string(mustJSON([]any{v.Vector, v.Nodes, v.Edges, v.Drift, v.Extractors}))
-	g.mu.Lock()
-	same := sig == g.sig
-	g.mu.Unlock()
-	if cur != nil && same {
-		return cur.Seq, false, nil
-	}
-	if cur != nil {
-		v.Seq = cur.Seq + 1
-	}
-	g.set(&v)
-	g.mu.Lock()
-	g.sig = sig
-	g.mu.Unlock()
-	return v.Seq, true, nil
+	return seq, changed, err
 }
 
 // loadFixture serves file (an /api/graph answer) as the latest projection: --dev only (the gate, local work).
@@ -607,14 +663,12 @@ func (a *App) serveGraph(w http.ResponseWriter, r *http.Request) {
 	case seq == 0:
 		http.Error(w, errNoProjection.Error(), http.StatusNotFound)
 		return
-	case g.db() == nil:
-		http.Error(w, "atlas: no history without a database", http.StatusNotFound)
-		return
 	default:
+		_, hist := g.stores()
 		var err error
-		v, err = loadGraph(r.Context(), g.db(), seq)
+		v, err = hist.load(r.Context(), seq)
 		switch {
-		case errors.Is(err, errNoProjection):
+		case errors.Is(err, errNoHistory), errors.Is(err, errNoProjection):
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		case err != nil:
