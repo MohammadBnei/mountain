@@ -91,7 +91,9 @@ doesn't.
   token in the test jobs. With atlas's use: the require, and the image build's buildah secret mount (in no layer).
   Tags (owner, 2026-10-28): the agent may push `pkg/vX.Y.Z` tags on main after a merge that changes `pkg/`, never
   an app's tags; until a tag exists, the version is a pseudo-version of a main commit. Each shared concern is its own
-  package (`pkg/errs`, `pkg/telemetry`), so an app that imports only the error model links no OTel SDK.
+  package (`pkg/errs`, `pkg/telemetry`), so an app that imports only the error model links no OTel package. Its
+  module graph still gains the OTel modules, and MVS may raise ones it shares (golang.org/x/text and x/sync for atlas):
+  the PR that bumps pkg lists every module that rises.
 - **The bridge and the fleet** follow these conventions in their own repos. They don't import mountain.
 
 ## 4. Errors: one model for every app
@@ -147,7 +149,9 @@ doesn't.
   variable for every app) is set. The wiring for atlas and the game is `pkg/telemetry`.
   - Connect's `otelconnect` instruments the fleet and the bridge.
   - An HTTP middleware instruments atlas and the game.
-  - Spans cross from the game to atlas, the fleet and ArgoCD.
+  - Spans cross from the game to atlas, the fleet and ArgoCD. Until propagation lands, every server span starts a
+    trace of its own, linked to a caller's traceparent, never its child (a public endpoint: the choice runs before
+    the gate); trusting a machine principal's context is an option added with propagation, decided after the gate.
 - **Metrics are pulled.**
   - OTel's Prometheus exporter serves today's `/metrics` port, with views that pin today's names, units and
     buckets.

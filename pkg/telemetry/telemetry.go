@@ -10,11 +10,13 @@
 // The SDK's own OTEL_* variables: overridden in code are the service name (OTEL_SERVICE_NAME), the sampler, the
 // propagators and the endpoint (OTEL_EXPORTER_OTLP_ENDPOINT, _INSECURE); still honoured are OTEL_RESOURCE_ATTRIBUTES
 // (merged into the resource), the exporter's headers, timeout, compression and certificates, OTEL_BSP_*, the span
-// limits and OTEL_GO_X_*: the libraries' own reads, which each app's README names.
+// limits and OTEL_GO_X_*: the libraries' own reads, which each app's configuration docs name (the game's README,
+// atlas's main.go doc comment).
 //
 // Spans: one server span per route, named by its pattern; a request no route takes has none. Every server is treated
-// as public, so a traceparent from outside starts a new trace linked to it, never a child (a public endpoint).
-// Outbound requests carry no context yet: propagation lands with the first peer that traces.
+// as public, so a traceparent from outside starts a new trace linked to it, never a child (a public endpoint): the
+// choice is made before any gate runs, so it can only see what a caller can forge. Outbound requests carry no context
+// yet; when propagation lands, a trust option comes with it, decided after the gate (a machine principal's call).
 package telemetry
 
 import (
