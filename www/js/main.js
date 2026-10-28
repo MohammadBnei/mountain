@@ -7,7 +7,7 @@ import { buildModel, REALM, REALMS, OUTSIDE, search, groupOf, alertsOn } from '.
 import { parse, format, up } from './router.js';
 import { connect, gateLapsed, signedOut } from './socket.js';
 import { el, crumbs, panel, results, minimap, status, pct, buildingCards } from './ui.js';
-import { readerView } from './reader.js';
+import { readerView, readError } from './reader.js';
 
 const $ = (id) => document.getElementById(id);
 const dev = location.hostname === '127.0.0.1';
@@ -243,7 +243,7 @@ async function start() {
     try {
       const r = await fetch(`/api/read?repo=${encodeURIComponent(view.doc.repo)}&path=${encodeURIComponent(view.doc.path)}`, { cache: 'no-store' });
       if (r.ok) doc = await r.json();
-      else error = { 404: 'atlas does not hold this file at the sha it read (moved, renamed, or a repo it does not read).', 413: 'The file is larger than the reader reads.', 415: 'Not a text file.' }[r.status] || `atlas answered ${r.status}.`;
+      else error = readError(r.status, await r.json().catch(() => null));
     } catch (e) { error = `atlas could not be reached: ${e.message}`; }
     if (reading !== key) return; // another document was opened meanwhile
     box.replaceChildren(readerView(model, view, doc, error));

@@ -1,8 +1,17 @@
 # atlas image: one static Go binary with www/ embedded (embed.go). Built by .github/workflows/app.yml.
 FROM golang:1.27 AS build
 WORKDIR /src
+# mountain's nested module (pkg/) is private: go mod download reads it with the build job's token, a secret mount
+# applied through git's env config for that one command, so it is in no layer and no image.
+ENV GOPRIVATE=github.com/MohammadBnei/mountain
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=secret,id=github_token \
+    if [ -s /run/secrets/github_token ]; then \
+      export GIT_CONFIG_COUNT=1 \
+        GIT_CONFIG_KEY_0="url.https://x-access-token:$(cat /run/secrets/github_token)@github.com/MohammadBnei/mountain.insteadOf" \
+        GIT_CONFIG_VALUE_0="https://github.com/MohammadBnei/mountain"; \
+    fi; \
+    go mod download
 COPY embed.go ./
 COPY internal ./internal
 COPY contract ./contract

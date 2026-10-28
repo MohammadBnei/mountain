@@ -9,7 +9,7 @@ package main
 // Links: http(s) URLs stay external; a relative link, or a github.com link into a repo atlas reads, becomes an
 // in-atlas link {doc: "<repo>/<path>"} (cleaned, never above the repo root); anything else (mailto:, javascript:, a
 // bare #anchor) is dropped to its text. Files are read through os.Root on the checkout, regular files only, at most
-// maxReadBytes, valid UTF-8 without NUL bytes (415 otherwise).
+// maxReadBytes, valid UTF-8 without NUL bytes (failed_precondition otherwise, keyed read.too_large or read.not_text).
 
 import (
 	"bytes"
@@ -32,6 +32,7 @@ import (
 	"github.com/yuin/goldmark/util"
 
 	"github.com/MohammadBnei/mountain/internal/extract"
+	"github.com/MohammadBnei/mountain/pkg/errs"
 )
 
 const maxReadBytes = 1 << 20
@@ -613,24 +614,24 @@ func (a *App) serveRead(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	repo, p := q.Get("repo"), cleanRel(q.Get("path"))
 	if repo == "" || p == "" || p != q.Get("path") { // only a path already clean and relative
-		http.Error(w, "repo and a clean repo-relative path are required", http.StatusBadRequest)
+		errs.Write(w, errs.Invalid(keyReadPath, "repo and a clean repo-relative path are required"))
 		return
 	}
 	rp, ok := a.Files.get(repo)
 	if !ok {
-		http.Error(w, "atlas does not hold that repo", http.StatusNotFound)
+		errs.Write(w, errs.Missing(keyReadRepo, "atlas does not hold that repo"))
 		return
 	}
 	b, err := readFile(rp.Dir, p)
 	switch {
 	case errors.Is(err, errNotText):
-		http.Error(w, err.Error(), http.StatusUnsupportedMediaType)
+		errs.Write(w, errs.Precondition(keyReadNotText, err.Error()))
 		return
 	case errors.Is(err, errTooBig):
-		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+		errs.Write(w, errs.Precondition(keyReadTooLarge, err.Error()))
 		return
 	case err != nil:
-		http.Error(w, "no such file at the sha atlas holds", http.StatusNotFound)
+		errs.Write(w, errs.Missing(keyReadFile, "no such file at the sha atlas holds"))
 		return
 	}
 	key := repo + "@" + rp.SHA + ":" + p
