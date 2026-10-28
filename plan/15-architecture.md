@@ -83,7 +83,13 @@ doesn't.
   swap globals.
 - **Shared code is extracted on second use.** A package starts in the app that needs it. It moves to the nested
   module **`mountain/pkg`** (its own `go.mod`, tagged `pkg/vX`) only once a second app uses it, with mountain's
-  Dockerfile and CI paths updated in the same PR.
+  Dockerfile and CI paths updated by the time the first app requires it. The move may be staged (amended for A6,
+  2026-10-28): the module first, then each app's use, since an app can require only a version that is already on
+  main. The shape: no `replace` and no committed `go.work` (a dependency's are ignored, so mountain's require must
+  name a real, fetchable version: ukubi-game resolves it), the root requiring pkg by version, and CI and the image
+  build reading the private module with the job's own token. Built so far (A6a): the module, its own workflow, the
+  token in the test jobs. With atlas's use: the require, and the image build's buildah secret mount (in no layer).
+  Until the owner tags `pkg/vX`, the version is a pseudo-version of a main commit.
 - **The bridge and the fleet** follow these conventions in their own repos. They don't import mountain.
 
 ## 4. Errors: one model for every app
@@ -104,7 +110,10 @@ doesn't.
   ```
 - **Each app keeps a closed registry of its keys.** A test fails on an unregistered key. Pages translate keys and
   never parse messages.
-- **Every error is recorded on its span** (§7).
+- **Every error is recorded on its span** (§7). `errs.Write(w, err)` will keep its signature for that: it will
+  call `RecordError(*errs.Error)` on the first writer in `w`'s `Unwrap() http.ResponseWriter` chain that has it
+  (the OTel middleware's will), internal errors included, so a wrapping middleware without it doesn't drop the
+  record. No breaking bump in either app; a behaviour change, labelled in the OTel step.
 - **Moving an app to this body changes what users see:** today the game shows plain-text errors as they come. Its
   clients are updated in the same PR, and the PR says so.
 
@@ -284,6 +293,14 @@ These already follow the standard:
    error hides a machine one). "An optional part is a nil pointer": the machine's configuration is raw strings, for
    the same reason. Mountain has no README: the table is main.go's doc comment, which a test checks against each
    FlagSet's usage line and every variable the loaders read.
+
+   Then the error model's extraction, first part (A6a): `mountain/pkg`, a nested module, holds `errs`, the game's
+   model with its registry left per app (each app's keys, its sources, its test; only `KeyInternal`, Write's own, is
+   shared). Nothing in mountain uses it yet; its own workflow tests it (on main too), and the test jobs read the
+   private module with the job's token, ready for atlas. The image build's half (a buildah secret mount for `go mod
+   download`) ships with atlas's use, after the build runner has deployed main again, so an unverified Dockerfile
+   never sits in front of another change's deploy. Next: the game moves onto it behind a facade that keeps its call
+   sites and its key test; then atlas speaks the model (its routes' errors; the gate's refusals stay plain text).
 6. **The sim:**
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;

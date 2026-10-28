@@ -52,11 +52,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      GOPRIVATE: github.com/MohammadBnei/mountain
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      # mountain's own nested module (pkg/) is private: the job's token, sent for this repo's URLs only, reads it.
+      - name: Private modules
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/MohammadBnei/mountain".insteadOf "https://github.com/MohammadBnei/mountain"
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -108,11 +115,16 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       MOUNTAIN_TEST_DSN: postgres://postgres:mountain@localhost:5432/postgres?sslmode=disable
+      GOPRIVATE: github.com/MohammadBnei/mountain
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: Private modules
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/MohammadBnei/mountain".insteadOf "https://github.com/MohammadBnei/mountain"
       - name: DB tests
         run: go test -run '^TestDB' -v ./cmd/atlas/
 
