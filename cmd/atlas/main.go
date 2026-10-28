@@ -7,10 +7,12 @@
 //
 // Env: DATABASE_URL (Postgres; empty = memory-only: the latest projection only, no history),
 // MOUNTAIN_GITHUB_TOKEN (read-only token for the repo poll; empty = no poll, --repos or the stored projection only),
-// MOUNTAIN_OIDC_ISSUER / _CLIENT_ID / _CLIENT_SECRET + MOUNTAIN_SESSION_KEY (sign-in; any unset = every route but
-// /healthz refuses a person, except under --dev on a loopback address),
-// MOUNTAIN_MACHINE_CERT / _ISSUER / _CLIENT_ID / _SUB (the game's machine principal on the town's two reads,
-// machine.go; all or none: unset = off).
+// ATLAS_CACHE (where the repo poll unpacks the trees it reads, emptied at start; default /var/cache/atlas),
+// MOUNTAIN_OIDC_ISSUER, MOUNTAIN_OIDC_CLIENT_ID, MOUNTAIN_OIDC_CLIENT_SECRET and MOUNTAIN_SESSION_KEY (sign-in; any
+// unset or a key under 32 bytes = every route but /healthz refuses a person, except under --dev on a loopback address),
+// MOUNTAIN_MACHINE_CERT, MOUNTAIN_MACHINE_ISSUER, MOUNTAIN_MACHINE_CLIENT_ID and MOUNTAIN_MACHINE_SUB (the game's
+// machine principal on the town's two reads, machine.go; all or none: unset = off). All of it is read once, in
+// config.go; the libraries' own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*) are theirs.
 //
 // Read side only: atlas never writes a repo or a live store (CQRS, plan/10).
 package main
@@ -21,7 +23,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -41,49 +42,33 @@ import (
 	"github.com/MohammadBnei/mountain/realms"
 )
 
-// Opts are the command-line flags plus the env the service reads at start.
+// Opts are the command-line flags plus the env the App reads (config.go).
 type Opts struct {
 	Listen, Metrics, PromURL, AMURL, GHURL, Repos, GraphFixture, LiveFixture string
 	Every                                                                    time.Duration
 	Dev                                                                      bool
 	GHToken                                                                  string
-}
-
-func parseServe(args []string) (Opts, error) {
-	var o Opts
-	f := flag.NewFlagSet("atlas", flag.ContinueOnError)
-	f.StringVar(&o.Listen, "listen", ":8080", "public listen address")
-	f.StringVar(&o.Metrics, "metrics", ":9090", "metrics listen address (never routed)")
-	f.StringVar(&o.PromURL, "prom-url", "http://platform-prometheus-kube-p-prometheus.monitoring:9090", "Prometheus base URL")
-	f.StringVar(&o.AMURL, "am-url", "http://platform-prometheus-kube-p-alertmanager.monitoring:9093", "Alertmanager base URL")
-	f.StringVar(&o.GHURL, "github-url", "https://api.github.com", "GitHub API base URL")
-	f.StringVar(&o.Repos, "repos", "", "read local checkouts from this directory instead of polling GitHub")
-	f.DurationVar(&o.Every, "every", 2*time.Minute, "how often the tracked heads are checked")
-	f.BoolVar(&o.Dev, "dev", false, "allow http://127.0.0.1:* origins and serve /dev/; on a loopback address with sign-in unset, admit everyone")
-	f.StringVar(&o.GraphFixture, "graph-fixture", "", "dev: serve this graph (an /api/graph answer) instead of projecting")
-	f.StringVar(&o.LiveFixture, "live-fixture", "", "dev: serve this live state instead of polling Prometheus and Alertmanager")
-	err := f.Parse(args)
-	o.GHToken = os.Getenv("MOUNTAIN_GITHUB_TOKEN") // env, not a flag: a flag value shows in ps and the pod spec
-	if err == nil && (o.GraphFixture != "" || o.LiveFixture != "") && !o.Dev {
-		err = errors.New("atlas: fixtures are --dev only")
-	}
-	return o, err
+	Cache                                                                    string // ATLAS_CACHE
 }
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	if len(os.Args) > 1 && os.Args[1] == "project" {
-		if err := projectCmd(os.Args[2:]); err != nil {
+		dir, dsn, drop, err := projectFromProcess()
+		if err == nil {
+			err = projectCmd(dir, dsn, drop)
+		}
+		if err != nil {
 			log.Fatal(err)
 		}
 		return
 	}
-	o, err := parseServe(os.Args[1:])
+	c, err := serveFromProcess()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	if err := serve(o); err != nil {
+	if err := serve(c); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -114,14 +99,15 @@ func newApp(o Opts, rl *realms.Realms, www fs.FS, g *gate, gr *Graphs) *App {
 	return a
 }
 
-func serve(o Opts) error {
+func serve(c Config) error {
+	o := c.Opts
 	rl, err := realms.Load()
 	if err != nil {
 		return err
 	}
 	www, _ := fs.Sub(mountain.WWW, "www")
-	g := &gate{auth: authFromEnv(o.Dev)}
-	if g.machine, err = machineFromEnv(); err != nil {
+	g := &gate{auth: authFrom(c.OIDC, o.Dev)}
+	if g.machine, err = machineFrom(c.Machine); err != nil {
 		return err
 	}
 	g.devOpen = o.Dev && g.auth == nil && loopback(o.Listen)
@@ -131,7 +117,7 @@ func serve(o Opts) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	a := newApp(o, rl, www, g, openGraphs(ctx, os.Getenv("DATABASE_URL")))
+	a := newApp(o, rl, www, g, openGraphs(ctx, c.DSN))
 	if o.GraphFixture != "" {
 		if err := a.Graph.loadFixture(o.GraphFixture); err != nil {
 			return err

@@ -11,12 +11,9 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"log"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -120,11 +117,7 @@ func (a *App) project(ctx context.Context) {
 	case a.Opts.Repos != "":
 		src = localHeads(a.Opts.Repos)
 	case a.Opts.GHToken != "":
-		dir := os.Getenv("ATLAS_CACHE")
-		if dir == "" {
-			dir = "/var/cache/atlas"
-		}
-		gh, err := newGitHub(a.Opts.GHURL, a.Opts.GHToken, dir)
+		gh, err := newGitHub(a.Opts.GHURL, a.Opts.GHToken, a.Opts.Cache)
 		if err != nil {
 			log.Printf("projector: %v: off", err)
 			return
@@ -206,34 +199,8 @@ func (d localHeads) checkout(_ context.Context, repo, _ string) (extract.Repo, e
 	return r, nil
 }
 
-// parseProject is `atlas project`'s flags. --dsn's default is DATABASE_URL, read only when --dsn is not given, so the
-// flag's help never prints the URL (it holds the database password).
-func parseProject(args []string, getenv func(string) string, out io.Writer) (dir, dsn string, drop bool, err error) {
-	f := flag.NewFlagSet("project", flag.ContinueOnError)
-	f.SetOutput(out)
-	f.StringVar(&dir, "repos", "", "directory holding the repo checkouts (one per GitHub repo name)")
-	f.StringVar(&dsn, "dsn", "", "Postgres URL (default: DATABASE_URL)")
-	f.BoolVar(&drop, "drop-repos", false, "accept that repos the last projection read are gone (their nodes close)")
-	if err = f.Parse(args); err != nil {
-		return
-	}
-	given := false
-	f.Visit(func(fl *flag.Flag) { given = given || fl.Name == "dsn" })
-	if !given {
-		dsn = getenv("DATABASE_URL")
-	}
-	if dir == "" || dsn == "" {
-		err = errors.New("project: --repos and a DSN (--dsn or DATABASE_URL) are required")
-	}
-	return
-}
-
 // projectCmd is `atlas project`: one round over local checkouts, stored.
-func projectCmd(args []string) error {
-	dir, dsn, drop, err := parseProject(args, os.Getenv, os.Stderr)
-	if err != nil {
-		return err
-	}
+func projectCmd(dir, dsn string, drop bool) error {
 	rl, err := realms.Load()
 	if err != nil {
 		return err

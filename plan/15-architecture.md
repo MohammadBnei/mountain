@@ -270,6 +270,20 @@ These already follow the standard:
    (the game checks Host and Origin in its router, atlas Origin per handler; 401 against 403; the return pattern; the
    game's 10 s discovery timeout; /auth/me's shape; cookie names; atlas's machine principal and signed-out mark), so
    the extraction into `mountain/pkg` is its own plan.
+
+   Then atlas's one Config (§5): `cmd/atlas/config.go` reads the flags and the environment once, and a test at the
+   module root refuses a listed reader of the environment in any other non-test file (os's and syscall's own, the
+   directory and proxy helpers that read one, os/exec and os/user whole, cgo and go:linkname; under any import name,
+   dot imports refused). Proven by the old and new binaries over 51 cases of flags and environment, identical after
+   masking timestamps and ports (exit codes, output, and for serving runs the sign-in redirect against a stub
+   discovery server, a refused machine bearer and the metric names); the exiting runs also compared raw, stdout and
+   stderr apart. Not proven there: a valid machine token, and the IPv6 loopback under --dev (the sandbox has no
+   IPv6). Two of §5's rules are not met yet, each on purpose. "Validated once, every error at once": a sign-in partly
+   set stays off silently (refusing it is a behaviour change, its own PR), the machine principal is checked in serve
+   after realms.Load as before (so its refusal keeps its exit path), and errors still come one at a time (a fixtures
+   error hides a machine one). "An optional part is a nil pointer": the machine's configuration is raw strings, for
+   the same reason. Mountain has no README: the table is main.go's doc comment, which a test checks against each
+   FlagSet's usage line and every variable the loaders read.
 6. **The sim:**
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;

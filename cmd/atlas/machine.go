@@ -31,7 +31,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -46,9 +45,9 @@ type Machine struct {
 // machineRoutes are the routes the machine principal may read: the town's.
 var machineRoutes = []string{"GET /api/graph", "GET /ws"}
 
-// machineFromEnv reads the machine principal's config: all four set, or none (nil, nil).
-func machineFromEnv() (*Machine, error) {
-	certs, iss, aud, sub := os.Getenv("MOUNTAIN_MACHINE_CERT"), os.Getenv("MOUNTAIN_MACHINE_ISSUER"), os.Getenv("MOUNTAIN_MACHINE_CLIENT_ID"), os.Getenv("MOUNTAIN_MACHINE_SUB")
+// machineFrom is the machine principal from its configuration (config.go): all four set, or none (nil, nil).
+func machineFrom(e machineEnv) (*Machine, error) {
+	certs, iss, aud, sub := e.Cert, e.Issuer, e.ClientID, e.Sub
 	set := 0
 	for _, v := range []string{certs, iss, aud, sub} {
 		if v != "" {
