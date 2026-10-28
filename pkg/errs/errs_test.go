@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -78,8 +79,8 @@ func TestIsBody(t *testing.T) {
 // default is (an app's JSON one); one of the model is not logged.
 func TestWriteLogs(t *testing.T) {
 	var buf bytes.Buffer
-	old := slog.Default()
-	t.Cleanup(func() { slog.SetDefault(old) })
+	old, w, flags := slog.Default(), log.Writer(), log.Flags()
+	t.Cleanup(func() { slog.SetDefault(old); log.SetOutput(w); log.SetFlags(flags) }) // SetDefault(old) leaves log redirected
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
 	Write(httptest.NewRecorder(), errors.New("pq: connection refused"))
 	var m map[string]any

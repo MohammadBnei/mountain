@@ -24,6 +24,8 @@ func TestLogger(t *testing.T) {
 	l.Info("three")
 	l.InfoContext(context.Background(), "four")
 	l.WithGroup("g").InfoContext(ctx, "five", "k", "v")
+	unsampled := trace.NewSpanContext(trace.SpanContextConfig{TraceID: trace.TraceID{3}, SpanID: trace.SpanID{4}})
+	l.InfoContext(trace.ContextWithSpanContext(context.Background(), unsampled), "six") // a sampler's no: still a span
 	var lines []map[string]any
 	for _, b := range bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n")) {
 		var m map[string]any
@@ -43,6 +45,7 @@ func TestLogger(t *testing.T) {
 		{"level": "INFO", "msg": "three"},
 		{"level": "INFO", "msg": "four"},
 		{"level": "INFO", "msg": "five", "g": "k v " + tid + " " + sid},
+		{"level": "INFO", "msg": "six", "trace_id": "03000000000000000000000000000000", "span_id": "0400000000000000"},
 	}
 	if len(lines) != len(want) {
 		t.Fatalf("%d lines: %v", len(lines), lines)
@@ -65,12 +68,18 @@ func TestLogger(t *testing.T) {
 // TestLoggerDefault: installed as slog's default, the log package's lines come through it as INFO.
 func TestLoggerDefault(t *testing.T) {
 	var buf bytes.Buffer
-	old := slog.Default()
-	t.Cleanup(func() { slog.SetDefault(old) })
+	restore(t)
 	slog.SetDefault(NewLogger(&buf))
 	log.Printf("db: attached")
 	var m map[string]any
 	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &m); err != nil || m["level"] != "INFO" || m["msg"] != "db: attached" {
 		t.Errorf("%s: %v", buf.Bytes(), err)
 	}
+}
+
+// restore puts slog's and the log package's defaults back after t: slog.SetDefault with slog's own default handler
+// does not undo the log package's redirection.
+func restore(t *testing.T) {
+	old, w, flags, prefix := slog.Default(), log.Writer(), log.Flags(), log.Prefix()
+	t.Cleanup(func() { slog.SetDefault(old); log.SetOutput(w); log.SetFlags(flags); log.SetPrefix(prefix) })
 }

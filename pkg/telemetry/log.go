@@ -10,7 +10,9 @@ import (
 
 // NewLogger is ukubi's log (mountain plan/15 §7): one JSON object per line on w (an app's stdout), with slog's time,
 // level and msg, and trace_id and span_id when the call passes a context holding a span (slog's *Context calls).
-// An app installs it with slog.SetDefault, which also routes the standard library's log package through it, at INFO.
+// An app installs it with slog.SetDefault, which also routes the standard library's log package through it, at INFO:
+// log.Fatal and log.Panic too (an app gives those their level first), with log's prefix and any flags set after the
+// install inside msg (install it after log.SetFlags, or drop the call). Any valid span adds its ids, sampled or not.
 // Under a logger's WithGroup the ids land inside the group, as every attribute of the record does: the apps open none.
 func NewLogger(w io.Writer) *slog.Logger {
 	return slog.New(traceHandler{slog.NewJSONHandler(w, nil)})
