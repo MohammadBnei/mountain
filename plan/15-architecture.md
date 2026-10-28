@@ -248,6 +248,10 @@ These already follow the standard:
      ordered list of joiners. The joiners carry no version: the live frame is never stored, so there is nowhere to
      record one (§2's "wherever the output is stored").
    
+   Then the needs evidence finders became a registry keyed like `realms.Suppliers` (their order is not observable:
+   each kind keeps its own evidence), and `realms.Parse`'s checks an ordered list (the first error wins, so order is
+   behaviour; no version, since only the file's digest is stored).
+
    Each seam's contract suite runs the real client against a local server answering in the API's wire format
    (hand-written bodies, not recordings), and a map fake. §1's other two legs are missing: the recorded leg waits for
    a reachable cluster, as the game's `AlertSource` does, and the sim's mirror lives in ukubi-game, which imports
