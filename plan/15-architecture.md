@@ -130,8 +130,17 @@ doesn't.
   clients are updated in the same PR, and the PR says so.
 
 ## 5. Config
-- **One `Config` struct per binary,** built from flags and the environment, and validated once at start. It fails
-  closed and reports every error at once, for example a sign-in only partly set.
+- **One `Config` struct per binary,** built from flags and the environment, and validated once at start.
+- **Sane defaults, and a refusal only for what the app cannot run without (owner, 2026-10-28).** An optional setting
+  (it has a default, or unset is a supported state) that is set and does not satisfy its rule is one WARN line naming
+  the setting and its rule, and the setting takes its default: atlas's, the game's and the bridge's traces endpoint
+  turn tracing off, a retention or an interval takes its default. Only a required setting that is missing or
+  unusable refuses the start, with every such problem reported at once. A security setting fails closed: it never
+  opens anything it was not clearly told to. That is a refusal (the game refuses a sign-in only partly set, or
+  `--dev` off loopback; the fleet's local-stack git rewrite refuses when malformed) or a closed gate (atlas with a
+  partial sign-in runs with every route but /healthz refusing a person, and warns; an unrecognised "turn the gate
+  off" value reads as on). Command-line flags stay strict, as the flag package makes them (an unknown value is a
+  usage error).
 - **Nothing else reads `os.Getenv`.** A test enforces it.
 - **Every field appears in the README's table,** and a test checks that.
 - **An optional part is a nil pointer.** No fleet token means a nil `Fleet` config, so the fleet provider is simply

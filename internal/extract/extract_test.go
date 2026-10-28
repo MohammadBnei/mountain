@@ -198,10 +198,10 @@ func TestKubesprayProxyReplaced(t *testing.T) {
 	dir := t.TempDir()
 	for _, f := range []string{"k8s-cluster.yml", "addons.yml"} {
 		b, _ := os.ReadFile("testdata/infra-bootstrap/" + groupVars + f)
-		os.MkdirAll(filepath.Join(dir, groupVars), 0o755)
-		os.WriteFile(filepath.Join(dir, groupVars, f), b, 0o644)
+		_ = os.MkdirAll(filepath.Join(dir, groupVars), 0o755)
+		_ = os.WriteFile(filepath.Join(dir, groupVars, f), b, 0o644)
 	}
-	os.WriteFile(filepath.Join(dir, groupVars, "k8s-net-cilium.yml"), []byte("cilium_kube_proxy_replacement: strict\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, groupVars, "k8s-net-cilium.yml"), []byte("cilium_kube_proxy_replacement: strict\n"), 0o644)
 	x := &Ctx{Repos: Repos{"infra-bootstrap": {Dir: dir}}, track: map[Track]bool{}}
 	if err := kubespray(x); err != nil {
 		t.Fatal(err)
@@ -514,8 +514,8 @@ func TestSymlinkOut(t *testing.T) {
 // projection never fails on it (the live poll runs Run first, and an error stalls every repo).
 func TestClusterOddInput(t *testing.T) {
 	write := func(dir, path, body string) {
-		os.MkdirAll(filepath.Join(dir, filepath.Dir(path)), 0o755)
-		os.WriteFile(filepath.Join(dir, path), []byte(body), 0o644)
+		_ = os.MkdirAll(filepath.Join(dir, filepath.Dir(path)), 0o755)
+		_ = os.WriteFile(filepath.Join(dir, path), []byte(body), 0o644)
 	}
 	dir := t.TempDir()
 	write(dir, groupVars+"addons.yml", "metallb_enabled: \"{{ x }}\"\nkube_vip_enabled: [a]\n")

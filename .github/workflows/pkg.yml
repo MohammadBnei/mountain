@@ -25,8 +25,13 @@ jobs:
         with:
           go-version-file: pkg/go.mod
           cache-dependency-path: pkg/go.sum # its own key: the root's go.sum keys the app jobs' cache
-      - name: go vet + go test (pkg)
-        run: |
-          set -euo pipefail
-          go vet ./...
-          go test ./...
+      - name: go vet (pkg)
+        run: go vet ./...
+      # Its own module, so the root's lint step does not reach it. Same pin as app.yml, defaults, no config.
+      - name: golangci-lint (pkg)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
+          working-directory: pkg
+      - name: go test -race (pkg)
+        run: go test -race ./...

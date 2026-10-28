@@ -275,7 +275,7 @@ func TestMachineSocket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 	conn.SetReadLimit(-1)
 	if f := readT(t, conn); f["t"] != "hello" {
 		t.Fatalf("hello: %v", f)

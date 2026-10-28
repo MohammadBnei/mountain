@@ -47,7 +47,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if _, err := c.Exec(ctx, "SELECT pg_advisory_lock($1)", migrateLock); err != nil {
 		return err
 	}
-	defer c.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", migrateLock)
+	defer func() { _, _ = c.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", migrateLock) }()
 	if _, err := c.Exec(ctx, "CREATE TABLE IF NOT EXISTS atlas_migrations (version text PRIMARY KEY, at timestamptz NOT NULL DEFAULT now())"); err != nil {
 		return err
 	}
@@ -540,7 +540,7 @@ func (g *Graphs) set(v *atlasView) {
 	g.mu.Unlock()
 	g.met.ProjectionSeq(float64(v.Seq))
 	var drift []graph.Drift
-	json.Unmarshal(v.Drift, &drift)
+	_ = json.Unmarshal(v.Drift, &drift)
 	counts := map[string]float64{graph.DriftUnassigned: 0, graph.DriftMirror: 0, graph.DriftAmbiguous: 0, graph.DriftUnresolved: 0}
 	for _, d := range drift {
 		counts[d.Kind]++
@@ -683,5 +683,5 @@ func (a *App) serveGraph(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.Set("Content-Type", "application/json")
-	w.Write(mustJSON(v))
+	_, _ = w.Write(mustJSON(v))
 }

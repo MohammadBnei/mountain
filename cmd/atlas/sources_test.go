@@ -109,15 +109,15 @@ func TestPromContract(t *testing.T) {
 				w.WriteHeader(http.StatusNotFound)
 			case fail == "error":
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(`{"status":"error","errorType":"bad_data","error":"refused"}`))
+				_, _ = w.Write([]byte(`{"status":"error","errorType":"bad_data","error":"refused"}`))
 			case fail == "body":
-				w.Write([]byte(`{"status":"success","data":`))
+				_, _ = w.Write([]byte(`{"status":"success","data":`))
 			default:
 				res, ok := results[name]
 				if !ok {
 					res = "[]"
 				}
-				w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":` + res + `}}`))
+				_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":` + res + `}}`))
 			}
 		}))
 		t.Cleanup(srv.Close)
@@ -170,7 +170,7 @@ func TestAlertsContract(t *testing.T) {
 				return
 			}
 			w.WriteHeader(code)
-			w.Write([]byte(body))
+			_, _ = w.Write([]byte(body))
 		}))
 		t.Cleanup(srv.Close)
 		return amHTTP{base: srv.URL, hc: srv.Client()}
@@ -230,7 +230,7 @@ func TestJoinNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	var f map[string]json.RawMessage
-	json.Unmarshal(mustJSON(l.st), &f)
+	_ = json.Unmarshal(mustJSON(l.st), &f)
 	for _, k := range []string{"apps", "ready", "probes"} {
 		if string(f[k]) != "{}" {
 			t.Errorf("%s = %s, want {}", k, f[k])

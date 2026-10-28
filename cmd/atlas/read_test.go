@@ -135,7 +135,7 @@ func TestRenderBounds(t *testing.T) {
 			t.Errorf("a pathological file was parsed as markdown (%.10q…)", bad)
 		}
 	}
-	if time.Since(start) > 2*time.Second {
+	if time.Since(start) > 2*time.Second*raceSlowdown {
 		t.Errorf("pathological files took %v", time.Since(start))
 	}
 	nested := strings.Repeat("> ", 32) + "deep\n\n" + strings.Repeat("- ", 30) + "list\n" // within mdSafe, past maxDepth
@@ -180,11 +180,11 @@ func TestRead(t *testing.T) {
 	a.gate.devOpen = true
 	base := t.TempDir()
 	dir := filepath.Join(base, "infra-bootstrap")
-	os.MkdirAll(filepath.Join(dir, "docs"), 0o755)
-	os.WriteFile(filepath.Join(dir, "docs", "a.md"), []byte("# A\n\nhello"), 0o644)
-	os.WriteFile(filepath.Join(dir, "bin.dat"), []byte("x\x00y"), 0o644)
-	os.WriteFile(filepath.Join(base, "outside.md"), []byte("secret"), 0o644)
-	os.Symlink(filepath.Join(base, "outside.md"), filepath.Join(dir, "link.md"))
+	_ = os.MkdirAll(filepath.Join(dir, "docs"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "docs", "a.md"), []byte("# A\n\nhello"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "bin.dat"), []byte("x\x00y"), 0o644)
+	_ = os.WriteFile(filepath.Join(base, "outside.md"), []byte("secret"), 0o644)
+	_ = os.Symlink(filepath.Join(base, "outside.md"), filepath.Join(dir, "link.md"))
 	a.Files.update(extract.Repos{"infra-bootstrap": {Dir: dir, SHA: "s1"}})
 	r := a.serveReq("GET", "/api/read?repo=infra-bootstrap&path=docs/a.md", nil)
 	var d Doc

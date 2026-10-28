@@ -64,7 +64,7 @@ func newGitHub(apiURL, token, dir string, met *Metrics) (*ghHeads, error) {
 	}
 	old, _ := os.ReadDir(dir) // a previous run's trees: the cache starts empty, so nothing on disk is trusted stale
 	for _, e := range old {
-		os.RemoveAll(filepath.Join(dir, e.Name()))
+		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
 	return &ghHeads{url: strings.TrimRight(apiURL, "/"), token: token, dir: dir, hc: &http.Client{Timeout: 5 * time.Minute},
 		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}, retired: map[string]string{}, met: met}, nil
@@ -110,7 +110,7 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 	}
 	if ok { // the replaced tree goes one round later: the reader serves the last round's trees until this round ends
 		if old := g.retired[repo]; old != "" {
-			os.RemoveAll(old)
+			_ = os.RemoveAll(old)
 		}
 		g.retired[repo] = cur.Dir
 	}
@@ -142,16 +142,16 @@ func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	g.limits(resp.Header)
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("tarball %s: status %d", sha[:12], resp.StatusCode)
 	}
 	g.seq++
 	dir := filepath.Join(g.dir, fmt.Sprintf("%s-%s-%d", repo, sha[:12], g.seq)) // never the held tree's path
-	os.RemoveAll(dir)
+	_ = os.RemoveAll(dir)
 	if err := unpack(resp.Body, dir); err != nil {
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir)
 		return "", fmt.Errorf("tarball %s: %w", sha[:12], err)
 	}
 	return dir, nil
@@ -170,7 +170,7 @@ func unpack(r io.Reader, dir string) error {
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	tr := tar.NewReader(zr)
 	var total int64
 	for n := 0; ; n++ {
@@ -250,7 +250,7 @@ func (g *ghHeads) get(ctx context.Context, p, accept string, conditional bool) (
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	g.limits(resp.Header)
 	switch resp.StatusCode {
 	case http.StatusNotModified:

@@ -44,11 +44,11 @@ func tarball(t *testing.T, es ...entry) []byte {
 			if e.size > 0 {
 				body = strings.Repeat("x", int(e.size))
 			}
-			tw.Write([]byte(body))
+			_, _ = tw.Write([]byte(body))
 		}
 	}
-	tw.Close()
-	zw.Close()
+	_ = tw.Close()
+	_ = zw.Close()
 	return buf.Bytes()
 }
 
@@ -79,8 +79,8 @@ func TestUnpack(t *testing.T) {
 	}
 	// a link planted inside the tree cannot be followed by a later entry either
 	dir2 := filepath.Join(base, "repo2")
-	os.MkdirAll(dir2, 0o755)
-	os.Symlink(base, filepath.Join(dir2, "out"))
+	_ = os.MkdirAll(dir2, 0o755)
+	_ = os.Symlink(base, filepath.Join(dir2, "out"))
 	if err := unpack(bytes.NewReader(tarball(t, entry{name: "top/out/pwned.txt", body: "x", typ: tar.TypeReg})), dir2); err == nil {
 		t.Error("a write through a symlink succeeded")
 	}
@@ -118,16 +118,16 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 				return
 			}
 			w.Header().Set("ETag", `"`+sha+`"`)
-			w.Write([]byte(sha))
+			_, _ = w.Write([]byte(sha))
 		case len(parts) == 3 && parts[1] == "compare":
 			if f.status == "error" {
 				http.Error(w, "gone", http.StatusUnprocessableEntity)
 				return
 			}
-			w.Write([]byte(`{"status":"` + f.status + `"}`))
+			_, _ = w.Write([]byte(`{"status":"` + f.status + `"}`))
 		case len(parts) == 3 && parts[1] == "tarball":
 			f.tarballs++
-			w.Write(tarball(t, entry{name: "top/README.md", body: parts[2], typ: tar.TypeReg}))
+			_, _ = w.Write(tarball(t, entry{name: "top/README.md", body: parts[2], typ: tar.TypeReg}))
 		default:
 			http.NotFound(w, r)
 		}

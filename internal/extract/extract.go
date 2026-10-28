@@ -78,7 +78,7 @@ func (x *Ctx) Read(repo, path string) ([]byte, graph.Source, error) {
 	if err != nil {
 		return nil, src, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	fi, err := root.Lstat(filepath.FromSlash(path))
 	if err != nil {
 		return nil, src, err
@@ -370,7 +370,7 @@ func place(g *graph.Graph, rl *realms.Realms) {
 			}
 		}
 	}
-	g.Merge(graph.Graph{Drift: drift}) // drift only: cannot fail
+	_ = g.Merge(graph.Graph{Drift: drift}) // drift only: cannot fail
 	placeRepos(g)
 }
 
