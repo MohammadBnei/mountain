@@ -184,4 +184,12 @@ func TestConfigTraces(t *testing.T) {
 	if err := serve(Config{Traces: "http://c"}); err == nil || !strings.Contains(err.Error(), `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "http://c"`) {
 		t.Errorf("serve with a bad endpoint: %v", err)
 	}
+	// and it reports every refusal at once: a partial machine principal and a bad endpoint together are both named
+	both := serve(Config{Machine: machineEnv{Cert: "x"}, Traces: "http://c"})
+	if both == nil || !strings.Contains(both.Error(), "are all set or none") || !strings.Contains(both.Error(), `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "http://c"`) {
+		t.Errorf("serve with both refused: %v", both)
+	}
+	if only := serve(Config{Machine: machineEnv{Cert: "x"}}); only == nil || !strings.Contains(only.Error(), "are all set or none") || strings.Contains(only.Error(), "OTEL") {
+		t.Errorf("serve with the machine alone refused: %v", only)
+	}
 }

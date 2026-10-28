@@ -117,12 +117,11 @@ func (a *App) project(ctx context.Context) {
 	case a.Opts.Repos != "":
 		src = localHeads(a.Opts.Repos)
 	case a.Opts.GHToken != "":
-		gh, err := newGitHub(a.Opts.GHURL, a.Opts.GHToken, a.Opts.Cache)
+		gh, err := newGitHub(a.Opts.GHURL, a.Opts.GHToken, a.Opts.Cache, a.Met)
 		if err != nil {
 			slog.Error(fmt.Sprintf("projector: %v: off", err))
 			return
 		}
-		gh.met = a.Met
 		src = gh
 		a.Met.SourceOK("github", float64(time.Now().Unix())) // seeded: a token that never works still ages into the alert
 	default:

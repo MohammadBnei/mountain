@@ -47,21 +47,19 @@ type Metrics struct {
 }
 
 // series is one metric: its name, HELP text and the one label key it may carry ("" = none). The views pin the label
-// set from this table, the instruments take the name and the text from it.
+// set from newMetrics's table of them, the instruments take the name and the text from it. The table is locals there,
+// not package variables.
 type series struct{ name, help, label string }
-
-var (
-	sSourceLastSuccess = series{"mountain_source_last_success", "Unix time of the last success per source (prom, alerts, github, projection, db); seeded at start.", labelSource}
-	sTokenDaysLeft     = series{"mountain_github_token_days_left", "Days until the GitHub token expires.", ""}
-	sWSConnections     = series{"mountain_ws_connections", "Open /ws connections.", ""}
-	sQueryFailed       = series{"mountain_query_failed_total", "Failed PromQL queries (the poll keeps its last answer and goes stale).", labelQuery}
-	sProjectionSeq     = series{"mountain_projection_seq", "The latest projection's sequence number.", ""}
-	sDrift             = series{"mountain_drift", "Drift in the latest projection, by kind (unassigned = a component realms.yaml does not place).", labelKind}
-)
 
 // newMetrics builds the provider, its views and the exporter, and the instruments. The websocket count starts at 0
 // (a series from the first scrape, as it has always been); every other series appears with its first write.
 func newMetrics() (*Metrics, error) {
+	sSourceLastSuccess := series{"mountain_source_last_success", "Unix time of the last success per source (prom, alerts, github, projection, db); seeded at start.", labelSource}
+	sTokenDaysLeft := series{"mountain_github_token_days_left", "Days until the GitHub token expires.", ""}
+	sWSConnections := series{"mountain_ws_connections", "Open /ws connections.", ""}
+	sQueryFailed := series{"mountain_query_failed_total", "Failed PromQL queries (the poll keeps its last answer and goes stale).", labelQuery}
+	sProjectionSeq := series{"mountain_projection_seq", "The latest projection's sequence number.", ""}
+	sDrift := series{"mountain_drift", "Drift in the latest projection, by kind (unassigned = a component realms.yaml does not place).", labelKind}
 	reg := prometheus.NewRegistry()
 	exp, err := otelprom.New(
 		otelprom.WithRegisterer(reg),
@@ -104,7 +102,7 @@ func labelView(s series) sdkmetric.View {
 	return sdkmetric.NewView(sdkmetric.Instrument{Name: s.name}, sdkmetric.Stream{AttributeFilter: attribute.NewAllowKeysFilter(keys...)})
 }
 
-// Handler serves the exposition; nil without metrics.
+// Handler serves the exposition; on a nil *Metrics, a 404 handler.
 func (m *Metrics) Handler() http.Handler {
 	if m == nil {
 		return http.NotFoundHandler()

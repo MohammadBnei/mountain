@@ -16,8 +16,10 @@
 // tracer and no span, a malformed one is a refusal to start). All of it is read once, in config.go; the libraries'
 // own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*) are theirs, and so are OpenTelemetry's: the metrics
 // SDK always reads OTEL_RESOURCE_ATTRIBUTES, OTEL_SERVICE_NAME, OTEL_METRICS_EXEMPLAR_FILTER and OTEL_GO_X_* (a
-// malformed one is a plain-text line on stderr, from OTel's own logger), and with tracing on the trace exporter
-// reads its headers, timeout, compression and certificates, OTEL_BSP_* and the span limits (mountain/pkg/telemetry).
+// malformed one is a JSON INFO line on stdout, from OTel's global error handler going through the log package that
+// slog has taken over; some bad values are ignored with no line at all; the exposition is unchanged either way), and
+// with tracing on the trace exporter reads its headers, timeout, compression and certificates, OTEL_BSP_* and the span
+// limits (mountain/pkg/telemetry).
 //
 // Logs: JSON lines (mountain/pkg/telemetry.NewLogger), each site with its level: on stdout for the service, on stderr
 // for `atlas project`, whose stdout is its result line as before. serve's own flag errors and usage stay text on
@@ -107,17 +109,21 @@ type App struct {
 // newApp builds what the App owns, for serve and the tests alike; the caller starts the projector and the polls.
 func newApp(o Opts, rl *realms.Realms, www fs.FS, g *gate, gr *Graphs, met *Metrics) *App {
 	a := &App{Opts: o, Realms: rl, Build: buildID(www), Graph: gr, Files: &repoSet{}, gate: g, unread: map[string]string{},
-		reads: &readCache{m: map[string][]byte{}}, readSlots: make(chan struct{}, 2)}
-	a.Met = met
-	a.Hub = NewHub(o.Dev, a.hello)
-	a.Hub.met = met
-	a.Live = newLive(rl, a.Hub)
-	a.Live.met = met
+		reads: &readCache{m: map[string][]byte{}}, readSlots: make(chan struct{}, 2), Met: met}
+	a.Hub = NewHub(o.Dev, a.hello, met)
+	a.Live = newLive(rl, a.Hub, met)
 	a.Live.idx = func() *GraphIndex { return a.Graph.index() }
 	return a
 }
 
 func serve(c Config) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return run(ctx, c)
+}
+
+// run is serve until ctx ends (a test ends it; serve's is SIGINT or SIGTERM).
+func run(ctx context.Context, c Config) error {
 	o := c.Opts
 	rl, err := realms.Load()
 	if err != nil {
@@ -125,18 +131,15 @@ func serve(c Config) error {
 	}
 	www, _ := fs.Sub(mountain.WWW, "www")
 	g := &gate{auth: authFrom(c.OIDC, o.Dev)}
-	if g.machine, err = machineFrom(c.Machine); err != nil {
-		return err
-	}
-	if err := tracesEndpoint(c.Traces); err != nil {
+	var merr error
+	g.machine, merr = machineFrom(c.Machine)
+	if err := errors.Join(merr, tracesEndpoint(c.Traces)); err != nil { // every refusal at once (plan/15 §5)
 		return err
 	}
 	g.devOpen = o.Dev && g.auth == nil && loopback(o.Listen)
 	if g.auth == nil && !g.devOpen {
 		slog.Warn("atlas: sign-in is not configured: every route but /healthz refuses a person (the machine principal, if configured, still reads its two routes)")
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	pm, err := newMetrics()
 	if err != nil {

@@ -60,8 +60,8 @@ type Hub struct {
 	met     *Metrics // nil = not recorded
 }
 
-func NewHub(dev bool, hello func() []byte) *Hub {
-	return &Hub{dev: dev, hello: hello, ping: pingEvery, clients: map[*Client]struct{}{}, perIP: map[string]int{}}
+func NewHub(dev bool, hello func() []byte, met *Metrics) *Hub {
+	return &Hub{dev: dev, hello: hello, ping: pingEvery, clients: map[*Client]struct{}{}, perIP: map[string]int{}, met: met}
 }
 
 // Broadcast queues b to every client (nil = nothing).

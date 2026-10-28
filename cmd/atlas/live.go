@@ -73,10 +73,10 @@ type Live struct {
 	met    *Metrics         // nil = not recorded
 }
 
-func newLive(rl *realms.Realms, hub *Hub) *Live {
+func newLive(rl *realms.Realms, hub *Hub, met *Metrics) *Live {
 	return &Live{rl: rl, hub: hub, st: LiveState{T: "live", Apps: map[string]AppLive{}, Ready: map[string]bool{}, Probes: map[string]bool{},
 		Land: Land{Realms: map[string]Use{}, NS: map[string]Use{}, NSRealm: map[string]string{}, Nodes: map[string]NodeLand{}}, Alerts: []AlertLive{}, Stale: map[string]int64{},
-		Health: map[string]contract.Health{}}, events: []Event{}, low: map[string]int64{}}
+		Health: map[string]contract.Health{}}, events: []Event{}, low: map[string]int64{}, met: met}
 }
 
 // classify sets the frame's health from its answers and the latest graph (contract.Classify), keeping since when

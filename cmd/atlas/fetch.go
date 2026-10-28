@@ -58,7 +58,7 @@ type ghHeads struct {
 	met             *Metrics // nil = not recorded
 }
 
-func newGitHub(apiURL, token, dir string) (*ghHeads, error) {
+func newGitHub(apiURL, token, dir string, met *Metrics) (*ghHeads, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func newGitHub(apiURL, token, dir string) (*ghHeads, error) {
 		os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
 	return &ghHeads{url: strings.TrimRight(apiURL, "/"), token: token, dir: dir, hc: &http.Client{Timeout: 5 * time.Minute},
-		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}, retired: map[string]string{}}, nil
+		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}, retired: map[string]string{}, met: met}, nil
 }
 
 func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Repo, error) {

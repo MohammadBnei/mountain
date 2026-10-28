@@ -346,17 +346,22 @@ These already follow the standard:
 
    Then atlas's OTel (O): the six series go through OTel's Prometheus exporter onto the same `/metrics`, held by a
    `Metrics` on the app (the last package-level state, the vecs, is gone; `atlas project` and the tests pass none and
-   record nothing). The exposition is the same series: names, types, HELP texts, label keys and number format, checked
-   byte for byte on the built binary before and after, in three scenarios (a token and a stored projection with one
-   signal failing, local checkouts with one required query failing, and nothing configured), with `target_info`, the
-   `otel_scope_*` labels, suffixes and the default registry's `go_*`/`process_*` series off. The differences: a family
+   record nothing; the table of the six is locals of `newMetrics`, so no package variable is left). The exposition is the
+   same series: names, types, HELP texts and label keys, compared on the built binary before and after (lines sorted,
+   the values of `mountain_source_last_success` and `mountain_github_token_days_left` masked, being clocks), in three
+   scenarios (a token and a stored projection with one signal failing, local checkouts with one required query failing,
+   and nothing configured), with `target_info`, the `otel_scope_*` labels, suffixes and the default registry's
+   `go_*`/`process_*` series off; the number format is pinned by `TestMetricsExposition`. The differences: a family
    nothing has written yet no longer prints its HELP and TYPE lines (it had no sample either way); families print in
    name order; the Content-Type gains `charset` and `escaping` and a scraper that asks for protobuf gets it (the
    platform Prometheus asks for text only). Traces are `pkg/telemetry` on `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, one
    server span per route outside the gate (`/healthz` and `/ws` included: a probe makes a span, and a socket's span
    lasts as long as the socket and is dropped at shutdown), nothing at all when it is unset; a malformed value refuses
-   to start (JSON ERROR line, exit 1). Not in this step: `errs.Write`'s RecordError hook (§4) and `trace_id` on atlas's
-   log lines (its log calls take no context), which wait for the owner's word.
+   to start (JSON ERROR line, exit 1), together with a partial machine principal's refusal when both are wrong. The
+   writers take the `Metrics` in their constructors, and `TestMetricsWritersReach` and `TestServeMetrics` drive each
+   writer's real path and serve's own wiring (a writer left without it records nothing, silently). Not in this step:
+   `errs.Write`'s RecordError hook (§4) and `trace_id` on atlas's log lines (its log calls take no context), which
+   wait for the owner's word.
 
    **Done** (ukubi-game #33–#34): the three, and no mutable package-level state in the whole module (the check
    now covers every package). The sim's frames for 38 worlds, seeds and intensities are byte-identical; the one

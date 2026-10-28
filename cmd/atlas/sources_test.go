@@ -224,7 +224,7 @@ func TestJoinerOrder(t *testing.T) {
 // maps, and leaves the unknown signals out of the frame.
 func TestJoinNothing(t *testing.T) {
 	rl, _ := realms.Load()
-	l := newLive(rl, NewHub(false, func() []byte { return nil }))
+	l := newLive(rl, NewHub(false, func() []byte { return nil }, nil), nil)
 	p := &promPoll{l: l, prom: promMap{}, idx: testIndex}
 	if err := p.poll(context.Background(), time.Now()); err != nil {
 		t.Fatal(err)
