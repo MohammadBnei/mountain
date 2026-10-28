@@ -44,14 +44,14 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	p.Server = httptest.NewServer(mux)
 	t.Cleanup(p.Close)
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"issuer": p.URL, "authorization_endpoint": p.URL + "/authorize",
+		_ = json.NewEncoder(w).Encode(map[string]any{"issuer": p.URL, "authorization_endpoint": p.URL + "/authorize",
 			"token_endpoint": p.URL + "/token", "jwks_uri": p.URL + "/jwks", "id_token_signing_alg_values_supported": []string{"RS256"}})
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "k1", Algorithm: "RS256", Use: "sig"}}})
+		_ = json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "k1", Algorithm: "RS256", Use: "sig"}}})
 	})
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
+		_ = r.ParseForm()
 		p.mu.Lock()
 		g, ok := p.codes[r.PostForm.Get("code")]
 		delete(p.codes, r.PostForm.Get("code"))
@@ -62,7 +62,7 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"access_token": "at", "token_type": "Bearer", "expires_in": 300,
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "at", "token_type": "Bearer", "expires_in": 300,
 			"id_token": p.sign(t, map[string]any{"iss": p.URL, "aud": "mountain", "sub": "u1", "preferred_username": "ana_k", "nonce": g.nonce, "groups": g.groups,
 				"iat": time.Now().Unix(), "exp": time.Now().Add(5 * time.Minute).Unix()})})
 	})
@@ -180,7 +180,7 @@ func TestSignIn(t *testing.T) {
 	}
 	isAdm := func(c *http.Cookie) bool {
 		var m struct{ Admin bool }
-		json.NewDecoder(a.serveReq("GET", "/auth/me", []*http.Cookie{c}).Body).Decode(&m)
+		_ = json.NewDecoder(a.serveReq("GET", "/auth/me", []*http.Cookie{c}).Body).Decode(&m)
 		return m.Admin
 	}
 	if !isAdm(admin) {
@@ -311,7 +311,7 @@ func TestSocket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 	conn.SetReadLimit(-1)
 	if f := readT(t, conn); f["t"] != "hello" || f["live"] == nil || f["build"] != a.Build {
 		t.Fatalf("hello: %v", f)
@@ -341,7 +341,7 @@ func TestSocketEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 	conn.SetReadLimit(-1)
 	if f := readT(t, conn); f["t"] != "hello" {
 		t.Errorf("devOpen hello: %v", f)
@@ -362,7 +362,7 @@ func TestSocketLapse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 	conn.SetReadLimit(-1)
 	if f := readT(t, conn); f["t"] != "hello" {
 		t.Fatalf("hello: %v", f)
@@ -386,6 +386,6 @@ func readT(t *testing.T, c *websocket.Conn) map[string]any {
 		t.Fatal(err)
 	}
 	var f map[string]any
-	json.Unmarshal(b, &f)
+	_ = json.Unmarshal(b, &f)
 	return f
 }

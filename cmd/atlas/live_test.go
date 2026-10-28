@@ -61,7 +61,7 @@ func fakeProm(t *testing.T, answers func() map[string]string) *httptest.Server {
 		if !ok {
 			res = "[]"
 		}
-		w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":` + res + `}}`))
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":` + res + `}}`))
 	}))
 	t.Cleanup(s.Close)
 	return s
@@ -148,7 +148,7 @@ func TestAlertPoll(t *testing.T) {
 		{"fingerprint":"f2","startsAt":"2026-10-24T09:00:00Z","labels":{"alertname":"NodeDown","severity":"critical","node":"k8s-cp-01"}},
 		{"fingerprint":"w","labels":{"alertname":"Watchdog"}}]`
 	code := 200
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(code); w.Write([]byte(body)) }))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(code); _, _ = w.Write([]byte(body)) }))
 	defer srv.Close()
 	a := &amPoll{l: l, am: amHTTP{base: srv.URL, hc: http.DefaultClient}, idx: testIndex, firing: map[string]AlertLive{}}
 	ctx := context.Background()
@@ -163,7 +163,7 @@ func TestAlertPoll(t *testing.T) {
 		t.Errorf("the first answer made events: %+v", l.events)
 	}
 	body = `[{"fingerprint":"f1","startsAt":"2026-10-24T10:00:00Z","labels":{"alertname":"KubePodCrashLooping","severity":"warning","namespace":"wird"}}]`
-	a.poll(ctx, time.Now())
+	_ = a.poll(ctx, time.Now())
 	if len(l.events) != 1 || l.events[0].Kind != "alert.resolve" || l.events[0].Node != "vm:k8s-cp-01" {
 		t.Errorf("resolve: %+v", l.events)
 	}
@@ -202,10 +202,10 @@ func TestLiveQuiet(t *testing.T) {
 	if n := len(c.send); n != 3 {
 		t.Errorf("stale then recovered: %d frames, want 3", n)
 	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`[]`)) }))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`[]`)) }))
 	defer srv.Close()
 	a := &amPoll{l: l, am: amHTTP{base: srv.URL, hc: http.DefaultClient}, idx: testIndex, firing: map[string]AlertLive{}}
-	a.poll(context.Background(), time.Now())
+	_ = a.poll(context.Background(), time.Now())
 	if !strings.Contains(string(mustJSON(l.st)), `"alerts":[]`) {
 		t.Errorf("no alerts: %s", mustJSON(l.st))
 	}
@@ -387,7 +387,7 @@ func TestFixtureHealth(t *testing.T) {
 	}
 	want, _ := json.Marshal(l.st.Health)
 	var have map[string]contract.Health
-	json.Unmarshal(raw["health"], &have)
+	_ = json.Unmarshal(raw["health"], &have)
 	if *updateFixtures {
 		raw["health"] = want
 		if _, ok := raw["alertsAt"]; !ok {
@@ -446,13 +446,13 @@ func TestLiveHealth(t *testing.T) {
 	if _, held := l.low["addon:cilium"]; held || l.st.Health["addon:cilium"].State != contract.OK {
 		t.Errorf("back to all ready: %+v %v", l.st.Health["addon:cilium"], l.low)
 	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`[]`)) }))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`[]`)) }))
 	defer srv.Close()
 	a := &amPoll{l: l, am: amHTTP{base: srv.URL, hc: http.DefaultClient}, idx: testIndex, firing: map[string]AlertLive{}}
 	n := len(c.send)
-	a.poll(context.Background(), time.Now())
+	_ = a.poll(context.Background(), time.Now())
 	first := l.st.AlertsAt
-	a.poll(context.Background(), time.Now().Add(time.Second))
+	_ = a.poll(context.Background(), time.Now().Add(time.Second))
 	// the first answer is a frame even when nothing fires: before it, [] alerts means no answer
 	if first == 0 || l.st.AlertsAt == first || len(c.send) != n+1 {
 		t.Errorf("alertsAt %d -> %d, %d frames for two equal answers (want 1: the first)", first, l.st.AlertsAt, len(c.send)-n)

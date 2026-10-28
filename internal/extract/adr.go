@@ -166,7 +166,7 @@ var statusWords = map[string]string{"accepted": "Accepted", "proposed": "Propose
 
 // normStatus is a status line's state in one word: the first known word among its first three, else its first word.
 func normStatus(s string) string {
-	words := strings.FieldsFunc(s, func(r rune) bool { return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z') })
+	words := strings.FieldsFunc(s, func(r rune) bool { return (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') })
 	for i, w := range words {
 		if i == 3 {
 			break

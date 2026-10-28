@@ -145,7 +145,7 @@ func run(ctx context.Context, c Config) error {
 	if err != nil {
 		return err
 	}
-	defer pm.Close()
+	defer func() { _ = pm.Close() }()
 	tel, err := telemetry.New(c.Traces, "atlas")
 	if err != nil {
 		return err
@@ -192,8 +192,8 @@ func run(ctx context.Context, c Config) error {
 	}
 	sc, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	pub.Shutdown(sc)
-	met.Shutdown(sc)
+	_ = pub.Shutdown(sc)
+	_ = met.Shutdown(sc)
 	a.Graph.close()
 	// a hijacked /ws is not waited for: a span still open then is dropped
 	if e := tel.Shutdown(); e != nil {
@@ -225,7 +225,7 @@ type route struct {
 }
 
 func routeTable(a *App, www fs.FS) []route {
-	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	return []route{
 		{"GET /healthz", true, true, ok},
 		{"GET /auth/login", true, false, a.gate.onAuth((*Auth).login)},
@@ -306,10 +306,10 @@ func csp(html []byte, dev bool) string {
 // buildID is a short hash over every embedded file: it changes on any deploy that changes www/.
 func buildID(www fs.FS) string {
 	h := sha256.New()
-	fs.WalkDir(www, ".", func(p string, d fs.DirEntry, err error) error {
+	_ = fs.WalkDir(www, ".", func(p string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
 			if b, err := fs.ReadFile(www, p); err == nil {
-				fmt.Fprintf(h, "%s\x00%d\x00", p, len(b))
+				_, _ = fmt.Fprintf(h, "%s\x00%d\x00", p, len(b))
 				h.Write(b)
 			}
 		}
@@ -325,7 +325,7 @@ func buildID(www fs.FS) string {
 func static(www fs.FS, dev bool) http.Handler {
 	files := http.FileServerFS(www)
 	etags := map[string]string{}
-	fs.WalkDir(www, ".", func(p string, d fs.DirEntry, err error) error {
+	_ = fs.WalkDir(www, ".", func(p string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
 			if b, err := fs.ReadFile(www, p); err == nil {
 				s := sha256.Sum256(b)

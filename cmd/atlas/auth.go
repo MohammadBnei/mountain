@@ -242,7 +242,7 @@ func authFail(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(code)
-	fmt.Fprintf(w, `<!doctype html><meta name="viewport" content="width=device-width"><title>mountain</title><p>%s</p>`, html.EscapeString(msg))
+	_, _ = fmt.Fprintf(w, `<!doctype html><meta name="viewport" content="width=device-width"><title>mountain</title><p>%s</p>`, html.EscapeString(msg))
 }
 
 func (g *gate) onAuth(h func(*Auth, http.ResponseWriter, *http.Request)) http.HandlerFunc {
@@ -302,7 +302,7 @@ func (au *Auth) callback(w http.ResponseWriter, r *http.Request) {
 		Groups []string
 		Name   string `json:"preferred_username"`
 	}
-	idt.Claims(&c) // no groups claim = not an admin (a missing claim yields no access)
+	_ = idt.Claims(&c) // no groups claim = not an admin (a missing claim yields no access)
 	if !slices.Contains(c.Groups, adminGroup) {
 		clearCookie(w, sessionCookie)
 		authFail(w, "mountain is for platform admins only.", http.StatusForbidden)
@@ -352,7 +352,7 @@ func (g *gate) me(w http.ResponseWriter, r *http.Request) {
 	h.Set("Vary", "Cookie")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Content-Type", "application/json")
-	w.Write(mustJSON(m))
+	_, _ = w.Write(mustJSON(m))
 }
 
 func mustJSON(v any) []byte {

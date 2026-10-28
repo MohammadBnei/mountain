@@ -56,7 +56,7 @@ func TestMetricsWritersReach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 	rl, err := realms.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func TestMetricsWritersReach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
 	conn.SetReadLimit(-1)
 	readT(t, conn)
 
@@ -112,7 +112,7 @@ func TestServeMetrics(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer l.Close()
+		defer func() { _ = l.Close() }()
 		return l.Addr().String()
 	}
 	pub, mx := free(), free()
@@ -127,7 +127,7 @@ func TestServeMetrics(t *testing.T) {
 		if err != nil {
 			return ""
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		var b strings.Builder
 		buf := make([]byte, 4096)
 		for {
@@ -146,7 +146,7 @@ func TestServeMetrics(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
 	waitScrape(t, scrapeAddr, "mountain_ws_connections 1\n")
 	cancel()
 	select {
