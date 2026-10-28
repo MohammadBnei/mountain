@@ -5,9 +5,10 @@ package main
 // ID token (iss, aud, signature, nonce) and, for a member of platform-admins only, sets a signed session cookie
 // {v: {admin, sub, name, id}, exp}, TTL 1 h; the group is re-checked at the next sign-in. Anyone else gets no session
 // and a page saying why. The return view rides a 10 min signed flow cookie. A sign-out revokes the session's id on
-// the server, which also closes its open sockets at their next ping (hub.go). The revocation set is this replica's
-// memory (one replica, helm/values.yaml): a restart or a rollback forgets it, so a revoked cookie works again until
-// its own expiry, at most 1 h; a sign-out handled by an older pod during a rollout revokes nothing.
+// the server, which also closes its open sockets at their next ping (hub.go), with a code the page stops reconnecting
+// on. The revocation set is this replica's memory (one replica, helm/values.yaml): a restart forgets it, so a revoked
+// cookie works again until its own expiry, at most 1 h; after a rollback to a release from before ids, nothing is
+// revoked and an id-less cookie is a session again.
 //
 // Env (Secret mountain-oidc): MOUNTAIN_OIDC_ISSUER, MOUNTAIN_OIDC_CLIENT_ID, MOUNTAIN_OIDC_CLIENT_SECRET,
 // MOUNTAIN_SESSION_KEY (HMAC key, ≥ 32 bytes). Any unset = off: every admin route refuses (main.go adminOnly),

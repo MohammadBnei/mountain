@@ -26,6 +26,10 @@ const (
 	sendBuffer  = 64
 	origin      = "https://mountain.bnei.dev"
 	writeTimout = 10 * time.Second
+
+	// closeSignedOut ends a signed-out session's socket (an application code, 4000-4999): the page stops
+	// reconnecting on it (www/js/socket.js), since a reconnect would sign it straight back in through authentik.
+	closeSignedOut websocket.StatusCode = 4001
 )
 
 // Client is one /ws connection.
@@ -172,7 +176,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-tick.C:
 			if live != nil && !live() { // signed out: the socket ends at the next ping, not at the cookie's expiry
-				conn.Close(websocket.StatusPolicyViolation, "session ended")
+				conn.Close(closeSignedOut, "signed out")
 				return
 			}
 			pctx, pc := context.WithTimeout(ctx, writeTimout)

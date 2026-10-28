@@ -1,5 +1,8 @@
 // /ws: the live overlay. connect({onFrame, onStatus, probe}) → {close()}: every frame to onFrame; jittered backoff
-// 1 s → 30 s, reset by a hello. probe: called once per run of failures, at the second close without a hello.
+// 1 s → 30 s, reset by a hello. probe: called once per run of failures, at the second close without a hello. A close
+// with SIGNED_OUT (a sign-out of this session, maybe in another tab) ends it for good: onStatus('signed-out'), no
+// reconnect, since one would sign straight back in through authentik.
+export const SIGNED_OUT = 4001; // cmd/atlas/hub.go closeSignedOut
 export const wsURL = (loc = location) => `${loc.protocol === 'https:' ? 'wss' : 'ws'}://${loc.host}/ws`;
 
 // gateLapsed: a sign-in has lapsed under an open tab, and a socket only sees that as a failed upgrade. Two can:
@@ -34,7 +37,8 @@ export function connect({ url = wsURL(), onFrame, onStatus = () => {}, probe = n
       if (f.t === 'hello') { backoff = 1000; fails = 0; }
       onFrame(f);
     };
-    ws.onclose = () => {
+    ws.onclose = (e) => {
+      if (!closed && e?.code === SIGNED_OUT) { closed = true; return onStatus('signed-out'); }
       onStatus('closed');
       if (closed) return;
       if (++fails % 6 === 2) probe?.(); // the 2nd failure, then every 6th: a lapsed session is found again after the 5 min guard

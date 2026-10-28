@@ -25,6 +25,9 @@ func graphStatus(a *tapp, c *http.Cookie) int {
 	return a.serveReq("GET", "/api/graph", []*http.Cookie{c}, "Origin", origin).StatusCode
 }
 
+// inside is /api/graph's answer to an admitted caller in a test app: no projection yet.
+const inside = http.StatusNotFound
+
 func logout(a *tapp, c *http.Cookie, from string) int {
 	return a.serveReq("POST", "/auth/logout", []*http.Cookie{c}, "Origin", from).StatusCode
 }
@@ -35,7 +38,7 @@ func logout(a *tapp, c *http.Cookie, from string) int {
 func TestLogoutRevokes(t *testing.T) {
 	a, p := withAuth(t)
 	one, two := adminCookie(t, a, p), adminCookie(t, a, p) // the same person, twice
-	if graphStatus(a, one) == http.StatusForbidden || graphStatus(a, two) == http.StatusForbidden {
+	if graphStatus(a, one) != inside || graphStatus(a, two) != inside {
 		t.Fatal("a fresh sign-in is refused") // the positive control
 	}
 	// cross-origin: refused before anything is revoked
@@ -47,7 +50,7 @@ func TestLogoutRevokes(t *testing.T) {
 	if code := logout(a, forged, origin); code != http.StatusSeeOther {
 		t.Errorf("logout with a forged cookie: %d", code)
 	}
-	if graphStatus(a, one) == http.StatusForbidden {
+	if graphStatus(a, one) != inside {
 		t.Fatal("a cross-origin or forged sign-out revoked the session")
 	}
 	if code := logout(a, one, origin); code != http.StatusSeeOther {
@@ -74,8 +77,14 @@ func TestLogoutRevokes(t *testing.T) {
 	if r := a.serveReq("GET", "/auth/me", []*http.Cookie{one}); json.NewDecoder(r.Body).Decode(&me) != nil || me.Admin {
 		t.Error("/auth/me: the signed-out copy is an admin")
 	}
-	if graphStatus(a, two) == http.StatusForbidden {
+	if graphStatus(a, two) != inside {
 		t.Error("the other sign-in was revoked with the first")
+	}
+	// the revocation lasts until the cookie's own end: a sweep (the next revoke) keeps it
+	a.gate.auth.pruned = time.Time{}
+	a.gate.auth.revoke("another", time.Now().Add(time.Hour))
+	if graphStatus(a, one) != http.StatusForbidden {
+		t.Error("the signed-out copy works again after a sweep")
 	}
 }
 
@@ -103,7 +112,7 @@ func TestSessionShape(t *testing.T) {
 			}
 		}
 	}
-	if graphStatus(a, signed(a, Session{Admin: true, Sub: "u1", ID: "i1"})) == http.StatusForbidden {
+	if graphStatus(a, signed(a, Session{Admin: true, Sub: "u1", ID: "i1"})) != inside {
 		t.Error("a whole session is refused") // the positive control
 	}
 }
@@ -151,7 +160,7 @@ func TestSocketSignedOut(t *testing.T) {
 	start := time.Now()
 	for {
 		if _, _, err := c1.Read(ctx); err != nil {
-			if websocket.CloseStatus(err) != websocket.StatusPolicyViolation {
+			if websocket.CloseStatus(err) != closeSignedOut {
 				t.Errorf("the signed-out socket ended with %v", err)
 			}
 			break

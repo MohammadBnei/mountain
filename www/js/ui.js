@@ -314,7 +314,8 @@ export function minimap(v, still = null) {
 /** status is the status line: stale sources in words, the projection's age, the connection. */
 export function status(m, live, conn) {
   const parts = [];
-  if (conn !== 'open') parts.push('Live connection lost, reconnecting…');
+  if (conn === 'signed-out') parts.push('Signed out: reload to sign in again');
+  else if (conn !== 'open') parts.push('Live connection lost, reconnecting…');
   for (const [src, since] of Object.entries(live?.stale || {})) parts.push(`${{ prom: 'Prometheus', alerts: 'Alertmanager' }[src] || src} not answering since ${new Date(since).toLocaleTimeString()}`);
   if (m?.at) parts.push(`projection ${m.seq}, ${ago(Date.parse(m.at))}`);
   return parts.join(' · ');

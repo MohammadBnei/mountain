@@ -6,7 +6,8 @@ import { buildModel, routes, search, fold, use, namespaces, health, alertsOn, go
 import { layout, heightOf, cardSlots, MAX_CARDS } from '../js/geometry.js';
 import { tokens } from '../js/reader.js';
 import { parse, format, up } from '../js/router.js';
-import { gateLapsed } from '../js/socket.js';
+import { gateLapsed, connect, SIGNED_OUT } from '../js/socket.js';
+import { status } from '../js/ui.js';
 
 let failed = 0;
 const ok = (c, m) => { if (!c) { failed++; console.log(`FAIL ${m}`); } else console.log(`ok   ${m}`); };
@@ -141,6 +142,22 @@ const st = store();
 let reloads = 0;
 for (const now of [1e12, 1e12 + 60e3]) await gateLapsed({ fetchFn: async () => json({ enabled: true, admin: false }), reload: () => reloads++, store: st, now });
 ok(reloads === 1, 'socket: at most one reload per 5 min');
+
+// ---- socket: a signed-out session's socket (another tab signed out) stops for good; any other close reconnects
+{
+  const socks = [], seen = [], realWS = globalThis.WebSocket, realST = globalThis.setTimeout;
+  globalThis.WebSocket = class { constructor() { socks.push(this); } close() {} };
+  globalThis.setTimeout = (f) => { f(); return 0; }; // reconnect at once
+  try {
+    let probes = 0;
+    connect({ url: 'ws://x/ws', onFrame: () => {}, onStatus: (s) => seen.push(s), probe: () => probes++ });
+    socks[0].onclose({ code: 1006 });
+    ok(socks.length === 2 && seen.at(-1) === 'closed', 'socket: a dropped connection reconnects');
+    socks[1].onclose({ code: SIGNED_OUT });
+    ok(socks.length === 2 && seen.at(-1) === 'signed-out' && probes === 0, 'socket: signed out: no reconnect, no probe (it would sign straight back in)');
+  } finally { globalThis.WebSocket = realWS; globalThis.setTimeout = realST; }
+  ok(status(null, null, 'signed-out') === 'Signed out: reload to sign in again' && status(null, null, 'closed') === 'Live connection lost, reconnecting…', 'status: signed out is said as such');
+}
 
 console.log(failed ? `${failed} FAILED` : 'all passed');
 process.exit(failed ? 1 : 0);
