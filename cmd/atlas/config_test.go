@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -154,5 +155,41 @@ func TestConfigDocumented(t *testing.T) {
 	}
 	if m := undocumented("--dev-x, MOUNTAIN_SESSION_KEYS, --repos", []string{"--dev", "MOUNTAIN_SESSION_KEY", "--repos"}); !slices.Equal(m, []string{"--dev", "MOUNTAIN_SESSION_KEY"}) {
 		t.Errorf("undocumented: %v", m) // the matcher's own control: a longer name is not the name
+	}
+}
+
+// TestConfigTraces: the traces endpoint is read as given (a bad flag does not hide it, as the token is not hidden);
+// serve checks it: unset = no tracing, else an http(s) URL with its traces path, anything else is a refusal to
+// start with these words (a JSON ERROR line and exit 1, as machineFrom's), before anything is bound.
+func TestConfigTraces(t *testing.T) {
+	const good = "http://collector.monitoring:4318/v1/traces"
+	cfg, err := loadConfig(nil, envOf(map[string]string{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": good}))
+	if err != nil || cfg.Traces != good {
+		t.Errorf("traces: %q %v", cfg.Traces, err)
+	}
+	if cfg, err = loadConfig([]string{"--nope"}, envOf(map[string]string{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "junk"})); err == nil || cfg.Traces != "junk" || strings.Contains(err.Error(), "OTEL") {
+		t.Errorf("a bad flag with a bad endpoint: %q %v", cfg.Traces, err) // the flag's error wins, as the fixtures rule's does
+	}
+	for v, ok := range map[string]bool{"": true, good: true, "https://c/v1/traces": true, "http://c:4318/otlp/traces": true,
+		"c:4318/v1/traces": false, "ftp://c/v1/traces": false, "http://c": false, "http://c/": false, "http:///v1/traces": false, "/v1/traces": false, "%zz": false} {
+		err := tracesEndpoint(v)
+		if (err == nil) != ok {
+			t.Errorf("tracesEndpoint(%q) = %v, want ok=%v", v, err, ok)
+		}
+		if err != nil && err.Error() != "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "+strconv.Quote(v)+" is not an http(s) URL with its traces path (…/v1/traces)" {
+			t.Errorf("tracesEndpoint(%q): %v", v, err)
+		}
+	}
+	// serve itself refuses, before it binds or opens anything
+	if err := serve(Config{Traces: "http://c"}); err == nil || !strings.Contains(err.Error(), `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "http://c"`) {
+		t.Errorf("serve with a bad endpoint: %v", err)
+	}
+	// and it reports every refusal at once: a partial machine principal and a bad endpoint together are both named
+	both := serve(Config{Machine: machineEnv{Cert: "x"}, Traces: "http://c"})
+	if both == nil || !strings.Contains(both.Error(), "are all set or none") || !strings.Contains(both.Error(), `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "http://c"`) {
+		t.Errorf("serve with both refused: %v", both)
+	}
+	if only := serve(Config{Machine: machineEnv{Cert: "x"}}); only == nil || !strings.Contains(only.Error(), "are all set or none") || strings.Contains(only.Error(), "OTEL") {
+		t.Errorf("serve with the machine alone refused: %v", only)
 	}
 }

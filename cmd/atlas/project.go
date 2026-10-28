@@ -117,18 +117,18 @@ func (a *App) project(ctx context.Context) {
 	case a.Opts.Repos != "":
 		src = localHeads(a.Opts.Repos)
 	case a.Opts.GHToken != "":
-		gh, err := newGitHub(a.Opts.GHURL, a.Opts.GHToken, a.Opts.Cache)
+		gh, err := newGitHub(a.Opts.GHURL, a.Opts.GHToken, a.Opts.Cache, a.Met)
 		if err != nil {
 			slog.Error(fmt.Sprintf("projector: %v: off", err))
 			return
 		}
 		src = gh
-		SourceLastSuccess.Set("github", float64(time.Now().Unix())) // seeded: a token that never works still ages into the alert
+		a.Met.SourceOK("github", float64(time.Now().Unix())) // seeded: a token that never works still ages into the alert
 	default:
 		slog.Warn("projector: MOUNTAIN_GITHUB_TOKEN unset and no --repos: serving the stored projection only")
 		return
 	}
-	SourceLastSuccess.Set("projection", float64(time.Now().Unix()))
+	a.Met.SourceOK("projection", float64(time.Now().Unix()))
 	cache := &roundCache{}
 	t := time.NewTicker(a.Opts.Every)
 	defer t.Stop()
@@ -159,7 +159,7 @@ func (a *App) projectOnce(ctx context.Context, src heads, c *roundCache) error {
 		a.Files.update(repos) // what the reader serves: the trees this round read, at their shas; a repo it did not read keeps the last
 	}
 	if errors.Is(err, errUnchanged) {
-		SourceLastSuccess.Set("projection", float64(time.Now().Unix()))
+		a.Met.SourceOK("projection", float64(time.Now().Unix()))
 		return nil
 	}
 	if err != nil {
@@ -174,7 +174,7 @@ func (a *App) projectOnce(ctx context.Context, src heads, c *roundCache) error {
 		return err
 	}
 	c.vector = vectorKey(repos)
-	SourceLastSuccess.Set("projection", float64(time.Now().Unix()))
+	a.Met.SourceOK("projection", float64(time.Now().Unix()))
 	if changed {
 		slog.Info(fmt.Sprintf("projector: projection %d: %d repos, %d nodes, %d edges, %d drift", seq, len(repos), len(res.Graph.Nodes), len(res.Graph.Edges), len(res.Graph.Drift)))
 		a.Hub.Broadcast(mustJSON(map[string]any{"t": "graph", "seq": seq}))

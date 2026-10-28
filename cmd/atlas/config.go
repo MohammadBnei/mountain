@@ -8,7 +8,9 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"time"
 )
@@ -19,6 +21,7 @@ type Config struct {
 	DSN     string     // DATABASE_URL: Postgres; empty = memory-only
 	OIDC    *oidcEnv   // sign-in; nil = off
 	Machine machineEnv // the machine principal, as given: machineFrom checks it where serve always has
+	Traces  string     // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, as given: tracesEndpoint checks it in serve; "" = no tracing
 }
 
 // oidcEnv is sign-in's configuration: the client and the session cookie's HMAC key.
@@ -46,12 +49,26 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	if iss, id, sec, key := getenv("MOUNTAIN_OIDC_ISSUER"), getenv("MOUNTAIN_OIDC_CLIENT_ID"), getenv("MOUNTAIN_OIDC_CLIENT_SECRET"), getenv("MOUNTAIN_SESSION_KEY"); iss != "" && id != "" && sec != "" && len(key) >= 32 {
 		c.OIDC = &oidcEnv{Issuer: iss, ClientID: id, Secret: sec, Key: key} // any unset or a short key: off, silently
 	}
+	c.Traces = getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
 	c.Machine = machineEnv{Cert: getenv("MOUNTAIN_MACHINE_CERT"), Issuer: getenv("MOUNTAIN_MACHINE_ISSUER"),
 		ClientID: getenv("MOUNTAIN_MACHINE_CLIENT_ID"), Sub: getenv("MOUNTAIN_MACHINE_SUB")}
 	if err == nil && (o.GraphFixture != "" || o.LiveFixture != "") && !o.Dev {
 		err = errors.New("atlas: fixtures are --dev only")
 	}
 	return c, err
+}
+
+// tracesEndpoint is serve's check of Config.Traces, made with machineFrom's (a refusal to start is a JSON ERROR line, exit
+// 1, as every one but the flags'): "" = no tracing; else the OTLP/HTTP traces URL in full, because the exporter posts
+// to the path as given ("" or "/" would be the collector's root, not /v1/traces).
+func tracesEndpoint(v string) error {
+	if v == "" {
+		return nil
+	}
+	if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Path == "" || u.Path == "/" {
+		return fmt.Errorf("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT %q is not an http(s) URL with its traces path (…/v1/traces)", v)
+	}
+	return nil
 }
 
 // serveFlags is serve's FlagSet, writing into o.

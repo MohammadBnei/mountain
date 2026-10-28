@@ -70,12 +70,13 @@ type Live struct {
 	nextID int64
 	sent   string           // the last frame broadcast, without its timestamps
 	low    map[string]int64 // add-on id -> since when it is below all ready (unix ms)
+	met    *Metrics         // nil = not recorded
 }
 
-func newLive(rl *realms.Realms, hub *Hub) *Live {
+func newLive(rl *realms.Realms, hub *Hub, met *Metrics) *Live {
 	return &Live{rl: rl, hub: hub, st: LiveState{T: "live", Apps: map[string]AppLive{}, Ready: map[string]bool{}, Probes: map[string]bool{},
 		Land: Land{Realms: map[string]Use{}, NS: map[string]Use{}, NSRealm: map[string]string{}, Nodes: map[string]NodeLand{}}, Alerts: []AlertLive{}, Stale: map[string]int64{},
-		Health: map[string]contract.Health{}}, events: []Event{}, low: map[string]int64{}}
+		Health: map[string]contract.Health{}}, events: []Event{}, low: map[string]int64{}, met: met}
 }
 
 // classify sets the frame's health from its answers and the latest graph (contract.Classify), keeping since when
@@ -190,7 +191,7 @@ func (l *Live) start(ctx context.Context, prom promAPI, alerts alertsAPI, idx fu
 	p := &promPoll{l: l, prom: prom, idx: idx}
 	am := &amPoll{l: l, am: alerts, idx: idx, firing: map[string]AlertLive{}}
 	for name, run := range map[string]func(context.Context, time.Time) error{"prom": p.poll, "alerts": am.poll} {
-		SourceLastSuccess.Set(name, float64(time.Now().Unix())) // seeded: a source that never answers still ages into the alert
+		l.met.SourceOK(name, float64(time.Now().Unix())) // seeded: a source that never answers still ages into the alert
 		go func() {
 			t := time.NewTicker(liveEvery)
 			defer t.Stop()
@@ -209,7 +210,7 @@ func (l *Live) start(ctx context.Context, prom promAPI, alerts alertsAPI, idx fu
 						slog.Info(fmt.Sprintf("%s: recovered", name))
 						lastErr = ""
 					}
-					SourceLastSuccess.Set(name, float64(time.Now().Unix()))
+					l.met.SourceOK(name, float64(time.Now().Unix()))
 					l.stale(name, false)
 				}
 				select {
@@ -295,7 +296,7 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 	for name, q := range contract.Queries { // the sim mirrors exactly these
 		s, err := p.prom.Query(ctx, q)
 		if err != nil {
-			QueryFailed.Add(name, 1)
+			p.l.met.QueryFailure(name)
 			return err
 		}
 		r[name] = s
@@ -354,7 +355,7 @@ func (p *promPoll) signals(ctx context.Context, now time.Time) {
 		}
 		s, err := p.prom.Query(ctx, sg.Query)
 		if err != nil {
-			QueryFailed.Add(name, 1)
+			p.l.met.QueryFailure(name)
 		}
 		p.sig[name] = signalAnswer{at: now, ok: err == nil && len(s) > 0, s: s}
 	}

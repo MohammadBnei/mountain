@@ -350,6 +350,7 @@ type Graphs struct {
 	mem    memStore   // the store until a database is attached
 	latest *atlasView // nil = no projection yet
 	idx    *GraphIndex
+	met    *Metrics // nil = not recorded
 }
 
 // The store seams (plan/15 §1), each owned by its consumer: Graphs.put stores through projections, serveGraph reads an
@@ -441,9 +442,9 @@ func (g *Graphs) stores() (projections, history) {
 
 // openGraphs opens dsn and loads the latest stored projection. Empty dsn = memory-only (logged). A database that
 // can't be reached or migrated is retried every 30 s in the background; until then atlas runs memory-only.
-func openGraphs(ctx context.Context, dsn string) *Graphs {
-	g := &Graphs{}
-	SourceLastSuccess.Set("db", float64(time.Now().Unix())) // memory-only ages into MountainSourceStale: the alarm for a missing secret
+func openGraphs(ctx context.Context, dsn string, met *Metrics) *Graphs {
+	g := &Graphs{met: met}
+	g.met.SourceOK("db", float64(time.Now().Unix())) // memory-only ages into MountainSourceStale: the alarm for a missing secret
 	if dsn == "" {
 		slog.Warn("db: DATABASE_URL unset: memory-only (the latest projection, no history)")
 		return g
@@ -484,7 +485,7 @@ func (g *Graphs) attach(ctx context.Context, dsn string) error {
 		pool.Close()
 		return err
 	}
-	SourceLastSuccess.Set("db", float64(time.Now().Unix()))
+	g.met.SourceOK("db", float64(time.Now().Unix()))
 	v, err := loadGraph(ctx, pool, 0)
 	switch {
 	case err == nil && g.Latest() == nil:
@@ -519,7 +520,7 @@ func (g *Graphs) ping(ctx context.Context, pool *pgxpool.Pool) {
 		case <-t.C:
 			pc, cancel := context.WithTimeout(ctx, 5*time.Second)
 			if pool.Ping(pc) == nil {
-				SourceLastSuccess.Set("db", float64(time.Now().Unix()))
+				g.met.SourceOK("db", float64(time.Now().Unix()))
 			}
 			cancel()
 		}
@@ -537,7 +538,7 @@ func (g *Graphs) set(v *atlasView) {
 	g.mu.Lock()
 	g.latest, g.idx = v, idx
 	g.mu.Unlock()
-	ProjectionSeq.Set("", float64(v.Seq))
+	g.met.ProjectionSeq(float64(v.Seq))
 	var drift []graph.Drift
 	json.Unmarshal(v.Drift, &drift)
 	counts := map[string]float64{graph.DriftUnassigned: 0, graph.DriftMirror: 0, graph.DriftAmbiguous: 0, graph.DriftUnresolved: 0}
@@ -545,7 +546,7 @@ func (g *Graphs) set(v *atlasView) {
 		counts[d.Kind]++
 	}
 	for k, n := range counts {
-		Drift.Set(k, n)
+		g.met.DriftCount(k, n)
 	}
 }
 

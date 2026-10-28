@@ -142,7 +142,7 @@ func TestGitHubHeads(t *testing.T) {
 	f := newFakeGitHub(t)
 	sha1, sha2, sha0 := strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40)
 	f.head["infra-bootstrap@main"] = sha1
-	g, err := newGitHub(f.URL, "tok", t.TempDir())
+	g, err := newGitHub(f.URL, "tok", t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

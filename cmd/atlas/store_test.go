@@ -71,7 +71,7 @@ func TestGraphStore(t *testing.T) {
 func TestDBGraphStore(t *testing.T) {
 	ctx := context.Background()
 	dsn := testDSN(t)
-	g := openGraphs(ctx, dsn)
+	g := openGraphs(ctx, dsn, nil)
 	defer g.close()
 	if g.db() == nil {
 		t.Fatal("no database")

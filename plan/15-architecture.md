@@ -214,7 +214,7 @@ These already follow the standard:
 2. **atlas, small and urgent:**
    - its globals go: `auth`, `machine` and `devOpen` into a `gate` the app holds; `app` itself; the read cache, the
      render slots and `unread` onto the app; `liveEvery` becomes a const and `promQ` gives way to `contract.Queries`.
-     The metric vecs stay global until the OTel step replaces them: moving them twice is churn;
+     The metric vecs stay global until the OTel step replaces them (done, below): moving them twice is churn;
    - the post-extraction passes become a versioned ordered list.
    
    **The gap was metadata only** (corrected in step 3). The passes carried no version, so a change to the watch,
@@ -343,6 +343,26 @@ These already follow the standard:
    TestServersLog the servers' ErrorLog, TestFatal fatal's line and exit. Bumping pkg raises golang.org/x/text,
    x/sync, x/mod and x/tools, and links the OTel SDK and grpc (pkg/telemetry is one package): 25.7 → 36.5 MB,
    which atlas's traces need next anyway.
+
+   Then atlas's OTel (O): the six series go through OTel's Prometheus exporter onto the same `/metrics`, held by a
+   `Metrics` on the app (the last package-level state, the vecs, is gone; `atlas project` and the tests pass none and
+   record nothing; the table of the six is locals of `newMetrics`, so no package variable is left). The exposition is the
+   same series: names, types, HELP texts and label keys, compared on the built binary before and after (lines sorted,
+   the values of `mountain_source_last_success` and `mountain_github_token_days_left` masked, being clocks), in three
+   scenarios (a token and a stored projection with one signal failing, local checkouts with one required query failing,
+   and nothing configured), with `target_info`, the `otel_scope_*` labels, suffixes and the default registry's
+   `go_*`/`process_*` series off; the number format is pinned by `TestMetricsExposition`. The differences: a family
+   nothing has written yet no longer prints its HELP and TYPE lines (it had no sample either way); families print in
+   name order; the Content-Type gains `charset` and `escaping` and a scraper that asks for protobuf gets it (the
+   platform Prometheus asks for text only). Traces are `pkg/telemetry` on `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, one
+   server span per route outside the gate (`/ws` included: a socket's span lasts as long as the socket and is dropped
+   at shutdown), except `/healthz`, which the kubelet's probes hit every few seconds (owner, 2026-10-28), and nothing
+   at all when it is unset; a malformed value refuses
+   to start (JSON ERROR line, exit 1), together with a partial machine principal's refusal when both are wrong. The
+   writers take the `Metrics` in their constructors, and `TestMetricsWritersReach` and `TestServeMetrics` drive each
+   writer's real path and serve's own wiring (a writer left without it records nothing, silently). Not in this step:
+   `errs.Write`'s RecordError hook (§4) and `trace_id` on atlas's log lines (its log calls take no context), which
+   wait for the owner's word.
 
    **Done** (ukubi-game #33–#34): the three, and no mutable package-level state in the whole module (the check
    now covers every package). The sim's frames for 38 worlds, seeds and intensities are byte-identical; the one

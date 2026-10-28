@@ -11,8 +11,15 @@
 // MOUNTAIN_OIDC_ISSUER, MOUNTAIN_OIDC_CLIENT_ID, MOUNTAIN_OIDC_CLIENT_SECRET and MOUNTAIN_SESSION_KEY (sign-in; any
 // unset or a key under 32 bytes = every route but /healthz refuses a person, except under --dev on a loopback address),
 // MOUNTAIN_MACHINE_CERT, MOUNTAIN_MACHINE_ISSUER, MOUNTAIN_MACHINE_CLIENT_ID and MOUNTAIN_MACHINE_SUB (the game's
-// machine principal on the town's two reads, machine.go; all or none: unset = off). All of it is read once, in
-// config.go; the libraries' own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*) are theirs.
+// machine principal on the town's two reads, machine.go; all or none: unset = off), and
+// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT (the OTLP/HTTP traces URL in full, its /v1/traces path included; unset = no
+// tracer and no span, a malformed one is a refusal to start). All of it is read once, in config.go; the libraries'
+// own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*) are theirs, and so are OpenTelemetry's: the metrics
+// SDK always reads OTEL_RESOURCE_ATTRIBUTES, OTEL_SERVICE_NAME, OTEL_METRICS_EXEMPLAR_FILTER and OTEL_GO_X_* (a
+// malformed one is a JSON INFO line on stdout, from OTel's global error handler going through the log package that
+// slog has taken over; some bad values are ignored with no line at all; the exposition is unchanged either way), and
+// with tracing on the trace exporter reads its headers, timeout, compression and certificates, OTEL_BSP_* and the span
+// limits (mountain/pkg/telemetry).
 //
 // Logs: JSON lines (mountain/pkg/telemetry.NewLogger), each site with its level: on stdout for the service, on stderr
 // for `atlas project`, whose stdout is its result line as before. serve's own flag errors and usage stay text on
@@ -83,13 +90,15 @@ func main() {
 
 // App is the running service: the graph it serves, the live overlay, and the clients that watch both.
 type App struct {
-	Opts   Opts
-	Realms *realms.Realms
-	Hub    *Hub
-	Graph  *Graphs
-	Live   *Live
-	Files  *repoSet // the checkouts the last round read: the reader's files (read.go)
-	Build  string   // the served www's build id (/v/<build>/); hello.build
+	Opts    Opts
+	Realms  *realms.Realms
+	Hub     *Hub
+	Graph   *Graphs
+	Live    *Live
+	Files   *repoSet           // the checkouts the last round read: the reader's files (read.go)
+	Build   string             // the served www's build id (/v/<build>/); hello.build
+	Met     *Metrics           // the series on :9090 (nil = not recorded: the tests')
+	Tracing *telemetry.Tracing // a server span per route; nil or empty = none (plan/15 §7)
 
 	gate      *gate
 	unread    map[string]string // each source's last read failure (the projector goroutine's, project.go)
@@ -98,16 +107,23 @@ type App struct {
 }
 
 // newApp builds what the App owns, for serve and the tests alike; the caller starts the projector and the polls.
-func newApp(o Opts, rl *realms.Realms, www fs.FS, g *gate, gr *Graphs) *App {
+func newApp(o Opts, rl *realms.Realms, www fs.FS, g *gate, gr *Graphs, met *Metrics) *App {
 	a := &App{Opts: o, Realms: rl, Build: buildID(www), Graph: gr, Files: &repoSet{}, gate: g, unread: map[string]string{},
-		reads: &readCache{m: map[string][]byte{}}, readSlots: make(chan struct{}, 2)}
-	a.Hub = NewHub(o.Dev, a.hello)
-	a.Live = newLive(rl, a.Hub)
+		reads: &readCache{m: map[string][]byte{}}, readSlots: make(chan struct{}, 2), Met: met}
+	a.Hub = NewHub(o.Dev, a.hello, met)
+	a.Live = newLive(rl, a.Hub, met)
 	a.Live.idx = func() *GraphIndex { return a.Graph.index() }
 	return a
 }
 
 func serve(c Config) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return run(ctx, c)
+}
+
+// run is serve until ctx ends (a test ends it; serve's is SIGINT or SIGTERM).
+func run(ctx context.Context, c Config) error {
 	o := c.Opts
 	rl, err := realms.Load()
 	if err != nil {
@@ -115,17 +131,27 @@ func serve(c Config) error {
 	}
 	www, _ := fs.Sub(mountain.WWW, "www")
 	g := &gate{auth: authFrom(c.OIDC, o.Dev)}
-	if g.machine, err = machineFrom(c.Machine); err != nil {
+	var merr error
+	g.machine, merr = machineFrom(c.Machine)
+	if err := errors.Join(merr, tracesEndpoint(c.Traces)); err != nil { // every refusal at once (plan/15 §5)
 		return err
 	}
 	g.devOpen = o.Dev && g.auth == nil && loopback(o.Listen)
 	if g.auth == nil && !g.devOpen {
 		slog.Warn("atlas: sign-in is not configured: every route but /healthz refuses a person (the machine principal, if configured, still reads its two routes)")
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
-	a := newApp(o, rl, www, g, openGraphs(ctx, c.DSN))
+	pm, err := newMetrics()
+	if err != nil {
+		return err
+	}
+	defer pm.Close()
+	tel, err := telemetry.New(c.Traces, "atlas")
+	if err != nil {
+		return err
+	}
+	a := newApp(o, rl, www, g, openGraphs(ctx, c.DSN, pm), pm)
+	a.Tracing = tel
 	if o.GraphFixture != "" {
 		if err := a.Graph.loadFixture(o.GraphFixture); err != nil {
 			return err
@@ -153,7 +179,7 @@ func serve(c Config) error {
 
 	pub := &http.Server{Addr: o.Listen, Handler: routes(a, www), ReadHeaderTimeout: 10 * time.Second, ErrorLog: serverLog()}
 	mx := http.NewServeMux()
-	mx.HandleFunc("GET /metrics", serveMetrics)
+	mx.Handle("GET /metrics", pm.Handler())
 	met := &http.Server{Addr: o.Metrics, Handler: mx, ReadHeaderTimeout: 10 * time.Second, ErrorLog: serverLog()}
 	errc := make(chan error, 2)
 	for _, s := range []*http.Server{pub, met} {
@@ -169,6 +195,10 @@ func serve(c Config) error {
 	pub.Shutdown(sc)
 	met.Shutdown(sc)
 	a.Graph.close()
+	// a hijacked /ws is not waited for: a span still open then is dropped
+	if e := tel.Shutdown(); e != nil {
+		slog.Warn(fmt.Sprintf("atlas: traces: %v", e))
+	}
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
@@ -188,23 +218,24 @@ func loopback(addr string) bool {
 // route is one entry of the public mux. open routes answer anyone; every other route answers a platform admin only
 // (plan/10 Security: deny by default). A test calls each route as each kind of caller.
 type route struct {
-	pattern string
-	open    bool
-	h       http.Handler
+	pattern  string
+	open     bool
+	untraced bool // no span: the kubelet's probes, every few seconds per pod, would be a stream of empty spans (owner, 2026-10-28)
+	h        http.Handler
 }
 
 func routeTable(a *App, www fs.FS) []route {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	return []route{
-		{"GET /healthz", true, ok},
-		{"GET /auth/login", true, a.gate.onAuth((*Auth).login)},
-		{"GET /auth/callback", true, a.gate.onAuth((*Auth).callback)},
-		{"POST /auth/logout", true, a.gate.onAuth((*Auth).logout)},
-		{"GET /auth/me", true, http.HandlerFunc(a.gate.me)},
-		{"GET /ws", false, a.Hub},
-		{"GET /api/graph", false, http.HandlerFunc(a.serveGraph)},
-		{"GET /api/read", false, http.HandlerFunc(a.serveRead)},
-		{"GET /", false, static(www, a.Opts.Dev)},
+		{"GET /healthz", true, true, ok},
+		{"GET /auth/login", true, false, a.gate.onAuth((*Auth).login)},
+		{"GET /auth/callback", true, false, a.gate.onAuth((*Auth).callback)},
+		{"POST /auth/logout", true, false, a.gate.onAuth((*Auth).logout)},
+		{"GET /auth/me", true, false, http.HandlerFunc(a.gate.me)},
+		{"GET /ws", false, false, a.Hub},
+		{"GET /api/graph", false, false, http.HandlerFunc(a.serveGraph)},
+		{"GET /api/read", false, false, http.HandlerFunc(a.serveRead)},
+		{"GET /", false, false, static(www, a.Opts.Dev)},
 	}
 }
 
@@ -214,6 +245,9 @@ func routes(a *App, www fs.FS) http.Handler {
 		h := r.h
 		if !r.open {
 			h = a.gate.bearerFirst(r.pattern, h, a.gate.adminOnly(h)) // a bearer is judged alone: the machine principal (machine.go)
+		}
+		if !r.untraced {
+			h = a.Tracing.Handler(r.pattern, h) // outside the gate, so a refusal has its span; without tracing, h itself
 		}
 		mux.Handle(r.pattern, h)
 	}

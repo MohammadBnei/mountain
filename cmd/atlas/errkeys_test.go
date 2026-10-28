@@ -229,7 +229,7 @@ func TestDBErrBodies(t *testing.T) {
 	ctx := context.Background()
 	a := testApp(t)
 	a.gate.devOpen = true
-	a.Graph = openGraphs(ctx, testDSN(t))
+	a.Graph = openGraphs(ctx, testDSN(t), nil)
 	if _, _, err := a.Graph.put(ctx, atlasResult([]graph.Node{n("app:a", "1", "s1")}, nil), extract.Repos{"infra-bootstrap": {SHA: "s1"}}, nil); err != nil {
 		t.Fatal(err)
 	}

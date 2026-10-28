@@ -84,8 +84,8 @@ func pvec(pairs ...string) string { // label JSON, value, label JSON, value...
 // the land lens sums each realm's share of capacity (unattributed explicit), and a health change is an event.
 func TestPromPoll(t *testing.T) {
 	rl, _ := realms.Load()
-	hub := NewHub(false, func() []byte { return nil })
-	l := newLive(rl, hub)
+	hub := NewHub(false, func() []byte { return nil }, nil)
+	l := newLive(rl, hub, nil)
 	health, req := "Healthy", "2"
 	srv := fakeProm(t, func() map[string]string {
 		return map[string]string{
@@ -143,7 +143,7 @@ func TestPromPoll(t *testing.T) {
 // failed answer is no answer (the firing set stays).
 func TestAlertPoll(t *testing.T) {
 	rl, _ := realms.Load()
-	l := newLive(rl, NewHub(false, func() []byte { return nil }))
+	l := newLive(rl, NewHub(false, func() []byte { return nil }, nil), nil)
 	body := `[{"fingerprint":"f1","startsAt":"2026-10-24T10:00:00Z","labels":{"alertname":"KubePodCrashLooping","severity":"warning","namespace":"netbird"},"annotations":{"summary":"crash"}},
 		{"fingerprint":"f2","startsAt":"2026-10-24T09:00:00Z","labels":{"alertname":"NodeDown","severity":"critical","node":"k8s-cp-01"}},
 		{"fingerprint":"w","labels":{"alertname":"Watchdog"}}]`
@@ -185,10 +185,10 @@ func TestAlertPoll(t *testing.T) {
 // empty answer is [] alerts, never null.
 func TestLiveQuiet(t *testing.T) {
 	rl, _ := realms.Load()
-	hub := NewHub(false, func() []byte { return nil })
+	hub := NewHub(false, func() []byte { return nil }, nil)
 	c := &Client{send: make(chan []byte, 64)}
 	hub.clients[c] = struct{}{}
-	l := newLive(rl, hub)
+	l := newLive(rl, hub, nil)
 	for i := 0; i < 3; i++ {
 		l.update(func(s *LiveState) { s.At = int64(i + 1) })
 	}
@@ -215,7 +215,7 @@ func TestLiveQuiet(t *testing.T) {
 // nothing (or fails) is unknown, never zero, and never fails the poll; the day signals are asked on their own cadence.
 func TestSignals(t *testing.T) {
 	rl, _ := realms.Load()
-	l := newLive(rl, NewHub(false, func() []byte { return nil }))
+	l := newLive(rl, NewHub(false, func() []byte { return nil }, nil), nil)
 	var mu sync.Mutex
 	asked := map[string]int{}
 	answers := map[string]string{
@@ -319,7 +319,7 @@ func TestSignals(t *testing.T) {
 // is installed into); one workload unanswered makes it unknown, and a static pod (kube-vip) is always unknown.
 func TestAddonReadiness(t *testing.T) {
 	rl, _ := realms.Load()
-	l := newLive(rl, NewHub(false, func() []byte { return nil }))
+	l := newLive(rl, NewHub(false, func() []byte { return nil }, nil), nil)
 	idx := testIndex()
 	idx.Into = map[string]string{"addon:cilium": "kube-system", "addon:metallb": "metallb-system", "addon:coredns": "kube-system", "addon:kube-vip": "kube-system"}
 	for id := range idx.Into {
@@ -348,7 +348,7 @@ func TestPlaceWatched(t *testing.T) {
 	idx := testIndex()
 	idx.Watch = map[string][]string{"TraefikCertExpiringSoon": {"app:platform-traefik"}, "NetBirdUnreachable": {"app:netbird"},
 		"PVEHostProbeStale": {"host:bnei", "host:ex-laptop", "host:server1"}}
-	a := &amPoll{l: newLive(rl, NewHub(false, func() []byte { return nil }))}
+	a := &amPoll{l: newLive(rl, NewHub(false, func() []byte { return nil }, nil), nil)}
 	for _, c := range []struct {
 		labels     map[string]string
 		node, real string
@@ -375,7 +375,7 @@ func TestFixtureHealth(t *testing.T) {
 	}
 	const file = "../../www/dev/fixtures/live.json"
 	rl, _ := realms.Load()
-	l := newLive(rl, NewHub(false, func() []byte { return nil }))
+	l := newLive(rl, NewHub(false, func() []byte { return nil }, nil), nil)
 	l.idx = g.index
 	if err := l.loadFixture(file); err != nil {
 		t.Fatal(err)
@@ -417,10 +417,10 @@ func TestFixtureHealth(t *testing.T) {
 // and degraded after contract.AddonHold; Alertmanager's answer stamps alertsAt, which, like at, never makes a frame.
 func TestLiveHealth(t *testing.T) {
 	rl, _ := realms.Load()
-	hub := NewHub(false, func() []byte { return nil })
+	hub := NewHub(false, func() []byte { return nil }, nil)
 	c := &Client{send: make(chan []byte, 64)}
 	hub.clients[c] = struct{}{}
-	l := newLive(rl, hub)
+	l := newLive(rl, hub, nil)
 	if l.update(func(s *LiveState) { s.At = 1 }); len(l.st.Health) != 0 {
 		t.Errorf("no graph yet, yet health: %v", l.st.Health)
 	}
