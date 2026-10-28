@@ -1,5 +1,5 @@
-github.com/MohammadBnei/mountain/pkg v0.0.0-20261028085902-cb826e0e9560 h1:aTz+cmkMlj4+0hTr/BhN3c7hrgpczosgaupZPOwe6/k=
-github.com/MohammadBnei/mountain/pkg v0.0.0-20261028085902-cb826e0e9560/go.mod h1:3KIvtlopOJyV5INh1BHA08S5fsZUDTTM3me+9cUUXcs=
+github.com/MohammadBnei/mountain/pkg v0.1.0 h1:ngwO39/uSqlomOCVrRJHUbqNyGDqz0xo4itwmv31S6g=
+github.com/MohammadBnei/mountain/pkg v0.1.0/go.mod h1:3KIvtlopOJyV5INh1BHA08S5fsZUDTTM3me+9cUUXcs=
 github.com/agext/levenshtein v1.2.1 h1:QmvMAjj2aEICytGiWzmxoE0x2KZvE0fvmqMOfy2tjT8=
 github.com/agext/levenshtein v1.2.1/go.mod h1:JEDfjyjHDjOF/1e4FlBE/PkbqA9OfWu2ki2W0IB5558=
 github.com/apparentlymart/go-textseg/v15 v15.0.0 h1:uYvfpb3DyLSCGWnctWKGj857c6ew1u1fNQOlOtuGxQY=
