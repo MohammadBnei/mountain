@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"io"
+	"log/slog"
 	"os"
 	"reflect"
 	"regexp"
@@ -159,8 +163,8 @@ func TestConfigDocumented(t *testing.T) {
 }
 
 // TestConfigTraces: the traces endpoint is read as given (a bad flag does not hide it, as the token is not hidden);
-// serve checks it: unset = no tracing, else an http(s) URL with its traces path, anything else is a refusal to
-// start with these words (a JSON ERROR line and exit 1, as machineFrom's), before anything is bound.
+// serve checks it: unset = no tracing, else an http(s) URL with its traces path. Tracing is optional, so anything else
+// is one WARN line with these words and no tracing (tracesOrOff), never a refusal to start.
 func TestConfigTraces(t *testing.T) {
 	const good = "http://collector.monitoring:4318/v1/traces"
 	cfg, err := loadConfig(nil, envOf(map[string]string{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": good}))
@@ -170,26 +174,73 @@ func TestConfigTraces(t *testing.T) {
 	if cfg, err = loadConfig([]string{"--nope"}, envOf(map[string]string{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "junk"})); err == nil || cfg.Traces != "junk" || strings.Contains(err.Error(), "OTEL") {
 		t.Errorf("a bad flag with a bad endpoint: %q %v", cfg.Traces, err) // the flag's error wins, as the fixtures rule's does
 	}
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	defer slog.SetDefault(prev)
 	for v, ok := range map[string]bool{"": true, good: true, "https://c/v1/traces": true, "http://c:4318/otlp/traces": true,
 		"c:4318/v1/traces": false, "ftp://c/v1/traces": false, "http://c": false, "http://c/": false, "http:///v1/traces": false, "/v1/traces": false, "%zz": false} {
 		err := tracesEndpoint(v)
 		if (err == nil) != ok {
 			t.Errorf("tracesEndpoint(%q) = %v, want ok=%v", v, err, ok)
 		}
-		if err != nil && err.Error() != "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "+strconv.Quote(v)+" is not an http(s) URL with its traces path (…/v1/traces)" {
+		msg := "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT " + strconv.Quote(v) + " is not an http(s) URL with its traces path (…/v1/traces)"
+		if err != nil && err.Error() != msg {
 			t.Errorf("tracesEndpoint(%q): %v", v, err)
 		}
+		logs.Reset()
+		got := tracesOrOff(v)
+		var line struct{ Level, Msg string }
+		switch {
+		case ok && (got != v || logs.Len() != 0):
+			t.Errorf("tracesOrOff(%q) = %q, logged %q", v, got, logs.String())
+		case !ok && (got != "" || json.Unmarshal(logs.Bytes(), &line) != nil || line.Level != "WARN" || line.Msg != msg+"; tracing is off"):
+			t.Errorf("tracesOrOff(%q) = %q, logged %q", v, got, logs.String())
+		}
 	}
-	// serve itself refuses, before it binds or opens anything
-	if err := serve(Config{Traces: "http://c"}); err == nil || !strings.Contains(err.Error(), `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "http://c"`) {
-		t.Errorf("serve with a bad endpoint: %v", err)
+	// A password in a bad endpoint is never echoed.
+	if err := tracesEndpoint("http://u:hunter2@c"); err == nil || strings.Contains(err.Error(), "hunter2") || !strings.Contains(err.Error(), "http://u:xxxxx@c") {
+		t.Errorf("redaction: %v", err)
 	}
-	// and it reports every refusal at once: a partial machine principal and a bad endpoint together are both named
+	// serve no longer refuses a bad endpoint: with a partial machine principal, only the machine is named.
 	both := serve(Config{Machine: machineEnv{Cert: "x"}, Traces: "http://c"})
-	if both == nil || !strings.Contains(both.Error(), "are all set or none") || !strings.Contains(both.Error(), `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "http://c"`) {
-		t.Errorf("serve with both refused: %v", both)
+	if both == nil || !strings.Contains(both.Error(), "are all set or none") || strings.Contains(both.Error(), "OTEL") {
+		t.Errorf("serve with a bad endpoint and a partial machine: %v", both)
 	}
 	if only := serve(Config{Machine: machineEnv{Cert: "x"}}); only == nil || !strings.Contains(only.Error(), "are all set or none") || strings.Contains(only.Error(), "OTEL") {
 		t.Errorf("serve with the machine alone refused: %v", only)
+	}
+}
+
+// TestTracesWiring: run hands telemetry.New the endpoint tracesOrOff returns, never Config.Traces as given, so a bad
+// endpoint can only ever be a warning. Every telemetry.New call in main.go is checked.
+func TestTracesWiring(t *testing.T) {
+	f, err := parser.ParseFile(token.NewFileSet(), "main.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	ast.Inspect(f, func(n ast.Node) bool {
+		c, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := c.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "New" {
+			return true
+		}
+		if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "telemetry" {
+			return true
+		}
+		calls++
+		if arg, ok := c.Args[0].(*ast.CallExpr); !ok {
+			t.Errorf("telemetry.New's endpoint is not tracesOrOff(...)")
+		} else if fn, ok := arg.Fun.(*ast.Ident); !ok || fn.Name != "tracesOrOff" {
+			t.Errorf("telemetry.New's endpoint is not tracesOrOff(...)")
+		}
+		return true
+	})
+	if calls == 0 {
+		t.Error("no telemetry.New call in main.go")
 	}
 }

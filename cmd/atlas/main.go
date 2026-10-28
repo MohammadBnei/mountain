@@ -133,8 +133,8 @@ func run(ctx context.Context, c Config) error {
 	g := &gate{auth: authFrom(c.OIDC, o.Dev)}
 	var merr error
 	g.machine, merr = machineFrom(c.Machine)
-	if err := errors.Join(merr, tracesEndpoint(c.Traces)); err != nil { // every refusal at once (plan/15 §5)
-		return err
+	if merr != nil {
+		return merr
 	}
 	g.devOpen = o.Dev && g.auth == nil && loopback(o.Listen)
 	if g.auth == nil && !g.devOpen {
@@ -146,7 +146,7 @@ func run(ctx context.Context, c Config) error {
 		return err
 	}
 	defer func() { _ = pm.Close() }()
-	tel, err := telemetry.New(c.Traces, "atlas")
+	tel, err := telemetry.New(tracesOrOff(c.Traces), "atlas")
 	if err != nil {
 		return err
 	}
