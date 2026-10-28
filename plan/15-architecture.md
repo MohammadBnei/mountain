@@ -326,6 +326,10 @@ These already follow the standard:
 
    Then the traces' extraction (T1): the game's internal/telemetry moves, unchanged, to `pkg/telemetry`, for atlas's
    use; the game moves onto it next.
+
+   Then the logs' shared half (L1): `pkg/telemetry.NewLogger`, JSON lines with trace ids from a span in the context, which
+   an app installs as slog's default (the log package then comes through it, at INFO); `errs.Write` logs an error
+   outside the model at ERROR through slog. Each app then gives every site its level and moves to stdout.
 6. **The sim:**
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;
