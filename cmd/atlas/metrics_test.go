@@ -39,7 +39,7 @@ func TestMetricsExposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 	code, ct, body := scrape(t, m)
 	if want := helpWS + "mountain_ws_connections 0\n"; body != want {
 		t.Errorf("a fresh exposition:\n got %q\nwant %q", body, want)
@@ -88,7 +88,7 @@ func TestMetricsLabelViews(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 	ctx := context.Background()
 	extra := attribute.String("extra", "y")
 	m.drift.Record(ctx, 7, metric.WithAttributes(attribute.String("kind", "mirror"), extra))

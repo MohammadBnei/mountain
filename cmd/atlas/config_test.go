@@ -140,8 +140,8 @@ func TestConfigDocumented(t *testing.T) {
 	var b bool
 	projectFlags(&d, &s, &b).VisitAll(func(f *flag.Flag) { proj = append(proj, "--"+f.Name) })
 	read := func(k string) string { env = append(env, k); return "" }
-	loadConfig(nil, read)
-	parseProject([]string{"--repos", "r"}, read, io.Discard)
+	_, _ = loadConfig(nil, read)
+	_, _, _, _ = parseProject([]string{"--repos", "r"}, read, io.Discard)
 	for what, c := range map[string]struct {
 		text  string
 		names []string

@@ -73,7 +73,7 @@ func (h *Hub) Broadcast(b []byte) {
 	defer h.mu.Unlock()
 	for c := range h.clients {
 		if !c.Send(b) {
-			c.conn.CloseNow() // never block the hub lock on a close handshake
+			_ = c.conn.CloseNow() // never block the hub lock on a close handshake
 		}
 	}
 }
@@ -146,7 +146,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		delete(h.clients, c)
 		h.mu.Unlock()
 		h.met.WSConns(-1)
-		conn.CloseNow()
+		_ = conn.CloseNow()
 	}()
 
 	// a machine socket ends with its token: a deactivated account loses the feed within the token's 10 minutes
@@ -167,7 +167,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-ctx.Done():
-			conn.Close(websocket.StatusPolicyViolation, "session ended")
+			_ = conn.Close(websocket.StatusPolicyViolation, "session ended")
 			return
 		case b := <-c.send:
 			wctx, wc := context.WithTimeout(ctx, writeTimout)
@@ -178,7 +178,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-tick.C:
 			if live != nil && !live() { // signed out: the socket ends at the next ping, not at the cookie's expiry
-				conn.Close(closeSignedOut, "signed out")
+				_ = conn.Close(closeSignedOut, "signed out")
 				return
 			}
 			pctx, pc := context.WithTimeout(ctx, writeTimout)

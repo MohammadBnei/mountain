@@ -77,7 +77,7 @@ func ruleBlock(b []byte, start, end int) ruleMeta {
 			var sec float64
 			for _, p := range promDur.FindAllStringSubmatch(x[1], -1) {
 				var n float64
-				fmt.Sscan(p[1], &n)
+				_, _ = fmt.Sscan(p[1], &n)
 				sec += n * durFactor[p[2]]
 			}
 			m.forSec = int(sec)
@@ -292,7 +292,7 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 	}
 	edges = merged
 	drift = append(drift, walls(x, rl, files, forwardAuthNames(files), g)...)
-	g.Merge(graph.Graph{Edges: edges, Drift: drift}) // both ends checked above: cannot fail
+	_ = g.Merge(graph.Graph{Edges: edges, Drift: drift}) // both ends checked above: cannot fail
 	modelFacts(rl, g)
 }
 
@@ -407,7 +407,7 @@ func skipDir(rl *realms.Realms, repo, dir string) bool {
 func yamlFiles(x *Ctx, rl *realms.Realms, has map[string]bool, deploys map[string]map[string]string) []sourceFile {
 	var out []sourceFile
 	for _, repo := range rl.Sources {
-		x.Walk(repo, func(dir string) bool { return skipDir(rl, repo, dir) }, func(p string, size int64) error {
+		_ = x.Walk(repo, func(dir string) bool { return skipDir(rl, repo, dir) }, func(p string, size int64) error {
 			if ext := path.Ext(p); (ext != ".yaml" && ext != ".yml") || size > 1<<20 {
 				return nil
 			}

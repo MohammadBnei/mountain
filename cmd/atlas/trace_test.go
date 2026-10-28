@@ -112,10 +112,10 @@ func TestRouteSpansSocket(t *testing.T) {
 	if f := readT(t, conn); f["t"] != "hello" {
 		t.Errorf("hello: %v", f)
 	}
-	conn.Close(websocket.StatusNormalClosure, "")
+	_ = conn.Close(websocket.StatusNormalClosure, "")
 	var names []string
 	for i := 0; i < 100; i++ { // the handler returns a moment after the close
-		tel.Flush()
+		_ = tel.Flush()
 		names = names[:0]
 		for _, s := range exp.GetSpans() {
 			names = append(names, s.Name)

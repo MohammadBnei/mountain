@@ -1,0 +1,32 @@
+# mountain's commits and PRs carry no AI trailer, session link or co-author (CLAUDE.md of the estate; the other
+# repos allow a ukubi-claude-<host> co-author, this one does not). Scans every commit message in the PR's range
+# and its title and body: .github/scripts/check-trailers.py, self-tested by check-trailers-test.sh.
+name: trailers
+
+on:
+  pull_request:
+    branches: [main]
+    # edited: a title or body change must be re-checked; synchronize: a new commit.
+    types: [opened, reopened, synchronize, edited]
+
+jobs:
+  trailers:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # The whole history: the range is base..head, and the base branch bounds it.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Self-test of the check
+        run: .github/scripts/check-trailers-test.sh
+      # The PR's own text reaches the script through env, never interpolated into the shell: it is untrusted.
+      - name: No AI trailers, session links or model names
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 .github/scripts/check-trailers.py "$BASE_SHA" "$HEAD_SHA"

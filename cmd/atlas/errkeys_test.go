@@ -189,10 +189,10 @@ func TestErrBodies(t *testing.T) {
 	a.gate.devOpen = true
 	base := t.TempDir()
 	dir := filepath.Join(base, "infra-bootstrap")
-	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, "bin.dat"), []byte("x\x00y"), 0o644)
-	os.WriteFile(filepath.Join(dir, "big.md"), []byte(strings.Repeat("a", maxReadBytes+1)), 0o644)
-	os.WriteFile(filepath.Join(dir, "ok.md"), []byte(strings.Repeat("a", maxReadBytes)), 0o644)
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin.dat"), []byte("x\x00y"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "big.md"), []byte(strings.Repeat("a", maxReadBytes+1)), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "ok.md"), []byte(strings.Repeat("a", maxReadBytes)), 0o644)
 	a.Files.update(extract.Repos{"infra-bootstrap": {Dir: dir, SHA: "s1"}})
 	check := func(target string, status int, code errs.Code, key errs.Key, msg string) {
 		t.Helper()

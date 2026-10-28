@@ -17,7 +17,7 @@ func TestWatchNeeds(t *testing.T) {
 	dir := t.TempDir()
 	write := func(repo, path, body string) {
 		p := filepath.Join(dir, repo, path)
-		os.MkdirAll(filepath.Dir(p), 0o755)
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
 		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -128,11 +128,11 @@ needs:
 func TestChartPin(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "infra-bootstrap", "gitops/bootstrap/platform.applicationset.yaml")
-	os.MkdirAll(filepath.Dir(p), 0o755)
-	os.WriteFile(p, []byte("spec:\n  generators:\n    - list:\n        elements:\n          - name: other\n            chartName: x\n            chartRevision: \"9\"\n          - name: prometheus\n            chartName: kube-prometheus-stack\n            chartRevision: \"1.2.3\"\n"), 0o644)
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte("spec:\n  generators:\n    - list:\n        elements:\n          - name: other\n            chartName: x\n            chartRevision: \"9\"\n          - name: prometheus\n            chartName: kube-prometheus-stack\n            chartRevision: \"1.2.3\"\n"), 0o644)
 	v := filepath.Join(dir, "infra-bootstrap", promValues)
-	os.MkdirAll(filepath.Dir(v), 0o755)
-	os.WriteFile(v, []byte("defaultRules:\n  create: true\n  keepFiringFor: 5m\ncustomRules: {}\n"), 0o644)
+	_ = os.MkdirAll(filepath.Dir(v), 0o755)
+	_ = os.WriteFile(v, []byte("defaultRules:\n  create: true\n  keepFiringFor: 5m\ncustomRules: {}\n"), 0o644)
 	x := &Ctx{Repos: Repos{"infra-bootstrap": {Dir: filepath.Join(dir, "infra-bootstrap")}}}
 	if pin, _ := chartPin(x, "kube-prometheus-stack"); pin != "1.2.3" {
 		t.Errorf("pin = %q", pin)

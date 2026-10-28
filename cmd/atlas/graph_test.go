@@ -35,7 +35,7 @@ func testDSN(t *testing.T) string {
 	if _, err := c.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { c.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE"); c.Close(ctx) })
+	t.Cleanup(func() { _, _ = c.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE"); _ = c.Close(ctx) })
 	sep := "?"
 	if strings.Contains(dsn, "?") {
 		sep = "&"
@@ -200,7 +200,7 @@ func TestGraphsMemory(t *testing.T) {
 	if _, _, err := a.Graph.put(ctx, res2, extract.Repos{}, map[string]bool{"agent-fleet": true}); err != nil { // dropped from the sources
 		t.Errorf("a repo no longer a source was refused as lost: %v", err)
 	}
-	a.Graph.put(ctx, res2, repos, nil)
+	_, _, _ = a.Graph.put(ctx, res2, repos, nil)
 	var v atlasView
 	r := a.serveReq("GET", "/api/graph", nil)
 	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&v) != nil || v.Seq != a.Graph.Latest().Seq || len(v.Nodes) != 1 || r.Header.Get("Cache-Control") != "private, no-store" {

@@ -92,7 +92,7 @@ func TestClassify(t *testing.T) {
 func TestLiveWire(t *testing.T) {
 	b, _ := json.Marshal(Live{T: "live", AlertsAt: 1, Health: map[string]Health{"app:a": {OK, "x"}}, Day: &Day{}, Addons: map[string]float64{"a": 1}})
 	var m map[string]json.RawMessage
-	json.Unmarshal(b, &m)
+	_ = json.Unmarshal(b, &m)
 	var keys []string
 	for k := range m {
 		keys = append(keys, k)

@@ -81,11 +81,19 @@ jobs:
           echo "$s  $f" | sha256sum -c -
           tar -xzf "$f" -C "$RUNNER_TEMP" --strip-components=1 "prometheus-3.5.0.linux-$a/promtool"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-      - name: go vet + go test
-        run: |
-          set -euo pipefail
-          go vet ./...
-          go test ./...
+      - name: go vet
+        run: go vet ./...
+      # The root module only: pkg/ is its own module and lints in pkg.yml. No .golangci config, as in agent-fleet:
+      # the defaults (errcheck, govet, ineffassign, staticcheck, unused). Pinned, not latest, and built with a Go
+      # at least as new as go.mod's (v2.14.0 is built with go1.27.1, what agent-fleet's go.yml pins too).
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
+      # -race: the hub, the live state and the projector are concurrent. Under it TestRenderBounds' wall-clock
+      # bound is scaled (cmd/atlas/race_on_test.go).
+      - name: go test -race
+        run: go test -race ./...
       # GitHub's Ubuntu image ships Chrome, so the gate selftest runs here; without a Chrome (another
       # runner) it stays a local pre-merge step (04).
       - name: www core test + gate selftest (if Chrome)
@@ -126,7 +134,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/MohammadBnei/mountain".insteadOf "https://github.com/MohammadBnei/mountain"
       - name: DB tests
-        run: go test -run '^TestDB' -v ./cmd/atlas/
+        run: go test -race -run '^TestDB' -v ./cmd/atlas/
 
   build-push:
     needs: [test, db-test]

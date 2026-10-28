@@ -72,12 +72,12 @@ func TestRules(t *testing.T) {
 	var spec struct {
 		Spec yaml.Node `yaml:"spec"`
 	}
-	yaml.Unmarshal([]byte(src), &spec)
+	_ = yaml.Unmarshal([]byte(src), &spec)
 	out, _ := yaml.Marshal(&spec.Spec)
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "rules.yaml"), out, 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "rules.yaml"), out, 0o644)
 	tb, _ := os.ReadFile("helm/rules.test.yaml")
-	os.WriteFile(filepath.Join(dir, "rules.test.yaml"), tb, 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "rules.test.yaml"), tb, 0o644)
 	cmd := exec.Command("promtool", "test", "rules", "rules.test.yaml")
 	cmd.Dir = dir
 	if o, err := cmd.CombinedOutput(); err != nil {

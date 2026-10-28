@@ -175,7 +175,7 @@ func (l *Live) loadFixture(file string) error {
 	if err := json.Unmarshal(b, &f); err != nil {
 		return fmt.Errorf("%s: %w", file, err)
 	}
-	f.LiveState.T = "live"
+	f.T = "live"
 	l.mu.Lock()
 	l.st, l.events = f.LiveState, append([]Event{}, f.Events...)
 	l.classify(time.Now().UnixMilli()) // the fixture's own health is the page tests' copy; the server's is computed
@@ -252,7 +252,7 @@ func (c promHTTP) Query(ctx context.Context, q string) ([]sample, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var r struct {
 		Status string
 		Data   struct {
@@ -749,7 +749,7 @@ func (c amHTTP) Alerts(ctx context.Context) ([]amAlert, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var r []amAlert
 	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil || resp.StatusCode != http.StatusOK || r == nil {
 		return nil, fmt.Errorf("alertmanager: status %d, %v", resp.StatusCode, err)

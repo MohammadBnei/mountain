@@ -240,7 +240,7 @@ func (r *repoSet) exists(repo, p string) bool {
 	if err != nil {
 		return false
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	fi, err := root.Lstat(filepath.FromSlash(p))
 	return err == nil && fi.Mode().IsRegular()
 }
@@ -256,7 +256,7 @@ func readFile(dir, p string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	fi, err := root.Lstat(filepath.FromSlash(p))
 	if err != nil {
 		return nil, err
@@ -359,7 +359,7 @@ type mdWalker struct {
 func (w *mdWalker) blocks(parent ast.Node) []Block {
 	out := []Block{}
 	if w.depth >= maxDepth {
-		if t := strings.TrimSpace(string(parent.Text(w.src))); t != "" {
+		if t := strings.TrimSpace(string(parent.Text(w.src))); t != "" { //nolint:staticcheck // Node.Text: no drop-in non-deprecated text of a whole subtree; swapping it risks changing the depth-capped render (behaviour)
 			out = append(out, Block{T: "p", In: []Inline{{T: "text", Text: w.redact(t)}}})
 		}
 		return out
@@ -434,7 +434,7 @@ func bareValue(s string) bool {
 func (w *mdWalker) inlines(parent ast.Node) []Inline {
 	out := []Inline{}
 	if w.depth >= maxDepth {
-		if t := string(parent.Text(w.src)); t != "" {
+		if t := string(parent.Text(w.src)); t != "" { //nolint:staticcheck // as in blocks: Node.Text has no drop-in replacement (behaviour)
 			out = append(out, Inline{T: "text", Text: w.redact(t)})
 		}
 		return out
@@ -648,7 +648,7 @@ func (a *App) serveRead(w http.ResponseWriter, r *http.Request) {
 		a.reads.put(key, out)
 	}
 	h.Set("Content-Type", "application/json")
-	w.Write(out)
+	_, _ = w.Write(out)
 }
 
 // readCache holds rendered documents by repo, sha and path (a file at a sha never changes): the last 64, by insertion.
