@@ -51,7 +51,7 @@ func TestRouteSpans(t *testing.T) {
 		code                 int
 		open                 bool // the gate admits everyone (devOpen)
 	}{
-		{"GET", "/healthz", "GET /healthz", 200, false},
+		{"GET", "/healthz", "", 200, false},                 // untraced: the probes (route.untraced)
 		{"GET", "/api/graph", "GET /api/graph", 403, false}, // the gate refuses (no one is signed in), inside the span
 		{"GET", "/no/such/thing", "GET /", 404, true},       // every static asset and 404 shares the span name "GET /"
 		{"POST", "/api/graph", "", 405, true},               // the mux's own 405: no route took it

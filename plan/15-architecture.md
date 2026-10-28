@@ -355,8 +355,9 @@ These already follow the standard:
    nothing has written yet no longer prints its HELP and TYPE lines (it had no sample either way); families print in
    name order; the Content-Type gains `charset` and `escaping` and a scraper that asks for protobuf gets it (the
    platform Prometheus asks for text only). Traces are `pkg/telemetry` on `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, one
-   server span per route outside the gate (`/healthz` and `/ws` included: a probe makes a span, and a socket's span
-   lasts as long as the socket and is dropped at shutdown), nothing at all when it is unset; a malformed value refuses
+   server span per route outside the gate (`/ws` included: a socket's span lasts as long as the socket and is dropped
+   at shutdown), except `/healthz`, which the kubelet's probes hit every few seconds (owner, 2026-10-28), and nothing
+   at all when it is unset; a malformed value refuses
    to start (JSON ERROR line, exit 1), together with a partial machine principal's refusal when both are wrong. The
    writers take the `Metrics` in their constructors, and `TestMetricsWritersReach` and `TestServeMetrics` drive each
    writer's real path and serve's own wiring (a writer left without it records nothing, silently). Not in this step:

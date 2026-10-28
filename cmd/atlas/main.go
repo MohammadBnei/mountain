@@ -218,23 +218,24 @@ func loopback(addr string) bool {
 // route is one entry of the public mux. open routes answer anyone; every other route answers a platform admin only
 // (plan/10 Security: deny by default). A test calls each route as each kind of caller.
 type route struct {
-	pattern string
-	open    bool
-	h       http.Handler
+	pattern  string
+	open     bool
+	untraced bool // no span: the kubelet's probes, every few seconds per pod, would be a stream of empty spans (owner, 2026-10-28)
+	h        http.Handler
 }
 
 func routeTable(a *App, www fs.FS) []route {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	return []route{
-		{"GET /healthz", true, ok},
-		{"GET /auth/login", true, a.gate.onAuth((*Auth).login)},
-		{"GET /auth/callback", true, a.gate.onAuth((*Auth).callback)},
-		{"POST /auth/logout", true, a.gate.onAuth((*Auth).logout)},
-		{"GET /auth/me", true, http.HandlerFunc(a.gate.me)},
-		{"GET /ws", false, a.Hub},
-		{"GET /api/graph", false, http.HandlerFunc(a.serveGraph)},
-		{"GET /api/read", false, http.HandlerFunc(a.serveRead)},
-		{"GET /", false, static(www, a.Opts.Dev)},
+		{"GET /healthz", true, true, ok},
+		{"GET /auth/login", true, false, a.gate.onAuth((*Auth).login)},
+		{"GET /auth/callback", true, false, a.gate.onAuth((*Auth).callback)},
+		{"POST /auth/logout", true, false, a.gate.onAuth((*Auth).logout)},
+		{"GET /auth/me", true, false, http.HandlerFunc(a.gate.me)},
+		{"GET /ws", false, false, a.Hub},
+		{"GET /api/graph", false, false, http.HandlerFunc(a.serveGraph)},
+		{"GET /api/read", false, false, http.HandlerFunc(a.serveRead)},
+		{"GET /", false, false, static(www, a.Opts.Dev)},
 	}
 }
 
@@ -245,7 +246,9 @@ func routes(a *App, www fs.FS) http.Handler {
 		if !r.open {
 			h = a.gate.bearerFirst(r.pattern, h, a.gate.adminOnly(h)) // a bearer is judged alone: the machine principal (machine.go)
 		}
-		h = a.Tracing.Handler(r.pattern, h) // outside the gate, so a refusal has its span; without tracing, h itself
+		if !r.untraced {
+			h = a.Tracing.Handler(r.pattern, h) // outside the gate, so a refusal has its span; without tracing, h itself
+		}
 		mux.Handle(r.pattern, h)
 	}
 	return mux
