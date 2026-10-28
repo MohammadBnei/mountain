@@ -53,17 +53,17 @@ jobs:
     permissions:
       contents: read
     env:
-      GOPRIVATE: github.com/MohammadBnei/*
+      GOPRIVATE: github.com/MohammadBnei/mountain
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      # mountain's own nested module (pkg/) is private: the job's token reads this repo, nothing else.
+      # mountain's own nested module (pkg/) is private: the job's token, sent for this repo's URLs only, reads it.
       - name: Private modules
         env:
           GH_TOKEN: ${{ github.token }}
-        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/MohammadBnei/".insteadOf "https://github.com/MohammadBnei/"
+        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/MohammadBnei/mountain".insteadOf "https://github.com/MohammadBnei/mountain"
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -115,7 +115,7 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       MOUNTAIN_TEST_DSN: postgres://postgres:mountain@localhost:5432/postgres?sslmode=disable
-      GOPRIVATE: github.com/MohammadBnei/*
+      GOPRIVATE: github.com/MohammadBnei/mountain
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -124,29 +124,9 @@ jobs:
       - name: Private modules
         env:
           GH_TOKEN: ${{ github.token }}
-        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/MohammadBnei/".insteadOf "https://github.com/MohammadBnei/"
+        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/MohammadBnei/mountain".insteadOf "https://github.com/MohammadBnei/mountain"
       - name: DB tests
         run: go test -run '^TestDB' -v ./cmd/atlas/
-
-  # The nested module shared with ukubi-game (15-architecture.md "extracted on second use"): outside the root's
-  # ./..., so its own job. Not a push path: a pkg-only change changes no image (atlas requires pkg by version).
-  pkg:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: pkg
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: pkg/go.mod
-      - name: go vet + go test (pkg)
-        run: |
-          set -euo pipefail
-          go vet ./...
-          go test ./...
 
   build-push:
     needs: [test, db-test]

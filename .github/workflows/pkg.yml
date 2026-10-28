@@ -1,0 +1,32 @@
+# The nested module shared with ukubi-game (plan/15 "extracted on second use"): outside the root's ./..., so its own
+# workflow. It runs on main too: two pkg PRs merged one after the other are tested together. No image depends on
+# the working tree (atlas requires pkg by version), so this never builds or deploys.
+name: pkg
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['pkg/**', '.github/workflows/pkg.yml']
+  push:
+    branches: [main]
+    paths: ['pkg/**', '.github/workflows/pkg.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: pkg
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: pkg/go.mod
+          cache: false # no dependencies; a shared key would leave the app jobs a near-empty cache
+      - name: go vet + go test (pkg)
+        run: |
+          set -euo pipefail
+          go vet ./...
+          go test ./...
