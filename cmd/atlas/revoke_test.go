@@ -153,8 +153,8 @@ func TestSocketSignedOut(t *testing.T) {
 		return conn
 	}
 	c1, c2 := dial(one), dial(two)
-	defer c1.CloseNow()
-	defer c2.CloseNow()
+	defer func() { _ = c1.CloseNow() }()
+	defer func() { _ = c2.CloseNow() }()
 	if code := logout(a, one, origin); code != http.StatusSeeOther {
 		t.Fatalf("logout: %d", code)
 	}

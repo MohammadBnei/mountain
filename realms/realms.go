@@ -311,7 +311,7 @@ func checkAddons(r *Realms) error {
 		}
 		for _, w := range wl {
 			kind, name, _ := strings.Cut(w, "/")
-			if !(w == "static" || (kind == "daemonset" || kind == "deployment") && name != "") {
+			if w != "static" && (kind != "daemonset" && kind != "deployment" || name == "") {
 				return fmt.Errorf("realms.yaml: addons %s: %q is not daemonset/<name>, deployment/<name> or static", id, w)
 			}
 		}
