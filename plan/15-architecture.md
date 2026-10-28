@@ -257,6 +257,12 @@ These already follow the standard:
    (hand-written bodies, not recordings), and a map fake. §1's other two legs are missing: the recorded leg waits for
    a reachable cluster, as the game's `AlertSource` does, and the sim's mirror lives in ukubi-game, which imports
    this module, so its leg is ukubi-game's integration test (the real atlas against the mirror), not the same cases.
+
+   Then atlas's graph store sat behind two seams, `projections` (Graphs.put) and `history` (serveGraph's older
+   projections), served by a Postgres store and a memory one. Those are both atlas's own (the real Postgres in the
+   db-test job, and memory, a production mode), so §1's legs don't apply: they run shared cases (new, same, changed,
+   lost, dropped, another writer) and differ by design where the tests say (memory keeps no history, tells a change
+   by content, and keeps the latest's seq on a lost repo, where Postgres answers 0).
 6. **The sim:**
    - ladders as a registry;
    - a failure `series` type shared by app health, probes and node readiness;
