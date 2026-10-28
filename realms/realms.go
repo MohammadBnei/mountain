@@ -147,121 +147,222 @@ func Parse(b []byte) (*Realms, error) {
 	}
 	sum := sha256.Sum256(b)
 	r.Digest = int(binary.BigEndian.Uint32(sum[:4]))
-	if !slices.Contains(r.Realms, Code) {
-		return nil, fmt.Errorf("realms.yaml: realms must include %q (atlas places the repos there)", Code)
+	for _, c := range checks() {
+		if err := c.run(&r); err != nil {
+			return nil, err
+		}
 	}
+	return &r, nil
+}
+
+// check is one of Parse's validations. They run in order and the first error is Parse's, so the order is part of
+// what Parse says: a later check may read what an earlier one validated (components reads functions). They carry no
+// version: Parse's result is not stored, only the file's digest is (a projection records it).
+type check struct {
+	name string
+	run  func(r *Realms) error
+}
+
+// checks is Parse's validations, in order.
+func checks() []check {
+	return []check{
+		{"code", checkCode},
+		{"functions", checkFunctions},
+		{"components", checkComponents},
+		{"watch", checkWatch},
+		{"needs", checkNeeds},
+		{"shapes", checkShapes},
+		{"walls", checkWalls},
+		{"addons", checkAddons},
+		{"k8sPlacement", checkK8sPlacement},
+		{"sources", checkSources},
+		{"probes", checkProbes},
+		{"namespaces", checkNamespaces},
+		{"pveNodeName", checkPveNodeName},
+	}
+}
+
+// checkCode: the realms include code, which atlas fills with the repos.
+func checkCode(r *Realms) error {
+	if !slices.Contains(r.Realms, Code) {
+		return fmt.Errorf("realms.yaml: realms must include %q (atlas places the repos there)", Code)
+	}
+	return nil
+}
+
+// checkFunctions: each functions key is <realm>/<group> of a listed realm other than code, and each value a function
+// (not the repos' workshop).
+func checkFunctions(r *Realms) error {
 	for key, fn := range r.Functions {
 		realm, group, _ := strings.Cut(key, "/")
 		if !slices.Contains(r.Realms, realm) || group == "" || realm == Code {
-			return nil, fmt.Errorf("realms.yaml: functions key %q is not <realm>/<group> of a listed realm (code's are atlas's)", key)
+			return fmt.Errorf("realms.yaml: functions key %q is not <realm>/<group> of a listed realm (code's are atlas's)", key)
 		}
 		if !slices.Contains(functions, fn) || fn == FnWorkshop {
-			return nil, fmt.Errorf("realms.yaml: functions %s is %q, not one of %v (workshop is the repos', set by atlas)", key, fn, functions)
+			return fmt.Errorf("realms.yaml: functions %s is %q, not one of %v (workshop is the repos', set by atlas)", key, fn, functions)
 		}
 	}
+	return nil
+}
+
+// checkComponents: each component is of a placeable kind, in a listed realm other than code, in a group, with a
+// function of its own or its group's (read from the functions the check before validated), and its paths are
+// <repo>/<prefix>.
+func checkComponents(r *Realms) error {
 	for id, c := range r.Components {
 		if kind, _, _ := strings.Cut(id, ":"); !slices.Contains(ComponentKinds, kind) {
-			return nil, fmt.Errorf("realms.yaml: %s is not a component (%v); atlas places repos itself", id, ComponentKinds)
+			return fmt.Errorf("realms.yaml: %s is not a component (%v); atlas places repos itself", id, ComponentKinds)
 		}
 		if c.Realm == Code {
-			return nil, fmt.Errorf("realms.yaml: %s is in realm %q, which only atlas fills (the repos)", id, Code)
+			return fmt.Errorf("realms.yaml: %s is in realm %q, which only atlas fills (the repos)", id, Code)
 		}
 		if !slices.Contains(r.Realms, c.Realm) {
-			return nil, fmt.Errorf("realms.yaml: %s has realm %q, not one of %v", id, c.Realm, r.Realms)
+			return fmt.Errorf("realms.yaml: %s has realm %q, not one of %v", id, c.Realm, r.Realms)
 		}
 		if c.Group == "" {
-			return nil, fmt.Errorf("realms.yaml: %s has no group", id)
+			return fmt.Errorf("realms.yaml: %s has no group", id)
 		}
 		if c.Function != "" && (!slices.Contains(functions, c.Function) || c.Function == FnWorkshop) {
-			return nil, fmt.Errorf("realms.yaml: %s has function %q, not one of %v", id, c.Function, functions)
+			return fmt.Errorf("realms.yaml: %s has function %q, not one of %v", id, c.Function, functions)
 		}
 		if c.Function == "" && r.Functions[c.Realm+"/"+c.Group] == "" {
-			return nil, fmt.Errorf("realms.yaml: %s: group %s/%s has no function (functions:), and it sets none", id, c.Realm, c.Group)
+			return fmt.Errorf("realms.yaml: %s: group %s/%s has no function (functions:), and it sets none", id, c.Realm, c.Group)
 		}
 		for _, p := range c.Paths {
 			if !strings.Contains(p, "/") {
-				return nil, fmt.Errorf("realms.yaml: %s path %q is not <repo>/<prefix>", id, p)
+				return fmt.Errorf("realms.yaml: %s path %q is not <repo>/<prefix>", id, p)
 			}
 		}
 	}
+	return nil
+}
+
+// checkWatch: each watch row is a listed component's, and names a rule.
+func checkWatch(r *Realms) error {
 	for id, w := range r.Watch {
 		if _, ok := r.Components[id]; !ok {
-			return nil, fmt.Errorf("realms.yaml: watch %s is not a listed component", id)
+			return fmt.Errorf("realms.yaml: watch %s is not a listed component", id)
 		}
 		if len(w.Prometheus)+len(w.Grafana) == 0 {
-			return nil, fmt.Errorf("realms.yaml: watch %s names no rule", id)
+			return fmt.Errorf("realms.yaml: watch %s names no rule", id)
 		}
 	}
+	return nil
+}
+
+// checkNeeds: each needs row is a listed component's, and each entry parses (ParseNeed) and names another listed
+// component.
+func checkNeeds(r *Realms) error {
 	for id, list := range r.Needs {
 		if _, ok := r.Components[id]; !ok {
-			return nil, fmt.Errorf("realms.yaml: needs %s is not a listed component", id)
+			return fmt.Errorf("realms.yaml: needs %s is not a listed component", id)
 		}
 		for _, s := range list {
 			n, err := ParseNeed(s)
 			if err != nil {
-				return nil, fmt.Errorf("realms.yaml: needs %s: %w", id, err)
+				return fmt.Errorf("realms.yaml: needs %s: %w", id, err)
 			}
 			if _, ok := r.Components[n.On]; !ok || n.On == id {
-				return nil, fmt.Errorf("realms.yaml: needs %s: %s is not another listed component", id, n.On)
+				return fmt.Errorf("realms.yaml: needs %s: %s is not another listed component", id, n.On)
 			}
 		}
 	}
+	return nil
+}
+
+// checkShapes: each shapes key is a group with a function, and each shape a lower-case word.
+func checkShapes(r *Realms) error {
 	for g, list := range r.Shapes {
 		if _, ok := r.Functions[g]; !ok {
-			return nil, fmt.Errorf("realms.yaml: shapes %s is not a <realm>/<group> with a function", g)
+			return fmt.Errorf("realms.yaml: shapes %s is not a <realm>/<group> with a function", g)
 		}
 		for _, s := range list {
 			if s == "" || strings.Trim(s, "abcdefghijklmnopqrstuvwxyz") != "" {
-				return nil, fmt.Errorf("realms.yaml: shapes %s: %q is not a shape word", g, s)
+				return fmt.Errorf("realms.yaml: shapes %s: %q is not a shape word", g, s)
 			}
 		}
 	}
+	return nil
+}
+
+// checkWalls: each walls row is a door's, with known kinds, never public and own both.
+func checkWalls(r *Realms) error {
 	for id, list := range r.Walls {
 		if !strings.HasPrefix(id, "dns:") {
-			return nil, fmt.Errorf("realms.yaml: walls %s is not a door (dns:<host>)", id)
+			return fmt.Errorf("realms.yaml: walls %s is not a door (dns:<host>)", id)
 		}
 		for _, k := range list {
 			if !slices.Contains(WallKinds, k) {
-				return nil, fmt.Errorf("realms.yaml: walls %s: %q is not one of %v", id, k, WallKinds)
+				return fmt.Errorf("realms.yaml: walls %s: %q is not one of %v", id, k, WallKinds)
 			}
 		}
 		if slices.Contains(list, "public") && slices.Contains(list, "own") {
-			return nil, fmt.Errorf("realms.yaml: walls %s: public and own both", id)
+			return fmt.Errorf("realms.yaml: walls %s: public and own both", id)
 		}
 	}
+	return nil
+}
+
+// checkAddons: each addons row is an addon node's, and each workload daemonset/<name>, deployment/<name> or static.
+func checkAddons(r *Realms) error {
 	for id, wl := range r.Addons {
 		if kind, _, _ := strings.Cut(id, ":"); kind != "addon" {
-			return nil, fmt.Errorf("realms.yaml: addons %s is not an addon node", id)
+			return fmt.Errorf("realms.yaml: addons %s is not an addon node", id)
 		}
 		for _, w := range wl {
 			kind, name, _ := strings.Cut(w, "/")
 			if !(w == "static" || (kind == "daemonset" || kind == "deployment") && name != "") {
-				return nil, fmt.Errorf("realms.yaml: addons %s: %q is not daemonset/<name>, deployment/<name> or static", id, w)
+				return fmt.Errorf("realms.yaml: addons %s: %q is not daemonset/<name>, deployment/<name> or static", id, w)
 			}
 		}
 	}
+	return nil
+}
+
+// checkK8sPlacement: each k8s node is on a listed host.
+func checkK8sPlacement(r *Realms) error {
 	for vm, h := range r.K8sPlacement {
 		if _, ok := r.Hosts[h]; !ok {
-			return nil, fmt.Errorf("realms.yaml: k8s node %s is on %q, not a listed host", vm, h)
+			return fmt.Errorf("realms.yaml: k8s node %s is on %q, not a listed host", vm, h)
 		}
 	}
+	return nil
+}
+
+// checkSources: the sources start with infra-bootstrap.
+func checkSources(r *Realms) error {
 	if len(r.Sources) == 0 || r.Sources[0] != "infra-bootstrap" {
-		return nil, fmt.Errorf("realms.yaml: sources must start with infra-bootstrap (its registry names the branches)")
+		return fmt.Errorf("realms.yaml: sources must start with infra-bootstrap (its registry names the branches)")
 	}
+	return nil
+}
+
+// checkProbes: each probe names a listed component.
+func checkProbes(r *Realms) error {
 	for target, id := range r.Probes {
 		if _, ok := r.Components[id]; !ok {
-			return nil, fmt.Errorf("realms.yaml: probe %s -> %s is not a listed component", target, id)
+			return fmt.Errorf("realms.yaml: probe %s -> %s is not a listed component", target, id)
 		}
 	}
+	return nil
+}
+
+// checkNamespaces: each namespace's realm is listed and not code.
+func checkNamespaces(r *Realms) error {
 	for ns, realm := range r.Namespaces {
 		if !slices.Contains(r.Realms, realm) || realm == Code {
-			return nil, fmt.Errorf("realms.yaml: namespace %s has realm %q, not one of %v", ns, realm, r.Realms)
+			return fmt.Errorf("realms.yaml: namespace %s has realm %q, not one of %v", ns, realm, r.Realms)
 		}
 	}
+	return nil
+}
+
+// checkPveNodeName: pveNodeName is a listed host.
+func checkPveNodeName(r *Realms) error {
 	if _, ok := r.Hosts[r.PVENodeName]; !ok {
-		return nil, fmt.Errorf("realms.yaml: pveNodeName %q is not a listed host", r.PVENodeName)
+		return fmt.Errorf("realms.yaml: pveNodeName %q is not a listed host", r.PVENodeName)
 	}
-	return &r, nil
+	return nil
 }
 
 // Owner is the component a repo-relative file belongs to by the longest matching path prefix, or "" (its repo).

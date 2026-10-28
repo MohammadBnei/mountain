@@ -239,6 +239,11 @@ These already follow the standard:
    - `realms` checks as a list;
    - access as a `Gate`.
 
+   The evidence finders and the realms checks are done (mountain #58: the finders a registry keyed by
+   `realms.Suppliers`' kinds but postgres, since their order is not observable, each kind keeping its own evidence;
+   `realms.Parse`'s checks an ordered list, since the first error wins; no version, since only the file's digest is
+   stored).
+
    These refactors don't wait for the extraction: they change no exported API (`contract.Classify`'s signature and
    results are unchanged, and ukubi-game's suite and integration test pass against it), and the seams give the later
    error model one place to go (an unavailable source is one client's error). **Started** (2026-10-27):
