@@ -58,6 +58,7 @@ async function start() {
   srv = spawn(bin, ['--dev', `--listen=127.0.0.1:${port}`, '--metrics=127.0.0.1:0', `--graph-fixture=${graphFile}`, `--live-fixture=${join(ROOT, 'dev/fixtures/live.json')}`, `--repos=${join(ROOT, 'dev/fixtures/repos')}`],
     { cwd: repo, env: { ...process.env, MOUNTAIN_OIDC_ISSUER: '', MOUNTAIN_GITHUB_TOKEN: '', DATABASE_URL: '' } });
   srv.stderr.on('data', (d) => { log += d; });
+  srv.stdout.on('data', (d) => { log += d; }); // atlas's JSON log lines
   for (let i = 0; i < 50; i++) { try { if ((await fetch(`${origin}/healthz`)).ok) return; } catch {} await sleep(100); }
   fail('atlas did not answer /healthz');
 }

@@ -24,7 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"maps"
 	"math"
 	"net/http"
@@ -200,13 +200,13 @@ func (l *Live) start(ctx context.Context, prom promAPI, alerts alertsAPI, idx fu
 				switch {
 				case err != nil:
 					if err.Error() != lastErr {
-						log.Printf("%s: %v", name, err)
+						slog.Warn(fmt.Sprintf("%s: %v", name, err))
 						lastErr = err.Error()
 					}
 					l.stale(name, true)
 				default:
 					if lastErr != "" {
-						log.Printf("%s: recovered", name)
+						slog.Info(fmt.Sprintf("%s: recovered", name))
 						lastErr = ""
 					}
 					SourceLastSuccess.Set(name, float64(time.Now().Unix()))

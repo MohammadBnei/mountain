@@ -12,7 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -62,7 +62,7 @@ func round(ctx context.Context, src heads, rl *realms.Realms, c *roundCache, unr
 		return extract.Result{}, nil, fmt.Errorf("%s: %w", rl.Sources[0], err)
 	}
 	if err != nil {
-		log.Printf("projector: %s: %v: reading the tree held at %s", rl.Sources[0], err, infra.SHA[:min(12, len(infra.SHA))])
+		slog.Warn(fmt.Sprintf("projector: %s: %v: reading the tree held at %s", rl.Sources[0], err, infra.SHA[:min(12, len(infra.SHA))]))
 	}
 	repos[rl.Sources[0]] = infra
 	var branch map[string]string
@@ -92,7 +92,7 @@ func round(ctx context.Context, src heads, rl *realms.Realms, c *roundCache, unr
 		r, err := src.checkout(ctx, name, b)
 		if err != nil {
 			if msg := err.Error(); unread[name] != msg { // once per change, not every round
-				log.Printf("projector: %s@%s: %v", name, b, err)
+				slog.Warn(fmt.Sprintf("projector: %s@%s: %v", name, b, err))
 				unread[name] = msg
 			}
 			if r.Dir == "" {
@@ -119,13 +119,13 @@ func (a *App) project(ctx context.Context) {
 	case a.Opts.GHToken != "":
 		gh, err := newGitHub(a.Opts.GHURL, a.Opts.GHToken, a.Opts.Cache)
 		if err != nil {
-			log.Printf("projector: %v: off", err)
+			slog.Error(fmt.Sprintf("projector: %v: off", err))
 			return
 		}
 		src = gh
 		SourceLastSuccess.Set("github", float64(time.Now().Unix())) // seeded: a token that never works still ages into the alert
 	default:
-		log.Printf("projector: MOUNTAIN_GITHUB_TOKEN unset and no --repos: serving the stored projection only")
+		slog.Warn("projector: MOUNTAIN_GITHUB_TOKEN unset and no --repos: serving the stored projection only")
 		return
 	}
 	SourceLastSuccess.Set("projection", float64(time.Now().Unix()))
@@ -139,10 +139,10 @@ func (a *App) project(ctx context.Context) {
 		cancel()
 		switch { // logged once per change, not per round
 		case err != nil && err.Error() != lastErr:
-			log.Printf("projector: %v", err)
+			slog.Warn(fmt.Sprintf("projector: %v", err)) // a GitHub hiccup; MountainSourceStale alerts on a lasting one
 			lastErr = err.Error()
 		case err == nil && lastErr != "":
-			log.Printf("projector: recovered")
+			slog.Info("projector: recovered")
 			lastErr = ""
 		}
 		select {
@@ -176,7 +176,7 @@ func (a *App) projectOnce(ctx context.Context, src heads, c *roundCache) error {
 	c.vector = vectorKey(repos)
 	SourceLastSuccess.Set("projection", float64(time.Now().Unix()))
 	if changed {
-		log.Printf("projector: projection %d: %d repos, %d nodes, %d edges, %d drift", seq, len(repos), len(res.Graph.Nodes), len(res.Graph.Edges), len(res.Graph.Drift))
+		slog.Info(fmt.Sprintf("projector: projection %d: %d repos, %d nodes, %d edges, %d drift", seq, len(repos), len(res.Graph.Nodes), len(res.Graph.Edges), len(res.Graph.Drift)))
 		a.Hub.Broadcast(mustJSON(map[string]any{"t": "graph", "seq": seq}))
 		a.Live.event("graph", "", fmt.Sprintf("projection %d", seq))
 	}

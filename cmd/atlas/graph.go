@@ -13,7 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -72,7 +72,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		if err != nil {
 			return fmt.Errorf("migration %s: %w", v, err)
 		}
-		log.Printf("db: applied migration %s", v)
+		slog.Info(fmt.Sprintf("db: applied migration %s", v))
 	}
 	return nil
 }
@@ -445,11 +445,11 @@ func openGraphs(ctx context.Context, dsn string) *Graphs {
 	g := &Graphs{}
 	SourceLastSuccess.Set("db", float64(time.Now().Unix())) // memory-only ages into MountainSourceStale: the alarm for a missing secret
 	if dsn == "" {
-		log.Printf("db: DATABASE_URL unset: memory-only (the latest projection, no history)")
+		slog.Warn("db: DATABASE_URL unset: memory-only (the latest projection, no history)")
 		return g
 	}
 	if err := g.attach(ctx, dsn); err != nil {
-		log.Printf("db: %v: memory-only until it answers (retried every 30 s)", err)
+		slog.Warn(fmt.Sprintf("db: %v: memory-only until it answers (retried every 30 s)", err))
 		go func() {
 			t := time.NewTicker(30 * time.Second)
 			defer t.Stop()
@@ -459,7 +459,7 @@ func openGraphs(ctx context.Context, dsn string) *Graphs {
 					return
 				case <-t.C:
 					if g.attach(ctx, dsn) == nil {
-						log.Printf("db: attached")
+						slog.Info("db: attached")
 						return
 					}
 				}
@@ -490,7 +490,7 @@ func (g *Graphs) attach(ctx context.Context, dsn string) error {
 	case err == nil && g.Latest() == nil:
 		g.set(&v)
 	case err != nil && !errors.Is(err, errNoProjection):
-		log.Printf("db: load the latest projection: %v", err)
+		slog.Error(fmt.Sprintf("db: load the latest projection: %v", err))
 	}
 	g.mu.Lock()
 	g.pg = &pgStore{pool}
@@ -676,7 +676,7 @@ func (a *App) serveGraph(w http.ResponseWriter, r *http.Request) {
 			errs.Write(w, errs.Missing(keyGraphSeqMissing, err.Error()))
 			return
 		case err != nil:
-			log.Printf("atlas: %v", err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("atlas: %v", err))
 			errs.Write(w, internalError("atlas: read failed"))
 			return
 		}
