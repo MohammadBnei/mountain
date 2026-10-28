@@ -16,8 +16,10 @@ package main
 //
 //	GET  /auth/login?return=/#view  → authentik
 //	GET  /auth/callback             → session cookie, 303 to the return view
-//	POST /auth/logout               (same Origin only: CSRF) → session revoked, cookie cleared, 303 to /auth/me
-//	GET  /auth/me                   → {"enabled": bool, "admin": bool, "name"?: the admin's username}
+//	POST /auth/logout               (same Origin only: CSRF) → session revoked, cookie cleared, signed-out mark set,
+//	                                   303 to /auth/me
+//	GET  /auth/me                   → {"enabled": bool, "admin": bool, "name"?: the admin's username,
+//	                                   "signedOut"?: true after a sign-out, until the next sign-in}
 
 import (
 	"context"
@@ -46,6 +48,7 @@ const (
 	adminGroup    = "platform-admins"
 	sessionCookie = "__Host-mountain" // __Host-: Secure, Path=/, no Domain
 	flowCookie    = "__Host-mountain-flow"
+	outCookie     = "__Host-mountain-out" // signed out on purpose: the page stops signing itself back in (logout)
 	sessionTTL    = time.Hour
 	flowTTL       = 10 * time.Minute
 )
@@ -305,13 +308,16 @@ func (au *Auth) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	au.set(w, sessionCookie, Session{Admin: true, Sub: idt.Subject, Name: c.Name, ID: rand.Text()}, sessionTTL)
+	clearCookie(w, outCookie)
 	http.Redirect(w, r, f.Return, http.StatusSeeOther)
 }
 
 // logout is POST + same Origin (originOK, checked first: atlas has no router-level Origin check), so another site can
 // neither GET nor form-POST a sign-out. It revokes the session's id, but only of a cookie whose MAC holds, so a forged
-// one revokes nothing and the set stays bounded by an hour of sign-ins. The authentik session stays: the page would
-// sign straight back in, so it lands on /auth/me, which says who is signed in.
+// one revokes nothing and the set stays bounded by an hour of sign-ins. The authentik session stays, so a page that
+// reloaded into the sign-in would sign straight back in: logout also sets outCookie, which /auth/me reports as
+// signedOut, and the page's lapse probe (www/js/socket.js gateLapsed) stops on it, in every tab, a restored one too.
+// A sign-in the person asks for (loading the page) clears it. It lands on /auth/me, which says who is signed in.
 func (au *Auth) logout(w http.ResponseWriter, r *http.Request) {
 	if !originOK(r.Header.Get("Origin"), au.dev) {
 		http.Error(w, "forbidden origin", http.StatusForbidden)
@@ -322,6 +328,7 @@ func (au *Auth) logout(w http.ResponseWriter, r *http.Request) {
 		au.revoke(s.ID, exp)
 	}
 	clearCookie(w, sessionCookie)
+	au.set(w, outCookie, true, sessionTTL)
 	http.Redirect(w, r, "/auth/me", http.StatusSeeOther)
 }
 
@@ -331,6 +338,12 @@ func (g *gate) me(w http.ResponseWriter, r *http.Request) {
 	m := map[string]any{"enabled": g.auth != nil, "admin": admin}
 	if admin && s.Name != "" {
 		m["name"] = s.Name
+	}
+	if !admin && g.auth != nil {
+		var out bool // only logout sets the mark, always true: its MAC is what counts
+		if _, ok := g.auth.get(r, outCookie, &out); ok {
+			m["signedOut"] = true
+		}
 	}
 	h := w.Header()
 	h.Set("Cache-Control", "private, no-store") // per session: never a shared cache

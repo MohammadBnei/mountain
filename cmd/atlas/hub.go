@@ -1,7 +1,7 @@
 package main
 
 // WebSocket hub: the live overlay and graph notices, out to admin sessions only (adminOnly gates the upgrade; the
-// socket closes when its session lapses). Clients send nothing: anything they write is read and dropped, which is
+// socket closes when its session lapses, or at its next ping once signed out, with closeSignedOut: the page stops). Clients send nothing: anything they write is read and dropped, which is
 // also what lets Ping return. coder/websocket's own origin check ignores the scheme and passes an empty Origin, so
 // originOK runs first and Accept gets InsecureSkipVerify.
 

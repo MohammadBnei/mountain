@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -173,5 +174,55 @@ func TestSocketSignedOut(t *testing.T) {
 	defer rc()
 	if _, _, err := c2.Read(rctx); err != nil && rctx.Err() == nil {
 		t.Errorf("the other session's socket closed: %v", err)
+	}
+}
+
+// TestSignedOutMark: a sign-out marks the browser signed out, and /auth/me says so while it holds no session, so the
+// page stops instead of reloading into authentik's silent sign-in; the next sign-in clears the mark. A mark without
+// a MAC says nothing, and an admin is never told it is signed out.
+func TestSignedOutMark(t *testing.T) {
+	a, p := withAuth(t)
+	me := func(cs ...*http.Cookie) map[string]any {
+		var m map[string]any
+		if err := json.NewDecoder(a.serveReq("GET", "/auth/me", cs).Body).Decode(&m); err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	if _, ok := me()["signedOut"]; ok {
+		t.Error("never signed out: /auth/me says signedOut") // the positive control is below
+	}
+	r := a.serveReq("POST", "/auth/logout", []*http.Cookie{adminCookie(t, a, p)}, "Origin", origin)
+	mark := cookie(r, outCookie)
+	if mark == nil || mark.MaxAge <= 0 || !mark.HttpOnly || !mark.Secure {
+		t.Fatalf("logout set no signed-out mark: %+v", mark)
+	}
+	if m := me(mark); m["signedOut"] != true || m["admin"] != false {
+		t.Errorf("signed out: /auth/me %v", m)
+	}
+	if m := me(&http.Cookie{Name: outCookie, Value: base64.RawURLEncoding.EncodeToString([]byte(`{"v":true,"exp":9999999999}`)) + ".AAAA"}); m["signedOut"] != nil {
+		t.Errorf("a forged mark: /auth/me %v", m)
+	}
+	admin := adminCookie(t, a, p)
+	if m := me(admin, mark); m["signedOut"] != nil || m["admin"] != true {
+		t.Errorf("an admin holding a mark: /auth/me %v", m)
+	}
+	if c := cookie(signIn(t, a, p, []string{"platform-admins"}, nil), outCookie); c == nil || c.MaxAge >= 0 {
+		t.Errorf("a sign-in left the mark: %+v", c)
+	}
+	off := testApp(t)
+	if m := map[string]any{}; json.NewDecoder(off.serveReq("GET", "/auth/me", []*http.Cookie{mark}).Body).Decode(&m) != nil || m["signedOut"] != nil {
+		t.Errorf("sign-in off: /auth/me %v", m)
+	}
+}
+
+// TestSignedOutCode: the page stops on the server's close code, so the two must agree (www/js/socket.js SIGNED_OUT).
+func TestSignedOutCode(t *testing.T) {
+	b, err := mountain.WWW.ReadFile("www/js/socket.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("export const SIGNED_OUT = %d;", closeSignedOut); !strings.Contains(string(b), want) {
+		t.Errorf("www/js/socket.js has no %q", want)
 	}
 }

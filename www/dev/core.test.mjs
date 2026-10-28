@@ -135,7 +135,7 @@ const store = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? 
 const probe = async (res) => { let n = 0; await gateLapsed({ fetchFn: async () => res, reload: () => n++, store: store(), now: 1e12 }); return n; };
 const json = (b, status = 200) => ({ type: 'basic', status, ok: status < 300, json: async () => b });
 ok(await probe({ type: 'opaqueredirect', status: 0, ok: false }) === 1, 'socket: the gate\'s redirect reloads');
-ok(await probe(json({ enabled: true, admin: false })) === 1, 'socket: atlas\'s session ended (signed out of atlas, gate still open) reloads');
+ok(await probe(json({ enabled: true, admin: false })) === 1, 'socket: atlas\'s session ended (expired, gate still open) reloads');
 ok(await probe(json({ enabled: true, admin: true })) === 0, 'socket: still an admin: no reload (atlas is down, not the session)');
 ok(await probe(json({ enabled: false, admin: true })) === 0 && await probe(json({}, 503)) === 0, 'socket: dev, or a 5xx: no reload');
 const st = store();
@@ -143,19 +143,44 @@ let reloads = 0;
 for (const now of [1e12, 1e12 + 60e3]) await gateLapsed({ fetchFn: async () => json({ enabled: true, admin: false }), reload: () => reloads++, store: st, now });
 ok(reloads === 1, 'socket: at most one reload per 5 min');
 
-// ---- socket: a signed-out session's socket (another tab signed out) stops for good; any other close reconnects
+// ---- socket: a sign-out stops the page for good (no reload into the sign-in); any other close reconnects
+ok(await probe(json({ enabled: true, admin: false, signedOut: true })) === 0, 'socket: signed out (/auth/me says so): no reload');
+ok(await gateLapsed({ fetchFn: async () => json({ enabled: true, admin: false, signedOut: true }), reload: () => {}, store: store(), now: 1e12 }) === 'signed-out', 'socket: signed out is answered as such');
+ok(SIGNED_OUT === 4001, 'socket: SIGNED_OUT is the server\'s close code (cmd/atlas/hub.go closeSignedOut)');
 {
-  const socks = [], seen = [], realWS = globalThis.WebSocket, realST = globalThis.setTimeout;
+  const realWS = globalThis.WebSocket, realST = globalThis.setTimeout, realAEL = globalThis.addEventListener;
+  let socks, seen, on;
+  const start = (probe) => {
+    socks = []; seen = []; on = {};
+    connect({ url: 'ws://x/ws', onFrame: () => {}, onStatus: (s) => seen.push(s), probe });
+  };
   globalThis.WebSocket = class { constructor() { socks.push(this); } close() {} };
   globalThis.setTimeout = (f) => { f(); return 0; }; // reconnect at once
+  globalThis.addEventListener = (type, f) => { on[type] = f; };
   try {
     let probes = 0;
-    connect({ url: 'ws://x/ws', onFrame: () => {}, onStatus: (s) => seen.push(s), probe: () => probes++ });
+    start(() => probes++);
     socks[0].onclose({ code: 1006 });
     ok(socks.length === 2 && seen.at(-1) === 'closed', 'socket: a dropped connection reconnects');
-    socks[1].onclose({ code: SIGNED_OUT });
-    ok(socks.length === 2 && seen.at(-1) === 'signed-out' && probes === 0, 'socket: signed out: no reconnect, no probe (it would sign straight back in)');
-  } finally { globalThis.WebSocket = realWS; globalThis.setTimeout = realST; }
+    on.pagehide({ persisted: true }); on.pageshow({ persisted: true });
+    ok(socks.length === 3, 'socket: a page restored from the back/forward cache reconnects');
+    socks[2].onclose({ code: SIGNED_OUT });
+    ok(socks.length === 3 && seen.at(-1) === 'signed-out' && probes === 0, 'socket: signed out (4001): no reconnect, no probe');
+    on.pageshow({ persisted: true });
+    ok(socks.length === 3, 'socket: signed out: a restored page does not reconnect either');
+
+    start(async () => 'signed-out'); // the socket was down at the sign-out: the probe finds it
+    socks[0].onclose({ code: 1006 }); socks[1].onclose({ code: 1006 }); // the 2nd failure probes
+    await new Promise((r) => realST(r, 0));
+    const n = socks.length;
+    socks.at(-1).onclose({ code: 1006 }); // the socket opening meanwhile
+    ok(seen.at(-1) === 'signed-out' && socks.length === n, 'socket: a probe answering signed out stops the reconnects');
+    start(async () => false);
+    socks[0].onclose({ code: 1006 }); socks[1].onclose({ code: 1006 });
+    await new Promise((r) => realST(r, 0));
+    socks.at(-1).onclose({ code: 1006 });
+    ok(seen.at(-1) === 'closed' && socks.length === 4, 'socket: a probe saying nothing keeps reconnecting');
+  } finally { globalThis.WebSocket = realWS; globalThis.setTimeout = realST; globalThis.addEventListener = realAEL; }
   ok(status(null, null, 'signed-out') === 'Signed out: reload to sign in again' && status(null, null, 'closed') === 'Live connection lost, reconnecting…', 'status: signed out is said as such');
 }
 

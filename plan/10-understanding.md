@@ -307,6 +307,9 @@ What changed against the table above, and why:
 - **The gate**: `adminOnly` wraps every route but `/healthz` and `/auth/*`; the page redirects to the sign-in, the rest
   answer 403. A non-admin's callback sets no cookie. A town cookie (same key, `Role` field) is not a session.
   `--dev` admits everyone only on a loopback address with sign-in unset (the gate, `scripts/devpod.sh`).
+  Since plan/15's step 5 (A4) a session carries an id and a sign-out revokes it on the server (one replica's memory;
+  a restart forgets it): a copied cookie is refused, its sockets close at their next ping with code 4001, and a
+  signed-out mark keeps every tab from reloading into authentik's silent sign-in until the person loads the page.
 - **Alert rules**: MountainSourceStale (now prom, alerts, github, projection, db), MountainTokenExpiring,
   MountainUnassigned (drift `unassigned` for 1 h). MountainUnmapped and MountainTownEmpty went with the town.
 - **Rollback** is a revert, plus, before the relay image starts again, `DROP TABLE atlas_migrations, atlas_drift,
