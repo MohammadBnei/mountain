@@ -17,10 +17,10 @@ those are its condensed forms.
 Every non-trivial change (any feature or refactor, or a fix that crosses a module, changes a wire format or claims
 "behaviour unchanged") goes through these steps in order. A step is skipped only on the owner's word.
 
-**Two tiers (owner, 2026-10-28; this is the owner's word for skipping steps).** The **full loop** below applies to
-security, auth, wire-format, data and schema changes, and to any "behaviour unchanged" claim. The **light loop**
-(plan, local checks, review; no doubt cycle and no proof on main) applies to CI, docs, pins, static content and an
-isolated single-module fix. Anything else is full.
+**Two tiers (owner, 2026-10-28; the tiers are the owner's word for the light loop, and for nothing else).** The
+**full loop** below applies to security, auth, wire-format, data and schema changes, and to any "behaviour
+unchanged" claim. The **light loop** (plan, local checks, review) applies to CI, docs, pins, static content and an
+isolated single-module fix.
 
 1. **A short plan.** What changes and what stays, each claim about today's code with its `file:line`, every test it
    edits and every behaviour it changes (§2).
@@ -137,8 +137,9 @@ isolated single-module fix. Anything else is full.
 - **TypeScript 6** defaults `types` to `[]`.
 
 ## 6. Git, PRs and CI
-- **Agents may push `.github/workflows`** (owner, 2026-10-28) with the `gh` `workflow` scope. This amends the
-  standard's "ask a human" rule.
+- **Agents may push `.github/workflows`** (owner, 2026-10-28) with the `gh` `workflow` scope. This amends the rule
+  in the fleet's `change-loop` skill (condensed in the standard's §9): "an agent's token cannot push
+  `.github/workflows`, so ask a human".
 - **Re-sync after a squash merge** without a force push: fetch, make the branch again from main, merge the old
   branch head into it with `-s ours` (tree unchanged), and push it to the same branch name. That is a fast-forward,
   since the old head is a parent. A force push is refused here.
