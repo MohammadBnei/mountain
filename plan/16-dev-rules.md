@@ -141,6 +141,9 @@ Every non-trivial change (any feature or refactor, or a fix that crosses a modul
   ukubi repo forbids it, and mountain allows no attribution at all.
 - **A CI that is red for a reason outside the PR** (an unset secret, a runner down) is named in the PR, the PR is
   verified locally instead, and a job that can run without it is made to (ukubi-game's web job needs no secret).
+- **While the build runner is down, main builds only its newest commit** (`cancel-in-progress`): an image change
+  that PR CI cannot build (a Dockerfile or build-push edit) waits until main has deployed, so it never stands
+  between an earlier fix and its deploy (A6a, while #61's sign-out fix waited for the runner).
 - **A fresh GitHub runner is slow:** Chrome's first start can take over 10 s (mountain #51). Wait long, and report
   the exit code on failure.
 - **Collisions git can't see:** two migrations with different file names and the same number (agent-fleet#318).
