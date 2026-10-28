@@ -1,5 +1,5 @@
 # mountain's commits and PRs carry no AI trailer, session link or co-author (CLAUDE.md of the estate; the other
-# repos allow a ukubi-claude-<host> co-author, this one does not). Scans every commit message in the PR's range
+# repos' rules are in plan/00-decisions.md's trailer table). Scans every commit message in the PR's range
 # and its title and body: .github/scripts/check-trailers.py, self-tested by check-trailers-test.sh.
 # The PR's own text is scanned too, so describing the rules with the strings they refuse (the domain, an example
 # model id, a quoted trailer) fails the PR that does it: write "claude links" and "model names" in words.
