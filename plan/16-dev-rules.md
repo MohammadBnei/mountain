@@ -138,8 +138,8 @@ isolated single-module fix.
 
 ## 6. Git, PRs and CI
 - **Agents may push `.github/workflows`** (owner, 2026-10-28) with the `gh` `workflow` scope. This amends the rule
-  in the fleet's `change-loop` skill (condensed in the standard's §9): "an agent's token cannot push
-  `.github/workflows`, so ask a human".
+  in the fleet's `change-loop` skill (condensed in the ukubi Code Standard's §9, not `15-architecture.md`'s):
+  "an agent's token cannot push `.github/workflows`, so ask a human".
 - **Re-sync after a squash merge** without a force push: fetch, make the branch again from main, merge the old
   branch head into it with `-s ours` (tree unchanged), and push it to the same branch name. That is a fast-forward,
   since the old head is a parent. A force push is refused here.
