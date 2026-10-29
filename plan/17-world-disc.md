@@ -1,9 +1,11 @@
-# 17 · R14: the world as a disc: one world from orbit to a building's rooms (design, 2026-10-29)
+# 17 · R16: the world as a disc: one world from orbit to a building's rooms (design, 2026-10-29)
 
 > Status: **draft**. Three owner rounds (ideation, interview, architecture) and one doubt cycle (12 findings, all
 > folded in). The living copy, with the map of the disc, is the owner's manifest doc "The Mountain — World Manifest".
 > It replaces the floating islands of `13-game-town.md` and the realm-as-civ grouping there; it keeps 12's sim, goals
-> and fleet wiring as they are. Nothing is built; each slice gets its own plan and doubt cycle when it starts.
+> and fleet wiring as they are. It amends 00's Audience row (R10: admins only) with a public, read-only audience and a
+> `public` route role, which 14's every-route test gains. 14's island targets map onto buildings (top) and turtles and
+> elephants (underside); 13's kits re-key from civ to building kind and type. Nothing is built; each slice gets its own plan and doubt cycle when it starts.
 
 ## North star
 The ukubi platform is a world you live in while you work: a disc you tend from orbit and understand on foot, where
@@ -100,7 +102,8 @@ One world, three altitudes; the vehicle picks the altitude.
 - **A visitor** sees coarse states only (healthy, degraded, maintenance per building; no walls, no probe details, no
   underside beyond hosts), walks the code rooms of repos public on GitHub (private ones are closed doors), and talks to
   characters only through the direct-API voice path: persona prompt and public facts, no fleet, no tools, a
-  per-visitor rate limit and its own budget, visitor text treated as untrusted. Ambient chatter is the owner's only.
+  per-visitor rate limit and its own budget, visitor text treated as untrusted. The public pod holds one credential only: the capped voice key, in its own
+  workspace; nothing else. Ambient chatter is generated for the owner only.
 - **Secrets and failure.** Direct API calls use a real API key in its own workspace with a spend cap (fleet keeps its
   subscription token). Budget gone: canned lines. Atlas down: the last snapshot. Fleet down: residents asleep.
 - **The layout runs on the server** and serves positions with `/api/town`; clients never simulate. Each layout step
@@ -112,7 +115,7 @@ One world, three altitudes; the vehicle picks the altitude.
 - **State:** the game's append-only log moves into a Pigsty Postgres database (`gamedb`) in the cluster, per the
   standard's event log; the JSONL file stays for local and sim runs. An import job carries the JSONL log over keeping
   order, `At` and the game id (live fleet threads key on it); one record = one Append. Egress to Postgres needs
-  ADR-0069 part 4.
+  the console ADR's part 4 (14).
 - **Interiors:** 3 to 4 rooms, one per architecture seam, each flat (files on shelves, code in a reader panel). They
   need atlas work first: machine access to `/api/read` (an ADR-0068 amendment), the deployed sha rather than the
   branch head, a cache sized for every app repo, and a public-repo flag.
@@ -126,16 +129,16 @@ One world, three altitudes; the vehicle picks the altitude.
 
 ## Slices
 0. **D0 · go public.** The infra-bootstrap app entry, chart and hosts, DNS and Cloudflare with the origin lock, the
-   OIDC blueprint, the `--public` mode and snapshot, the public types, a rate limit on a trusted client IP, the voice
-   budget.
+   OIDC blueprint, the `--public` mode and snapshot, the public types, and a rate limit on a trusted client IP.
 1. **D1 · the orbit disc.** The rings, buildings placed by the breathing layout, data and auth roads from `needs`,
    the underside (turtles, elephants, roots where edges exist). Replaces the islands. Its plan settles where each
    component's layer comes from.
 2. **D2 · moons and call roads.** The `ext:` kind and probes; Alloy's OTLP receiver and servicegraph connector; atlas
    reads the service graph.
-3. **D3 · on foot.** The interior scene, the camera flight, the two input modes, the tablet. Needs the repo and
-   import work in atlas.
-4. **D4 · characters.** Residents and specialists, markers, live talk, the chatter budget, personality prompts.
+3. **D3 · on foot.** The interior scene, the camera flight, the two input modes, the tablet (a stub until D5's
+   cockpit). Needs the repo and import work in atlas.
+4. **D4 · characters.** Residents and specialists, markers, live talk, the voice key and the chatter and visitor
+   budgets, personality prompts.
 5. **D5 · the cockpit and the tech tree.**
 6. **D6 · the calm.** Day and night, ambient life, sound, pastimes.
 
