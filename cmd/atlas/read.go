@@ -32,7 +32,7 @@ import (
 	"github.com/yuin/goldmark/util"
 
 	"github.com/MohammadBnei/mountain/internal/extract"
-	"github.com/MohammadBnei/mountain/pkg/errs"
+	"github.com/MohammadBnei/ukubi-go/errs"
 )
 
 const maxReadBytes = 1 << 20
