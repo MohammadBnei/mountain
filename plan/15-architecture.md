@@ -105,7 +105,7 @@ doesn't.
     analyzer, the `ukubi.errors.v1.ErrorKey` proto). mountain, the game, the bridge, the fleet, wird and hq import
     it. This supersedes the nested `mountain/pkg` and the line above (its old rule: the bridge and the fleet copy the
     shape and don't import). The text above stays as the history of what was built. Order: ukubi-go v0.1.0, then the
-    game, then mountain, then a mountain PR deletes `pkg/`.
+    game, then mountain, then a mountain PR deletes `pkg/`. Done: `mountain/pkg` is deleted (X4); no CI job or image build reads a private module.
 
 ## 4. Errors: one model for every app
 - **The codes are Connect's 16** (`invalid_argument`, `failed_precondition`, `not_found`, `permission_denied`,
@@ -175,7 +175,7 @@ doesn't.
 - **Every app uses the OpenTelemetry API.**
 - **Traces are pushed** over OTLP. The backend is open (owner, 2026-10-28: explored later; Tempo on Garage S3 was
   the first idea), so every app's tracing is opt-in and inert until `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` (the one
-  variable for every app) is set. The wiring for atlas and the game is `pkg/telemetry`.
+  variable for every app) is set. The wiring for atlas and the game is `ukubi-go/telemetry`.
   - Connect's `otelconnect` instruments the fleet and the bridge.
   - An HTTP middleware instruments atlas and the game.
   - Spans cross from the game to atlas, the fleet and ArgoCD. Until propagation lands, every server span starts a
@@ -279,7 +279,7 @@ These already follow the standard:
      differs from the JS one only in Bun's path comments);
    - slice 4f;
    - atlas's L0–L3 retired.
-5. **Extraction:** once atlas adopts the gate, the error model and OTel, they move to `mountain/pkg`. The rest of
+5. **Extraction:** once atlas adopts the gate, the error model and OTel, they move to `ukubi-go`. The rest of
    atlas follows:
    - live joiners with a `promAPI` seam;
    - evidence finders for `needs:` rows;
@@ -318,7 +318,7 @@ These already follow the standard:
    reconnecting on, and a signed-out mark that stops the page reloading into the sign-in). The two gates still differ
    (the game checks Host and Origin in its router, atlas Origin per handler; 401 against 403; the return pattern; the
    game's 10 s discovery timeout; /auth/me's shape; cookie names; atlas's machine principal and signed-out mark), so
-   the extraction into `mountain/pkg` is its own plan.
+   the extraction into `ukubi-go` is its own plan.
 
    Then atlas's one Config (§5): `cmd/atlas/config.go` reads the flags and the environment once, and a test at the
    module root refuses a listed reader of the environment in any other non-test file (os's and syscall's own, the
