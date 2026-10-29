@@ -71,6 +71,7 @@ func TestLayers(t *testing.T) {
 		"group no layer": "layers: {}",
 		"unknown layer":  "layers: {infra/g: moon}",
 		"bad override":   "layers: {infra/g: core}\ncomponents: {app:x: {realm: infra, group: g, layer: moon}}",
+		"land override":  "layers: {infra/g: core}\ncomponents: {host:x: {realm: infra, group: h, layer: core}}",
 	} {
 		if _, err := Parse([]byte(base + y)); err == nil {
 			t.Errorf("%s: parsed", name)

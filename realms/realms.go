@@ -3,6 +3,7 @@
 package realms
 
 import (
+	"cmp"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/binary"
@@ -219,7 +220,8 @@ func checkLayers(r *Realms) error {
 	ring := func(l string) bool { return slices.Contains(LayerOrder, l) && l != LayerWorkshops }
 	for g, fn := range r.Functions {
 		// ponytail: a file with no layers: at all passes (the tests' small realms files); the game draws such
-		// buildings on the services ring and lists them unlayered. Drop the guard once every test file has layers:.
+		// buildings on the services ring and lists them unlayered. TODO(2026-10-29, plan/17 D2): give the test realms
+		// files layers: and drop the guard (only TestLayers, on the live file, catches a missing layers: today).
 		if l, ok := r.Layers[g]; fn != FnLand && !ok && r.Layers != nil {
 			return fmt.Errorf("realms.yaml: functions group %s has no layer (layers:)", g)
 		} else if ok && fn == FnLand {
@@ -234,6 +236,10 @@ func checkLayers(r *Realms) error {
 		}
 	}
 	for id, c := range r.Components {
+		fn := cmp.Or(c.Function, r.Functions[c.Realm+"/"+c.Group])
+		if c.Layer != "" && fn == FnLand {
+			return fmt.Errorf("realms.yaml: %s is land, which has no ring (no layer:)", id)
+		}
 		if c.Layer != "" && !ring(c.Layer) {
 			return fmt.Errorf("realms.yaml: %s has layer %q, not one of %v", id, c.Layer, LayerOrder)
 		}
