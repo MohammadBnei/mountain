@@ -26,6 +26,7 @@ import (
 //     templated string); a watched rule with no literal severity is drift.
 //   - needs: what a node depends on, each written as its evidence. A row's evidence must be found (else drift), and
 //     evidence found for an app with no row naming it is drift too. A row becomes a needs edge (attrs: via, checked).
+//     A declared:ext:<name> row also makes the ext node it names (a moon: an outside service, plan/17 D2).
 //
 // Only names are read: alert names, rule uids, database names, hostnames of redirect URLs, middleware names and the
 // presence of keys. Never an expression's value, an address, a user or a secret.
@@ -223,6 +224,18 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 	}
 	dbs := pigstyDatabases(x)
 
+	// the moons: each ext a row declares is a node, made here from realms.yaml alone (no realm, so no drift: place
+	// ran before them and only places components)
+	var exts []graph.Node
+	for _, id := range sortedKeys(rl.Needs) {
+		for _, s := range rl.Needs[id] {
+			if n, _ := realms.ParseNeed(s); strings.HasPrefix(n.On, realms.Ext+":") && !has[n.On] {
+				has[n.On] = true
+				exts = append(exts, graph.Node{ID: n.On, Kind: graph.KindExt, Source: realmsSrc})
+			}
+		}
+	}
+
 	stated := map[string]bool{} // "<kind>/<app>"
 	var edges []graph.Edge
 	for _, id := range sortedKeys(rl.Needs) {
@@ -292,7 +305,7 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 	}
 	edges = merged
 	drift = append(drift, walls(x, rl, files, forwardAuthNames(files), g)...)
-	_ = g.Merge(graph.Graph{Edges: edges, Drift: drift}) // both ends checked above: cannot fail
+	_ = g.Merge(graph.Graph{Nodes: exts, Edges: edges, Drift: drift}) // ids and both ends checked above: cannot fail
 	modelFacts(rl, g)
 }
 

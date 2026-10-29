@@ -238,10 +238,14 @@ general: { grafana: [log-error-rate-spike] }
 # names an authentik forwardAuth middleware), infisical (its values have an infisical: block), s3 (its values name
 # Garage's S3 endpoint), postgres:<db> (that database is in Pigsty's pg_databases; which app owns it is this row's
 # word), declared:<node> (the evidence lives outside the sources atlas reads: shown as unverified). atlas checks both
-# ways: a row's evidence must be found, and evidence for an app with no row naming it is drift.
+# ways: a row's evidence must be found, and evidence for an app with no row naming it is drift. declared:ext:<name>
+# is an outside service (a moon, plan/17 D2): no component, its node made from the row, its health the blackbox
+# probe ext-<name> when there is one.
 needs:
-  app:mountain: [oidc, forwardauth, infisical, postgres:mountaindb]
-  app:agent-fleet-core: [oidc, infisical, postgres:agentfleetdb]
+  app:mountain: [oidc, forwardauth, infisical, postgres:mountaindb, "declared:ext:github"]
+  app:agent-fleet-core: [oidc, infisical, postgres:agentfleetdb, "declared:ext:github", "declared:ext:anthropic"]
+  app:platform-traefik: ["declared:ext:cloudflare"] # its ACME DNS challenge (dnsChallenge provider cloudflare)
+  app:pi-lab: ["declared:ext:pi-lab"] # the Raspberry Pi its lab runs on, at a home the cluster cannot reach: no probe
   app:ukubi-bridge: [postgres:bridge]
   app:platform-authentik: [postgres:authentik]
   app:platform-infisical: [postgres:infisicaldb]

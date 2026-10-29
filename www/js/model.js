@@ -30,7 +30,8 @@ export const KIND = {
   dns: 'hostname',
   adr: 'ADR',
   addon: 'add-on',
-  db: 'database'
+  db: 'database',
+  ext: 'outside service'
 };
 export const MAX_GROUPS = 7;
 
