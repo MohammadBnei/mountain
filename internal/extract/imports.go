@@ -13,7 +13,8 @@ import (
 // importsExtractor reads every go.mod of each source (minus what skipDir skips) and adds one imports edge per pair
 // of our repos, repo:A -> repo:B, when a go.mod in A requires a module of B directly. Several go.mods in one repo
 // still give one edge (attrs modules and paths, sorted, comma-joined), so Merge never sees two versions of it.
-// Its source is A's lexically first go.mod; a require of A's own modules is skipped, and so is "// indirect".
+// Its source is A's lexically first go.mod requiring B; a require of A's own modules is skipped, and so is
+// "// indirect".
 var importsExtractor = Extractor{Name: "imports", Version: 1, Run: imports}
 
 // ourModules is the module path prefix of our repos; the segment after it is the repo.
@@ -36,12 +37,9 @@ func imports(x *Ctx) error {
 		}
 		slices.Sort(mods)                                                            // Walk's order is per directory level, not the string order the source is chosen by
 		modules, paths := map[string]map[string]bool{}, map[string]map[string]bool{} // imported repo -> sets
-		var src graph.Source
-		for i, p := range mods {
+		src := map[string]graph.Source{}                                             // imported repo -> the first go.mod (in string order) requiring it
+		for _, p := range mods {
 			b, s, err := x.Read(repo, p)
-			if i == 0 {
-				src = s
-			}
 			if err != nil {
 				continue
 			}
@@ -57,13 +55,13 @@ func imports(x *Ctx) error {
 					continue
 				}
 				if modules[to] == nil {
-					modules[to], paths[to] = map[string]bool{}, map[string]bool{}
+					modules[to], paths[to], src[to] = map[string]bool{}, map[string]bool{}, s
 				}
 				modules[to][r.Mod.Path], paths[to][p] = true, true
 			}
 		}
 		for _, to := range sortedKeys(modules) {
-			x.Edge(graph.Edge{From: graph.ID(graph.KindRepo, repo), To: graph.ID(graph.KindRepo, to), Kind: graph.EdgeImports, Origin: graph.Declared, Source: src,
+			x.Edge(graph.Edge{From: graph.ID(graph.KindRepo, repo), To: graph.ID(graph.KindRepo, to), Kind: graph.EdgeImports, Origin: graph.Declared, Source: src[to],
 				Attrs: map[string]string{"modules": strings.Join(sortedKeys(modules[to]), ","), "paths": strings.Join(sortedKeys(paths[to]), ",")}})
 		}
 	}

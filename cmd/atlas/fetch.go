@@ -40,10 +40,12 @@ import (
 const (
 	ghOwner      = contract.GitHubOwner
 	maxTreeBytes = 256 << 20 // one tree's cap
-	cacheBudget  = 4 << 30   // every tree on disk, held and retired, under the 6 Gi emptyDir (helm/values.yaml)
 	maxFileBytes = 8 << 20
 	maxEntries   = 200_000
 )
+
+// cacheBudget is every tree on disk, held and retired, under the 6 Gi emptyDir (helm/values.yaml); a var so tests lower it.
+var cacheBudget int64 = 4 << 30
 
 var errNoAccess = errors.New("not found (no access)")
 

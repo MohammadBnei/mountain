@@ -398,6 +398,7 @@ func placeRepos(g *graph.Graph) {
 		}
 		fed[e.To][realmOf[e.From]] = true
 	}
+	feedImports(g, fed)
 	for i, n := range g.Nodes {
 		if n.Kind != graph.KindRepo {
 			continue

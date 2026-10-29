@@ -543,6 +543,22 @@
    "state": "ok",
    "why": "1 of 1 members answer, 0 don't"
   },
+  "ext:anthropic": {
+   "state": "unknown",
+   "why": "no probe and no k8s node answer for it"
+  },
+  "ext:cloudflare": {
+   "state": "unknown",
+   "why": "no probe and no k8s node answer for it"
+  },
+  "ext:github": {
+   "state": "unknown",
+   "why": "no probe and no k8s node answer for it"
+  },
+  "ext:pi-lab": {
+   "state": "unknown",
+   "why": "no probe and no k8s node answer for it"
+  },
   "host:bnei": {
    "state": "ok",
    "why": "probe answers"

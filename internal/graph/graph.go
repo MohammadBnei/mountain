@@ -25,7 +25,7 @@ const (
 	KindDB    = "db"    // a data service outside the cluster, by its cluster name (db:pg-proxmox)
 	KindDNS   = "dns"   // a public hostname (dns:wird.bnei.dev)
 	KindADR   = "adr"   // a decision record (adr:infra-bootstrap/0064)
-	KindExt   = "ext"   // a repo outside the realms, known only as an import (ext:ukubi-go)
+	KindExt   = "ext"   // an outside service an app declares it needs, a moon (ext:github)
 )
 
 // Kinds of edge.

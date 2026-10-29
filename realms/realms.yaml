@@ -105,8 +105,10 @@ skip:
   ukubi-bridge: [proto/gen]
 
 # The repos atlas fetches and reads (A2's poll): infra-bootstrap first, since its registry names the branch each of
-# the others is read at. An app repo outside this list is a git edge only: no extractor reads its files yet.
-sources: [infra-bootstrap, agent-fleet, ukubi-bridge, mountain, pi-lab]
+# the others is read at, then every repo of its gitops/apps/registry.yaml, then the workshops (their interiors too).
+# An app repo outside this list is a git edge only: no extractor reads its files yet.
+sources: [infra-bootstrap, agent-fleet, dream-analyst, drop, editable-blog, has-journal, hq, mountain, pi-lab, ukubi-bridge,
+  ukubi-stt, vos-monolith, wedding-2026, wird, ukubi-game, ukubi-go, ukubi-kit]
 
 # blackbox probe targets -> the node they probe (infra-bootstrap ADR-0064). pve-<host> targets map to host:<host>
 # by name; the guest-<role> names are the town's old role keys, so they are listed. k9s-dashboard is never probed.
