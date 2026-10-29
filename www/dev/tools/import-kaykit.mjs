@@ -15,10 +15,16 @@ import { pathToFileURL } from 'node:url';
 
 const [pack, ...names] = process.argv.slice(2);
 if (!pack || !names.length || !process.env.GT) {
-  console.error('usage: GT=<gltf-transform prefix> import-kaykit.mjs <pack checkout> <name> [<name> …]');
+  console.error(
+    'usage: GT=<gltf-transform prefix> import-kaykit.mjs <pack checkout> <name> [<name> …]'
+  );
   process.exit(2);
 }
-const mod = (m) => import(pathToFileURL(join(process.env.GT, 'node_modules', '@gltf-transform', m, 'dist', 'index.js')).href);
+const mod = m =>
+  import(
+    pathToFileURL(join(process.env.GT, 'node_modules', '@gltf-transform', m, 'dist', 'index.js'))
+      .href
+  );
 const { NodeIO } = await mod('core');
 const { ALL_EXTENSIONS } = await mod('extensions');
 const { prune, quantize, dedup, join: joinMeshes, flatten } = await mod('functions');
@@ -27,7 +33,10 @@ const root = join(resolve(pack), 'addons/kaykit_medieval_hexagon_pack/Assets/glt
 const find = (dir, file) => {
   for (const e of readdirSync(dir)) {
     const p = join(dir, e);
-    if (statSync(p).isDirectory()) { const f = find(p, file); if (f) return f; } else if (e === file) return p;
+    if (statSync(p).isDirectory()) {
+      const f = find(p, file);
+      if (f) return f;
+    } else if (e === file) return p;
   }
   return null;
 };
@@ -35,12 +44,29 @@ const out = resolve(new URL('../../models/', import.meta.url).pathname);
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 for (const name of names) {
   const src = find(root, `${name}.gltf`);
-  if (!src) { console.error(`${name}: not in the pack`); process.exitCode = 1; continue; }
+  if (!src) {
+    console.error(`${name}: not in the pack`);
+    process.exitCode = 1;
+    continue;
+  }
   const doc = await io.read(src);
   for (const t of doc.getRoot().listTextures()) t.dispose(); // the atlas comes from kit.js (clay.png); UVs stay (keepAttributes)
-  await doc.transform(dedup(), flatten(), joinMeshes(), prune({ keepAttributes: true }), quantize({ quantizePosition: 16, quantizeNormal: 16, quantizeTexcoord: 16 }));
+  await doc.transform(
+    dedup(),
+    flatten(),
+    joinMeshes(),
+    prune({ keepAttributes: true }),
+    quantize({ quantizePosition: 16, quantizeNormal: 16, quantizeTexcoord: 16 })
+  );
   const dst = join(out, `${name}.glb`);
   await io.write(dst, doc);
-  const tris = doc.getRoot().listMeshes().flatMap((m) => m.listPrimitives()).reduce((n, p) => n + (p.getIndices()?.getCount() ?? p.getAttribute('POSITION').getCount()) / 3, 0);
+  const tris = doc
+    .getRoot()
+    .listMeshes()
+    .flatMap(m => m.listPrimitives())
+    .reduce(
+      (n, p) => n + (p.getIndices()?.getCount() ?? p.getAttribute('POSITION').getCount()) / 3,
+      0
+    );
   console.log(`${name}.glb  ${statSync(dst).size} B  ${tris} tris`);
 }
