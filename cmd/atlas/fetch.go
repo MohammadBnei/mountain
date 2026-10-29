@@ -12,7 +12,8 @@ package main
 //
 // The unpacking trusts nothing in the archive: regular files and directories only (no links, devices or FIFOs), paths
 // relative and inside the checkout (os.Root), at most maxTreeBytes in total and maxFileBytes per file (larger files are
-// left out: no extractor reads them).
+// left out: no extractor reads them). Every tree on disk (held and retired) shares cacheBudget: a tree that would go
+// over it is refused, and the repo is read stale (or skipped) instead of the pod being evicted.
 
 import (
 	"archive/tar"
@@ -38,7 +39,8 @@ import (
 
 const (
 	ghOwner      = contract.GitHubOwner
-	maxTreeBytes = 256 << 20 // ×5 sources + one being swapped stays under the 2 Gi cache (helm/values.yaml)
+	maxTreeBytes = 256 << 20 // one tree's cap
+	cacheBudget  = 4 << 30   // every tree on disk, held and retired, under the 6 Gi emptyDir (helm/values.yaml)
 	maxFileBytes = 8 << 20
 	maxEntries   = 200_000
 )
@@ -53,6 +55,7 @@ type ghHeads struct {
 	have            map[string]extract.Repo // repo -> the checkout on disk
 	behind          map[string]string       // repo -> a head seen behind the held one, once
 	retired         map[string]string       // repo -> the tree replaced last round, removed when the next one is (the reader may still be serving it)
+	size            map[string]int64        // tree directory -> bytes unpacked into it (held and retired trees)
 	seq             int                     // tree directories are never reused: <repo>-<sha>-<seq>
 	pauseUntil      time.Time
 	met             *Metrics // nil = not recorded
@@ -67,7 +70,7 @@ func newGitHub(apiURL, token, dir string, met *Metrics) (*ghHeads, error) {
 		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
 	return &ghHeads{url: strings.TrimRight(apiURL, "/"), token: token, dir: dir, hc: &http.Client{Timeout: 5 * time.Minute},
-		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}, retired: map[string]string{}, met: met}, nil
+		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}, retired: map[string]string{}, size: map[string]int64{}, met: met}, nil
 }
 
 func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Repo, error) {
@@ -111,6 +114,7 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 	if ok { // the replaced tree goes one round later: the reader serves the last round's trees until this round ends
 		if old := g.retired[repo]; old != "" {
 			_ = os.RemoveAll(old)
+			delete(g.size, old)
 		}
 		g.retired[repo] = cur.Dir
 	}
@@ -132,8 +136,16 @@ func (g *ghHeads) compare(ctx context.Context, repo, base, head string) (string,
 	return c.Status, nil
 }
 
-// tree downloads repo at sha and unpacks it into a fresh directory under the cache.
+// tree downloads repo at sha and unpacks it into a fresh directory under the cache, within what cacheBudget leaves.
 func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
+	var used int64
+	for _, n := range g.size {
+		used += n
+	}
+	limit := min(maxTreeBytes, cacheBudget-used)
+	if limit <= 0 {
+		return "", fmt.Errorf("tarball %s: cache budget spent (%d of %d bytes)", sha[:12], used, int64(cacheBudget))
+	}
 	req, err := g.request(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo)+contract.GitHubTarball+sha, contract.GitHubJSONAccept)
 	if err != nil {
 		return "", err
@@ -150,25 +162,28 @@ func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
 	g.seq++
 	dir := filepath.Join(g.dir, fmt.Sprintf("%s-%s-%d", repo, sha[:12], g.seq)) // never the held tree's path
 	_ = os.RemoveAll(dir)
-	if err := unpack(resp.Body, dir); err != nil {
+	n, err := unpack(resp.Body, dir, limit)
+	if err != nil {
 		_ = os.RemoveAll(dir)
 		return "", fmt.Errorf("tarball %s: %w", sha[:12], err)
 	}
+	g.size[dir] = n
 	return dir, nil
 }
 
-// unpack writes a GitHub tarball (one top directory, "<owner>-<repo>-<sha>/") into dir, stripping that directory.
-func unpack(r io.Reader, dir string) error {
+// unpack writes a GitHub tarball (one top directory, "<owner>-<repo>-<sha>/") into dir, stripping that directory,
+// and answers the bytes written; more than limit bytes of files is an error.
+func unpack(r io.Reader, dir string, limit int64) (int64, error) {
 	zr, err := gzip.NewReader(r)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return 0, err
 	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer func() { _ = root.Close() }()
 	tr := tar.NewReader(zr)
@@ -176,13 +191,13 @@ func unpack(r io.Reader, dir string) error {
 	for n := 0; ; n++ {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
-			return nil
+			return total, nil
 		}
 		if err != nil {
-			return err
+			return total, err
 		}
 		if n >= maxEntries {
-			return errors.New("too many entries")
+			return total, errors.New("too many entries")
 		}
 		_, rel, _ := strings.Cut(h.Name, "/") // strip the top directory
 		rel = path.Clean(rel)
@@ -193,30 +208,30 @@ func unpack(r io.Reader, dir string) error {
 		switch h.Typeflag {
 		case tar.TypeDir:
 			if err := root.MkdirAll(name, 0o755); err != nil {
-				return err
+				return total, err
 			}
 		case tar.TypeReg:
 			if h.Size > maxFileBytes {
 				continue // no extractor reads a file this large
 			}
-			if total += h.Size; total > maxTreeBytes {
-				return errors.New("tree too large")
+			if total += h.Size; total > limit {
+				return total, fmt.Errorf("tree over %d bytes", limit)
 			}
 			if d := filepath.Dir(name); d != "." {
 				if err := root.MkdirAll(d, 0o755); err != nil {
-					return err
+					return total, err
 				}
 			}
 			f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 			if err != nil {
-				return err
+				return total, err
 			}
 			_, err = io.Copy(f, io.LimitReader(tr, h.Size))
 			if cerr := f.Close(); err == nil {
 				err = cerr
 			}
 			if err != nil {
-				return err
+				return total, err
 			}
 		}
 		// anything else (symlinks, hard links, devices, the pax global header) is left out
