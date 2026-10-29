@@ -82,7 +82,7 @@ infisical:
 extraVolumes:
   - name: cache
     emptyDir:
-      sizeLimit: 2Gi
+      sizeLimit: 6Gi # fetch.go's cacheBudget (4 GiB) plus headroom
 extraVolumeMounts:
   - name: cache
     mountPath: /var/cache/atlas

@@ -66,7 +66,7 @@ func TestUnpack(t *testing.T) {
 		entry{name: "MohammadBnei-x-abc/hard", link: "MohammadBnei-x-abc/docs/adr/0001.md", typ: tar.TypeLink},
 		entry{name: "MohammadBnei-x-abc/big.bin", size: maxFileBytes + 1, typ: tar.TypeReg},
 	)
-	if err := unpack(bytes.NewReader(b), dir); err != nil {
+	if _, err := unpack(bytes.NewReader(b), dir, maxTreeBytes); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := os.ReadFile(filepath.Join(dir, "docs/adr/0001.md")); err != nil || string(got) != "# ADR-0001: one" {
@@ -81,7 +81,7 @@ func TestUnpack(t *testing.T) {
 	dir2 := filepath.Join(base, "repo2")
 	_ = os.MkdirAll(dir2, 0o755)
 	_ = os.Symlink(base, filepath.Join(dir2, "out"))
-	if err := unpack(bytes.NewReader(tarball(t, entry{name: "top/out/pwned.txt", body: "x", typ: tar.TypeReg})), dir2); err == nil {
+	if _, err := unpack(bytes.NewReader(tarball(t, entry{name: "top/out/pwned.txt", body: "x", typ: tar.TypeReg})), dir2, maxTreeBytes); err == nil {
 		t.Error("a write through a symlink succeeded")
 	}
 	if _, err := os.Stat(filepath.Join(base, "pwned.txt")); err == nil {
