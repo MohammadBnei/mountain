@@ -43,6 +43,23 @@ auth library) takes the full loop.
    merges after local verification and CI (§6 for a CI that is red for a reason outside the PR), and the branch is
    re-synced (§6).
 
+**A change built by many agents (owner, 2026-10-29).** When a change is split across parallel agents, the loop
+above runs in this shape. "The workflow is mostly about parallel implementation": steps 1-3 stay in the main session,
+and steps 4-7 are the multi-agent workflow.
+
+1. **One holistic plan** for the whole change, not one plan per PR (step 1 above).
+2. **An architecture interview:** the owner answers the open decisions, one question at a time.
+3. **One doubt agent** over the whole plan (step 2 above).
+4. **Parallel builders** on disjoint files, plus a checks lane that proves each new check red before it is trusted.
+5. **One integration** of the builders' work.
+6. **Gates, then reviewers:** the full gates fan in once, then one reviewer per angle (correctness, security and so on).
+7. **A fix fan-out,** at most 2 rounds; then the mutation checks once and a final gate.
+8. **The PR** (step 7 above).
+9. **A fresh code review** of the PR diff. It is mandatory, by an agent that did not build the change.
+10. **The merge on green CI** (step 8 above).
+
+Builders run only the fast suites. Browser gates, image builds and mutation checks run once per round, not per builder.
+
 ## 2. Planning
 - **Check every fact against the code before writing it.** Plans have said tests swapped `liveEvery` (they only read
   it; mountain #51), that atlas spoke Connect's error body (it has no Connect dependency), three@0.186.0 (vendored:
