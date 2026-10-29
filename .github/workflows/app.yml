@@ -52,18 +52,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      GOPRIVATE: github.com/MohammadBnei/mountain
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      # mountain's own nested module (pkg/) is private: the job's token, sent for this repo's URLs only, reads it.
-      - name: Private modules
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/MohammadBnei/mountain".insteadOf "https://github.com/MohammadBnei/mountain"
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -86,9 +79,9 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: go vet
         run: go vet ./...
-      # The root module only: pkg/ is its own module and lints in pkg.yml. No .golangci config, as in agent-fleet:
-      # the defaults (errcheck, govet, ineffassign, staticcheck, unused). Pinned, not latest, and built with a Go
-      # at least as new as go.mod's (v2.14.0 is built with go1.27.1, what agent-fleet's go.yml pins too).
+      # No .golangci config, as in agent-fleet: the defaults (errcheck, govet, ineffassign, staticcheck, unused).
+      # Pinned, not latest, and built with a Go at least as new as go.mod's (v2.14.0 is built with go1.27.1, what
+      # agent-fleet's go.yml pins too).
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -129,16 +122,11 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       MOUNTAIN_TEST_DSN: postgres://postgres:mountain@localhost:5432/postgres?sslmode=disable
-      GOPRIVATE: github.com/MohammadBnei/mountain
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Private modules
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/MohammadBnei/mountain".insteadOf "https://github.com/MohammadBnei/mountain"
       - name: DB tests
         run: go test -race -run '^TestDB' -v ./cmd/atlas/
 
@@ -194,23 +182,16 @@ jobs:
             --username "$REGISTRY_USER" \
             --password-stdin "$REGISTRY"
 
-      # The job's token reaches the build only as a secret mount (Dockerfile: go mod download for the private
-      # pkg module), from a 0600 file removed after: never a build arg, never in a layer.
       - name: Build and push
         env:
           TAG: ${{ steps.tag.outputs.value }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tok="$(mktemp)"
-          trap 'rm -f "$tok"' EXIT
-          printf '%s' "$GH_TOKEN" > "$tok"
           sudo buildah bud \
             --isolation chroot \
             --format docker \
             --layers \
             --pull=newer \
-            --secret id=github_token,src="$tok" \
             -f Dockerfile \
             -t "$REGISTRY/$IMAGE:$TAG" \
             .

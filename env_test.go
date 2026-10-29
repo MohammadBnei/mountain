@@ -92,7 +92,7 @@ func TestEnvBan(t *testing.T) {
 			if p != "." && (strings.HasPrefix(d.Name(), ".") || d.Name() == "node_modules" || d.Name() == "testdata") {
 				return filepath.SkipDir
 			}
-			return nil // a nested module (pkg/) is walked too: it is shared code, with no allowed file
+			return nil // nested directories are walked too
 		}
 		if !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
 			return nil
