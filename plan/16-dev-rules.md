@@ -138,8 +138,8 @@ auth library) takes the full loop.
   - `bun test tools` is a substring filter (write `./tools`);
   - `bun add` writes `^` ranges (use `-E`).
 - **TypeScript 6** defaults `types` to `[]`.
-- **Biome lints and formats JS and TS** (owner, 2026-10-29), pinned exactly, one root `biome.json`, in place of
-  ESLint and Prettier. `lint` runs `biome ci .`; svelte-check still checks Svelte types, since Biome's Svelte support is
+- **Biome lints and formats JS and TS** (owner, 2026-10-29) in every repo that has any, with or without a linter
+  before, and CI runs it. Pinned exactly, one root `biome.json`, in place of ESLint and Prettier. `lint` runs `biome ci .`; svelte-check still checks Svelte types, since Biome's Svelte support is
   partial.
 
 ## 6. Git, PRs and CI
