@@ -220,7 +220,7 @@ func checkLayers(r *Realms) error {
 	for g, fn := range r.Functions {
 		// ponytail: a file with no layers: at all passes (the tests' small realms files); the game draws such
 		// buildings on the services ring and lists them unlayered. Drop the guard once every test file has layers:.
-		if l, ok := r.Layers[g]; fn != FnLand && !ok && len(r.Layers) > 0 {
+		if l, ok := r.Layers[g]; fn != FnLand && !ok && r.Layers != nil {
 			return fmt.Errorf("realms.yaml: functions group %s has no layer (layers:)", g)
 		} else if ok && fn == FnLand {
 			return fmt.Errorf("realms.yaml: layers %s is land, which has no ring", g)
