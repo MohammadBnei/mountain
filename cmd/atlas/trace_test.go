@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
-	"log"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -138,11 +139,22 @@ func TestRouteSpansSocket(t *testing.T) {
 
 // TestOTelErrorHandler: an error OTel reports is the log package's INFO line, msg the error, until telemetry.New with
 // an endpoint installs ukubi-go's handler; after it the same error is one WARN line, msg "traces", err the error
-// (main.go's doc). ponytail: OTel's handler is a process global with no unset, so the INFO half holds only while
-// nothing earlier in this test binary called New with an endpoint (true today; run with -count=1).
+// (main.go's doc). OTel's handler is a process global with no unset, so the test runs in a child process (the test
+// binary again, as TestFatal), with no OTEL_* of the caller's: a bad OTEL_TRACES_SAMPLER would add its own line.
 func TestOTelErrorHandler(t *testing.T) {
-	oldSlog, oldOut, oldFlags := slog.Default(), log.Writer(), log.Flags()
-	t.Cleanup(func() { slog.SetDefault(oldSlog); log.SetOutput(oldOut); log.SetFlags(oldFlags) })
+	if os.Getenv("ATLAS_TEST_OTEL_HANDLER") != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestOTelErrorHandler$", "-test.count=1")
+		for _, kv := range os.Environ() {
+			if !strings.HasPrefix(kv, "OTEL_") {
+				cmd.Env = append(cmd.Env, kv)
+			}
+		}
+		cmd.Env = append(cmd.Env, "ATLAS_TEST_OTEL_HANDLER=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		return
+	}
 	var buf bytes.Buffer
 	slog.SetDefault(telemetry.NewLogger(&buf)) // as main does: the log package goes through it
 	line := func() map[string]any {
