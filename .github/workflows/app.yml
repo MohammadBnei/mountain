@@ -79,9 +79,9 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: go vet
         run: go vet ./...
-      # No .golangci config, as in agent-fleet:
-      # the defaults (errcheck, govet, ineffassign, staticcheck, unused). Pinned, not latest, and built with a Go
-      # at least as new as go.mod's (v2.14.0 is built with go1.27.1, what agent-fleet's go.yml pins too).
+      # No .golangci config, as in agent-fleet: the defaults (errcheck, govet, ineffassign, staticcheck, unused).
+      # Pinned, not latest, and built with a Go at least as new as go.mod's (v2.14.0 is built with go1.27.1, what
+      # agent-fleet's go.yml pins too).
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:

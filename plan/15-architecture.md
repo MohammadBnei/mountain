@@ -105,7 +105,9 @@ doesn't.
     analyzer, the `ukubi.errors.v1.ErrorKey` proto). mountain, the game, the bridge, the fleet, wird and hq import
     it. This supersedes the nested `mountain/pkg` and the line above (its old rule: the bridge and the fleet copy the
     shape and don't import). The text above stays as the history of what was built. Order: ukubi-go v0.1.0, then the
-    game, then mountain, then a mountain PR deletes `pkg/`. Done: `mountain/pkg` is deleted (X4); no CI job or image build reads a private module.
+    game, then mountain, then a mountain PR deletes `pkg/`. Done: `mountain/pkg` is deleted (X4), and no mountain CI
+    job or image build reads a private module any more; the `pkg/vX.Y.Z` tag rule above is void. ukubi-game's CI
+    still reads mountain's root module with its token.
 
 ## 4. Errors: one model for every app
 - **The codes are Connect's 16** (`invalid_argument`, `failed_precondition`, `not_found`, `permission_denied`,
