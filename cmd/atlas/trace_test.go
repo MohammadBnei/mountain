@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"io/fs"
+	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +15,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/MohammadBnei/mountain"
@@ -127,5 +133,53 @@ func TestRouteSpansSocket(t *testing.T) {
 	}
 	if len(names) != 1 || names[0] != "GET /ws" {
 		t.Errorf("spans after the socket closed: %v", names)
+	}
+}
+
+// TestOTelErrorHandler: an error OTel reports is the log package's INFO line, msg the error, until telemetry.New with
+// an endpoint installs ukubi-go's handler; after it the same error is one WARN line, msg "traces", err the error
+// (main.go's doc). ponytail: OTel's handler is a process global with no unset, so the INFO half holds only while
+// nothing earlier in this test binary called New with an endpoint (true today; run with -count=1).
+func TestOTelErrorHandler(t *testing.T) {
+	oldSlog, oldOut, oldFlags := slog.Default(), log.Writer(), log.Flags()
+	t.Cleanup(func() { slog.SetDefault(oldSlog); log.SetOutput(oldOut); log.SetFlags(oldFlags) })
+	var buf bytes.Buffer
+	slog.SetDefault(telemetry.NewLogger(&buf)) // as main does: the log package goes through it
+	line := func() map[string]any {
+		t.Helper()
+		lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+		buf.Reset()
+		if len(lines) != 1 {
+			t.Fatalf("want one line, got %q", lines)
+		}
+		var m map[string]any
+		if err := json.Unmarshal([]byte(lines[0]), &m); err != nil {
+			t.Fatalf("%q: %v", lines[0], err)
+		}
+		return m
+	}
+
+	otel.Handle(errors.New("x"))
+	if m := line(); m["level"] != "INFO" || m["msg"] != "x" {
+		t.Fatalf("before New: want INFO msg x, got %v", m)
+	}
+	if _, err := telemetry.New("", "atlas"); err != nil {
+		t.Fatal(err)
+	}
+	otel.Handle(errors.New("x"))
+	if m := line(); m["level"] != "INFO" || m["msg"] != "x" {
+		t.Fatalf("New without endpoint: want INFO msg x, got %v", m)
+	}
+
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+	tel, err := telemetry.New(srv.URL+"/v1/traces", "atlas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tel.Shutdown() })
+	otel.Handle(errors.New("x"))
+	if m := line(); m["level"] != "WARN" || m["msg"] != "traces" || m["err"] != "x" {
+		t.Fatalf("New with endpoint: want WARN msg traces err x, got %v", m)
 	}
 }
