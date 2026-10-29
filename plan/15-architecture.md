@@ -125,6 +125,15 @@ doesn't.
   ```
 - **Each app keeps a closed registry of its keys.** A test fails on an unregistered key. Pages translate keys and
   never parse messages.
+  - **Amended 2026-10-29 (owner, fleet ADR-0081):** a Connect service's registry is its proto. Each service
+    declares an enum whose values carry the wire string through `(ukubi.errors.v1.key)`, and each RPC lists the
+    keys it may return in `(ukubi.errors.v1.keys)` (ukubi-go v0.2.0, `proto/ukubi/errors/v1/options.proto`).
+    A test runs `connectkeys.CheckDeclared`, and `buf breaking` keeps a key from being renamed. Only stock buf,
+    protoc-gen-go and protoc-gen-es; reflection runs only in tests. HTTP apps without proto keep a Go registry.
+  - **A key exists only where a client must act on an error, or show text for it, and the code alone doesn't say
+    what happened.** Everything else is `server.internal` with its code. Where an error came from and why comes from
+    the trace id every Connect error carries and the one JSON log line the server writes per handler error, never
+    from keys.
 - **Every error is recorded on its span** (§7). `errs.Write(w, err)` will keep its signature for that: it will
   call `RecordError(*errs.Error)` on the first writer in `w`'s `Unwrap() http.ResponseWriter` chain that has it
   (the OTel middleware's will), internal errors included, so a wrapping middleware without it doesn't drop the
