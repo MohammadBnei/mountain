@@ -385,6 +385,7 @@
     "group": "own",
     "function": "workshop",
     "attrs": {
+     "layer": "workshops",
      "url": "https://github.com/MohammadBnei/agent-fleet"
     },
     "source": {
@@ -400,6 +401,7 @@
     "group": "own",
     "function": "workshop",
     "attrs": {
+     "layer": "workshops",
      "url": "https://github.com/MohammadBnei/ghost"
     },
     "source": {
@@ -414,6 +416,7 @@
     "group": "shared",
     "function": "workshop",
     "attrs": {
+     "layer": "workshops",
      "url": "https://github.com/MohammadBnei/infra-bootstrap"
     },
     "source": {
@@ -429,6 +432,7 @@
     "group": "own",
     "function": "workshop",
     "attrs": {
+     "layer": "workshops",
      "url": "https://github.com/MohammadBnei/mountain"
     },
     "source": {
@@ -444,6 +448,7 @@
     "group": "own",
     "function": "workshop",
     "attrs": {
+     "layer": "workshops",
      "url": "https://github.com/MohammadBnei/pi-lab"
     },
     "source": {
@@ -459,6 +464,7 @@
     "group": "apps",
     "function": "workshop",
     "attrs": {
+     "layer": "workshops",
      "url": "https://github.com/MohammadBnei/vos-monolith"
     },
     "source": {
@@ -473,6 +479,7 @@
     "group": "apps",
     "function": "workshop",
     "attrs": {
+     "layer": "workshops",
      "url": "https://github.com/MohammadBnei/wird"
     },
     "source": {
@@ -1120,7 +1127,7 @@
   "pass:rehome": 1,
   "pass:repoNodes": 1,
   "pass:resolve": 1,
-  "pass:watch": 1,
+  "pass:watch": 2,
   "pigsty": 1,
   "realms": 1115609892
  },

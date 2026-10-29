@@ -3,6 +3,7 @@
 package realms
 
 import (
+	"cmp"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/binary"
@@ -20,6 +21,7 @@ type Component struct {
 	Realm    string   `yaml:"realm"`
 	Group    string   `yaml:"group"`
 	Function string   `yaml:"function"` // overrides its group's function
+	Layer    string   `yaml:"layer"`    // overrides its group's layer
 	Parent   string   `yaml:"parent"`
 	Paths    []string `yaml:"paths"` // "<repo>/<prefix>": ADR citations under it govern this component
 }
@@ -37,6 +39,7 @@ type Realms struct {
 	Namespaces   map[string]string    `yaml:"namespaces"`   // namespace without an Application -> realm
 	Components   map[string]Component `yaml:"components"`
 	Functions    map[string]string    `yaml:"functions"` // "<realm>/<group>" -> what the group does in play
+	Layers       map[string]string    `yaml:"layers"`    // "<realm>/<group>" -> its ring in the world disc (LayerOrder)
 	Watch        map[string]Watch     `yaml:"watch"`     // node -> the alert rules that name it (its watchtowers)
 	General      Watch                `yaml:"general"`   // the rules that watch every building at once
 	Needs        map[string][]string  `yaml:"needs"`     // node -> what it depends on, each with its evidence (Need)
@@ -109,6 +112,12 @@ const (
 )
 
 var functions = []string{FnLand, FnTownCentre, FnHouses, FnWorkshop, FnEconomy, FnUtility, FnDefence, FnTrade, FnBarracks, FnProduct}
+
+// LayerOrder is the world disc's rings, Hub to Rim (plan/17 D1). Workshops is the repos', set by atlas.
+var LayerOrder = []string{"core", LayerWorkshops, "data", "services", "edge"}
+
+// LayerWorkshops is the repos' ring.
+const LayerWorkshops = "workshops"
 
 // ComponentKinds are the node kinds realms.yaml may list and atlas must place (extract's realmKinds); repos are
 // atlas's own, hostnames and ADRs are never placed.
@@ -191,7 +200,7 @@ func checkCode(r *Realms) error {
 }
 
 // checkFunctions: each functions key is <realm>/<group> of a listed realm other than code, and each value a function
-// (not the repos' workshop).
+// (not the repos' workshop); then its groups' layers (checkLayers).
 func checkFunctions(r *Realms) error {
 	for key, fn := range r.Functions {
 		realm, group, _ := strings.Cut(key, "/")
@@ -200,6 +209,39 @@ func checkFunctions(r *Realms) error {
 		}
 		if !slices.Contains(functions, fn) || fn == FnWorkshop {
 			return fmt.Errorf("realms.yaml: functions %s is %q, not one of %v (workshop is the repos', set by atlas)", key, fn, functions)
+		}
+	}
+	return checkLayers(r)
+}
+
+// checkLayers: the layers keys are exactly the functions groups other than land (when there are any), each a ring of
+// LayerOrder other than the repos' workshops, and so is each component's layer override.
+func checkLayers(r *Realms) error {
+	ring := func(l string) bool { return slices.Contains(LayerOrder, l) && l != LayerWorkshops }
+	for g, fn := range r.Functions {
+		// ponytail: a file with no layers: at all passes (the tests' small realms files); the game draws such
+		// buildings on the services ring and lists them unlayered. TODO(2026-10-29, plan/17 D2): give the test realms
+		// files layers: and drop the guard (only TestLayers, on the live file, catches a missing layers: today).
+		if l, ok := r.Layers[g]; fn != FnLand && !ok && r.Layers != nil {
+			return fmt.Errorf("realms.yaml: functions group %s has no layer (layers:)", g)
+		} else if ok && fn == FnLand {
+			return fmt.Errorf("realms.yaml: layers %s is land, which has no ring", g)
+		} else if ok && !ring(l) {
+			return fmt.Errorf("realms.yaml: layers %s is %q, not one of %v (workshops is the repos', set by atlas)", g, l, LayerOrder)
+		}
+	}
+	for g := range r.Layers {
+		if _, ok := r.Functions[g]; !ok {
+			return fmt.Errorf("realms.yaml: layers %s is not a <realm>/<group> with a function", g)
+		}
+	}
+	for id, c := range r.Components {
+		fn := cmp.Or(c.Function, r.Functions[c.Realm+"/"+c.Group])
+		if c.Layer != "" && fn == FnLand {
+			return fmt.Errorf("realms.yaml: %s is land, which has no ring (no layer:)", id)
+		}
+		if c.Layer != "" && !ring(c.Layer) {
+			return fmt.Errorf("realms.yaml: %s has layer %q, not one of %v", id, c.Layer, LayerOrder)
 		}
 	}
 	return nil

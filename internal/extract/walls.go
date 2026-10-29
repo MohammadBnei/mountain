@@ -239,8 +239,9 @@ func walls(x *Ctx, rl *realms.Realms, files []sourceFile, fa []string, g *graph.
 // landmark: drawn larger by the world (plan/13 §1), never by a model of its own.
 const landmarkDependents, landmarkParts = 5, 3
 
-// modelFacts writes the facts the game derives a building's model from: its group's shapes (realms.yaml shapes:)
-// and landmark. Called once the needs edges are in.
+// modelFacts writes the facts the game derives a building's model from: its group's shapes (realms.yaml shapes:),
+// landmark, and its ring in the world disc (layer: its group's realms.yaml layers:, its own layer:, or workshops for a
+// repo; never on parts or the land). Called once the needs edges are in.
 func modelFacts(rl *realms.Realms, g *graph.Graph) {
 	deps, parts := map[string]int{}, map[string]int{}
 	for _, e := range g.Edges {
@@ -262,6 +263,16 @@ func modelFacts(rl *realms.Realms, g *graph.Graph) {
 		}
 		if s := rl.Shapes[n.Realm+"/"+n.Group]; len(s) > 0 && n.Parent == "" {
 			set("shapes", strings.Join(s, ", "))
+		}
+		layer := rl.Layers[n.Realm+"/"+n.Group]
+		if l := rl.Components[n.ID].Layer; l != "" {
+			layer = l
+		}
+		if n.Realm == realms.Code {
+			layer = realms.LayerWorkshops
+		}
+		if layer != "" && n.Parent == "" && n.Function != realms.FnLand {
+			set("layer", layer)
 		}
 		if deps[n.ID] >= landmarkDependents || parts[n.ID] >= landmarkParts {
 			set("landmark", "true")

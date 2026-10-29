@@ -37,6 +37,37 @@ functions:
   apps/ai: product
   apps/tools: product
 
+# The ring each group's buildings stand on in the world disc (plan/17 D1), by realm/group; a component may override it
+# with layer:. Rings run Hub to Rim: core, workshops, data, services, edge (realms.LayerOrder). land (the hosts) has
+# none: it is the underside. The repos' workshops is set by atlas.
+layers:
+  platform/nodes: core
+  platform/network: core
+  platform/metrics: core
+  platform/storage: services
+  platform/gpu: services
+  platform/edge: edge
+  data/postgres: data
+  data/redis: data
+  data/s3: data
+  data/nfs: data
+  operations/delivery: core
+  operations/build: services
+  operations/observability: services
+  operations/events: services
+  operations/atlas: core
+  guard/authentik: services
+  guard/secrets: services
+  guard/mesh: edge
+  fleet/control: core
+  fleet/cluster-access: core
+  fleet/hermes: services
+  fleet/session-pod: core
+  apps/sites: services
+  apps/products: services
+  apps/ai: services
+  apps/tools: services
+
 # Proxmox hosts (the land) and their island labels.
 hosts:
   bnei: h1

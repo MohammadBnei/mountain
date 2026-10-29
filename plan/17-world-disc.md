@@ -133,6 +133,9 @@ One world, three altitudes; the vehicle picks the altitude.
 1. **D1 · the orbit disc.** The rings, buildings placed by the breathing layout, data and auth roads from `needs`,
    the underside (turtles, elephants, roots where edges exist). Replaces the islands. Its plan settles where each
    component's layer comes from.
+   The layer lives in realms.yaml `layers:` (by realm/group, a component may override it with `layer:`; the repos'
+   `workshops` is atlas's, the hosts have none) and reaches the game as the node attr `layer`, written by atlas's
+   watch pass (modelFacts).
 2. **D2 · moons and call roads.** The `ext:` kind and probes; Alloy's OTLP receiver and servicegraph connector; atlas
    reads the service graph.
 3. **D3 · on foot.** The interior scene, the camera flight, the two input modes, the tablet (a stub until D5's
