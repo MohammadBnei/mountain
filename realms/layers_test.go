@@ -72,6 +72,9 @@ func TestLayers(t *testing.T) {
 		"unknown layer":  "layers: {infra/g: moon}",
 		"bad override":   "layers: {infra/g: core}\ncomponents: {app:x: {realm: infra, group: g, layer: moon}}",
 		"land override":  "layers: {infra/g: core}\ncomponents: {host:x: {realm: infra, group: h, layer: core}}",
+		// workshops is atlas's to give (the repos), never the yaml's
+		"workshops layer":    "layers: {infra/g: workshops}",
+		"workshops override": "layers: {infra/g: core}\ncomponents: {app:x: {realm: infra, group: g, layer: workshops}}",
 	} {
 		if _, err := Parse([]byte(base + y)); err == nil {
 			t.Errorf("%s: parsed", name)
