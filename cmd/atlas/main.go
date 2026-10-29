@@ -238,6 +238,7 @@ func routeTable(a *App, www fs.FS) []route {
 		{"GET /ws", false, false, a.Hub},
 		{"GET /api/graph", false, false, http.HandlerFunc(a.serveGraph)},
 		{"GET /api/read", false, false, http.HandlerFunc(a.serveRead)},
+		{"GET /api/tree", false, false, http.HandlerFunc(a.serveTree)},
 		{"GET /", false, false, static(www, a.Opts.Dev)},
 	}
 }

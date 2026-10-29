@@ -139,7 +139,7 @@ func (x *Ctx) Walk(repo string, skip func(dir string) bool, fn func(path string,
 }
 
 // All is every extractor, in run order.
-var All = []Extractor{gitopsExtractor, machinesExtractor, kubesprayExtractor, pigstyExtractor, adrExtractor}
+var All = []Extractor{gitopsExtractor, machinesExtractor, kubesprayExtractor, pigstyExtractor, adrExtractor, importsExtractor}
 
 // Run runs the extractors over repos, places every component in its realm and checks the result.
 func Run(repos Repos, rl *realms.Realms, exs []Extractor) (Result, error) {
@@ -195,6 +195,7 @@ type pass struct {
 //   - rehome moves governs edges onto a node that exists, before place reads the edges;
 //   - place gives every component its realm and group (and the repos theirs, from what they feed);
 //   - watch adds the watch, needs and walls rows and the model facts (watch.go and walls.go, which share its files);
+//   - image writes each app's deployed image tag from its values files (image.go);
 //   - branchDrift reports a checkout on a branch ArgoCD does not deploy.
 func passes() []pass {
 	return []pass{
@@ -202,8 +203,9 @@ func passes() []pass {
 		{"repoNodes", 1, func(x *Ctx, g *graph.Graph) error { repoNodes(x, x.Repos, *g); return nil }},
 		{"resolve", 1, func(x *Ctx, g *graph.Graph) error { return g.Merge(resolve(*g, x.members)) }},
 		{"rehome", 1, func(_ *Ctx, g *graph.Graph) error { rehome(g); return nil }},
-		{"place", 1, func(x *Ctx, g *graph.Graph) error { place(g, x.Realms); return nil }},
-		{"watch", 2, func(x *Ctx, g *graph.Graph) error { watchNeeds(x.Repos, x.Realms, g); return nil }},
+		{"place", 2, func(x *Ctx, g *graph.Graph) error { place(g, x.Realms); return nil }},
+		{"watch", 3, func(x *Ctx, g *graph.Graph) error { watchNeeds(x.Repos, x.Realms, g); return nil }},
+		{"image", 1, func(x *Ctx, g *graph.Graph) error { image(x.Repos, g); return nil }},
 		{"branchDrift", 1, func(x *Ctx, g *graph.Graph) error { return g.Merge(graph.Graph{Drift: branchDrift(x.Repos, x.track)}) }},
 	}
 }
