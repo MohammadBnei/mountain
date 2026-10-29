@@ -14,12 +14,12 @@ import (
 
 	"github.com/MohammadBnei/mountain/internal/extract"
 	"github.com/MohammadBnei/mountain/internal/graph"
-	"github.com/MohammadBnei/mountain/pkg/errs"
+	"github.com/MohammadBnei/ukubi-go/errs"
 )
 
 // keyUses checks src (a file of this package) against the registry, syntactically (each form below; a type-checked
-// guard like the game's TestKeys comes with its codecheck's extraction to mountain/pkg):
-//   - every key a constructor of mountain/pkg/errs is called with is one of keys, named directly;
+// guard is ukubi-go's cmd/ukubicheck, not yet wired here):
+//   - every key a constructor of ukubi-go/errs is called with is one of keys, named directly;
 //   - a constructor is only ever called, never taken as a value;
 //   - outside errkeys.go, errs.Key and errs.Error are never named (no conversion, literal, new, alias or field type),
 //     no .Key field is written, and no name of the registry is declared again (a shadowing const or variable);
@@ -33,7 +33,7 @@ func keyUses(name string, src []byte, keys map[string]bool) (problems []string, 
 	}
 	pkg := ""
 	for _, im := range f.Imports {
-		if im.Path.Value == `"github.com/MohammadBnei/mountain/pkg/errs"` {
+		if im.Path.Value == `"github.com/MohammadBnei/ukubi-go/errs"` {
 			pkg = "errs"
 			if im.Name != nil {
 				pkg = im.Name.Name
@@ -41,7 +41,7 @@ func keyUses(name string, src []byte, keys map[string]bool) (problems []string, 
 		}
 	}
 	if pkg == "." {
-		return []string{"a dot import of pkg/errs"}, 0
+		return []string{"a dot import of ukubi-go/errs"}, 0
 	}
 	registry := filepath.Base(name) == "errkeys.go"
 	sel := func(e ast.Expr) string {
@@ -169,15 +169,15 @@ func TestErrKeysForms(t *testing.T) {
 		`errs.From("sim", errs.Unknown, "", "", nil)`: 1,
 		`&errs.Error{Code: errs.Internal}`:            1,
 	} {
-		p, _ := keyUses("x.go", []byte("package main\nimport \"github.com/MohammadBnei/mountain/pkg/errs\"\nvar _ = "+src+"\n"), keys)
+		p, _ := keyUses("x.go", []byte("package main\nimport \"github.com/MohammadBnei/ukubi-go/errs\"\nvar _ = "+src+"\n"), keys)
 		if len(p) != want {
 			t.Errorf("%s: %v, want %d problems", src, p, want)
 		}
 	}
-	if p, _ := keyUses("x.go", []byte("package main\nimport e \"github.com/MohammadBnei/mountain/pkg/errs\"\nvar _ = e.Missing(\"lit\", \"x\")\n"), keys); len(p) != 1 {
+	if p, _ := keyUses("x.go", []byte("package main\nimport e \"github.com/MohammadBnei/ukubi-go/errs\"\nvar _ = e.Missing(\"lit\", \"x\")\n"), keys); len(p) != 1 {
 		t.Errorf("an aliased import: %v", p)
 	}
-	if p, _ := keyUses("x.go", []byte("package main\nimport . \"github.com/MohammadBnei/mountain/pkg/errs\"\nvar _ = Missing(\"lit\", \"x\")\n"), keys); len(p) != 1 {
+	if p, _ := keyUses("x.go", []byte("package main\nimport . \"github.com/MohammadBnei/ukubi-go/errs\"\nvar _ = Missing(\"lit\", \"x\")\n"), keys); len(p) != 1 {
 		t.Errorf("a dot import: %v", p)
 	}
 }

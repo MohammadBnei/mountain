@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MohammadBnei/mountain/pkg/telemetry"
+	"github.com/MohammadBnei/ukubi-go/telemetry"
 )
 
 // logUses lists src's uses of the log package other than its Logger type: a line written through it is INFO under

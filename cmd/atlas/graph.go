@@ -28,7 +28,7 @@ import (
 
 	"github.com/MohammadBnei/mountain/internal/extract"
 	"github.com/MohammadBnei/mountain/internal/graph"
-	"github.com/MohammadBnei/mountain/pkg/errs"
+	"github.com/MohammadBnei/ukubi-go/errs"
 )
 
 //go:embed migrations/*.sql

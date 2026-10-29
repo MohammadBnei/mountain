@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/MohammadBnei/mountain"
-	"github.com/MohammadBnei/mountain/pkg/telemetry"
+	"github.com/MohammadBnei/ukubi-go/telemetry"
 )
 
 // tracedApp is testApp with its routes traced into an in-memory exporter (traced=false: no tracer at all, a nil

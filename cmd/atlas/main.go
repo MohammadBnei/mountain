@@ -19,12 +19,15 @@
 // malformed one is a JSON INFO line on stdout, from OTel's global error handler going through the log package that
 // slog has taken over; some bad values are ignored with no line at all; the exposition is unchanged either way), and
 // with tracing on the trace exporter reads its headers, timeout, compression and certificates, OTEL_BSP_* and the span
-// limits (mountain/pkg/telemetry).
+// limits (ukubi-go/telemetry). With tracing on, telemetry.New also installs ukubi-go's error handler: every error OTel
+// reports after it (a failed export, a collect error of the Prometheus exporter, a bad OTEL_TRACES_SAMPLER or resource
+// value read by the trace SDK) is one WARN line, msg "traces", err=<error>; those reported before it (newMetrics's
+// resource detection) stay INFO lines as above.
 //
-// Logs: JSON lines (mountain/pkg/telemetry.NewLogger), each site with its level: on stdout for the service, on stderr
+// Logs: JSON lines (ukubi-go/telemetry.NewLogger), each site with its level: on stdout for the service, on stderr
 // for `atlas project`, whose stdout is its result line as before. serve's own flag errors and usage stay text on
 // stderr; every other refusal to start is a JSON ERROR line, then exit 1. The libraries' own reads, as above, plus
-// grpc's GRPC_GO_* (linked through mountain/pkg, read at init, unused).
+// grpc's GRPC_GO_* (linked through ukubi-go, read at init, unused).
 //
 // Read side only: atlas never writes a repo or a live store (CQRS, plan/10).
 package main
@@ -53,8 +56,8 @@ import (
 
 	"github.com/MohammadBnei/mountain"
 	"github.com/MohammadBnei/mountain/internal/extract"
-	"github.com/MohammadBnei/mountain/pkg/telemetry"
 	"github.com/MohammadBnei/mountain/realms"
+	"github.com/MohammadBnei/ukubi-go/telemetry"
 )
 
 // Opts are the command-line flags plus the env the App reads (config.go).
