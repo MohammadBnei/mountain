@@ -29,7 +29,7 @@ export function tokens(line, lang) {
     /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`)|(\/\/.*$|#.*$)|\b(\d+(?:\.\d+)?)\b|\b([A-Za-z_][A-Za-z0-9_]*)\b/g;
   let last = 0,
     m;
-  while ((m = re.exec(line))) {
+  for (m = re.exec(line); m; m = re.exec(line)) {
     if (m[2] && m[2].startsWith('#') && !hashComment) {
       continue;
     }

@@ -98,7 +98,7 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
       o.traverse(x => {
         if (!x.isMesh) return;
         if (!shared.has(x.geometry)) x.geometry.dispose();
-        (Array.isArray(x.material) ? x.material : [x.material]).forEach(mm => mm.dispose());
+        for (const mm of Array.isArray(x.material) ? x.material : [x.material]) mm.dispose();
         if (x.isInstancedMesh) x.dispose();
       });
     }
@@ -319,7 +319,9 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
     const mat = new THREE.Matrix4(),
       q = new THREE.Quaternion(),
       s = new THREE.Vector3(1, 1, 1);
-    dots.forEach((d, i) => inst.setMatrixAt(i, mat.compose(d.p, q, s)));
+    dots.forEach((d, i) => {
+      inst.setMatrixAt(i, mat.compose(d.p, q, s));
+    });
     inst.userData = { dots };
     routeLayer.add(inst);
     paintRoutes();
@@ -332,9 +334,9 @@ export function createMap({ canvas, low = false, cover = () => 0, onPick = () =>
       if (it.mesh) it.mesh.material.emissiveIntensity = on(it.route) ? 0.6 : 0.05;
     if (!inst) return;
     const c = new THREE.Color();
-    inst.userData.dots.forEach((d, i) =>
-      inst.setColorAt(i, c.copy(d.item.wire).lerp(SEA, on(d.item.route) ? 0.25 : 0.85))
-    );
+    inst.userData.dots.forEach((d, i) => {
+      inst.setColorAt(i, c.copy(d.item.wire).lerp(SEA, on(d.item.route) ? 0.25 : 0.85));
+    });
     if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
   }
 

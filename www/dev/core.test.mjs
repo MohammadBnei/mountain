@@ -504,7 +504,9 @@ ok(
   const tick = () => {
     const due = [...timers.values()];
     timers.clear();
-    due.forEach(f => f());
+    due.forEach(f => {
+      f();
+    });
   }; // the reconnect timers fire
   const settle = () => new Promise(r => real.setTimeout(r, 0)); // the probe answers
   globalThis.WebSocket = class {

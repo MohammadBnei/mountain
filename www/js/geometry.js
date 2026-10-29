@@ -15,7 +15,9 @@ export function layout(groups) {
   });
   const rows = [];
   plots.forEach((p, i) => {
-    (rows[Math.floor(i / cols)] ||= []).push(p);
+    const k = Math.floor(i / cols);
+    if (!rows[k]) rows[k] = [];
+    rows[k].push(p);
   });
   let z = 0,
     width = 0;

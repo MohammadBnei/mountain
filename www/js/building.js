@@ -137,7 +137,10 @@ export function createBuilding({ model, id, cards, flat }) {
     update(next) {
       next = next.slice(0, MAX_CARDS);
       if (next.length !== items.length || next.some((c, i) => c.key !== items[i].key)) return false;
-      if (!flat) next.forEach((c, i) => items[i].obj.element.replaceChildren(...c.el.childNodes));
+      if (!flat)
+        next.forEach((c, i) => {
+          items[i].obj.element.replaceChildren(...c.el.childNodes);
+        });
       return true;
     },
     /** where a card's wall stands (the gate clicks it) */

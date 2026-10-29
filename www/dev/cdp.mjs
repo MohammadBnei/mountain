@@ -118,7 +118,10 @@ export async function launch({ w = 1280, h = 800, mobile = false, dpr = 1, args 
       const { res, rej } = pending.get(msg.id);
       pending.delete(msg.id);
       msg.error ? rej(new Error(msg.error.message)) : res(msg.result);
-    } else if (msg.method) listeners.forEach(l => l(msg));
+    } else if (msg.method)
+      listeners.forEach(l => {
+        l(msg);
+      });
   };
   const send = (method, params = {}, sessionId) =>
     new Promise((res, rej) => {

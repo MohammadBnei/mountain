@@ -11,6 +11,5 @@
       "trailingCommas": "none",
       "arrowParentheses": "asNeeded"
     }
-  },
-  "linter": { "rules": { "suspicious": { "noExplicitAny": "error" } } }
+  }
 }

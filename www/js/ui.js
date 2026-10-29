@@ -86,9 +86,11 @@ export function crumbs(m, v) {
   if (v.level === 4) out.push(el('span', { class: 'here' }, v.doc.path.split('/').pop()));
   else if (v.sel) out.push(el('span', { class: 'here' }, label(m.nodes.get(v.sel)) || v.sel));
   const nav = el('ol', { class: 'crumbs' });
-  out.forEach((c, i) =>
-    nav.append(el('li', {}, i ? el('span', { class: 'sep', 'aria-hidden': 'true' }, '›') : null, c))
-  );
+  out.forEach((c, i) => {
+    nav.append(
+      el('li', {}, i ? el('span', { class: 'sep', 'aria-hidden': 'true' }, '›') : null, c)
+    );
+  });
   return nav;
 }
 

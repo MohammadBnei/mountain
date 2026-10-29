@@ -77,9 +77,9 @@ export function createCity({ model, realm }) {
   });
   plotMesh.count = plots.length;
   for (const b of all) b.h = heightOf(governs(model, b.id).reduce((n, x) => n + x.count, 0));
-  all.forEach((b, i) =>
-    blds.setMatrixAt(i, m.compose(p.set(b.x, 0.06 + b.h / 2, b.z), q, s.set(1, b.h, 1)))
-  );
+  all.forEach((b, i) => {
+    blds.setMatrixAt(i, m.compose(p.set(b.x, 0.06 + b.h / 2, b.z), q, s.set(1, b.h, 1)));
+  });
   blds.count = all.length;
   beacons.count = 0;
   scene.add(plotMesh, blds, beacons);
@@ -100,9 +100,9 @@ export function createCity({ model, realm }) {
       blds.setColorAt(i, c);
     });
     if (blds.instanceColor) blds.instanceColor.needsUpdate = true;
-    plots.forEach((pl, i) =>
-      plotMesh.setColorAt(i, view.group === pl.g.id ? PLOT.clone().lerp(wire, 0.3) : PLOT)
-    );
+    plots.forEach((pl, i) => {
+      plotMesh.setColorAt(i, view.group === pl.g.id ? PLOT.clone().lerp(wire, 0.3) : PLOT);
+    });
     if (plotMesh.instanceColor) plotMesh.instanceColor.needsUpdate = true;
     beacons.count = 0;
     const at = new Map(all.map(b => [b.id, b]));
