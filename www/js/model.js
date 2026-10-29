@@ -14,30 +14,45 @@ export const REALM = {
   data: { label: 'Data', at: [0, 0], wire: '#1ff2dc' },
   operations: { label: 'Operations', at: [-5.2, 2.3], wire: '#3fa2ff' },
   code: { label: 'Code', at: [5.2, 2.3], wire: '#ff5cc8' },
-  platform: { label: 'Platform', at: [0, 4.6], wire: '#b4ff3c' },
+  platform: { label: 'Platform', at: [0, 4.6], wire: '#b4ff3c' }
 };
 // The outside (L0 rim): only what the graph names. Cloudflare holds the public hostnames (the repos are in code).
 export const OUTSIDE = {
-  cloudflare: { label: 'Cloudflare', kind: 'dns', at: [-10.5, 0.2] },
+  cloudflare: { label: 'Cloudflare', kind: 'dns', at: [-10.5, 0.2] }
 };
-export const KIND = { host: 'host', vm: 'VM', ct: 'container', app: 'Application', svc: 'component', repo: 'repo', dns: 'hostname', adr: 'ADR', addon: 'add-on', db: 'database' };
+export const KIND = {
+  host: 'host',
+  vm: 'VM',
+  ct: 'container',
+  app: 'Application',
+  svc: 'component',
+  repo: 'repo',
+  dns: 'hostname',
+  adr: 'ADR',
+  addon: 'add-on',
+  db: 'database'
+};
 export const MAX_GROUPS = 7;
 
-const nameOf = (id) => id.slice(id.indexOf(':') + 1);
+const nameOf = id => id.slice(id.indexOf(':') + 1);
+
 export { nameOf };
 
 /** A node's display name: an ADR's number and title, else the name part of its id. */
 export function label(n) {
   if (!n) return '';
-  if (n.kind === 'adr') return `${n.attrs?.repo || ''} ADR-${n.attrs?.number || nameOf(n.id).split('/')[1]}${n.attrs?.title ? `: ${n.attrs.title}` : ''}`;
+  if (n.kind === 'adr')
+    return `${n.attrs?.repo || ''} ADR-${n.attrs?.number || nameOf(n.id).split('/')[1]}${n.attrs?.title ? `: ${n.attrs.title}` : ''}`;
   return nameOf(n.id);
 }
 
 /** buildModel indexes one projection. */
 export function buildModel(view) {
-  const nodes = new Map(), out = new Map(), inn = new Map();
+  const nodes = new Map(),
+    out = new Map(),
+    inn = new Map();
   for (const n of view.nodes || []) nodes.set(n.id, n);
-  const edges = (view.edges || []).filter((e) => nodes.has(e.from) && nodes.has(e.to));
+  const edges = (view.edges || []).filter(e => nodes.has(e.from) && nodes.has(e.to));
   for (const e of edges) {
     if (!out.has(e.from)) out.set(e.from, []);
     if (!inn.has(e.to)) inn.set(e.to, []);
@@ -46,7 +61,8 @@ export function buildModel(view) {
   }
   const realms = {};
   for (const r of REALMS) realms[r] = { id: r, ...REALM[r], groups: new Map(), count: 0 };
-  const outside = { cloudflare: [] }, adrs = [];
+  const outside = { cloudflare: [] },
+    adrs = [];
   for (const n of nodes.values()) {
     if (n.realm && realms[n.realm]) {
       const g = realms[n.realm].groups;
@@ -57,13 +73,29 @@ export function buildModel(view) {
     else if (n.kind === 'adr') adrs.push(n.id);
   }
   for (const r of Object.values(realms)) {
-    r.groups = new Map([...r.groups.entries()].sort(([a, x], [b, y]) => y.members.length - x.members.length || a.localeCompare(b)));
+    r.groups = new Map(
+      [...r.groups.entries()].sort(
+        ([a, x], [b, y]) => y.members.length - x.members.length || a.localeCompare(b)
+      )
+    );
     for (const g of r.groups.values()) g.members.sort();
   }
   for (const l of Object.values(outside)) l.sort();
   adrs.sort();
   const drift = Array.isArray(view.drift) ? view.drift : [];
-  return { seq: view.seq, at: view.at, vector: view.vector || {}, nodes, edges, out, inn, realms, outside, adrs, drift };
+  return {
+    seq: view.seq,
+    at: view.at,
+    vector: view.vector || {},
+    nodes,
+    edges,
+    out,
+    inn,
+    realms,
+    outside,
+    adrs,
+    drift
+  };
 }
 
 /** groupOf is the group a component sits in: {realm, group} or null (hostnames, ADRs). */
@@ -74,8 +106,9 @@ export function groupOf(m, id) {
 
 /** The ADRs that govern a node (governs edges from it), with citation counts, most cited first. */
 export function governs(m, id) {
-  return (m.out.get(id) || []).filter((e) => e.kind === 'governs')
-    .map((e) => ({ id: e.to, count: Number(e.attrs?.count || 1) }))
+  return (m.out.get(id) || [])
+    .filter(e => e.kind === 'governs')
+    .map(e => ({ id: e.to, count: Number(e.attrs?.count || 1) }))
     .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
 }
 
@@ -111,10 +144,12 @@ export function routes(m, live) {
   const by = new Map();
   for (const e of m.edges) {
     if (!TRADE[e.kind]) continue;
-    const from = endpoint(m, e.from), to = endpoint(m, e.to);
+    const from = endpoint(m, e.from),
+      to = endpoint(m, e.to);
     if (!from || !to || from === to) continue;
     const key = `${from}>${to}>${e.kind}`;
-    if (!by.has(key)) by.set(key, { key, from, to, kind: e.kind, count: 0, rps: 0, observed: false, edges: [] });
+    if (!by.has(key))
+      by.set(key, { key, from, to, kind: e.kind, count: 0, rps: 0, observed: false, edges: [] });
     const r = by.get(key);
     r.count++;
     r.edges.push(e);
@@ -139,9 +174,11 @@ export function namespaces(m, ids) {
 
 /** use sums the live land lens over namespaces: absolute CPU cores, RAM and disk bytes, and their share of capacity. */
 export function use(live, nss) {
-  const cap = live?.land?.capacity || {}, ns = live?.land?.ns || {}, u = { cpu: 0, mem: 0, disk: 0 };
+  const cap = live?.land?.capacity || {},
+    ns = live?.land?.ns || {},
+    u = { cpu: 0, mem: 0, disk: 0 };
   for (const n of nss) for (const k of ['cpu', 'mem', 'disk']) u[k] += ns[n]?.[k] || 0;
-  const share = (k) => (cap[k] > 0 ? u[k] / cap[k] : null);
+  const share = k => (cap[k] > 0 ? u[k] / cap[k] : null);
   return { ...u, share: { cpu: share('cpu'), mem: share('mem'), disk: share('disk') } };
 }
 
@@ -155,9 +192,13 @@ export function health(m, live, id) {
 /** Alerts firing on a node, a group or a realm. */
 export function alertsOn(m, live, where) {
   const list = live?.alerts || [];
-  if (where.id) return list.filter((a) => a.node === where.id);
-  if (where.group) return list.filter((a) => { const g = a.node && groupOf(m, a.node); return g && g.realm === where.realm && g.group === where.group; });
-  if (where.realm) return list.filter((a) => a.realm === where.realm);
+  if (where.id) return list.filter(a => a.node === where.id);
+  if (where.group)
+    return list.filter(a => {
+      const g = a.node && groupOf(m, a.node);
+      return g && g.realm === where.realm && g.group === where.group;
+    });
+  if (where.realm) return list.filter(a => a.realm === where.realm);
   return list;
 }
 
@@ -167,7 +208,8 @@ export function search(m, q, limit = 20) {
   if (!s) return [];
   const hits = [];
   for (const n of m.nodes.values()) {
-    const name = nameOf(n.id).toLowerCase(), title = (n.attrs?.title || '').toLowerCase();
+    const name = nameOf(n.id).toLowerCase(),
+      title = (n.attrs?.title || '').toLowerCase();
     const adr = n.kind === 'adr' ? `adr-${n.attrs?.number || ''}` : '';
     let score = 0;
     if (name === s || n.id === s || adr === s) score = 4;
@@ -177,7 +219,7 @@ export function search(m, q, limit = 20) {
     if (score) hits.push({ id: n.id, score });
   }
   hits.sort((a, b) => b.score - a.score || a.id.length - b.id.length || a.id.localeCompare(b.id));
-  return hits.slice(0, limit).map((h) => h.id);
+  return hits.slice(0, limit).map(h => h.id);
 }
 
 /** A GitHub link to where a fact was read, at the sha it was read at (no sha: the default branch). */
@@ -193,14 +235,20 @@ export function sourceURL(n) {
  * → [{host, cpu, mem, capCpu, capMem}] sorted by host id
  */
 export function workedTiles(m, live, realm) {
-  const nodes = live?.land?.nodes || {}, nsRealm = live?.land?.nsRealm || {}, by = new Map();
+  const nodes = live?.land?.nodes || {},
+    nsRealm = live?.land?.nsRealm || {},
+    by = new Map();
   for (const [vm, nl] of Object.entries(nodes)) {
-    const host = (m.out.get(vm) || []).find((e) => e.kind === 'runs-on')?.to;
+    const host = (m.out.get(vm) || []).find(e => e.kind === 'runs-on')?.to;
     if (!host) continue;
     const t = by.get(host) || { host, cpu: 0, mem: 0, capCpu: 0, capMem: 0 };
     t.capCpu += nl.capacity?.cpu || 0;
     t.capMem += nl.capacity?.mem || 0;
-    for (const [ns, u] of Object.entries(nl.ns || {})) if (nsRealm[ns] === realm) { t.cpu += u.cpu || 0; t.mem += u.mem || 0; }
+    for (const [ns, u] of Object.entries(nl.ns || {}))
+      if (nsRealm[ns] === realm) {
+        t.cpu += u.cpu || 0;
+        t.mem += u.mem || 0;
+      }
     by.set(host, t);
   }
   return [...by.values()].sort((a, b) => a.host.localeCompare(b.host));
@@ -209,8 +257,12 @@ export function workedTiles(m, live, realm) {
 /** The ADRs governing a whole realm: each ADR's citations summed over the realm's components, most cited first. */
 export function realmGoverns(m, realm) {
   const sum = new Map();
-  for (const g of m.realms[realm].groups.values()) for (const id of g.members) for (const x of governs(m, id)) sum.set(x.id, (sum.get(x.id) || 0) + x.count);
-  return [...sum].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+  for (const g of m.realms[realm].groups.values())
+    for (const id of g.members)
+      for (const x of governs(m, id)) sum.set(x.id, (sum.get(x.id) || 0) + x.count);
+  return [...sum]
+    .map(([id, count]) => ({ id, count }))
+    .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
 }
 
 /** The file a node was read from, as a reader document {repo, path}, or null. */

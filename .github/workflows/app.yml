@@ -67,6 +67,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      # No package.json here, so the pinned Biome comes from npm (www/js and www/dev only).
+      - name: biome
+        run: npx --yes @biomejs/biome@2.6.4 ci .
       # rules_test.go runs `promtool test rules` (and fails, not skips, under CI without it).
       - name: promtool 3.5.0
         run: |

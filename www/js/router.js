@@ -16,15 +16,41 @@ const PATH = /^(?!.*(^|\/)\.\.?(\/|$))[A-Za-z0-9._@+,=~ -][A-Za-z0-9._@+,=~ /-]*
 /** parse reads a location hash into a view; anything it does not understand falls back to the map. */
 export function parse(hash = '') {
   const [raw, query = ''] = hash.replace(/^#/, '').split('?');
-  const q = new URLSearchParams(query), parts = raw.split('/').filter(Boolean).map((p) => { try { return decodeURIComponent(p); } catch { return ''; } });
-  const v = { level: 0, realm: null, group: null, sel: null, id: null, doc: null, from: null, lens: q.get('lens') === 'land' ? 'land' : 'structure' };
-  if ((parts[0] === 'L1' || parts[0] === 'L2') && (parts[0] === 'L1' || REALMS.includes(parts[1]))) {
+  const q = new URLSearchParams(query),
+    parts = raw
+      .split('/')
+      .filter(Boolean)
+      .map(p => {
+        try {
+          return decodeURIComponent(p);
+        } catch {
+          return '';
+        }
+      });
+  const v = {
+    level: 0,
+    realm: null,
+    group: null,
+    sel: null,
+    id: null,
+    doc: null,
+    from: null,
+    lens: q.get('lens') === 'land' ? 'land' : 'structure'
+  };
+  if (
+    (parts[0] === 'L1' || parts[0] === 'L2') &&
+    (parts[0] === 'L1' || REALMS.includes(parts[1]))
+  ) {
     v.level = parts[0] === 'L1' ? 1 : 2;
     if (REALMS.includes(parts[1])) v.realm = parts[1];
   } else if (parts[0] === 'L3' && ID.test(parts.slice(1).join('/'))) {
     v.level = 3;
     v.id = parts.slice(1).join('/');
-  } else if (parts[0] === 'L4' && REPO.test(parts[1] || '') && PATH.test(parts.slice(2).join('/'))) {
+  } else if (
+    parts[0] === 'L4' &&
+    REPO.test(parts[1] || '') &&
+    PATH.test(parts.slice(2).join('/'))
+  ) {
     v.level = 4;
     v.doc = { repo: parts[1], path: parts.slice(2).join('/') };
     if (ID.test(q.get('from') || '')) v.from = q.get('from');
@@ -34,7 +60,11 @@ export function parse(hash = '') {
   return v;
 }
 
-const enc = (s) => s.split('/').map((x) => encodeURIComponent(x).replace(/%3A/g, ':').replace(/%40/g, '@')).join('/'); // ids read as written
+const enc = s =>
+  s
+    .split('/')
+    .map(x => encodeURIComponent(x).replace(/%3A/g, ':').replace(/%40/g, '@'))
+    .join('/'); // ids read as written
 
 /** format writes a view as a hash; parse(format(v)) is v. */
 export function format(v) {

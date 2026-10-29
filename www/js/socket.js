@@ -4,7 +4,8 @@
 // authentik: a close with SIGNED_OUT (the session's own socket, open at the sign-out, maybe in another tab), or a
 // probe answering 'signed-out' (a socket that was down then, or a page restored from the back/forward cache).
 export const SIGNED_OUT = 4001; // cmd/atlas/hub.go closeSignedOut
-export const wsURL = (loc = location) => `${loc.protocol === 'https:' ? 'wss' : 'ws'}://${loc.host}/ws`;
+export const wsURL = (loc = location) =>
+  `${loc.protocol === 'https:' ? 'wss' : 'ws'}://${loc.host}/ws`;
 
 // gateLapsed: a sign-in has lapsed under an open tab, and a socket only sees that as a failed upgrade. Two can:
 //   - the forwardAuth gate's (infra-bootstrap ADR-0065): every request answers a redirect to the login wall, so
@@ -21,16 +22,31 @@ export async function signedOut({ fetchFn = globalThis.fetch } = {}) {
     const r = await fetchFn('/auth/me', { redirect: 'manual', cache: 'no-store' });
     const me = r.ok ? await r.json() : null;
     return me?.signedOut === true && !me.admin;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
-export async function gateLapsed({ fetchFn = globalThis.fetch, reload = () => location.reload(), store = globalThis.sessionStorage, now = Date.now() } = {}) {
+export async function gateLapsed({
+  fetchFn = globalThis.fetch,
+  reload = () => location.reload(),
+  store = globalThis.sessionStorage,
+  now = Date.now()
+} = {}) {
   let r;
-  try { r = await fetchFn('/auth/me', { redirect: 'manual', cache: 'no-store' }); } catch { return false; }
+  try {
+    r = await fetchFn('/auth/me', { redirect: 'manual', cache: 'no-store' });
+  } catch {
+    return false;
+  }
   let lapsed = r.type === 'opaqueredirect' || r.status === 401;
   if (!lapsed && r.ok) {
     let me;
-    try { me = await r.json(); } catch { /* not JSON: says nothing */ }
+    try {
+      me = await r.json();
+    } catch {
+      /* not JSON: says nothing */
+    }
     if (me?.signedOut === true && !me.admin) return 'signed-out';
     lapsed = Boolean(me?.enabled && !me.admin);
   }
@@ -38,30 +54,52 @@ export async function gateLapsed({ fetchFn = globalThis.fetch, reload = () => lo
   try {
     if (now - Number(store?.getItem('mountain.gate') || 0) < 5 * 60e3) return false;
     store?.setItem('mountain.gate', String(now));
-  } catch { /* storage off: still one reload, the gate's own page ends the loop */ }
+  } catch {
+    /* storage off: still one reload, the gate's own page ends the loop */
+  }
   reload();
   return true;
 }
 
 export function connect({ url = wsURL(), onFrame, onStatus = () => {}, probe = null }) {
-  let ws, closed = false, out = false, backoff = 1000, timer, fails = 0;
-  const signedOut = () => { out = closed = true; clearTimeout(timer); ws?.close(); onStatus('signed-out'); };
+  let ws,
+    closed = false,
+    out = false,
+    backoff = 1000,
+    timer,
+    fails = 0;
+  const signedOut = () => {
+    out = closed = true;
+    clearTimeout(timer);
+    ws?.close();
+    onStatus('signed-out');
+  };
   const open = () => {
     ws = new WebSocket(url);
     ws.onopen = () => onStatus('open');
-    ws.onmessage = (e) => {
+    ws.onmessage = e => {
       let f;
-      try { f = JSON.parse(e.data); } catch { return console.warn('socket: dropped a non-JSON frame'); }
-      if (f.t === 'hello') { backoff = 1000; fails = 0; }
+      try {
+        f = JSON.parse(e.data);
+      } catch {
+        return console.warn('socket: dropped a non-JSON frame');
+      }
+      if (f.t === 'hello') {
+        backoff = 1000;
+        fails = 0;
+      }
       onFrame(f);
     };
-    ws.onclose = (e) => {
+    ws.onclose = e => {
       if (out) return; // a socket still opening when a probe found the sign-out: its close says nothing new
       if (!closed && e?.code === SIGNED_OUT) return signedOut();
       onStatus('closed');
       if (closed) return;
-      if (++fails % 6 === 2) { // the 2nd failure, then every 6th: a lapsed session is found again after the 5 min guard
-        Promise.resolve(probe?.()).then((r) => { if (r === 'signed-out' && !closed) signedOut(); });
+      if (++fails % 6 === 2) {
+        // the 2nd failure, then every 6th: a lapsed session is found again after the 5 min guard
+        Promise.resolve(probe?.()).then(r => {
+          if (r === 'signed-out' && !closed) signedOut();
+        });
       }
       timer = setTimeout(open, backoff * (0.5 + Math.random()));
       backoff = Math.min(30000, backoff * 2);
@@ -69,7 +107,21 @@ export function connect({ url = wsURL(), onFrame, onStatus = () => {}, probe = n
   };
   open();
   // the back/forward cache would hold the socket: drop it on pagehide, reconnect on pageshow
-  globalThis.addEventListener?.('pagehide', (e) => { if (e.persisted && !closed) { clearTimeout(timer); ws.onclose = null; ws.close(); } });
-  globalThis.addEventListener?.('pageshow', (e) => { if (e.persisted && !closed) open(); });
-  return { close() { closed = true; clearTimeout(timer); ws?.close(); } };
+  globalThis.addEventListener?.('pagehide', e => {
+    if (e.persisted && !closed) {
+      clearTimeout(timer);
+      ws.onclose = null;
+      ws.close();
+    }
+  });
+  globalThis.addEventListener?.('pageshow', e => {
+    if (e.persisted && !closed) open();
+  });
+  return {
+    close() {
+      closed = true;
+      clearTimeout(timer);
+      ws?.close();
+    }
+  };
 }
