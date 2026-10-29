@@ -271,7 +271,7 @@ func modelFacts(rl *realms.Realms, g *graph.Graph) {
 		if n.Realm == realms.Code {
 			layer = realms.LayerWorkshops
 		}
-		if layer != "" && n.Parent == "" {
+		if layer != "" && n.Parent == "" && n.Function != realms.FnLand {
 			set("layer", layer)
 		}
 		if deps[n.ID] >= landmarkDependents || parts[n.ID] >= landmarkParts {

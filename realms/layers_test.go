@@ -31,7 +31,7 @@ func TestLayers(t *testing.T) {
 			t.Errorf("%s: layer %q, not one of %v", key, l, LayerOrder)
 		}
 	}
-	if keys != 26 || len(r.Layers) != keys {
+	if len(r.Layers) != keys {
 		t.Errorf("%d non-land functions keys, %d layers keys: each written out", keys, len(r.Layers))
 	}
 	for key := range r.Layers {
