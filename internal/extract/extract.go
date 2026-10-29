@@ -203,7 +203,7 @@ func passes() []pass {
 		{"resolve", 1, func(x *Ctx, g *graph.Graph) error { return g.Merge(resolve(*g, x.members)) }},
 		{"rehome", 1, func(_ *Ctx, g *graph.Graph) error { rehome(g); return nil }},
 		{"place", 1, func(x *Ctx, g *graph.Graph) error { place(g, x.Realms); return nil }},
-		{"watch", 1, func(x *Ctx, g *graph.Graph) error { watchNeeds(x.Repos, x.Realms, g); return nil }},
+		{"watch", 2, func(x *Ctx, g *graph.Graph) error { watchNeeds(x.Repos, x.Realms, g); return nil }},
 		{"branchDrift", 1, func(x *Ctx, g *graph.Graph) error { return g.Merge(graph.Graph{Drift: branchDrift(x.Repos, x.track)}) }},
 	}
 }
