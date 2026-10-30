@@ -121,7 +121,7 @@ func TestPasses(t *testing.T) {
 		}
 		names = append(names, p.name)
 	}
-	if want := []string{"declare", "repoNodes", "resolve", "rehome", "place", "watch", "branchDrift"}; !slices.Equal(names, want) {
+	if want := []string{"declare", "repoNodes", "resolve", "rehome", "place", "watch", "image", "branchDrift"}; !slices.Equal(names, want) {
 		t.Errorf("passes %v, want %v (a new order is a new version of every pass it moves)", names, want)
 	}
 }

@@ -66,7 +66,7 @@ func TestUnpack(t *testing.T) {
 		entry{name: "MohammadBnei-x-abc/hard", link: "MohammadBnei-x-abc/docs/adr/0001.md", typ: tar.TypeLink},
 		entry{name: "MohammadBnei-x-abc/big.bin", size: maxFileBytes + 1, typ: tar.TypeReg},
 	)
-	if err := unpack(bytes.NewReader(b), dir); err != nil {
+	if _, err := unpack(bytes.NewReader(b), dir, maxTreeBytes); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := os.ReadFile(filepath.Join(dir, "docs/adr/0001.md")); err != nil || string(got) != "# ADR-0001: one" {
@@ -81,11 +81,28 @@ func TestUnpack(t *testing.T) {
 	dir2 := filepath.Join(base, "repo2")
 	_ = os.MkdirAll(dir2, 0o755)
 	_ = os.Symlink(base, filepath.Join(dir2, "out"))
-	if err := unpack(bytes.NewReader(tarball(t, entry{name: "top/out/pwned.txt", body: "x", typ: tar.TypeReg})), dir2); err == nil {
+	if _, err := unpack(bytes.NewReader(tarball(t, entry{name: "top/out/pwned.txt", body: "x", typ: tar.TypeReg})), dir2, maxTreeBytes); err == nil {
 		t.Error("a write through a symlink succeeded")
 	}
 	if _, err := os.Stat(filepath.Join(base, "pwned.txt")); err == nil {
 		t.Error("escaped through the symlink")
+	}
+}
+
+// TestUnpackBlocks: a tree is counted as the disk uses it (the emptyDir's sizeLimit counts blocks), each file and
+// directory rounded up to blockSize, and the limit holds on that count.
+func TestUnpackBlocks(t *testing.T) {
+	b := tarball(t,
+		entry{name: "top/d/", typ: tar.TypeDir},
+		entry{name: "top/d/a", body: "x", typ: tar.TypeReg},
+		entry{name: "top/b", size: blockSize + 1, typ: tar.TypeReg},
+		entry{name: "top/empty", typ: tar.TypeReg},
+	)
+	if n, err := unpack(bytes.NewReader(b), filepath.Join(t.TempDir(), "r"), maxTreeBytes); err != nil || n != 4*blockSize {
+		t.Errorf("unpacked: %d %v, want %d (d, a, two blocks of b, nothing for empty)", n, err, 4*blockSize)
+	}
+	if _, err := unpack(bytes.NewReader(b), filepath.Join(t.TempDir(), "r"), 3*blockSize); err == nil {
+		t.Error("4 blocks unpacked within a limit of 3")
 	}
 }
 
@@ -165,15 +182,17 @@ func TestGitHubHeads(t *testing.T) {
 	if _, err := os.Stat(r.Dir); err != nil {
 		t.Error("the replaced tree went at once: the reader may still be serving it this round")
 	}
+	g.startRound()
+	if _, err := os.Stat(r.Dir); err == nil {
+		t.Error("the tree replaced last round was kept into the next")
+	}
 	f.head["infra-bootstrap@main"], f.status = sha0, "behind"
 	if r4, _ := g.checkout(ctx, "infra-bootstrap", "main"); r4.SHA != sha2 || f.tarballs != 2 {
 		t.Errorf("a head behind was taken: %+v", r4)
 	}
+	g.startRound()
 	if r5, _ := g.checkout(ctx, "infra-bootstrap", "main"); r5.SHA != sha0 || f.tarballs != 3 {
 		t.Errorf("the same head behind, a second round running: a real reset, taken: %+v %d", r5, f.tarballs)
-	}
-	if _, err := os.Stat(r.Dir); err == nil {
-		t.Error("the tree replaced two rounds ago was kept")
 	}
 	if _, err := os.Stat(r3.Dir); err != nil {
 		t.Error("the tree replaced this round went at once")
@@ -202,6 +221,8 @@ func TestGitHubHeads(t *testing.T) {
 
 // fakeHeads serves internal/extract's fixture repos at a sha the test sets.
 type fakeHeads map[string]string // repo -> sha
+
+func (fakeHeads) startRound() {}
 
 func (f fakeHeads) checkout(_ context.Context, repo, branch string) (extract.Repo, error) {
 	sha, ok := f[repo]
@@ -233,5 +254,35 @@ func TestRoundCache(t *testing.T) {
 	h["agent-fleet"] = "b2"
 	if res, _, err := round(ctx, h, rl, c, unread); err != nil || len(res.Graph.Nodes) == 0 {
 		t.Errorf("a moved head: %v", err)
+	}
+}
+
+// roundCounter is fakeHeads that counts its round starts.
+type roundCounter struct {
+	fakeHeads
+	starts int
+}
+
+func (r *roundCounter) startRound() { r.starts++ }
+
+// TestRoundStarts: every round starts the source's round first, unchanged heads included, so the trees the last round
+// retired are removed even when nothing moved.
+func TestRoundStarts(t *testing.T) {
+	rl, err := realms.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &roundCounter{fakeHeads: fakeHeads{"infra-bootstrap": "a1"}}
+	c, unread := &roundCache{}, map[string]string{}
+	_, repos, err := round(context.Background(), h, rl, c, unread)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.vector = vectorKey(repos)
+	if _, _, err := round(context.Background(), h, rl, c, unread); err != errUnchanged {
+		t.Fatalf("same heads: %v", err)
+	}
+	if h.starts != 2 {
+		t.Errorf("%d round starts in 2 rounds", h.starts)
 	}
 }

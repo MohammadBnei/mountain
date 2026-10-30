@@ -805,9 +805,10 @@ func (a *amPoll) poll(ctx context.Context, now time.Time) error {
 }
 
 // place is the node an alert's labels name (a probe target, a k8s node, then a namespace's one Application) and the
-// realm it pings at L0.
+// realm it pings at L0. A moon's probe target (ext-<name>) is not taken: a moon is off the disc and has no realm, so
+// its alert would ping nowhere at L0; it places by its other labels, and the probe itself dims the moon (joinProbes).
 func (a *amPoll) place(idx *GraphIndex, l map[string]string) (node, realm string) {
-	if id := a.l.rl.ProbeNode(l[contract.LabelTarget]); id != "" {
+	if id := a.l.rl.ProbeNode(l[contract.LabelTarget]); id != "" && !strings.HasPrefix(id, realms.Ext+":") {
 		return id, idx.Realm[id]
 	}
 	if id := "vm:" + strings.ToLower(l[contract.LabelNode]); l[contract.LabelNode] != "" && idx.Has[id] {

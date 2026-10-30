@@ -8,6 +8,7 @@ import (
 	_ "embed"
 	"encoding/binary"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -50,6 +51,8 @@ type Realms struct {
 	// Digest is the first 32 bits of the file's sha256: a projection records it, since atlas reads realms.yaml from
 	// its binary, not from the mountain checkout it projects.
 	Digest int `yaml:"-"`
+
+	exts map[string]bool // the ext nodes a needs row declares (ext:<name>), set by checkNeeds
 }
 
 // WallKinds are what a walls row may say of a door: a mark (public: meant for everyone; own: the app authenticates
@@ -135,11 +138,25 @@ func (r *Realms) Function(id string) string {
 	return r.Functions[c.Realm+"/"+c.Group]
 }
 
-// ProbeNode is the node a blackbox target probes, or "".
+// Ext is the kind of an outside service an app needs (ext:github): a moon, not a component. It exists only as a
+// declared need, has no realm and is probed as ext-<name> (plan/17 D2).
+const Ext = "ext"
+
+// extName is an ext need's name: its probe target is ext-<name>.
+var extName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+// ProbeNode is the node a blackbox target probes, or "": pve-<host> is a listed host, ext-<name> an ext a needs row
+// declares, anything else a probes row.
 func (r *Realms) ProbeNode(target string) string {
 	if h, ok := strings.CutPrefix(target, "pve-"); ok {
 		if _, known := r.Hosts[h]; known {
 			return "host:" + h
+		}
+		return ""
+	}
+	if name, ok := strings.CutPrefix(target, Ext+"-"); ok {
+		if id := Ext + ":" + name; r.exts[id] {
+			return id
 		}
 		return ""
 	}
@@ -293,8 +310,10 @@ func checkWatch(r *Realms) error {
 }
 
 // checkNeeds: each needs row is a listed component's, and each entry parses (ParseNeed) and names another listed
-// component.
+// component, or is declared:ext:<name> (an outside service: no component, its name its probe's). It records the exts
+// for ProbeNode.
 func checkNeeds(r *Realms) error {
+	r.exts = map[string]bool{}
 	for id, list := range r.Needs {
 		if _, ok := r.Components[id]; !ok {
 			return fmt.Errorf("realms.yaml: needs %s is not a listed component", id)
@@ -303,6 +322,13 @@ func checkNeeds(r *Realms) error {
 			n, err := ParseNeed(s)
 			if err != nil {
 				return fmt.Errorf("realms.yaml: needs %s: %w", id, err)
+			}
+			if name, ok := strings.CutPrefix(n.On, Ext+":"); ok {
+				if !extName.MatchString(name) { // only declared: names a node freely (ParseNeed)
+					return fmt.Errorf("realms.yaml: needs %s: %s: the name is not lower-case letters, digits and -", id, s)
+				}
+				r.exts[n.On] = true
+				continue
 			}
 			if _, ok := r.Components[n.On]; !ok || n.On == id {
 				return fmt.Errorf("realms.yaml: needs %s: %s is not another listed component", id, n.On)

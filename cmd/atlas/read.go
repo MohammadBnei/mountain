@@ -651,12 +651,16 @@ func (a *App) serveRead(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(out)
 }
 
-// readCache holds rendered documents by repo, sha and path (a file at a sha never changes): the last 64, by insertion.
+// readCache holds answers by a key naming the sha (rendered documents by repo, sha and path; trees by repo and sha):
+// the last max, by insertion.
 type readCache struct {
 	mu    sync.Mutex
 	m     map[string][]byte
 	order []string
+	max   int
 }
+
+func newReadCache(max int) *readCache { return &readCache{m: map[string][]byte{}, max: max} }
 
 func (c *readCache) get(k string) ([]byte, bool) {
 	c.mu.Lock()
@@ -673,7 +677,7 @@ func (c *readCache) put(k string, b []byte) {
 	}
 	c.m[k] = b
 	c.order = append(c.order, k)
-	if len(c.order) > 64 {
+	if len(c.order) > c.max {
 		delete(c.m, c.order[0])
 		c.order = c.order[1:]
 	}

@@ -11,7 +11,7 @@ package contract
 var Queries = map[string]string{
 	"info":    `argocd_app_info`,
 	"ready":   `kube_node_status_condition{condition="Ready",status="true"}`,
-	"probes":  `max by (target) (probe_success{target=~"guest-.*|pve-.*"})`,
+	"probes":  `max by (target) (probe_success{target=~"guest-.*|pve-.*|ext-.*"})`,
 	"cpu":     `sum by (namespace) (rate(container_cpu_usage_seconds_total{container!="",image!=""}[5m]))`,
 	"mem":     `sum by (namespace) (container_memory_working_set_bytes{container!="",image!=""})`,
 	"disk":    `sum by (namespace) (kubelet_volume_stats_used_bytes)`,
@@ -49,7 +49,7 @@ var Signals = map[string]Signal{
 	"reqday": {`sum by (exported_service) (increase(traefik_service_requests_total[1d]))`, 300},
 	"errday": {`sum by (exported_service) (increase(traefik_service_requests_total{code=~"5.."}[1d])) or 0 * sum by (exported_service) (increase(traefik_service_requests_total[1d]))`, 300},
 	// the last 24 h per probe target: the share of probes that succeeded
-	"probeday": {`avg by (target) (avg_over_time(probe_success{target=~"guest-.*|pve-.*"}[1d]))`, 300},
+	"probeday": {`avg by (target) (avg_over_time(probe_success{target=~"guest-.*|pve-.*|ext-.*"}[1d]))`, 300},
 	// the town's calm day: each critical alert that fired in the last 24 h (one series per alert name), or a single 0
 	// when none did and the Watchdog proves the rules were evaluated
 	"critday": {`count by (alertname) (max_over_time(ALERTS{alertstate="firing",severity="critical"}[1d])) or on () (0 * max(max_over_time(ALERTS{alertname="Watchdog"}[1d])))`, 300},
@@ -87,7 +87,7 @@ const (
 	LabelSync            = "sync_status"      // argocd_app_info
 	LabelNode            = "node"             // a k8s node, → vm:<lower node>
 	LabelNamespace       = "namespace"        // land, and an alert's app when one app owns the namespace
-	LabelTarget          = "target"           // a blackbox probe target (guest-*, pve-*), through realms.ProbeNode
+	LabelTarget          = "target"           // a blackbox probe target (guest-*, pve-*, ext-*), through realms.ProbeNode
 	LabelExportedService = "exported_service" // Traefik's <ns>-<svc>-<port>@<provider>, → its app
 	LabelDaemonSet       = "daemonset"        // kube-state-metrics: a DaemonSet's name
 	LabelDeployment      = "deployment"       // kube-state-metrics: a Deployment's name

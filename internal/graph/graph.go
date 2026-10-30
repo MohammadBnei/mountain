@@ -25,6 +25,7 @@ const (
 	KindDB    = "db"    // a data service outside the cluster, by its cluster name (db:pg-proxmox)
 	KindDNS   = "dns"   // a public hostname (dns:wird.bnei.dev)
 	KindADR   = "adr"   // a decision record (adr:infra-bootstrap/0064)
+	KindExt   = "ext"   // an outside service an app declares it needs, a moon (ext:github)
 )
 
 // Kinds of edge.
@@ -36,6 +37,7 @@ const (
 	EdgeRelated   = "related"    // adr -> adr (header lines)
 	EdgeAmends    = "amends"     // adr -> adr
 	EdgeSupersede = "supersedes" // adr -> adr
+	EdgeImports   = "imports"    // repo -> repo whose Go module it requires (attrs: modules, paths)
 )
 
 // Origins of an edge: what the repos say, or what traffic showed.
@@ -94,7 +96,7 @@ type Graph struct {
 	Drift []Drift `json:"drift"`
 }
 
-var idRe = regexp.MustCompile(`^(host|vm|ct|app|svc|repo|dns|adr|addon|db):[a-z0-9][a-z0-9._/@-]*$`)
+var idRe = regexp.MustCompile(`^(host|vm|ct|app|svc|repo|dns|adr|addon|db|ext):[a-z0-9][a-z0-9._/@-]*$`)
 
 // ID builds "<kind>:<name>", lower-cased.
 func ID(kind, name string) string { return kind + ":" + strings.ToLower(name) }

@@ -543,6 +543,22 @@
    "state": "ok",
    "why": "1 of 1 members answer, 0 don't"
   },
+  "ext:anthropic": {
+   "state": "unknown",
+   "why": "no blackbox probe for this outside service"
+  },
+  "ext:cloudflare": {
+   "state": "unknown",
+   "why": "no blackbox probe for this outside service"
+  },
+  "ext:github": {
+   "state": "unknown",
+   "why": "no blackbox probe for this outside service"
+  },
+  "ext:pi-lab": {
+   "state": "unknown",
+   "why": "no blackbox probe for this outside service"
+  },
   "host:bnei": {
    "state": "ok",
    "why": "probe answers"

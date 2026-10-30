@@ -106,13 +106,14 @@ type App struct {
 	gate      *gate
 	unread    map[string]string // each source's last read failure (the projector goroutine's, project.go)
 	reads     *readCache        // rendered documents (read.go)
+	trees     *readCache        // /api/tree answers (tree.go)
 	readSlots chan struct{}     // at most two renders at once (read.go)
 }
 
 // newApp builds what the App owns, for serve and the tests alike; the caller starts the projector and the polls.
 func newApp(o Opts, rl *realms.Realms, www fs.FS, g *gate, gr *Graphs, met *Metrics) *App {
 	a := &App{Opts: o, Realms: rl, Build: buildID(www), Graph: gr, Files: &repoSet{}, gate: g, unread: map[string]string{},
-		reads: &readCache{m: map[string][]byte{}}, readSlots: make(chan struct{}, 2), Met: met}
+		reads: newReadCache(64), trees: newReadCache(8), readSlots: make(chan struct{}, 2), Met: met}
 	a.Hub = NewHub(o.Dev, a.hello, met)
 	a.Live = newLive(rl, a.Hub, met)
 	a.Live.idx = func() *GraphIndex { return a.Graph.index() }
@@ -238,6 +239,7 @@ func routeTable(a *App, www fs.FS) []route {
 		{"GET /ws", false, false, a.Hub},
 		{"GET /api/graph", false, false, http.HandlerFunc(a.serveGraph)},
 		{"GET /api/read", false, false, http.HandlerFunc(a.serveRead)},
+		{"GET /api/tree", false, false, http.HandlerFunc(a.serveTree)},
 		{"GET /", false, false, static(www, a.Opts.Dev)},
 	}
 }
