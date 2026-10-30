@@ -256,3 +256,33 @@ func TestRoundCache(t *testing.T) {
 		t.Errorf("a moved head: %v", err)
 	}
 }
+
+// roundCounter is fakeHeads that counts its round starts.
+type roundCounter struct {
+	fakeHeads
+	starts int
+}
+
+func (r *roundCounter) startRound() { r.starts++ }
+
+// TestRoundStarts: every round starts the source's round first, unchanged heads included, so the trees the last round
+// retired are removed even when nothing moved.
+func TestRoundStarts(t *testing.T) {
+	rl, err := realms.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &roundCounter{fakeHeads: fakeHeads{"infra-bootstrap": "a1"}}
+	c, unread := &roundCache{}, map[string]string{}
+	_, repos, err := round(context.Background(), h, rl, c, unread)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.vector = vectorKey(repos)
+	if _, _, err := round(context.Background(), h, rl, c, unread); err != errUnchanged {
+		t.Fatalf("same heads: %v", err)
+	}
+	if h.starts != 2 {
+		t.Errorf("%d round starts in 2 rounds", h.starts)
+	}
+}
