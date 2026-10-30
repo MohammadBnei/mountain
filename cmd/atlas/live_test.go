@@ -342,7 +342,8 @@ func TestAddonReadiness(t *testing.T) {
 }
 
 // TestPlaceWatched: an alert with no target or node lands on the one node whose watch names it, before its namespace
-// is tried (NetBirdUnreachable keeps blackbox's namespace); a rule three hosts watch places no building.
+// is tried (NetBirdUnreachable keeps blackbox's namespace); a rule three hosts watch places no building; a moon's probe
+// target places nothing (its alert falls to its other labels).
 func TestPlaceWatched(t *testing.T) {
 	rl, _ := realms.Load()
 	idx := testIndex()
@@ -357,6 +358,8 @@ func TestPlaceWatched(t *testing.T) {
 		{map[string]string{"alertname": "NetBirdUnreachable", "target": "netbird", "namespace": "wird"}, "app:netbird", "guard"},
 		{map[string]string{"alertname": "PVEHostProbeStale", "namespace": "wird"}, "", "apps"},
 		{map[string]string{"alertname": "TraefikCertExpiringSoon", "node": "k8s-cp-01"}, "vm:k8s-cp-01", "platform"}, // a node label still wins
+		// a moon's probe (realms.yaml declares ext:github) is not the alert's place: it has no realm to ping at L0
+		{map[string]string{"alertname": "BlackboxProbeFailed", "target": "ext-github", "namespace": "wird"}, "", "apps"},
 	} {
 		if n, r := a.place(idx, c.labels); n != c.node || r != c.real {
 			t.Errorf("%v: placed on %q (%q), want %q (%q)", c.labels, n, r, c.node, c.real)
