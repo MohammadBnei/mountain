@@ -109,6 +109,9 @@ func (x *Ctx) Glob(repo, pattern string) []string {
 	return out
 }
 
+// maxReadFile is the largest file an extractor reads: larger ones are generated or data, never the repo's words.
+const maxReadFile = 1 << 20
+
 // Walk calls fn for every regular file under repo, repo-relative, skipping .git and the directories skip names.
 func (x *Ctx) Walk(repo string, skip func(dir string) bool, fn func(path string, size int64) error) error {
 	r, ok := x.Repos[repo]

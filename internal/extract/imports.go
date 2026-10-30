@@ -27,7 +27,7 @@ func imports(x *Ctx) error {
 	for _, repo := range x.Realms.Sources {
 		var mods []string
 		_ = x.Walk(repo, func(dir string) bool { return SkipDir(x.Realms, repo, dir) }, func(p string, size int64) error {
-			if path.Base(p) == "go.mod" && size <= 1<<20 {
+			if path.Base(p) == "go.mod" && size <= maxReadFile {
 				mods = append(mods, p)
 			}
 			return nil

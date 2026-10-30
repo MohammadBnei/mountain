@@ -426,7 +426,7 @@ func yamlFiles(x *Ctx, rl *realms.Realms, has map[string]bool, deploys map[strin
 	var out []sourceFile
 	for _, repo := range rl.Sources {
 		_ = x.Walk(repo, func(dir string) bool { return SkipDir(rl, repo, dir) }, func(p string, size int64) error {
-			if ext := path.Ext(p); (ext != ".yaml" && ext != ".yml") || size > 1<<20 {
+			if ext := path.Ext(p); (ext != ".yaml" && ext != ".yml") || size > maxReadFile {
 				return nil
 			}
 			b, src, err := x.Read(repo, p)

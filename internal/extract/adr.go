@@ -38,8 +38,6 @@ var textExt = map[string]bool{".md": true, ".go": true, ".yaml": true, ".yml": t
 // or generated trees are listed by repo-relative path in realms.yaml (skip).
 var skipDirs = map[string]bool{"node_modules": true, "vendor": true, "testdata": true}
 
-const maxCiteFile = 1 << 20
-
 type adrKey struct {
 	repo string
 	num  string
@@ -300,7 +298,7 @@ func (c *citer) governs() error {
 		}
 		skip := func(dir string) bool { return skipDirs[path.Base(dir)] || subs[dir] || listed[dir] }
 		err := c.x.Walk(repo, skip, func(p string, size int64) error {
-			if !textExt[path.Ext(p)] || size > maxCiteFile || strings.HasPrefix(p, adrDir+"/") {
+			if !textExt[path.Ext(p)] || size > maxReadFile || strings.HasPrefix(p, adrDir+"/") {
 				return nil // ADR files link through their headers; vendored and binary files are not the repo's words
 			}
 			b, _, err := c.x.Read(repo, p)

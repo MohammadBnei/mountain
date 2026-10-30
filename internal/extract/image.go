@@ -10,10 +10,10 @@ import (
 	"github.com/MohammadBnei/mountain/internal/graph"
 )
 
-// image writes an app's image.tag as the app's attr "image": the code an app runs, as its values files pin it (app CI
-// writes the tag there). It reads the .yaml/.yml paths of the app's git edges whose branch is the one checked out, so
-// a tag is never read off a branch ArgoCD doesn't deploy; when several files of one edge set it, the last wins (helm
-// layering). No tag read, no attr.
+// image writes an app's image.tag as the app's attr "image": the tag at the branch head, as its values files pin it
+// (app CI writes the tag there). It reads the .yaml/.yml paths of the app's git edges whose branch is the one checked
+// out, so a tag is never read off a branch ArgoCD doesn't deploy; when several files of one edge set it, the last wins
+// (helm layering). No tag read, no attr.
 // ponytail: one values edge per app is assumed; with two, the winner follows edge key order, not helm's source order.
 func image(repos Repos, g *graph.Graph) {
 	x := &Ctx{Repos: repos}
