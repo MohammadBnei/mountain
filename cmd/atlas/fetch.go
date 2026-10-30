@@ -13,7 +13,9 @@ package main
 // The unpacking trusts nothing in the archive: regular files and directories only (no links, devices or FIFOs), paths
 // relative and inside the checkout (os.Root), at most maxTreeBytes in total and maxFileBytes per file (larger files are
 // left out: no extractor reads them). Every tree on disk (held and retired) shares cacheBudget: a tree that would go
-// over it is refused, and the repo is read stale (or skipped) instead of the pod being evicted.
+// over it is refused, and the repo is read stale (or skipped) instead of the pod being evicted. A repo's own retired
+// tree is left out of the sum, since a new tree removes it: the disk can briefly hold one tree over the budget, which
+// the emptyDir's 2 Gi above cacheBudget covers.
 
 import (
 	"archive/tar"
@@ -39,7 +41,7 @@ import (
 
 const (
 	ghOwner      = contract.GitHubOwner
-	maxTreeBytes = 256 << 20 // one tree's cap
+	maxTreeBytes = 256 << 20 // one tree: the largest source, vos-monolith, is ~225 MiB tracked (2026-10); cacheBudget bounds the sum
 	maxFileBytes = 8 << 20
 	maxEntries   = 200_000
 )
@@ -141,8 +143,10 @@ func (g *ghHeads) compare(ctx context.Context, repo, base, head string) (string,
 // tree downloads repo at sha and unpacks it into a fresh directory under the cache, within what cacheBudget leaves.
 func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
 	var used int64
-	for _, n := range g.size {
-		used += n
+	for d, n := range g.size {
+		if d != g.retired[repo] { // this repo's retired tree goes once the new one lands: at most one tree over, in the headroom
+			used += n
+		}
 	}
 	limit := min(maxTreeBytes, cacheBudget-used)
 	if limit <= 0 {

@@ -9,7 +9,7 @@ import (
 
 // TestCacheBudget: the trees on disk (held and retired) stay within cacheBudget. A tree that would go over it is
 // refused before the pod is evicted: nothing of it stays on disk, a repo held already is read stale, and a retired
-// tree counts until it is removed. Each fake tree is one 40-byte file.
+// tree counts until it is removed, except against its own repo's next tree. Each fake tree is one 40-byte file.
 func TestCacheBudget(t *testing.T) {
 	old := cacheBudget
 	t.Cleanup(func() { cacheBudget = old })
@@ -64,6 +64,15 @@ func TestCacheBudget(t *testing.T) {
 	f2.head["b@main"] = sha("e")
 	if r, err := g2.checkout(ctx, "b", "main"); err == nil || r.SHA != sha("b") {
 		t.Errorf("b moved with a's retired tree on disk: %s %v, want refused (160 > 130)", r.SHA, err)
+	}
+	if n := trees(g2); n != 3 {
+		t.Errorf("%d trees on disk, want 3 (a, its retired tree, b)", n)
+	}
+
+	// a's own retired tree does not keep a stale: the new tree replaces it (120 counted, 160 on disk for a moment)
+	f2.head["a@main"] = sha("f")
+	if r, err := g2.checkout(ctx, "a", "main"); err != nil || r.SHA != sha("f") {
+		t.Errorf("a moved again with only its own retired tree in the way: %s %v", r.SHA, err)
 	}
 	if n := trees(g2); n != 3 {
 		t.Errorf("%d trees on disk, want 3 (a, its retired tree, b)", n)
