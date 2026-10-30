@@ -51,6 +51,8 @@ type Realms struct {
 	// Digest is the first 32 bits of the file's sha256: a projection records it, since atlas reads realms.yaml from
 	// its binary, not from the mountain checkout it projects.
 	Digest int `yaml:"-"`
+
+	exts map[string]bool // the ext nodes a needs row declares (ext:<name>), set by checkNeeds
 }
 
 // WallKinds are what a walls row may say of a door: a mark (public: meant for everyone; own: the app authenticates
@@ -153,11 +155,8 @@ func (r *Realms) ProbeNode(target string) string {
 		return ""
 	}
 	if name, ok := strings.CutPrefix(target, Ext+"-"); ok {
-		// ponytail: a scan of the needs rows per series, a few dozen rows; index them in Parse if that grows
-		for _, list := range r.Needs {
-			if slices.Contains(list, "declared:"+Ext+":"+name) {
-				return Ext + ":" + name
-			}
+		if id := Ext + ":" + name; r.exts[id] {
+			return id
 		}
 		return ""
 	}
@@ -311,8 +310,10 @@ func checkWatch(r *Realms) error {
 }
 
 // checkNeeds: each needs row is a listed component's, and each entry parses (ParseNeed) and names another listed
-// component, or is declared:ext:<name> (an outside service: no component, its name its probe's).
+// component, or is declared:ext:<name> (an outside service: no component, its name its probe's). It records the exts
+// for ProbeNode.
 func checkNeeds(r *Realms) error {
+	r.exts = map[string]bool{}
 	for id, list := range r.Needs {
 		if _, ok := r.Components[id]; !ok {
 			return fmt.Errorf("realms.yaml: needs %s is not a listed component", id)
@@ -326,6 +327,7 @@ func checkNeeds(r *Realms) error {
 				if !extName.MatchString(name) { // only declared: names a node freely (ParseNeed)
 					return fmt.Errorf("realms.yaml: needs %s: %s: the name is not lower-case letters, digits and -", id, s)
 				}
+				r.exts[n.On] = true
 				continue
 			}
 			if _, ok := r.Components[n.On]; !ok || n.On == id {
