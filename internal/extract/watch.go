@@ -224,10 +224,14 @@ func watchNeeds(repos Repos, rl *realms.Realms, g *graph.Graph) {
 	}
 	dbs := pigstyDatabases(x)
 
-	// the moons: each ext a row declares is a node, made here from realms.yaml alone (no realm, so no drift: place
-	// ran before them and only places components)
+	// the moons: each ext a row of a node declares is a node, made here from realms.yaml alone (no realm, so no drift:
+	// place ran before them and only places components). A row of no node makes none: its edge is drift, and a moon
+	// would be left with no edge on the disc.
 	var exts []graph.Node
 	for _, id := range sortedKeys(rl.Needs) {
+		if !has[id] {
+			continue
+		}
 		for _, s := range rl.Needs[id] {
 			if n, _ := realms.ParseNeed(s); strings.HasPrefix(n.On, realms.Ext+":") && !has[n.On] {
 				has[n.On] = true

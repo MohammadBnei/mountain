@@ -8,7 +8,8 @@ import (
 )
 
 // TestExtNodes: each moon a needs row declares is one ext node, written by the watch pass from realms.yaml, with no
-// realm (so neither placed nor unassigned), and its needs edges are declared, never drift.
+// realm (so neither placed nor unassigned), and its needs edges are declared, never drift. A row of an app that is
+// not a node (app:z) makes no moon: its edge is that row's drift, and ext:cloudflare would orbit nothing.
 func TestExtNodes(t *testing.T) {
 	rl, err := realms.Parse([]byte(`realms: [infra, code]
 functions: {infra/g: utility}
@@ -18,9 +19,11 @@ sources: [infra-bootstrap]
 components:
   app:x: {realm: infra, group: g}
   app:y: {realm: infra, group: g}
+  app:z: {realm: infra, group: g}
 needs:
   app:x: ["declared:ext:github"]
   app:y: ["declared:ext:github", "declared:ext:anthropic"]
+  app:z: ["declared:ext:cloudflare"]
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +59,9 @@ needs:
 		}
 	}
 	for _, d := range g.Drift {
-		t.Errorf("drift: %s %s: %s", d.Kind, d.Subject, d.Detail)
+		if d.Subject != "app:z" {
+			t.Errorf("drift: %s %s: %s", d.Kind, d.Subject, d.Detail)
+		}
 	}
 	if err := g.Check(); err != nil {
 		t.Errorf("check: %v", err)

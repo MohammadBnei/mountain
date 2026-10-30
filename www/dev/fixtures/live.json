@@ -545,19 +545,19 @@
   },
   "ext:anthropic": {
    "state": "unknown",
-   "why": "no probe and no k8s node answer for it"
+   "why": "no blackbox probe for this outside service"
   },
   "ext:cloudflare": {
    "state": "unknown",
-   "why": "no probe and no k8s node answer for it"
+   "why": "no blackbox probe for this outside service"
   },
   "ext:github": {
    "state": "unknown",
-   "why": "no probe and no k8s node answer for it"
+   "why": "no blackbox probe for this outside service"
   },
   "ext:pi-lab": {
    "state": "unknown",
-   "why": "no probe and no k8s node answer for it"
+   "why": "no blackbox probe for this outside service"
   },
   "host:bnei": {
    "state": "ok",

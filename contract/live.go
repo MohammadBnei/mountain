@@ -168,7 +168,7 @@ var classifiers = map[string]classifier{
 	"addon": {run: (*judge).addon},
 	"vm":    {run: (*judge).unanswered},
 	"ct":    {run: (*judge).unanswered},
-	"ext":   {run: (*judge).unanswered}, // a moon: its probe, ext-<name>, or unknown
+	"ext":   {run: (*judge).unprobed}, // a moon: its probe, ext-<name>, or unknown
 }
 
 // judge is what the classifiers read: the topology, the frame, since when each add-on is below all ready, and what
@@ -268,9 +268,14 @@ func (j *judge) addon(id string) Health {
 	return Health{OK, pct + ", rolling"}
 }
 
-// unanswered: a vm, ct or ext the node rule found no answer for.
+// unanswered: a vm or ct the node rule found no answer for.
 func (j *judge) unanswered(string) Health {
 	return Health{Unknown, "no probe and no k8s node answer for it"}
+}
+
+// unprobed: an ext (a moon) with no ext-<name> probe answer; some, like ext:pi-lab, are never probed on purpose.
+func (j *judge) unprobed(string) Health {
+	return Health{Unknown, "no blackbox probe for this outside service"}
 }
 
 func count(st []string, s string) int {
