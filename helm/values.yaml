@@ -88,7 +88,10 @@ extraVolumeMounts:
     mountPath: /var/cache/atlas
 
 # Explicit, because the chart's LimitRange default (512Mi) is below what a round
-# needs: five unpacked trees and the extractors' graph (plan/10 Security, Runtime).
+# may need: the extractors hold every source's YAML at once (plan/10 Security,
+# Runtime). Measured 2026-10-30 with `atlas --repos ~/Code/ukubi` over 15 of the 17
+# sources (vos-monolith included): peak RSS 68 MiB, so 1536Mi keeps wide headroom
+# and the per-repo YAML stream (B3 plan risk) is not needed yet.
 resources:
   requests:
     cpu: 50m
