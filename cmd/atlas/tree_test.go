@@ -105,8 +105,8 @@ func TestTree(t *testing.T) {
 		code errs.Code
 		key  errs.Key
 	}{
-		"":          {errs.InvalidArgument, keyReadPath},
-		"repo=":     {errs.InvalidArgument, keyReadPath},
+		"":          {errs.InvalidArgument, keyReadRepo},
+		"repo=":     {errs.InvalidArgument, keyReadRepo},
 		"repo=nope": {errs.NotFound, keyReadRepo},
 	} {
 		r := a.serveReq("GET", "/api/tree?"+q, nil)

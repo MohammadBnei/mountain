@@ -8,6 +8,7 @@ import (
 
 	"github.com/MohammadBnei/mountain/contract"
 	"github.com/MohammadBnei/mountain/internal/extract"
+	"github.com/MohammadBnei/mountain/realms"
 	"github.com/MohammadBnei/ukubi-go/errs"
 )
 
@@ -26,7 +27,7 @@ func (a *App) serveTree(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Content-Type-Options", "nosniff")
 	repo := r.URL.Query().Get("repo")
 	if repo == "" {
-		errs.Write(w, errs.Invalid(keyReadPath, "repo is required"))
+		errs.Write(w, errs.Invalid(keyReadRepo, "repo is required"))
 		return
 	}
 	rp, ok := a.Files.get(repo)
@@ -42,7 +43,7 @@ func (a *App) serveTree(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		}
-		t, err := treeOf(a, repo, rp)
+		t, err := treeOf(a.Realms, repo, rp)
 		<-a.readSlots
 		if err != nil {
 			slog.ErrorContext(r.Context(), fmt.Sprintf("atlas: tree %s@%s: %v", repo, rp.SHA, err))
@@ -56,10 +57,10 @@ func (a *App) serveTree(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(out)
 }
 
-func treeOf(a *App, repo string, rp extract.Repo) (contract.Tree, error) {
+func treeOf(rl *realms.Realms, repo string, rp extract.Repo) (contract.Tree, error) {
 	t := contract.Tree{Repo: repo, SHA: rp.SHA, Files: []contract.TreeFile{}}
 	x := &extract.Ctx{Repos: extract.Repos{repo: rp}}
-	err := x.Walk(repo, func(dir string) bool { return extract.SkipDir(a.Realms, repo, dir) }, func(p string, size int64) error {
+	err := x.Walk(repo, func(dir string) bool { return extract.SkipDir(rl, repo, dir) }, func(p string, size int64) error {
 		if len(t.Files) == maxTreeFiles {
 			t.Truncated = true
 			return errTreeFull

@@ -13,7 +13,7 @@ const (
 	keyGraphSeqMissing errs.Key = "graph.seq_missing" // no stored projection with that seq
 	keyGraphNoHistory  errs.Key = "graph.no_history"  // an older projection, without a database
 	keyReadPath        errs.Key = "read.path"         // no repo, or a path that is not clean and relative
-	keyReadRepo        errs.Key = "read.repo"         // a repo atlas does not hold
+	keyReadRepo        errs.Key = "read.repo"         // no repo (the tree route), or a repo atlas does not hold
 	keyReadNotText     errs.Key = "read.not_text"
 	keyReadTooLarge    errs.Key = "read.too_large"
 	keyReadFile        errs.Key = "read.file" // no such file at the sha atlas holds
