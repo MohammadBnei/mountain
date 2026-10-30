@@ -1,9 +1,10 @@
 package main
 
 // The machine principal (plan/13 §1, 00 Audience R10 as amended; infra-bootstrap ADR-0068): one authentik service
-// account, the game's (atlas-game), reads the town's two routes, GET /api/graph and GET /ws, with an access token from
-// the `atlas-api` provider's client_credentials grant. Read-only by construction: those two routes write nothing, and
-// it reaches no other.
+// account, the game's (atlas-game), reads four routes with an access token from the `atlas-api` provider's
+// client_credentials grant: the town's GET /api/graph and GET /ws, and a building's rooms, GET /api/tree and GET
+// /api/read (the redacted render, read.go Redacted; ADR-0068 as amended). Read-only by construction: those four routes
+// write nothing, and it reaches no other.
 //
 // A request that carries Authorization is judged by it alone, never by a cookie too: a token that fails is a 401
 // with WWW-Authenticate, on any gated route. The token is checked offline, as the bridge checks its clients (ADR-0066):
@@ -12,7 +13,7 @@ package main
 // the pod network); iss, aud and azp the provider's; sub the one principal; exp with no leeway and at least 5 s left
 // (a socket ends at it); nbf and iat with a minute.
 //
-// It is independent of people's sign-in: configured, it reads its two routes whether or not OIDC is. The game's server
+// It is independent of people's sign-in: configured, it reads its four routes whether or not OIDC is. The game's server
 // holds one socket, so the hub's per-address cap never binds it.
 //
 // Env: MOUNTAIN_MACHINE_CERT, MOUNTAIN_MACHINE_ISSUER, MOUNTAIN_MACHINE_CLIENT_ID, MOUNTAIN_MACHINE_SUB: all set, or
@@ -42,8 +43,8 @@ type Machine struct {
 	issuer, aud, sub string
 }
 
-// machineRoutes are the routes the machine principal may read: the town's.
-var machineRoutes = []string{"GET /api/graph", "GET /ws"}
+// machineRoutes are the routes the machine principal may read: the town's and a building's rooms.
+var machineRoutes = []string{"GET /api/graph", "GET /ws", "GET /api/read", "GET /api/tree"}
 
 // machineFrom is the machine principal from its configuration (config.go): all four set, or none (nil, nil).
 func machineFrom(e machineEnv) (*Machine, error) {
@@ -226,7 +227,7 @@ func (g *gate) bearerFirst(pattern string, h, next http.Handler) http.Handler {
 		case g.machine == nil:
 			unauthorized(w, "no machine principal is configured")
 		case !allowed:
-			unauthorized(w, "the machine principal reads the town's routes only")
+			unauthorized(w, "the machine principal reads its four routes only")
 		default:
 			exp, err := g.machine.verify(tok, time.Now())
 			if err != nil {

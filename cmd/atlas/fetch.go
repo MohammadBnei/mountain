@@ -103,6 +103,8 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 		return extract.Repo{}, fmt.Errorf("head of %s: not a sha", branch)
 	}
 	cur, ok := g.have[repo]
+	// visibility moves without a commit, so it is asked before the early return below and rides every path out
+	cur.Public = g.public(ctx, repo, cur.Public)
 	if ok && cur.SHA == sha { // the same tree (a branch retargeted onto the same commit only changes the name)
 		cur.Branch = branch
 		g.have[repo] = cur
@@ -134,9 +136,23 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 	if ok { // the replaced tree goes when the next round starts: the reader serves the last round's trees until then
 		g.retired = append(g.retired, cur.Dir)
 	}
-	r := extract.Repo{Dir: dir, SHA: sha, Branch: branch}
+	r := extract.Repo{Dir: dir, SHA: sha, Branch: branch, Public: cur.Public}
 	g.have[repo] = r
 	return r, nil
+}
+
+// public is whether GitHub says repo is public: GET /repos/{owner}/{repo}, conditional, so an unchanged answer is a
+// 304 that replays the last one. Any failure keeps held; never known, it is false (closed). A fine-grained token
+// always carries Metadata read, so the poll's token can ask.
+func (g *ghHeads) public(ctx context.Context, repo string, held bool) bool {
+	b, err := g.get(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo), contract.GitHubJSONAccept, true)
+	var m struct {
+		Private *bool `json:"private"`
+	}
+	if err != nil || json.Unmarshal(b, &m) != nil || m.Private == nil {
+		return held
+	}
+	return !*m.Private
 }
 
 // compare is GitHub's status of head relative to base: ahead, behind, identical or diverged.
