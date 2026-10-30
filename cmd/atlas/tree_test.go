@@ -1,17 +1,13 @@
 package main
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/MohammadBnei/mountain/contract"
 	"github.com/MohammadBnei/mountain/internal/extract"
@@ -120,29 +116,5 @@ func TestTree(t *testing.T) {
 	a.gate.devOpen = false
 	if r := a.serveReq("GET", "/api/tree?repo=infra-bootstrap", nil); r.StatusCode != http.StatusForbidden {
 		t.Errorf("anonymous: %d, want 403", r.StatusCode)
-	}
-}
-
-// TestTreeRefusesMachine: the machine principal's token is refused on /api/tree (ADR-0068: its routes are the
-// town's); an admin's cookie reads it.
-func TestTreeRefusesMachine(t *testing.T) {
-	a, p := withAuth(t)
-	admin := adminCookie(t, a, p)
-	key, _ := rsa.GenerateKey(rand.Reader, 2048)
-	a.gate.machine = withMachine(t, certPEM(t, key, &key.PublicKey))
-	tok := "Bearer " + mint(t, key, `{"alg":"RS256"}`, good(10*time.Minute))
-	dir := t.TempDir()
-	writeTree(t, dir, map[string]string{"README.md": "x"})
-	a.Files.update(extract.Repos{"infra-bootstrap": {Dir: dir, SHA: "s1"}})
-
-	if r := a.serveReq("GET", "/api/tree?repo=infra-bootstrap", nil, "Authorization", tok); r.StatusCode != http.StatusUnauthorized ||
-		!strings.HasPrefix(r.Header.Get("WWW-Authenticate"), "Bearer") {
-		t.Errorf("machine: %d, want 401", r.StatusCode)
-	}
-	if r := a.serveReq("GET", "/api/graph", nil, "Authorization", tok); r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden {
-		t.Errorf("machine on its own route: %d (the token is good)", r.StatusCode)
-	}
-	if r := a.serveReq("GET", "/api/tree?repo=infra-bootstrap", []*http.Cookie{admin}); r.StatusCode != http.StatusOK {
-		t.Errorf("admin: %d, want 200", r.StatusCode)
 	}
 }

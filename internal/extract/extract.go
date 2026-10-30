@@ -15,11 +15,13 @@ import (
 	"github.com/MohammadBnei/mountain/realms"
 )
 
-// Repo is one checkout: its root, the sha it is at and the branch HEAD names ("" when detached).
+// Repo is one checkout: its root, the sha it is at, the branch HEAD names ("" when detached) and whether GitHub says
+// the repo is public (false when not known: a local checkout, or GitHub never answered).
 type Repo struct {
 	Dir    string
 	SHA    string
 	Branch string
+	Public bool
 }
 
 // Repos is repo name (the GitHub name, "infra-bootstrap") -> checkout.
@@ -193,7 +195,7 @@ type pass struct {
 }
 
 // passes are run in this order, each on what the ones before it made:
-//   - declare and repoNodes add the svc components realms.yaml lists and the repo nodes;
+//   - declare and repoNodes add the svc components realms.yaml lists and the repo nodes (public: "yes" on a public repo);
 //   - resolve keeps the Member edges whose ends are both nodes, so it needs every node;
 //   - rehome moves governs edges onto a node that exists, before place reads the edges;
 //   - place gives every component its realm and group (and the repos theirs, from what they feed);
@@ -203,7 +205,7 @@ type pass struct {
 func passes() []pass {
 	return []pass{
 		{"declare", 1, func(x *Ctx, g *graph.Graph) error { declare(x, x.Repos, x.Realms, *g); return nil }},
-		{"repoNodes", 1, func(x *Ctx, g *graph.Graph) error { repoNodes(x, x.Repos, *g); return nil }},
+		{"repoNodes", 2, func(x *Ctx, g *graph.Graph) error { repoNodes(x, x.Repos, *g); return nil }},
 		{"resolve", 1, func(x *Ctx, g *graph.Graph) error { return g.Merge(resolve(*g, x.members)) }},
 		{"rehome", 1, func(_ *Ctx, g *graph.Graph) error { rehome(g); return nil }},
 		{"place", 2, func(x *Ctx, g *graph.Graph) error { place(g, x.Realms); return nil }},
@@ -317,8 +319,11 @@ func repoNodes(x *Ctx, repos Repos, g graph.Graph) {
 		}
 	}
 	for _, r := range sortedKeys(names) {
-		x.Node(graph.Node{ID: graph.ID(graph.KindRepo, r), Kind: graph.KindRepo,
-			Attrs:  map[string]string{"url": "https://github.com/MohammadBnei/" + r},
+		attrs := map[string]string{"url": "https://github.com/MohammadBnei/" + r}
+		if repos[r].Public {
+			attrs["public"] = "yes" // only when GitHub said so: unknown is closed
+		}
+		x.Node(graph.Node{ID: graph.ID(graph.KindRepo, r), Kind: graph.KindRepo, Attrs: attrs,
 			Source: graph.Source{Repo: r, SHA: repos[r].SHA}})
 	}
 }

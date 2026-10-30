@@ -186,8 +186,8 @@ func TestMachineVerify(t *testing.T) {
 	}
 }
 
-// TestMachineRoutes: a request with Authorization is judged by it alone. The machine principal reads the town's two
-// routes and is refused on every other gated route; a bad token is a 401 everywhere, an admin's cookie beside it
+// TestMachineRoutes: a request with Authorization is judged by it alone. The machine principal reads its four routes
+// and is refused on every other gated route; a bad token is a 401 everywhere, an admin's cookie beside it
 // changes nothing; with the machine path off, a bearer is refused.
 func TestMachineRoutes(t *testing.T) {
 	a, p := withAuth(t)
@@ -208,7 +208,7 @@ func TestMachineRoutes(t *testing.T) {
 		method, path, _ := strings.Cut(rt.pattern, " ")
 		r := a.serveReq(method, path, nil, "Authorization", tok)
 		switch rt.pattern {
-		case "GET /api/graph":
+		case "GET /api/graph", "GET /api/read", "GET /api/tree":
 			seen++
 			if r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden || r.StatusCode == http.StatusFound {
 				t.Errorf("machine %s: %d", rt.pattern, r.StatusCode)
@@ -242,13 +242,13 @@ func TestMachineRoutes(t *testing.T) {
 	if r := a.serveReq("HEAD", "/api/graph", nil, "Authorization", tok); r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden {
 		t.Errorf("HEAD /api/graph: %d (a read)", r.StatusCode)
 	}
-	for _, m := range [][2]string{{"HEAD", "/api/read"}, {"GET", "/api/graph/"}, {"GET", "/ws/"}, {"GET", "/"}} {
+	for _, m := range [][2]string{{"GET", "/api/read/"}, {"GET", "/api/graph/"}, {"GET", "/ws/"}, {"GET", "/"}} {
 		if r := a.serveReq(m[0], m[1], nil, "Authorization", tok); !refused(r) {
 			t.Errorf("machine %s %s: %d, want 401", m[0], m[1], r.StatusCode)
 		}
 	}
-	if seen != 2 {
-		t.Errorf("the machine's routes are gone from the table: %d of 2 seen", seen)
+	if seen != 4 {
+		t.Errorf("the machine's routes are gone from the table: %d of 4 seen", seen)
 	}
 	if r := a.serveReq("GET", "/api/graph?access_token="+strings.TrimPrefix(tok, "Bearer "), nil); r.StatusCode != http.StatusForbidden {
 		t.Errorf("a token in the query: %d, want the cookie path's 403", r.StatusCode)

@@ -31,8 +31,8 @@ type heads interface {
 }
 
 // errUnchanged: every head is where the last stored round read it, so the extractors are not run again (a projection
-// is a pure function of the extractor and pass versions, the realms digest and the vector, and only the vector moves
-// while the process runs).
+// is a pure function of the extractor and pass versions, the realms digest and the vector with each repo's
+// visibility, and only those move while the process runs).
 var errUnchanged = errors.New("unchanged")
 
 // roundCache carries what the last round learned: the branches infra-bootstrap's registry names (at its sha) and the
@@ -46,7 +46,7 @@ type roundCache struct {
 func vectorKey(repos extract.Repos) string {
 	var b strings.Builder
 	for _, name := range slices.Sorted(maps.Keys(repos)) {
-		fmt.Fprintf(&b, "%s=%s@%s;", name, repos[name].Branch, repos[name].SHA)
+		fmt.Fprintf(&b, "%s=%s@%s:%t;", name, repos[name].Branch, repos[name].SHA, repos[name].Public) // public is the repo node's attr
 	}
 	return b.String()
 }

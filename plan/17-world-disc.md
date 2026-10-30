@@ -119,7 +119,9 @@ One world, three altitudes; the vehicle picks the altitude.
 - **Interiors:** 3 to 4 rooms, one per architecture seam, each flat (files on shelves, code in a reader panel). They
   need atlas work first: machine access to `/api/read` (an ADR-0068 amendment), the deployed sha rather than the
   branch head, a cache sized for every app repo, and a public-repo flag.
-  The file list a room is built from is atlas's `GET /api/tree?repo=` (cmd/atlas/tree.go, admin-only for now).
+  The file list a room is built from is atlas's `GET /api/tree?repo=` (cmd/atlas/tree.go).
+  The machine principal's reads now include `/api/read` (redacted) and `/api/tree`, per the ADR-0068 amendment, and a
+  repo node carries `public: "yes"` when GitHub says the repo is public.
 - **Art:** ukubi-kit's procgen re-keyed by building kind and type (age, state, size as parameters); hand-made glTF
   heroes for wonders, characters, vehicles, turtles and elephants.
 - **Sim parity holds:** the sim mirrors every new signal (service-graph metrics, pod placement, moon probes) on the

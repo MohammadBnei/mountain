@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -106,24 +108,41 @@ func TestUnpackBlocks(t *testing.T) {
 	}
 }
 
-// fakeGitHub answers the three calls the poll makes: a branch head (with an ETag), a compare and a tarball.
+// fakeGitHub answers the four calls the poll makes: a branch head (with an ETag), a compare, a tarball and the repo's
+// metadata (with an ETag).
 type fakeGitHub struct {
 	*httptest.Server
 	mu       sync.Mutex
 	head     map[string]string // repo@branch -> sha
+	meta     map[string]string // repo -> its metadata JSON; none = 404
 	status   string            // compare answer
 	tarballs int
+	meta304  int // metadata answered 304
 	auth     []string
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
-	f := &fakeGitHub{head: map[string]string{}, status: "ahead"}
+	f := &fakeGitHub{head: map[string]string{}, meta: map[string]string{}, status: "ahead"}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.auth = append(f.auth, r.Header.Get("Authorization"))
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/repos/MohammadBnei/"), "/")
 		switch {
+		case len(parts) == 1:
+			body, ok := f.meta[parts[0]]
+			if !ok {
+				http.NotFound(w, r)
+				return
+			}
+			etag := fmt.Sprintf(`"%x"`, sha256.Sum256([]byte(body)))
+			if r.Header.Get("If-None-Match") == etag {
+				f.meta304++
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("ETag", etag)
+			_, _ = w.Write([]byte(body))
 		case len(parts) == 3 && parts[1] == "commits":
 			sha, ok := f.head[parts[0]+"@"+parts[2]]
 			if !ok {
