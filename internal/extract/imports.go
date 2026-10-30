@@ -10,7 +10,7 @@ import (
 	"github.com/MohammadBnei/mountain/internal/graph"
 )
 
-// importsExtractor reads every go.mod of each source (minus what skipDir skips) and adds one imports edge per pair
+// importsExtractor reads every go.mod of each source (minus what SkipDir skips) and adds one imports edge per pair
 // of our repos, repo:A -> repo:B, when a go.mod in A requires a module of B directly. Several go.mods in one repo
 // still give one edge (attrs modules and paths, sorted, comma-joined), so Merge never sees two versions of it.
 // Its source is A's lexically first go.mod requiring B; a require of A's own modules is skipped, and so is
@@ -26,7 +26,7 @@ func imports(x *Ctx) error {
 	}
 	for _, repo := range x.Realms.Sources {
 		var mods []string
-		_ = x.Walk(repo, func(dir string) bool { return skipDir(x.Realms, repo, dir) }, func(p string, size int64) error {
+		_ = x.Walk(repo, func(dir string) bool { return SkipDir(x.Realms, repo, dir) }, func(p string, size int64) error {
 			if path.Base(p) == "go.mod" && size <= 1<<20 {
 				mods = append(mods, p)
 			}
@@ -52,6 +52,10 @@ func imports(x *Ctx) error {
 				rest, ok := strings.CutPrefix(strings.ToLower(r.Mod.Path), ourModules)
 				to, _, _ := strings.Cut(rest, "/")
 				if !ok || r.Indirect || to == "" || to == strings.ToLower(repo) {
+					continue
+				}
+				if !graph.Valid(graph.ID(graph.KindRepo, to)) { // a repo name no node id can carry: one require, not the projection
+					x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, repo), Detail: p + ": requires " + r.Mod.Path + ": not a repo name atlas can name", Source: s})
 					continue
 				}
 				if modules[to] == nil {

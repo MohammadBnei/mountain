@@ -22,8 +22,9 @@ func attrItems(s string) []string {
 	return out
 }
 
-// TestImports: every go.mod of a source (minus what skipDir skips) gives one imports edge per pair of our repos, from
-// both require forms; another owner's module, an indirect require and a repo's own modules give none; several go.mods
+// TestImports: every go.mod of a source (minus what SkipDir skips) gives one imports edge per pair of our repos, from
+// both require forms; another owner's module, an indirect require and a repo's own modules give none, and a repo
+// name no node id can carry (_lib) is drift, not a failed projection; several go.mods
 // of one repo give one edge, sourced at the first of them; repoNodes makes the imported repos' nodes.
 func TestImports(t *testing.T) {
 	dir := t.TempDir()
@@ -47,6 +48,8 @@ require (
 )
 
 require github.com/MohammadBnei/Ukubi-Kit v0.1.0
+
+require github.com/MohammadBnei/_lib v0.1.0
 `)
 	write("agent-fleet", "dashboard/go.mod", "module github.com/MohammadBnei/agent-fleet/dashboard\n\nrequire github.com/MohammadBnei/ukubi-go/kit v0.2.0\n")
 	write("agent-fleet", "core/go.mod", "module github.com/MohammadBnei/agent-fleet/core\n\nrequire (\n\tgithub.com/MohammadBnei/agent-fleet/proto v0.0.0\n\tgithub.com/MohammadBnei/ukubi-go v0.3.0\n)\n")
@@ -69,6 +72,9 @@ require github.com/MohammadBnei/Ukubi-Kit v0.1.0
 		t.Fatal(err)
 	}
 	g := res.Graph
+	if !hasDrift(g, graph.DriftUnresolved, "repo:mountain", "github.com/MohammadBnei/_lib") {
+		t.Errorf("a require of a repo no id can name: no drift in %+v", g.Drift)
+	}
 
 	var got []string
 	for _, e := range g.Edges {

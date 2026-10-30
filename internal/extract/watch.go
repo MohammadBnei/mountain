@@ -407,20 +407,21 @@ func deployPaths(g *graph.Graph) map[string]map[string]string {
 	return out
 }
 
-// skipDirs are directories never read: dependencies and test fixtures anywhere, and at a repo's root the vendored
-// trees and submodules (pigsty's own tree, kubespray, the agent-fleet and k8s-cluster submodules).
-func skipDir(rl *realms.Realms, repo, dir string) bool {
+// SkipDir names the directories never read (atlas's tree route leaves them out too): dependencies and test fixtures
+// anywhere, and at a repo's root the vendored trees and submodules (pigsty's own tree, kubespray, the agent-fleet and
+// k8s-cluster submodules).
+func SkipDir(rl *realms.Realms, repo, dir string) bool {
 	if base := path.Base(dir); base == "node_modules" || base == "testdata" || base == "vendor" {
 		return true
 	}
 	return slices.Contains(rl.Skip[repo], dir) || dir == "pigsty" || dir == "kubespray" || dir == "agent-fleet" || dir == "k8s-cluster"
 }
 
-// yamlFiles is every YAML file of the sources, minus the directories skipDir names, each with the app it belongs to.
+// yamlFiles is every YAML file of the sources, minus the directories SkipDir names, each with the app it belongs to.
 func yamlFiles(x *Ctx, rl *realms.Realms, has map[string]bool, deploys map[string]map[string]string) []sourceFile {
 	var out []sourceFile
 	for _, repo := range rl.Sources {
-		_ = x.Walk(repo, func(dir string) bool { return skipDir(rl, repo, dir) }, func(p string, size int64) error {
+		_ = x.Walk(repo, func(dir string) bool { return SkipDir(rl, repo, dir) }, func(p string, size int64) error {
 			if ext := path.Ext(p); (ext != ".yaml" && ext != ".yml") || size > 1<<20 {
 				return nil
 			}
