@@ -12,10 +12,11 @@ package main
 //
 // The unpacking trusts nothing in the archive: regular files and directories only (no links, devices or FIFOs), paths
 // relative and inside the checkout (os.Root), at most maxTreeBytes in total and maxFileBytes per file (larger files are
-// left out: no extractor reads them). Every tree on disk (held and retired) shares cacheBudget: a tree that would go
-// over it is refused, and the repo is read stale (or skipped) instead of the pod being evicted. A repo's own retired
-// tree is left out of the sum, since a new tree removes it: the disk can briefly hold one tree over the budget, which
-// the emptyDir's 2 Gi above cacheBudget covers.
+// left out: no extractor reads them). Sizes are counted as the disk uses them, in blocks (blockSize), since that is
+// what the emptyDir's sizeLimit counts. Every tree on disk shares cacheBudget: the held ones and the ones this round
+// replaced (the reader serves the last round's trees until this round ends, so they are removed when the next round
+// starts). A tree that would go over it is refused, and the repo is read stale (or skipped) instead of the pod being
+// evicted.
 
 import (
 	"archive/tar"
@@ -41,12 +42,18 @@ import (
 
 const (
 	ghOwner      = contract.GitHubOwner
-	maxTreeBytes = 256 << 20 // one tree: the largest source, vos-monolith, is ~225 MiB tracked (2026-10); cacheBudget bounds the sum
 	maxFileBytes = 8 << 20
 	maxEntries   = 200_000
+	blockSize    = 4 << 10 // the filesystem block: a file or directory uses its size rounded up to it
+
+	// maxTreeBytes is one tree, on disk: the largest source, vos-monolith, is ~225 MiB tracked (2026-10). Raise it
+	// when a source outgrows it: its tree is refused every round and the repo read stale, which the projector's WARN
+	// says (the repo and the size reached). cacheBudget bounds the sum.
+	maxTreeBytes = 256 << 20
 )
 
-// cacheBudget is every tree on disk, held and retired, under the 6 Gi emptyDir (helm/values.yaml); a var so tests lower it.
+// cacheBudget is every tree on disk, held and retired, under the 6 Gi emptyDir (helm/values.yaml): the 2 Gi above it
+// is headroom for what the block count misses (filesystem metadata). A var so tests lower it.
 var cacheBudget int64 = 4 << 30
 
 var errNoAccess = errors.New("not found (no access)")
@@ -58,8 +65,8 @@ type ghHeads struct {
 	body            map[string][]byte       // request -> last 200 body (a 304 replays it)
 	have            map[string]extract.Repo // repo -> the checkout on disk
 	behind          map[string]string       // repo -> a head seen behind the held one, once
-	retired         map[string]string       // repo -> the tree replaced last round, removed when the next one is (the reader may still be serving it)
-	size            map[string]int64        // tree directory -> bytes unpacked into it (held and retired trees)
+	retired         []string                // the trees replaced this round, removed when the next round starts (the reader serves them until then)
+	size            map[string]int64        // tree directory -> bytes it uses on disk (held and retired trees)
 	seq             int                     // tree directories are never reused: <repo>-<sha>-<seq>
 	pauseUntil      time.Time
 	met             *Metrics // nil = not recorded
@@ -74,7 +81,16 @@ func newGitHub(apiURL, token, dir string, met *Metrics) (*ghHeads, error) {
 		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
 	return &ghHeads{url: strings.TrimRight(apiURL, "/"), token: token, dir: dir, hc: &http.Client{Timeout: 5 * time.Minute},
-		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}, retired: map[string]string{}, size: map[string]int64{}, met: met}, nil
+		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}, size: map[string]int64{}, met: met}, nil
+}
+
+// startRound removes the trees the last round replaced: the reader moved off them when that round ended.
+func (g *ghHeads) startRound() {
+	for _, d := range g.retired {
+		_ = os.RemoveAll(d)
+		delete(g.size, d)
+	}
+	g.retired = nil
 }
 
 func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Repo, error) {
@@ -115,12 +131,8 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 	if err != nil {
 		return cur, err // cur (when held) is still a whole tree: round reads it, stale, rather than lose the repo
 	}
-	if ok { // the replaced tree goes one round later: the reader serves the last round's trees until this round ends
-		if old := g.retired[repo]; old != "" {
-			_ = os.RemoveAll(old)
-			delete(g.size, old)
-		}
-		g.retired[repo] = cur.Dir
+	if ok { // the replaced tree goes when the next round starts: the reader serves the last round's trees until then
+		g.retired = append(g.retired, cur.Dir)
 	}
 	r := extract.Repo{Dir: dir, SHA: sha, Branch: branch}
 	g.have[repo] = r
@@ -143,10 +155,8 @@ func (g *ghHeads) compare(ctx context.Context, repo, base, head string) (string,
 // tree downloads repo at sha and unpacks it into a fresh directory under the cache, within what cacheBudget leaves.
 func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
 	var used int64
-	for d, n := range g.size {
-		if d != g.retired[repo] { // this repo's retired tree goes once the new one lands: at most one tree over, in the headroom
-			used += n
-		}
+	for _, n := range g.size {
+		used += n
 	}
 	limit := min(maxTreeBytes, cacheBudget-used)
 	if limit <= 0 {
@@ -178,7 +188,7 @@ func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
 }
 
 // unpack writes a GitHub tarball (one top directory, "<owner>-<repo>-<sha>/") into dir, stripping that directory,
-// and answers the bytes written; more than limit bytes of files is an error.
+// and answers the bytes it uses on disk, each file and directory rounded up to blockSize; more than limit is an error.
 func unpack(r io.Reader, dir string, limit int64) (int64, error) {
 	zr, err := gzip.NewReader(r)
 	if err != nil {
@@ -213,6 +223,9 @@ func unpack(r io.Reader, dir string, limit int64) (int64, error) {
 		name := filepath.FromSlash(rel)
 		switch h.Typeflag {
 		case tar.TypeDir:
+			if total += blockSize; total > limit {
+				return total, overLimit(total, limit)
+			}
 			if err := root.MkdirAll(name, 0o755); err != nil {
 				return total, err
 			}
@@ -220,8 +233,8 @@ func unpack(r io.Reader, dir string, limit int64) (int64, error) {
 			if h.Size > maxFileBytes {
 				continue // no extractor reads a file this large
 			}
-			if total += h.Size; total > limit {
-				return total, fmt.Errorf("tree over %d bytes", limit)
+			if total += (h.Size + blockSize - 1) / blockSize * blockSize; total > limit {
+				return total, overLimit(total, limit)
 			}
 			if d := filepath.Dir(name); d != "." {
 				if err := root.MkdirAll(d, 0o755); err != nil {
@@ -242,6 +255,11 @@ func unpack(r io.Reader, dir string, limit int64) (int64, error) {
 		}
 		// anything else (symlinks, hard links, devices, the pax global header) is left out
 	}
+}
+
+// overLimit is a refused tree's error: the round logs it at WARN with the repo, once per change.
+func overLimit(total, limit int64) error {
+	return fmt.Errorf("tree refused at %d bytes, over its limit of %d (maxTreeBytes, or what cacheBudget leaves)", total, limit)
 }
 
 func (g *ghHeads) request(ctx context.Context, p, accept string) (*http.Request, error) {

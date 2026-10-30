@@ -24,6 +24,8 @@ import (
 
 // heads is where a round's checkouts come from: GitHub tarballs (fetch.go) or local directories.
 type heads interface {
+	// startRound says the reader serves the last round's trees now, not the ones they replaced.
+	startRound()
 	// checkout returns repo at the head of branch, on disk, or why it can't be read this round.
 	checkout(ctx context.Context, repo, branch string) (extract.Repo, error)
 }
@@ -56,6 +58,7 @@ func round(ctx context.Context, src heads, rl *realms.Realms, c *roundCache, unr
 	if unread == nil {
 		unread = map[string]string{}
 	}
+	src.startRound()
 	repos := extract.Repos{}
 	infra, err := src.checkout(ctx, rl.Sources[0], "main")
 	if err != nil && infra.Dir == "" {
@@ -186,6 +189,8 @@ func (a *App) projectOnce(ctx context.Context, src heads, c *roundCache) error {
 // localHeads reads checkouts named by repo under a directory, at whatever they have checked out (branch drift
 // says when that is not the tracked branch).
 type localHeads string
+
+func (localHeads) startRound() {}
 
 func (d localHeads) checkout(_ context.Context, repo, _ string) (extract.Repo, error) {
 	all, err := extract.Checkouts(string(d))

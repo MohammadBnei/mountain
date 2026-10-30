@@ -89,6 +89,23 @@ func TestUnpack(t *testing.T) {
 	}
 }
 
+// TestUnpackBlocks: a tree is counted as the disk uses it (the emptyDir's sizeLimit counts blocks), each file and
+// directory rounded up to blockSize, and the limit holds on that count.
+func TestUnpackBlocks(t *testing.T) {
+	b := tarball(t,
+		entry{name: "top/d/", typ: tar.TypeDir},
+		entry{name: "top/d/a", body: "x", typ: tar.TypeReg},
+		entry{name: "top/b", size: blockSize + 1, typ: tar.TypeReg},
+		entry{name: "top/empty", typ: tar.TypeReg},
+	)
+	if n, err := unpack(bytes.NewReader(b), filepath.Join(t.TempDir(), "r"), maxTreeBytes); err != nil || n != 4*blockSize {
+		t.Errorf("unpacked: %d %v, want %d (d, a, two blocks of b, nothing for empty)", n, err, 4*blockSize)
+	}
+	if _, err := unpack(bytes.NewReader(b), filepath.Join(t.TempDir(), "r"), 3*blockSize); err == nil {
+		t.Error("4 blocks unpacked within a limit of 3")
+	}
+}
+
 // fakeGitHub answers the three calls the poll makes: a branch head (with an ETag), a compare and a tarball.
 type fakeGitHub struct {
 	*httptest.Server
@@ -165,15 +182,17 @@ func TestGitHubHeads(t *testing.T) {
 	if _, err := os.Stat(r.Dir); err != nil {
 		t.Error("the replaced tree went at once: the reader may still be serving it this round")
 	}
+	g.startRound()
+	if _, err := os.Stat(r.Dir); err == nil {
+		t.Error("the tree replaced last round was kept into the next")
+	}
 	f.head["infra-bootstrap@main"], f.status = sha0, "behind"
 	if r4, _ := g.checkout(ctx, "infra-bootstrap", "main"); r4.SHA != sha2 || f.tarballs != 2 {
 		t.Errorf("a head behind was taken: %+v", r4)
 	}
+	g.startRound()
 	if r5, _ := g.checkout(ctx, "infra-bootstrap", "main"); r5.SHA != sha0 || f.tarballs != 3 {
 		t.Errorf("the same head behind, a second round running: a real reset, taken: %+v %d", r5, f.tarballs)
-	}
-	if _, err := os.Stat(r.Dir); err == nil {
-		t.Error("the tree replaced two rounds ago was kept")
 	}
 	if _, err := os.Stat(r3.Dir); err != nil {
 		t.Error("the tree replaced this round went at once")
@@ -202,6 +221,8 @@ func TestGitHubHeads(t *testing.T) {
 
 // fakeHeads serves internal/extract's fixture repos at a sha the test sets.
 type fakeHeads map[string]string // repo -> sha
+
+func (fakeHeads) startRound() {}
 
 func (f fakeHeads) checkout(_ context.Context, repo, branch string) (extract.Repo, error) {
 	sha, ok := f[repo]
