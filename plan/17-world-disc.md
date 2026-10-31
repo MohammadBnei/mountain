@@ -1,5 +1,7 @@
 # 17 · R16: the world as a disc: one world from orbit to a building's rooms (design, 2026-10-29)
 
+> **Superseded in part by `18-villages.md` (2026-10-31):** the world is laid out as villages by civ round a capital, not as rings by layer. §The world's bullets "Rings are stack layers" and "Placement inside a ring follows the roads", and D1's ring wording, give way to 18. Everything else here stands.
+
 > Status: **draft**. Three owner rounds (ideation, interview, architecture) and one doubt cycle (12 findings, all
 > folded in). The living copy, with the map of the disc, is the owner's manifest doc "The Mountain — World Manifest".
 > It replaces the floating islands of `13-game-town.md` and the realm-as-civ grouping there; it keeps 12's sim, goals
