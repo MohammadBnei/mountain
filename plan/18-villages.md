@@ -1,6 +1,6 @@
 # 18 · Villages: one world for the owner, friends and engineers
 
-Status: draft 2, 2026-10-31, after two doubt rounds (product and code).
+Status: draft 3, 2026-10-31, after two doubt rounds (product and code), the owner's answers and the control room.
 
 This plan supersedes two things in plan/17:
 - in §The world, the bullets "rings are stack layers" and "placement inside a ring follows the roads";
@@ -26,7 +26,7 @@ principle and the altitudes.
   1. The visitor spawns on foot in the capital square.
   2. Visual guidance pulls them down the main street to the bazaar.
   3. A quick menu opens on a stall, then the portal takes them to the real app.
-  4. Quest 2, which needs sign-in, gives a bike or a horse. The ship comes later.
+  4. Quest 2, which needs sign-in, gives the bike. The ship comes later.
 - **Access:**
   - **Guests** get one quest (quest 1), no multiplayer, and progress kept in the browser.
   - **Signing in** through authentik's GitHub and Google sources unlocks everything.
@@ -147,8 +147,8 @@ centre to centre unless it says edge. The gate measures them.
   with edge at the gate.
 - **Stalls:**
   - friend-facing apps take the bazaar spine's stall lots first;
-  - the 4 stalls come from a game-side list until atlas passes a mountain `audience: public` attr through, then from
-    the attr;
+  - the stall list sits behind one seam in the layout's input. V1 seeds it with the 4 apps, and V7's Showcase editor
+    becomes its source;
   - the other apps stand in the bazaar's back streets.
 - **Doors face streets.**
   - `face` points at the street toward the partner a building shares the most roads with, or at the square.
@@ -242,8 +242,12 @@ world-hex.ts:66). It gives ordered lots, nearest the square first, for any count
   - the funnel is never public.
   - Visitors see every village's civ name, its lots and the roads between villages. Building ids, civs and supply
     roads are public today. The owner's sign-off covers this explicitly.
+- **The Showcase editor's output (V7):**
+  - only published fields with a public mark reach the public town;
+  - drafts, unmarked fields, the editor's log and every control-room route and datum stay owner-only;
+  - `public-fields.txt` still gates the public output.
 - **Per-field public source:**
-  - story cards and repo links come from a mountain field marked public per item;
+  - story cards and repo links come from the Showcase editor, marked public per item (seeded empty until V7);
   - with no mark, nothing is shown.
 - **Coarse up or down per building stays public,** as today (`live.states`, `cards.state`). The shutters need it.
   Host and VM health, raiders and causes stay owner-only.
@@ -253,7 +257,7 @@ world-hex.ts:66). It gives ordered lots, nearest the square first, for any count
 - The rides registry gets a `gate`. The owner has every ride, and a visitor starts on foot.
 - Quests 1 and 2 are hard-coded in V3.
   - Quest 1: reach the bazaar, open an app. Guests can play it, and its progress is kept in localStorage.
-  - Quest 2 needs sign-in: a signed-in visitor who has finished quest 1 collects the bike or horse at the capital's
+  - Quest 2 needs sign-in: a signed-in visitor who has finished quest 1 collects the bike at the capital's
     stables.
   - Until plan 19's progress store lands, that unlock is a flag derived from the signed-in session plus quest 1.
 - Visitors spawn at the square. The owner keeps today's start.
@@ -321,6 +325,8 @@ identity: guests are counted by event, never tracked. The cockpit shows the funn
     - stalls are on the spine;
     - no public field beyond the allowlist;
     - a visitor starts on foot;
+    - every control-room route returns 401 or 403 to a non-owner;
+    - a visitor's page draws no trapdoor and no control-room data;
     - the phone shows the capital within the load budget.
 - **Plan/17** gets a note that 18 supersedes it.
 - **The town page** (`/`) keeps its own hex grid (`districts`, `hex`, `RingHex`, `placement.json`) until it retires
@@ -331,7 +337,7 @@ identity: guests are counted by event, never tracked. The cockpit shows the funn
 | slice | what | depends on | files it owns |
 |---|---|---|---|
 | V0 | this plan in mountain, plus the plan/17 note | none | mountain plan/ |
-| V1 | server layout v3: `DiscR`, zones, villages, the frozen order, shape generators with water, lots, `face`, the stall list, the event, the migration, tests | V0 | town/, internal/play/, game/ |
+| V1 | server layout v3: `DiscR`, zones, villages, the frozen order, shape generators with water, lots, `face`, the stall list behind one seam (seeded, swapped by V7), the event, the migration, tests | V0 | town/, internal/play/, game/ |
 | V2 | client: zones, `disc.r`, shape water, roads, doors, boards, minimap, cards; restated gates | V1 | world-land.ts, world-hex.ts, world-rings.ts, world.ts, dev gates |
 | V3 | capital and first minute: the spawn square, info buildings, quick menu and portal, story cards, shutters, beacon, ride gates, quest 1, funnel | V2, plus aim (world/aim) | new world-capital.ts, world-quick.ts; world.ts is touched last, in sequence |
 | V4 | countryside and frontier: fields, farms, landmarks, ruins, wild zones | V2 | world-land.ts and world-hex.ts decor |
@@ -342,9 +348,10 @@ identity: guests are counted by event, never tracked. The cockpit shows the funn
 | plan 19 | quests, lore pipeline, mobs, progress store, LLM with caps | V3 | |
 | plan 20 | multiplayer | 19 | |
 
-- V3 to V6 overlap on world.ts, world-land.ts and world-hex.ts.
+- V3 to V7 overlap on world.ts, world-land.ts and world-hex.ts.
 - V4 and V6 run in sequence on the land files. V3 and V5 can run in parallel with them.
-- One integration pass merges world.ts.
+- One integration pass merges world.ts. V7's trapdoor and slab window touch it last.
+- V3's quick menu and story cards read the seeded Showcase data behind V1's seam. V7 swaps the editor in.
 
 ## The control room (owner, 2026-10-31)
 
@@ -357,7 +364,7 @@ identity: guests are counted by event, never tracked. The cockpit shows the funn
 - **Game operations here; cluster operations stay in the cockpit.**
   - **Live data:**
     - the funnel;
-    - visitors online, guests vs signed in;
+    - visitors online, guests vs signed in: a count of live connections, with no identity kept for guests;
     - quest completions;
     - LLM spend against its caps;
     - the layout log;
@@ -367,7 +374,8 @@ identity: guests are counted by event, never tracked. The cockpit shows the funn
     - the lore approval queue;
     - the LLM budget;
     - a message on the notice board;
-    - banning a visitor;
+    - banning a signed-in visitor, keyed on the authentik subject. Guests can't be banned one by one; abuse is held by
+      rate limits;
     - re-laying a village;
     - sim controls.
 - **Showcase edits are logged events in the game's state**, as the layout is. A visitor sees an edit at once, and it
