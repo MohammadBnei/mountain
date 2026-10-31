@@ -337,6 +337,7 @@ identity: guests are counted by event, never tracked. The cockpit shows the funn
 | V4 | countryside and frontier: fields, farms, landmarks, ruins, wild zones | V2 | world-land.ts and world-hex.ts decor |
 | V5 | life: homes, routines, street walking, awake residents, carriers on roads | V2 | world-people.ts, world-carts.ts |
 | V6 | fun: playground geometry, places, secrets, game slots | V2, V4 | the shape generators (Go) plus new world-fun.ts |
+| V7 | the control room: the interior under the clock tower, owner-only routes, live game data, the Showcase editor with logged events, the lore queue, the LLM budget, the notice-board message, bans, re-lay, sim controls; the slab window | V3 | new world-control.ts, game/showcase.go, internal/play/control.go |
 | infra | authentik GitHub and Google sources and the `visitors` group: stacked PR, never merged by agents | none | infra-bootstrap |
 | plan 19 | quests, lore pipeline, mobs, progress store, LLM with caps | V3 | |
 | plan 20 | multiplayer | 19 | |
@@ -345,11 +346,45 @@ identity: guests are counted by event, never tracked. The cockpit shows the funn
 - V4 and V6 run in sequence on the land files. V3 and V5 can run in parallel with them.
 - One integration pass merges world.ts.
 
-## Open questions (owner)
+## The control room (owner, 2026-10-31)
 
-1. The public URL and a one-line pitch for each of the 4 stalls (wird, dream-analyst, editable-website, voc on
-   steroid).
-2. Sign off the visitor column of the info buildings.
-3. Clock tower history: keep atlas events in the game log, or in a bounded ring?
-4. Quest 2's reward: a bike, a horse, or a choice? (The kit has no horse model.)
-5. Where the public story-card text and the public marks live: realm files in mountain, or a doc per project?
+- **What it is:** the game's own secret control room, an interior (world-interior) under the capital's clock tower.
+- **The entrance:** a trapdoor and stairs down into the slab, drawn only for the owner. Visitors never get the
+  entrance, its routes or its data.
+- **The disc keeps its thickness.** The only outside trace is a small lit window in the slab's underside, a tease
+  seen from the ship below.
+- **Secrecy is flavour, not security.** Every control-room route and action checks the owner session on the server.
+- **Game operations here; cluster operations stay in the cockpit.**
+  - **Live data:**
+    - the funnel;
+    - visitors online, guests vs signed in;
+    - quest completions;
+    - LLM spend against its caps;
+    - the layout log;
+    - errors.
+  - **Actions:**
+    - **the Showcase editor:** per app, on a stall or not, URL, pitch, story, repo link and which fields are public;
+    - the lore approval queue;
+    - the LLM budget;
+    - a message on the notice board;
+    - banning a visitor;
+    - re-laying a village;
+    - sim controls.
+- **Showcase edits are logged events in the game's state**, as the layout is. A visitor sees an edit at once, and it
+  survives restarts. A stall change is one logged building move.
+- **The Showcase editor is the one source** for stall, URL, pitch, story and public marks. It replaces the game-side
+  list and mountain's realm files: the owner wants it editable from an admin service. V1 seeds the 4 stalls behind one
+  seam.
+
+## Owner answers (2026-10-31)
+
+1. **Stalls:**
+   - URLs and pitches are written by the owner in the Showcase editor;
+   - Voco'steroid has its own domain;
+   - no drafted pitches.
+2. The visitor column of the info buildings is signed off as drafted. Village names and the roads between them are
+   public.
+3. **Clock tower history:** a bounded ring of the last 500 atlas events (deploys, syncs, incidents). Milestones are
+   pinned by hand.
+4. **Quest 2's reward:** the bike. No horse for now.
+5. **Story text and public marks** live in the Showcase editor (§The control room).
