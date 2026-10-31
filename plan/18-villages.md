@@ -6,12 +6,12 @@ This plan supersedes two things in plan/17:
 - in §The world, the bullets "rings are stack layers" and "placement inside a ring follows the roads";
 - D1's ring wording.
 
-Everything else in 17 stands: the disc, the turtles and elephants, the moons, the Rimfall, the logged layout and the
-altitudes.
+Everything else in 17 stands: the disc, the turtles and elephants, the moons, the Rimfall, the logged-layout
+principle and the altitudes.
 
 ## Intent (confirmed by the owner, 2026-10-31)
 
-- **Outcome:** one world, laid out as option C on the maps page (claude.ai/artifact/MVuFNtg92AsL1ki4VvZV84):
+- **Outcome:** one world, laid out as option C on the owner's "Ukubi village maps" page:
   - a capital;
   - the friend-facing apps' bazaar first from the spawn;
   - the infra cities round the capital;
@@ -26,9 +26,9 @@ altitudes.
   1. The visitor spawns on foot in the capital square.
   2. Visual guidance pulls them down the main street to the bazaar.
   3. A quick menu opens on a stall, then the portal takes them to the real app.
-  4. Quest 2 gives a bike or a horse. The ship comes later.
+  4. Quest 2, which needs sign-in, gives a bike or a horse. The ship comes later.
 - **Access:**
-  - **Guests** get one quest, no multiplayer, and progress kept in the browser.
+  - **Guests** get one quest (quest 1), no multiplayer, and progress kept in the browser.
   - **Signing in** through authentik's GitHub and Google sources unlocks everything.
   - Owner-only data (health beyond coarse up or down, commands, hosts) never reaches visitors.
 - **Success:** a friend opens a real app within a couple of minutes of landing, and keeps exploring. It is measured
@@ -66,7 +66,7 @@ altitudes.
    greyed out, while the pitch and Details stay. This uses only the coarse `states` already in the public live
    frame.
 6. **Funnel:**
-   - steps: landed, reached the bazaar, opened an app, quest 1, quest 2, signed in;
+   - steps: landed, reached the bazaar, opened an app, quest 1, signed in, quest 2;
    - counted server-side, with no cookies, no third parties and no per-guest tracking;
    - owner-only, shown in the cockpit.
 7. **Defaults the owner didn't contest:**
@@ -100,12 +100,13 @@ altitudes.
 | Capital | centre, up to about 0.12R | the town centre (`default` civ, `app:mountain`) at (0,0), the six wonder anchors at `hubRadius` on bearings w·π/3, the spawn square, the info buildings, the twin-city river and bridges kept clear of all of these |
 | City ring | centres at **0.25R (135 world units)** | the cities (civs of 10 or more): apps on the spawn square's main street, the others in the solved order |
 | Countryside | between and round the cities, and along the long roads | roads, fields, farms, windmills, orchards |
-| Frontier | 0.5R to R | the hamlets (civs of 7 or fewer) as outposts, plus wild forest, ruins, landmarks, secrets, wild zones |
+| Frontier | 0.5R to R | the hamlets (civs of 7 or fewer) as outposts at about 0.75R to 0.9R, plus wild forest, ruins, landmarks, secrets, wild zones |
 
 **Travel.** With centres at 0.25R, by bike at 16 u/s:
 - capital to a city's centre: about 8.4 s;
-- between neighbouring city centres: about 12 s (√2 × 135 = 191 units);
-- capital to an outpost: about 25 to 30 s.
+- between neighbouring city centres: about 12 s (√2 × 135 = 191 units, with today's four cities 90° apart; a fifth
+  city shortens it to about 10 s);
+- capital to an outpost (0.75R to 0.9R): about 25 to 30 s.
 
 On foot at 4 u/s, the spawn square to the bazaar's near edge must stay under 160 units (40 s). Every number is
 centre to centre unless it says edge. The gate measures them.
@@ -239,6 +240,8 @@ world-hex.ts:66). It gives ordered lots, nearest the square first, for any count
   - per building: `face`, `audience`, the stall pitch and URL;
   - the info buildings' visitor contents;
   - the funnel is never public.
+  - Visitors see every village's civ name, its lots and the roads between villages. Building ids, civs and supply
+    roads are public today. The owner's sign-off covers this explicitly.
 - **Per-field public source:**
   - story cards and repo links come from a mountain field marked public per item;
   - with no mark, nothing is shown.
@@ -248,8 +251,11 @@ world-hex.ts:66). It gives ordered lots, nearest the square first, for any count
 ## Visitors, guests and rides (the map's part)
 
 - The rides registry gets a `gate`. The owner has every ride, and a visitor starts on foot.
-- Quest 1 is hard-coded in V3: reach the bazaar, open an app. Its reward unlocks the bike or horse: a flag in
-  localStorage for guests, on the server once plan 19 lands.
+- Quests 1 and 2 are hard-coded in V3.
+  - Quest 1: reach the bazaar, open an app. Guests can play it, and its progress is kept in localStorage.
+  - Quest 2 needs sign-in: a signed-in visitor who has finished quest 1 collects the bike or horse at the capital's
+    stables.
+  - Until plan 19's progress store lands, that unlock is a flag derived from the signed-in session plus quest 1.
 - Visitors spawn at the square. The owner keeps today's start.
 
 ## Life
@@ -280,7 +286,7 @@ world-hex.ts:66). It gives ordered lots, nearest the square first, for any count
 
 ## Funnel (owner only)
 
-The server counts the steps (landed, bazaar, app opened, quest 1, quest 2, signed in) per day. There is no
+The server counts the steps (landed, bazaar, app opened, quest 1, signed in, quest 2) per day. There is no
 identity: guests are counted by event, never tracked. The cockpit shows the funnel.
 
 ## What breaks and must move
