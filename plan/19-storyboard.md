@@ -225,6 +225,20 @@ The second review read this plan against ukubi-game's main. Each finding and its
 - **PvP and voice chat:** nothing asks for them; moderation cost.
 - **A static fallback when the cluster is down:** owner decision 8.
 
+## Owner answers (2026-11-01, night)
+
+- **Public player text** (lot name, pitch, display name) goes public, after a quick LLM sanity check: a one-word
+  verdict from the small model. Until it passes (the model down, the budget gone) the lot shows its archetype's
+  default name and "a settler". A rejected text keeps the defaults; the player may try again.
+- **The clock-tower lantern stays**, lit while the owner is online.
+- Questions 1 to 6 below have defaults, built as data the owner edits in the control room:
+  1. a drafted archetype table (see S3), reviewed by the owner later;
+  2. drafted words for the spawn stone and the keeper's note, as Showcase fields;
+  3. the contact: a Showcase field, empty until the owner fills it (the note hides the line while empty);
+  4. stats: none until the owner picks them per stall (the card alone);
+  5. Voco'steroid: its shutters come from the existing probe, unchanged;
+  6. the blueprint page's links: a Showcase list, starting empty.
+
 ## Open questions for the owner
 
 1. The archetype list: which 12 apps can a visitor build (and which of the owner's pieces each needs)?
