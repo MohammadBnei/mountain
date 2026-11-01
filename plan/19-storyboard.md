@@ -1,7 +1,7 @@
 # 19 · The storyboard: work can be played
 
-Status: draft 1, 2026-11-01. Written from the owner's ideation, interview and first doubt cycle. A second doubt
-cycle on this plan comes before any build.
+Status: draft 2, 2026-11-01. Written from the owner's ideation, interview and first doubt cycle; the second doubt
+cycle's answers are in § After the second doubt cycle, which wins over the sections above where they differ.
 
 Plan/18 built the map: the capital, the bazaar, the villages, the control room. This plan gives the world its story,
 and the one quest every visitor plays. It replaces plan/18's "plan 19" row (quests, lore, mobs, progress store, LLM):
@@ -152,6 +152,70 @@ with an agent, like the lore.
 
 The build can run on the local stack while the cluster is down; nothing ships to users before it returns.
 
+## After the second doubt cycle
+
+The second review read this plan against ukubi-game's main. Each finding and its answer:
+
+1. **The lot comes from the browser.** A guest builds before signing in, and sign-in is a redirect, so the build
+   must survive in the browser. Answer: the public pod signs the builder's validated output (archetype, name, pitch,
+   colours) into a short-lived build token (HMAC, the pod's own key), kept in localStorage across the redirect. The
+   lot write carries the token; the owner pod accepts only text the token signed. The challenge's pass is not trusted
+   either: the lot is kept whatever the pick (the challenge teaches, it does not gate). Public player text needs a
+   moderation answer: open question 7.
+2. **Read-back through the broadcast snapshot.** The snapshot listener (:7411) is open to any pod and serves one
+   document to everyone (helm/values.yaml:25-32). Answer: only the settlers' quarter (public by design: display name,
+   archetype, name, pitch, colours) rides the snapshot. Per-player data (replies, memory) is read by the public pod
+   per subject, on demand, from the write listener below, never broadcast.
+3. **A route can't be closed off by a NetworkPolicy.** Answer: the writes and per-player reads get their own
+   listener on the owner pod (a third port), with its own NetworkPolicy admitting only the public pod, and a shared
+   token. The chart's `networkPolicy.ingressFrom` limit (values.yaml:30-32) is fixed in the same infra PR. The open
+   funnel POST on :7411 stays as plan/18 V7 left it.
+4. **Writes fail when the owner pod is down.** It runs one replica with Recreate, and is down often. Answer: the
+   public pod keeps a bounded, in-memory outbox per write kind (the funnel's add-back pattern, public/funnel.go),
+   retried on each poll. A restart of the public pod loses it, and the player is told. Scene 6 never waits on the
+   write: the lot shows from the build token at once, marked "the courier is on the road" until the owner pod
+   confirms it.
+5. **Subjects already sit in the event log (bans).** control.banned events hold the sub (game/showcase.go). Answer:
+   a ban is kept on purpose, to stop abuse, and the privacy page says so. Deletion removes everything else. New
+   events never carry a sub. The owner pod checks bans on every write, so writes don't rely on the public pod's
+   fail-open list.
+6. **Memory has no read path.** Answer: the per-subject read in 2 carries memory; the owner pod checks its shape and
+   length only, since it is the public pod's own model output.
+7. **The LLM caps don't match the code.** Answer:
+   - Guests get a signed anonymous session cookie (random id, no personal data, listed on the privacy page). The
+     ~6-call cap keys on it, and the per-IP limit stays as a backstop, raised for offices.
+   - Signed-in players are "uncapped" within reason: a high per-subject daily cap (about 100) under the global one,
+     so a few throwaway accounts can't drain it.
+   - The caps reuse the existing settings `llm.visitor` and `llm.total` (game/showcase.go:36-37). They reach the
+     public pod through the snapshot, which grows the fields. The counter stays in the pod's memory; the provider's
+     spend cap is still the hard stop.
+8. **The yard isn't outside the layout if reserved like the info lots.** Answer: the yard is a fixed grid the server
+   places once, beside the capital, before the lotter runs and outside newLotter (town/village.go). The owner pod
+   assigns each new lot the next free slot. A deleted lot's slot stays empty until the next new lot, so no lot ever
+   moves. A full yard shows "the yard is full" and the lot lives in the browser only, until the owner widens the
+   grid.
+9. **The privacy page misses data.** Answer:
+   - the steering log joins the list and the deletion cascade;
+   - Anthropic is named as the processor of the talk texts, and "nothing is shared with third parties" is
+     corrected;
+   - deletion by email needs the owner to look up the subject in authentik, and deleting the authentik account is
+     part of the cascade (a manual step).
+10. **voice can't do JSON or card fallbacks.** Answer: new seams, each a narrow interface its consumer owns:
+    - a dresser returning the builder's JSON;
+    - a stallkeeper whose fallback is read from the card;
+    - an output check (length, palette, archetype membership, and none of the card's "never claim" terms) apart from
+      voice.Clean, which stays the input check.
+    This plan overrides plan/18 decision 2 ("a live LLM only adds tone") for the stalls and the builder; lore stays
+    written by the owner.
+11. **The database role can't delete.** Answer: S1 adds the visitor tables with a role that may delete them and
+    only them, applied by hand like 0001. The local stack gets a file-backed store behind the same seam.
+12. **The time budget skips sign-in, and the funnel steps change.** Answer: sign-in (redirect, consent, reload)
+    counts in scene 4's time and is measured in S7. S7 renames the funnel steps by scene in town/funnel.go, the
+    privacy page and the cockpit tab together.
+13. **The bike stays on one device.** Answer: the visitor store holds the bike too, and the browser's copy migrates
+    on first sign-in.
+14. **The keeper's lantern broadcasts when the owner is online.** It is a real fact, not mood. Open question 8.
+
 ## Not doing (and why)
 
 - **Outage replays** (real incidents replayed in the sim as puzzles): a later engineer track; costly, and friends come
@@ -169,3 +233,7 @@ The build can run on the local stack while the cluster is down; nothing ships to
 4. Which public stats each stall may cite.
 5. Voco'steroid: on the cluster, or off it (where its shutters come from)?
 6. The blueprint page: which repos and plans are public?
+7. Public player text (lot name, pitch, display name) is shown to every visitor. Either the names and pitches are
+   assembled from fixed parts the model only picks (no moderation needed) and the display name waits for the owner's
+   approval on the settlers page, or free text goes public with only an automatic check.
+8. The clock-tower lantern tells everyone when the owner is online. Keep it, delay it, or drop it?
