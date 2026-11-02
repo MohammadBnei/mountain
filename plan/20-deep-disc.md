@@ -180,9 +180,13 @@ Each slice gets its own short plan section and a doubt cycle before it is built.
 - The map's side quads grow with the taller faces: one quad per edge whatever the height.
 
 ### Sequencing with plan/21
-- T2 changes `world-hex.ts`, `world-land.ts` and the Go twins in `internal/land` together, with the goldens re-recorded
-  in the same PR. The physics session (plan/21) is told before it starts; it is not blocked by phase 2 (collision and
-  motion), since cliffs use `stepOK` and the ship's `floorOf` as they are.
+- Agreed with the physics session (2026-11-02): T2 is planned now and **built after plan/21 phase 3 merges**. Phase 3
+  moves the client's land onto the Go/WASM build and deletes the TypeScript land core (`world-land`, the `hexLand` chain
+  in `world-hex`, `world-fun`), so T2 becomes a Go-only change in `internal/land` plus the meshing in
+  `world-terrain.ts`: one copy, no golden re-recorded against code about to be deleted. If the owner wants the
+  mountains sooner, both copies change in one PR with the goldens re-recorded, sequenced with phase 3 first.
+- The massifs' heights flow only through `StepOK`, `GroundOf` and the ship's floor: `internal/physics` reads only those,
+  so cliffs hold for the rider, mobs and the server with no physics change.
 
 ### Tests
 - Every massif hex at its level, its summit pad flat, its faces refused by `stepOK`, every village still reachable on foot
