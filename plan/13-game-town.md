@@ -303,7 +303,8 @@ later, as one more source feeding the same catalog and review.
 - Square kits are scaled to fit a hex (City 0.7, Space 0.66, Halloween, Dungeon and Prototype 0.32 on their 4-unit
   grid). There is a scale and a turn count per kit, and a footprint validator: per-vertex hex reach, ≤ 0.9 for a
   building on a plot, ≤ 1.0 for a plot, a 4500-triangle cap per building.
-- Only `KHR_mesh_quantization` is used, since the CSP blocks WASM decoders.
+- Only `KHR_mesh_quantization` is used, since the CSP blocked WASM decoders. (Plan/21, 2026-11-02: the CSP allows
+  `'wasm-unsafe-eval'` for the physics core; a WASM mesh decoder still needs its own decision.)
 
 **Home:**
 - A **public `ukubi-kit` repo** (CC0, GitHub-hosted runners only), holding:

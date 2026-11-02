@@ -220,9 +220,10 @@ The second review read this plan against ukubi-game's main. Each finding and its
 
 - **Outage replays** (real incidents replayed in the sim as puzzles): a later engineer track; costly, and friends come
   first.
-- **Mobs and a general quest engine:** one quest serves the thesis; more quests come when tests ask for them.
+- **A general quest engine:** one quest serves the thesis; more quests come when tests ask for them. (Mobs are back:
+  plan/21, 2026-11-02.)
 - **Guest multiplayer:** plan/18's decision stands.
-- **PvP and voice chat:** nothing asks for them; moderation cost.
+- **Voice chat:** nothing asks for it; moderation cost. (Opt-in PvP is back: plan/21, 2026-11-02.)
 - **A static fallback when the cluster is down:** owner decision 8.
 
 ## Owner answers (2026-11-01, night)
