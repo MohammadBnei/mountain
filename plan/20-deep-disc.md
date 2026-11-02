@@ -314,3 +314,13 @@ and the ship still lands there.
 3. **The models the first draft left out:** summit crystals (app health) and the corona (traffic) can come now; magma
    (builds), aquifers (storage pools), scree, glacier and river need atlas fields later. Which do you want on the
    mountain?
+
+### T2b owner answers, second round (2026-11-02)
+1. **Eruptions: add the Argo sync counter to atlas** (mountain's contract and atlas, the sim mirror with it), forwarded
+   per app in the owner live frame; ash on a failed sync.
+2. **Visitors see the eruption puffs too:** "open it for visitors too, they don't know what it is (part of the
+   mystery)". One new public field, a monotonic sync counter (no app named), pinned in `public-fields.txt`.
+3. **Effects wanted:** the corona (now, owner only), magma and aquifers, scree, glacier and river (each when its atlas
+   field exists). Summit crystals were not chosen: left out. So the mountain carries, now: eruption (with the atlas
+   change), the cauldron's steam and glow, the cracks, the shimmer, the corona; later: magma, aquifers, scree, glacier,
+   river, the strata's history.
