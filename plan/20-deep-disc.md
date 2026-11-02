@@ -260,3 +260,44 @@ and the ship still lands there.
 - **Budgets:** the ledges are land hexes and a few dozen solids a mountain: counted with the massif's chunk.
 - **Questions this adds (for the build's plan, not blocking):** whether reaching a summit on foot unlocks something (a
   secret, a badge on the settler's card), and whether the hard path is timed (a best time on the summit board).
+
+## T2b · The living mountain (draft, 2026-11-02)
+
+> The owner: "the mountain is alive, with eruption and all following cluster events like the previous mountain". This
+> drafts which of the old mountain's effects come back on the enormous mountain (the cluster), what drives each in the
+> game's live data today, and what visitors see. Render-only: nothing here enters `HexLand`, the `LandSpec` or the land's
+> hash. Built after T2 (the mountain must stand first); gets its own doubt cycle.
+
+### What the game's live data carries today (ukubi-game, the owner's `/api/town/live` and `/api/cockpit`)
+- `looks[id]`: each building's health, `fire`, raiders (alerts), parts down; `banners` and `centre`: the alerts.
+- `health`: each host's, VM's and container's state (`town.CarrierHealth`, owner only).
+- `land.hosts`: each host's CPU and memory over its capacity (owner only).
+- `deploys` (the cockpit): each app's Argo image, sync and health (owner only).
+- `weather`, `moons`, `units`, `sites`, `wonders`.
+- Not carried today: pod restarts and OOMs, commits, traffic (rps, owner only in atlas). The old effects that need them
+  wait for a live field (an atlas change, named below), never invented.
+
+### The effects (the old mountain's model, its source here, the visitor rule)
+| Effect | The old model | Source today | Owner | Visitors |
+|---|---|---|---|---|
+| **Eruption** on a sync | eruption: lava per Argo sync ok, an ash puff on a failed one | `deploys` sync changes between two polls (OutOfSync → Synced: lava; a sync to a Degraded health: ash) | yes | a plain smoke puff on any sync, no app named |
+| **Sag, steam, red glow** on alerts | cauldron: sag by severity, steam on critical, a flood past 30 min critical | `banners` / `looks.raiders` on the cluster's buildings (nodes, network, storage), by severity and age | yes | steam when a cluster building is degraded (the coarse state buildings already show) |
+| **Cracks, dark faces** when a host or node is down | mountain: bedrock slabs per host, colour by ready | `health` (hosts, VMs) | yes | none (host health is owner only: "visitors must not see host health") |
+| **Heat shimmer** by load | shimmer: by CPU | `land.hosts` CPU over capacity | yes | none |
+| **Fire on the slopes** | (the town's fire) | `looks.fire` on a cluster building | yes | as buildings show it today |
+| **Summit corona** by traffic | lightning: St. Elmo's fire by rps | needs traffic in the live frame (atlas) | later | none |
+| **Scree** per restart | scree: a pebble per restart, a boulder per OOM | needs pod restarts (atlas) | later | none |
+| **Glacier** by commits | glacier: snowfall from commits | needs commits (the GitHub feed atlas already reads) | later | the snow, no repo named |
+| **Strata ash lines** per incident | strata: ash bands per incident | needs an incident history (atlas) | later | the bands, no titles |
+
+### Shape (to settle in the doubt cycle)
+- One module, `world-mountain-life.ts`, reading the live frame each poll and the cockpit's deploys, holding only page
+  state (no server state, no land state), drawing pooled effects (a few sprites and one particle system, as the barrels'
+  blast pool) on the enormous mountain's summit and faces.
+- The visitor page reads only the public snapshot (its coarse states), so the rules above hold by construction.
+- Budgets: the effects' draws and triangles counted at orbit and close, on both tiers.
+
+### Questions for the owner (before T2b's build)
+1. Start with the five effects today's data drives (eruption, sag and steam, cracks, shimmer, fire), and the four that
+   need new atlas fields later?
+2. Visitors: the plain puffs and steam (no names, no host health), or nothing on the mountain for visitors?
