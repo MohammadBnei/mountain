@@ -144,6 +144,30 @@ From the other session (it runs 3a, 3b and 3e; you click Run where it can't):
       merged on the admin bypass with zero reviews.
 - [ ] Optional: the "now" rulesets (no delete or force-push on main, immutable agent-fleet tags, no numeric branches).
 
+## 9. The shared world (plan/21 phase 0b, prepared 2026-11-02 during the outage)
+Code merged on ukubi-game while the cluster was down: the land and the physics in Go (#149, #151, #154), then the
+WASM client and the realm service (phases 3 and 4) as they land. The realm needs its own deploy; two draft PRs hold it.
+Merge nothing below before the realm image (`ukubi-realm`) has been built once.
+- [ ] **you:** Infisical (root project), create:
+  - `DBUSER_REALM_PASSWORD`, and put its SCRAM verifier in infra-bootstrap `pigsty/pigsty.yml` (the role's `password`
+    line is commented out until then: a Pigsty run before that makes a role nobody can log in as);
+  - two Ed25519 key pairs, base64: `UKUBI_REALM_OWNER_TICKET_KEY` / `UKUBI_REALM_OWNER_TICKET_PUBKEY` (the owner pod
+    signs owner tickets) and `UKUBI_REALM_FRIEND_TICKET_KEY` / `UKUBI_REALM_FRIEND_TICKET_PUBKEY` (the public pod signs
+    friend tickets). The realm holds only the two public keys;
+  - `UKUBI_GAME_VISITORS_TOKEN` (the friends' sign-in: nothing set it before).
+- [ ] **you:** Pigsty: the `dbuser_realm` role and its database. Note: `dbuser_game`/`gamedb` are not in `pigsty.yml` on
+      main either; add them in the same run if the game's DB was made by hand.
+- [ ] Confirm the names marked `TODO(realm): confirm` in both drafts against cmd/realm's Config (port 7420, flags
+      `--listen`, `--snapshot`, `--origins`), then take the drafts out of draft:
+  - infra-bootstrap #399: the registry entry, `realm.bnei.dev` IngressRoute (websockets), the DB secret, the
+    CiliumNetworkPolicy (realm → ukubi-game public snapshot :7411, realm → Postgres, ingress → realm);
+  - ukubi-game #157: `helm/realm.yaml`, and the friends' sign-in turned on in `helm/values.yaml` and
+    `helm/public.yaml`, with the ticket keys as optional secret refs (no key: the world plays solo).
+- [ ] **you:** merge #399, then #157; ArgoCD syncs.
+- [ ] Check: `https://realm.bnei.dev` answers the websocket upgrade; `kubectl -n ukubi-realm logs deploy/ukubi-realm`
+      shows the land built from the public snapshot and its hash; the owner (game.bnei.dev) and a signed-in friend
+      (world.bnei.dev) see each other ride; stopping the realm shows the banner and the world still plays solo.
+
 ## After all that
 A4 (Hubble metrics, the ServiceMonitor, the Alloy traces Deployment, OTEL in atlas and the bridge) needs the cluster
 for every step, and A5 (the `ukubi-atlas` App, `bridge-atlas`) needs you to create the App and its Infisical project.
