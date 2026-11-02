@@ -4,7 +4,8 @@ package main
 // every 15 s and joined onto graph nodes by id. Real names throughout (admins only, R10 Audience row).
 //
 //   - apps: ArgoCD health and sync per Application (argocd_app_info's name is the app node's name, A1), plus the
-//     requests per second Traefik serves it (rate() per series, then summed: a counter reset is handled by rate).
+//     requests per second Traefik serves it (rate() per series, then summed: a counter reset is handled by rate),
+//     and its Argo CD syncs, succeeded and failed, counted from argocd_app_sync_total's raw series (countSyncs).
 //   - ready: each k8s node's Ready condition, as its vm node. probes: blackbox targets as the node they probe.
 //   - land (the land lens): CPU, RAM and disk in use per namespace, and each realm's share of the cluster's capacity,
 //     plus an explicit "unattributed" share for namespaces no realm claims. Per pod, summed by namespace, never
@@ -278,10 +279,53 @@ func (c promHTTP) Query(ctx context.Context, q string) ([]sample, error) {
 }
 
 type promPoll struct {
-	l    *Live
-	prom promAPI
-	idx  func() *GraphIndex
-	sig  map[string]signalAnswer // the last answer to each signal
+	l     *Live
+	prom  promAPI
+	idx   func() *GraphIndex
+	sig   map[string]signalAnswer // the last answer to each signal
+	syncs map[string]*syncCounter // argocd_app_sync_total series (all its labels) -> what it has counted
+}
+
+// syncCounter is one argocd_app_sync_total series: the Application and phase it counts, its last raw value, and the
+// syncs atlas has counted from it.
+type syncCounter struct {
+	app    string // app:<lower name>
+	failed bool   // phase Failed or Error
+	last   float64
+	n      uint64
+}
+
+// countSyncs adds each sync series' rise since the last poll to what it has counted. A value below the last is a
+// reset (the controller or Prometheus restarted, the counter began again at 0), so all of it is new syncs; a series
+// seen for the first time counts from 0, so atlas's first poll takes the controller's counts as they stand. The
+// counts only grow while atlas runs.
+func (p *promPoll) countSyncs(s []sample) {
+	if p.syncs == nil {
+		p.syncs = map[string]*syncCounter{}
+	}
+	for _, x := range s {
+		k := seriesKey(x.L)
+		c := p.syncs[k]
+		if c == nil {
+			c = &syncCounter{app: "app:" + strings.ToLower(x.L[contract.LabelName]), failed: x.L[contract.LabelPhase] != "Succeeded"}
+			p.syncs[k] = c
+		}
+		rise := x.V - c.last
+		if x.V < c.last {
+			rise = x.V
+		}
+		c.n += uint64(math.Round(max(rise, 0)))
+		c.last = x.V
+	}
+}
+
+// seriesKey is a series' identity: its labels, sorted.
+func seriesKey(l map[string]string) string {
+	var b strings.Builder
+	for _, k := range slices.Sorted(maps.Keys(l)) {
+		b.WriteString(k + "=" + l[k] + "\x00")
+	}
+	return b.String()
 }
 
 // signalAnswer is a signal's last answer: asked when, and what it said (ok false: failed or empty, so unknown).
@@ -301,12 +345,13 @@ func (p *promPoll) poll(ctx context.Context, now time.Time) error {
 		}
 		r[name] = s
 	}
+	p.countSyncs(r["syncs"])
 	p.signals(ctx, now)
 	idx := p.idx()
 	if idx == nil {
 		idx = &GraphIndex{Realm: map[string]string{}, NSApps: map[string][]string{}, Has: map[string]bool{}}
 	}
-	j := &join{r: r, sig: p.sig, idx: idx, rl: p.l.rl}
+	j := &join{r: r, sig: p.sig, syncs: p.syncs, idx: idx, rl: p.l.rl}
 	for _, jn := range joiners() {
 		jn.run(j)
 	}
@@ -368,10 +413,11 @@ func (p *promPoll) signals(ctx context.Context, now time.Time) {
 // stay nil while their signal is unknown, addons while both of its are, and day while either of its is: absent
 // from the frame, never a zero.
 type join struct {
-	r   map[string][]sample
-	sig map[string]signalAnswer
-	idx *GraphIndex
-	rl  *realms.Realms
+	r     map[string][]sample
+	sig   map[string]signalAnswer
+	syncs map[string]*syncCounter
+	idx   *GraphIndex
+	rl    *realms.Realms
 
 	apps     map[string]AppLive
 	ready    map[string]bool
@@ -392,12 +438,13 @@ type joiner struct {
 	run  func(j *join)
 }
 
-// joiners is the join, in order: rps adds to the apps that apps found (and may add one ArgoCD didn't report),
-// and appsignals reads what both left.
+// joiners is the join, in order: rps and syncs add to the apps that apps found (and may add one ArgoCD didn't
+// report), and appsignals reads what they left.
 func joiners() []joiner {
 	return []joiner{
 		{"apps", joinApps},
 		{"rps", joinRPS},
+		{"syncs", joinSyncs},
 		{"ready", joinReady},
 		{"probes", joinProbes},
 		{"land", joinLand},
@@ -433,6 +480,22 @@ func joinRPS(j *join) {
 	for id, a := range j.apps {
 		a.RPS = math.Round(a.RPS*100) / 100
 		j.apps[id] = a
+	}
+}
+
+// joinSyncs: each Application's syncs counted so far, succeeded and failed, summed over its series.
+func joinSyncs(j *join) {
+	for _, c := range j.syncs {
+		if !j.idx.Has[c.app] {
+			continue
+		}
+		a := j.apps[c.app]
+		if c.failed {
+			a.SyncsFailed += c.n
+		} else {
+			a.Syncs += c.n
+		}
+		j.apps[c.app] = a
 	}
 }
 

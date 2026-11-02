@@ -461,3 +461,35 @@ func TestLiveHealth(t *testing.T) {
 		t.Errorf("alertsAt %d -> %d, %d frames for two equal answers (want 1: the first)", first, l.st.AlertsAt, len(c.send)-n)
 	}
 }
+
+// TestSyncCounts: each sync series' rise is counted, so several syncs between two polls are all there; a counter
+// that goes down was reset and counts from 0 again, a series that vanishes and comes back counts nothing twice, Error
+// is a failed sync, and an app off the graph is not in the frame. The counts never go down.
+func TestSyncCounts(t *testing.T) {
+	rl, _ := realms.Load()
+	l := newLive(rl, NewHub(false, func() []byte { return nil }, nil), nil)
+	p := &promPoll{l: l, idx: testIndex}
+	ok := func(dest string) map[string]string {
+		return map[string]string{"name": "wird", "phase": "Succeeded", "dest_server": dest}
+	}
+	failed := map[string]string{"name": "wird", "phase": "Error"}
+	off := map[string]string{"name": "not-in-graph", "phase": "Succeeded"}
+	for i, step := range []struct {
+		s                  []sample
+		syncs, syncsFailed uint64
+	}{
+		{[]sample{{ok("a"), 3}, {ok("b"), 2}, {failed, 1}, {off, 5}}, 5, 1}, // the controller's counts as they stand
+		{[]sample{{ok("a"), 5}, {ok("b"), 2}, {failed, 1}}, 7, 1},           // two syncs between polls
+		{[]sample{{ok("a"), 1}, {ok("b"), 2}, {failed, 0}}, 8, 1},           // a reset: 1 new sync, none failed
+		{[]sample{{ok("b"), 2}, {failed, 2}}, 8, 3},                         // a series gone; two failures
+		{[]sample{{ok("a"), 1}, {ok("b"), 2}, {failed, 2}}, 8, 3},           // back where it was: nothing new
+	} {
+		p.prom = promMap{ans: map[string][]sample{"syncs": step.s}}
+		if err := p.poll(context.Background(), time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		if a := l.st.Apps["app:wird"]; a.Syncs != step.syncs || a.SyncsFailed != step.syncsFailed || len(l.st.Apps) != 1 {
+			t.Errorf("step %d: apps %+v, want wird %d ok, %d failed", i, l.st.Apps, step.syncs, step.syncsFailed)
+		}
+	}
+}

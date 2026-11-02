@@ -46,6 +46,12 @@ type AppLive struct {
 	Lat    *float64 `json:"lat,omitempty"`    // p95 response time, seconds
 	ReqDay *float64 `json:"reqDay,omitempty"` // requests in the last 24 h
 	Avail  *float64 `json:"avail,omitempty"`  // share of those that were not 5xx (unknown with no requests)
+	// Argo CD syncs counted since atlas started (argocd_app_sync_total): only ever grow while atlas runs, so a
+	// reader sees one sync per step up, even several between two frames. Absent is none counted. An atlas restart
+	// starts them again from the controller's own counts, which may be lower: a reader that sees one go down reseeds,
+	// it does not erupt.
+	Syncs       uint64 `json:"syncs,omitempty"`       // succeeded
+	SyncsFailed uint64 `json:"syncsFailed,omitempty"` // failed or errored
 }
 
 // Use is what a namespace (or the cluster's capacity) holds: CPU cores, bytes of RAM, bytes of disk.

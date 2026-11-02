@@ -24,6 +24,11 @@ var Queries = map[string]string{
 	"memnode":    `sum by (namespace, node) (container_memory_working_set_bytes{container!="",image!=""})`,
 	"cpucapnode": `sum by (node) (kube_node_status_allocatable{resource="cpu"})`,
 	"memcapnode": `sum by (node) (kube_node_status_allocatable{resource="memory"})`,
+	// each Application's finished syncs since its controller started, by phase (Succeeded, or Failed and Error):
+	// raw counters, one series per label set, diffed by atlas itself so no sync between two polls is missed and a
+	// reset (the controller or Prometheus restarting) is not a negative count. Same exporter as info: answers
+	// whenever it does, empty when nothing synced yet.
+	"syncs": `argocd_app_sync_total{phase=~"Succeeded|Failed|Error"}`,
 }
 
 // Signal is an optional query: what it measures may be missing (a metric not scraped yet, a histogram not configured),
@@ -85,6 +90,7 @@ const (
 	LabelName            = "name"             // argocd_app_info: the Application, → app:<lower name>
 	LabelHealth          = "health_status"    // argocd_app_info
 	LabelSync            = "sync_status"      // argocd_app_info
+	LabelPhase           = "phase"            // argocd_app_sync_total: Succeeded, Failed, Error (Running, Terminating not asked)
 	LabelNode            = "node"             // a k8s node, → vm:<lower node>
 	LabelNamespace       = "namespace"        // land, and an alert's app when one app owns the namespace
 	LabelTarget          = "target"           // a blackbox probe target (guest-*, pve-*, ext-*), through realms.ProbeNode
