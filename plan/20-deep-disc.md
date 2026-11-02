@@ -128,3 +128,72 @@ Every place on the disc stands for something real (17). A proposal, to confirm:
   building's real parts inside; cave mouths as doors.
 
 Each slice gets its own short plan section and a doubt cycle before it is built.
+
+## T2 · The mountains (design for review, 2026-11-02)
+
+> The slab (T1) is merged (ukubi-game #137). This section designs T2 to the level a build can follow; it gets a doubt
+> cycle before any code.
+
+### The land today (ukubi-game main 8c8a0a3)
+- The levels are `TERRACES` 0, 2, 3, 5, 8 (`world-hex.ts`), `STEP` = HEX/φ³ ≈ 2.34 units a level. A grass hex at level
+  `HILL_L` 5 or more is a hill (a share of them, `HILL_SHARE`), at `MOUNT_L` 8 a `mountain` hex with a kit mountain
+  model on it. Nothing stands higher than level 8, about 19 units.
+- Heights come from `heightAt` (`world-land.ts`): each zone's `Region` (capital, cities, countryside, frontier) blends
+  base, amplitude, frequency and terraces; `MAX_RELIEF` 170 caps it. The frontier's highlands (amp 92) are the only wild
+  high ground.
+- A rider climbs at most `MAX_CLIMB` (2 STEP) a hex (`stepOK`); the passes (`lower`, step 8 of `hexLand`) cut every
+  road down to that, so every village is reachable on foot.
+- A tile over a drop stands on a stack of unstretched blocks (`blocksOf`, a block a STEP), each a few triangles.
+- The ship flies to `CEILING` 300 and stands on what is under it (`floorOf`).
+- **The land is now pinned twice** (plan/21 phase 1b, ukubi-game #151): `internal/land` is a Go copy of the whole
+  `hexLand` chain, held equal to the TypeScript by goldens (`bun dev/land-golden.ts`). Any land change lands in both
+  languages in one PR, with the goldens re-recorded, and plan/21 phase 3 later makes the Go copy the only one.
+
+### What T2 adds
+- **Massifs, not noise.** A few named massifs, each one of the owner's platform systems (the owner's reading: mountains
+  are the platform). The proposal: one massif per platform group the town already knows (the `platform` civ's
+  services, grouped as control plane, storage, observability, networking), placed in the frontier behind the Platform
+  village, away from every lot, road and pad. A massif's height grows with its group's weight (its services' count;
+  later its load), from about 40 to about 90 units.
+- **Heights past the terraces.** New levels for the massifs only: 13, 21, 34 (the Fibonacci terraces go on), so a
+  massif reads as a few huge steps, then a summit. Everything under level 8 stays as it is today; the villages, roads,
+  passes and the land's hash outside the massifs do not move (the goldens' diff shows only the massif hexes).
+- **The rule on foot.** The foothills (levels up to 8) keep the climb rule. A face above 8 is a cliff: `stepOK` already
+  refuses a climb over `MAX_CLIMB`, so the summits are reachable only by ship (the owner's answer). No pass is cut to a
+  summit; a road never crosses a massif (the road router already avoids high ground: verify).
+- **The look.**
+  - Up close, the faces stand on stretched blocks: one block per terrace step, scaled to its height, instead of one per
+    STEP (a 21-level face would be 21 blocks; stretched, it is 3). The map mesh's side quads already draw any drop.
+  - The summit hex carries the kit's mountain model, scaled up with the massif. A thin snow tint on the top terraces,
+    from the land's own palette.
+  - From orbit the massifs throw the land's longest shadows: the sun is already cast from the day cycle.
+- **The ship.** A summit is a landing place: the ship's floor is the ground under it, so it already stands on a top. A
+  small flat pad on each summit (one hex, level ground) so the landing reads, with the massif's name on a board.
+- **The meaning in the world.** A massif's card (a click on its summit, or from the map) names its group and lists its
+  services with their health, as a village's card does. Its face colour shifts with the worst health in it (the land's
+  palette, never a neon). Visitors see the massif and its name, never its health (owner-only data stays on the owner's
+  pod).
+
+### Budgets
+- Triangles: a massif of about 60 hexes, stretched blocks, is about the cost of a hill range today. Checked on the phone
+  tier at orbit (200k) with the far trees (#136) before merging.
+- The map's side quads grow with the taller faces: one quad per edge whatever the height.
+
+### Sequencing with plan/21
+- T2 changes `world-hex.ts`, `world-land.ts` and the Go twins in `internal/land` together, with the goldens re-recorded
+  in the same PR. The physics session (plan/21) is told before it starts; it is not blocked by phase 2 (collision and
+  motion), since cliffs use `stepOK` and the ship's `floorOf` as they are.
+
+### Tests
+- Every massif hex at its level, its summit pad flat, its faces refused by `stepOK`, every village still reachable on foot
+  (the existing reachability test), the land outside the massifs unchanged (the golden diff limited to their hexes).
+- A ship test: from over a summit it settles on the pad.
+- Budgets: the triangle count at orbit on both tiers.
+
+### Questions for the owner
+1. **Which systems are the massifs?** One per platform group (control plane, storage, observability, networking) as
+   proposed, one per platform service (many small peaks), or a single great mountain for the whole platform?
+2. **Where?** In the frontier behind the Platform village (proposed), around the capital's edge, or spread across the
+   frontier?
+3. **Height by weight** (services' count now, load later), or fixed heights?
+4. **Health on the face:** the face's colour by the worst health in the massif (owner only), or no health on mountains?
