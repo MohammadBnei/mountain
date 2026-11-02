@@ -163,7 +163,17 @@ Merge nothing below before the realm image (`ukubi-realm`) has been built once.
     CiliumNetworkPolicy (realm → ukubi-game public snapshot :7411, realm → Postgres, ingress → realm);
   - ukubi-game #157: `helm/realm.yaml`, and the friends' sign-in turned on in `helm/values.yaml` and
     `helm/public.yaml`, with the ticket keys as optional secret refs (no key: the world plays solo).
-- [ ] **you:** merge #399, then #157; ArgoCD syncs.
+- [ ] **you:** before #157, check live that `dbuser_game`/`gamedb` and the visitors migration 0002 exist (visitor
+      writes fail at runtime without them, not at boot); after the Pigsty run, `SELECT rolpassword IS NULL FROM
+      pg_authid WHERE rolname='dbuser_realm'` is true until you add the verifier.
+- [ ] **you:** merge in this order, with no owner-pod restart in between: #399; wait until `ukubi-game-config` and
+      `ukubi-game-public-oidc` have rendered every key (`kubectl -n ukubi-game get secret … -o jsonpath='{.data}'`
+      lists the key names); then #157 at once. Why: #399 puts `UKUBI_GAME_VISITORS_TOKEN` in the owner's Secret, which
+      the owner refuses without #157's `--visitors-listen` (and #157's flag refuses to start without the token). #157
+      also turns on the owner's ingress policy (only the public pod reaches :7412, plan/19) with the realm's read of
+      :7411. world.bnei.dev then shows a sign-in (plan/18 V3).
+- [ ] The ticket keys reach the pods only once cmd/game mints tickets (plan/21 phase 4): their refs stay commented
+      until then. The realm image `ukubi-realm` must have been built once by app.yml before the registry entry syncs.
 - [ ] Check: `https://realm.bnei.dev` answers the websocket upgrade; `kubectl -n ukubi-realm logs deploy/ukubi-realm`
       shows the land built from the public snapshot and its hash; the owner (game.bnei.dev) and a signed-in friend
       (world.bnei.dev) see each other ride; stopping the realm shows the banner and the world still plays solo.
