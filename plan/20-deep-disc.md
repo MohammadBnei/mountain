@@ -216,3 +216,22 @@ Each slice gets its own short plan section and a doubt cycle before it is built.
 3. **Height:** by service count (network the highest) or one height for all?
 4. **Health:** none on the mountains; the owner sees a colour by the worst health inside; or visitors too, in the
    coarse states buildings already show?
+
+### Owner answers (2026-11-02)
+1. **Two mountains, one enormous and one medium.** The enormous one is **the cluster** (the platform's `nodes`,
+   `network` and `storage` groups: the ground everything runs on); the medium one is **the edge** (`edge`, `metrics`,
+   `gpu`). Heights are fixed by size, not by count: the enormous at `MASSIF_LEVELS` 34 (about 80 units), the medium at
+   21 (about 49).
+2. **Where:** "where currently there is not much": the placement stage picks, among the frontier sites that clear every
+   road, river, pass, lot, landmark, wild zone and the build ring, the two emptiest (fewest buildings, decor and ways
+   within their footprint and one ring round it), the enormous first.
+3. **A compass**, round, by the minimap (built now, in the page; no land change).
+4. **"The mountain is alive, with eruption and all following cluster events like the previous mountain".** The old
+   mountain (tag `mountain-final`, f1a53b2, plan/03-model-*) drew the cluster's life on itself: an eruption per Argo
+   sync (an ash puff when it fails), a summit corona as strong as the traffic, a sag with steam and a red under-glow per
+   alert (a flood past 30 minutes critical), scree per pod restart (a boulder per OOM or crash loop), magma dykes per
+   build, a heat shimmer by CPU, a glacier fed by commits, strata with ash lines for incidents. The enormous mountain
+   (the cluster) takes these back as **T2b, the living mountain**: render-only effects driven by the live frame's
+   events, never in `HexLand`, the `LandSpec` or the land's hash. Which effects visitors see follows the public
+   snapshot's rule (owner-only detail stays on the owner's pod; coarse states may show); T2b's own plan lists each
+   effect with its source in today's live frame and its visitor rule, and gets its doubt cycle.
