@@ -5,7 +5,7 @@ package main
 //
 //   - apps: ArgoCD health and sync per Application (argocd_app_info's name is the app node's name, A1), plus the
 //     requests per second Traefik serves it (rate() per series, then summed: a counter reset is handled by rate),
-//     and its Argo CD syncs, succeeded and failed, counted from argocd_app_sync_total's raw series (countSyncs).
+//     and its Argo CD syncs since atlas started, succeeded and failed, counted from argocd_app_sync_total (countSyncs).
 //   - ready: each k8s node's Ready condition, as its vm node. probes: blackbox targets as the node they probe.
 //   - land (the land lens): CPU, RAM and disk in use per namespace, and each realm's share of the cluster's capacity,
 //     plus an explicit "unattributed" share for namespaces no realm claims. Per pod, summed by namespace, never
@@ -283,7 +283,7 @@ type promPoll struct {
 	prom  promAPI
 	idx   func() *GraphIndex
 	sig   map[string]signalAnswer // the last answer to each signal
-	syncs map[string]*syncCounter // argocd_app_sync_total series (all its labels) -> what it has counted
+	syncs map[string]*syncCounter // argocd_app_sync_total's (name, phase) -> what it has counted (nil: no poll yet)
 }
 
 // syncCounter is one argocd_app_sync_total series: the Application and phase it counts, its last raw value, and the
@@ -295,19 +295,27 @@ type syncCounter struct {
 	n      uint64
 }
 
-// countSyncs adds each sync series' rise since the last poll to what it has counted. A value below the last is a
-// reset (the controller or Prometheus restarted, the counter began again at 0), so all of it is new syncs; a series
-// seen for the first time counts from 0, so atlas's first poll takes the controller's counts as they stand. The
-// counts only grow while atlas runs.
+// countSyncs adds each sync series' rise since the last poll to what it has counted. The first poll only seeds:
+// the controller's past syncs are not news, so atlas starts every app at 0. A series first seen later is a new one
+// (Argo makes it on an app's first sync in that phase) and counts from 0. A value below the last is a reset (the
+// controller restarted, its counter began again at 0), so all of it is new syncs. The counts only grow while atlas
+// runs.
+// ponytail: a controller that restarts and climbs past its old value between two polls (15 s) reads as a smaller
+// rise, and a rolling restart's old and new pods overlap under max (the new one's syncs before the old one's series
+// goes are missed); both undercount, never overcount. Per-pod series and a restart signal if that ever matters.
 func (p *promPoll) countSyncs(s []sample) {
-	if p.syncs == nil {
+	seed := p.syncs == nil
+	if seed {
 		p.syncs = map[string]*syncCounter{}
 	}
 	for _, x := range s {
-		k := seriesKey(x.L)
+		k := x.L[contract.LabelName] + "\x00" + x.L[contract.LabelPhase]
 		c := p.syncs[k]
 		if c == nil {
 			c = &syncCounter{app: "app:" + strings.ToLower(x.L[contract.LabelName]), failed: x.L[contract.LabelPhase] != "Succeeded"}
+			if seed {
+				c.last = x.V
+			}
 			p.syncs[k] = c
 		}
 		rise := x.V - c.last
@@ -317,15 +325,6 @@ func (p *promPoll) countSyncs(s []sample) {
 		c.n += uint64(math.Round(max(rise, 0)))
 		c.last = x.V
 	}
-}
-
-// seriesKey is a series' identity: its labels, sorted.
-func seriesKey(l map[string]string) string {
-	var b strings.Builder
-	for _, k := range slices.Sorted(maps.Keys(l)) {
-		b.WriteString(k + "=" + l[k] + "\x00")
-	}
-	return b.String()
 }
 
 // signalAnswer is a signal's last answer: asked when, and what it said (ok false: failed or empty, so unknown).

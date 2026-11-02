@@ -24,11 +24,12 @@ var Queries = map[string]string{
 	"memnode":    `sum by (namespace, node) (container_memory_working_set_bytes{container!="",image!=""})`,
 	"cpucapnode": `sum by (node) (kube_node_status_allocatable{resource="cpu"})`,
 	"memcapnode": `sum by (node) (kube_node_status_allocatable{resource="memory"})`,
-	// each Application's finished syncs since its controller started, by phase (Succeeded, or Failed and Error):
-	// raw counters, one series per label set, diffed by atlas itself so no sync between two polls is missed and a
-	// reset (the controller or Prometheus restarting) is not a negative count. Same exporter as info: answers
-	// whenever it does, empty when nothing synced yet.
-	"syncs": `argocd_app_sync_total{phase=~"Succeeded|Failed|Error"}`,
+	// each Application's finished syncs since its controller started, by phase (Succeeded, or Failed and Error): a
+	// counter per (name, phase), diffed by atlas itself so no sync between two polls is missed. The max across scrape
+	// targets, so two targets (or a pod's new name) are one series; the controller restarting resets it to 0
+	// (Prometheus restarting does not). Same exporter as info: answers whenever it does, empty when nothing synced
+	// yet. A required query: any reader's fake or sim of this contract must answer it.
+	"syncs": `max by (name, phase) (argocd_app_sync_total{phase=~"Succeeded|Failed|Error"})`,
 }
 
 // Signal is an optional query: what it measures may be missing (a metric not scraped yet, a histogram not configured),
