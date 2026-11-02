@@ -235,3 +235,28 @@ Each slice gets its own short plan section and a doubt cycle before it is built.
    events, never in `HexLand`, the `LandSpec` or the land's hash. Which effects visitors see follows the public
    snapshot's rule (owner-only detail stays on the owner's pod; coarse states may show); T2b's own plan lists each
    effect with its source in today's live frame and its visitor rule, and gets its doubt cycle.
+
+### Owner answer (2026-11-02): climbing paths
+"make sure that both mountain have platform like climbing paths (3, one easy, one hard, one medium. easy is longer, hard
+is faster)". This replaces "summits by ship only": each mountain gets **three paths to its summit**, platformer style,
+and the ship still lands there.
+- **Easy, the longest:** a switchback ledge path round the massif, every step within the walk's climb (`MAX_CLIMB`), no
+  jump needed, a few short gaps a single jump clears at most; the slowest way up.
+- **Medium:** fewer, steeper switchbacks; ledges a single jump (`JUMP_H`) apart, some gaps that ask a run-up.
+- **Hard, the fastest:** nearly straight up a face: ledges a double jump (`DOUBLE_H`) apart, small landings, a slide or
+  a roll to cross a gap; a fall drops to a lower ledge, never to the foot (catch ledges), so it is hard, not cruel.
+- **How they are built:**
+  - the ledges are the land's own: hexes of the massif stage at chosen levels (a path is a chain of hexes, its levels
+    stepping by what its grade allows), so they flow through `StepOK`, `GroundOf` and the ship's floor and
+    `internal/physics` needs no change; where a hex is too coarse for a platform, a fun-style solid (a crate, a ledge
+    stone, world-fun.ts's run pieces: a circle or box of a height) stands on it, as the playgrounds' runs already do;
+  - each path starts at a trailhead on the massif's foot by a road (a signpost: easy, medium, hard, with the summit's
+    name), and the three meet only at the summit;
+  - every gap and step is checked by the jump simulation (as world-fun.test.ts climbs the playground run): the easy path
+    walkable end to end, the medium within a single jump, the hard within a double jump; a test per path per massif;
+  - the paths' lengths: the easy at least twice the hard's (measured along the path), and a timed walk in the test
+    (easy slowest, hard fastest at the rider's run speed).
+- **The cliffs stay cliffs** everywhere off the paths (walk:false faces), so the paths are the only ways up on foot.
+- **Budgets:** the ledges are land hexes and a few dozen solids a mountain: counted with the massif's chunk.
+- **Questions this adds (for the build's plan, not blocking):** whether reaching a summit on foot unlocks something (a
+  secret, a badge on the settler's card), and whether the hard path is timed (a best time on the summit board).
