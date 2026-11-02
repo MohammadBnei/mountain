@@ -1,6 +1,6 @@
 # 21 · The shared world: one job per part, one physics core
 
-Status: draft 1, 2026-11-02. Written from the owner's research request, an intent interview, two architecture
+Status: approved, 2026-11-02. Written from the owner's research request, an intent interview, two architecture
 interviews (the physics core, then the shared world) and two doubt cycles. The owner approved this plan on
 2026-11-02.
 
@@ -52,7 +52,7 @@ The server knows nothing about the land: `hexLand` and `decorOf` run only in the
 - **Persistence:**
   - pieces, inventory and progression persist for signed-in players;
   - mobs, HP and projectiles are transient;
-  - guests stay page-local and never build (plan/18).
+  - guests stay page-local (plan/18) and never build (an owner decision here).
 - **Authority:**
   - the server owns the truth (HP, mobs, items, nodes, pieces, inventory);
   - the client claims its own hits, and the server checks range, cooldown and line of sight;
@@ -86,12 +86,12 @@ The server knows nothing about the land: `hexLand` and `decorOf` run only in the
   - The realm learns a player's slot from the realm ticket.
 - **One land:**
   - The realm, the owner and friends all build the land from the **public** town at age 1.
-  - `landOf`'s road tie-break sorts on the reduced road kind, so the owner's raw road vias and the public reduced
+  - `landOf`'s road tie-break will sort on the reduced road kind (phase 1), so the owner's raw road vias and the public reduced
     ones give the same land.
   - A Go test proves that the owner input and `PublicOf` give the same `LandSpec`.
   - The realm handshake refuses a client whose land hash differs.
 - **Auth:**
-  - The owner signs in on `game.bnei.dev` and friends on `world.bnei.dev`. The `__Host-` session cookies are
+  - The owner signs in on `game.bnei.dev`; friends will sign in on `world.bnei.dev` (phase 0b turns it on). The `__Host-` session cookies are
     host-only.
   - Each pod mints realm tickets with its own Ed25519 key. A ticket holds the subject, role, slot and expiry.
   - The realm accepts the role `owner` only from the owner pod's key, and `friend` only from the public pod's.
@@ -144,7 +144,8 @@ The server knows nothing about the land: `hexLand` and `decorOf` run only in the
 - The CSP gains `'wasm-unsafe-eval'` (plan/13 amended).
 - The client's collision, motion and land code is replaced by the WASM core.
 - The layout gains the build-zone rule.
-- Plan/19's "no mobs, no PvP" is reversed (plan/19 amended).
+- Plan/19's "Mobs and a general quest engine" and "PvP and voice chat" rows are reversed for mobs and PvP (plan/19
+  amended).
 
 ### Not doing
 

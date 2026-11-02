@@ -5,7 +5,8 @@ cycle's answers are in § After the second doubt cycle, which wins over the sect
 
 Plan/18 built the map: the capital, the bazaar, the villages, the control room. This plan gives the world its story,
 and the one quest every visitor plays. It replaces plan/18's "plan 19" row (quests, lore, mobs, progress store, LLM):
-mobs and the general quest engine are dropped, and lore shrinks to what the story needs.
+the general quest engine is dropped, and lore shrinks to what the story needs. (Mobs, dropped here at first, are back
+  with plan/21, 2026-11-02.)
 
 ## Intent (confirmed by the owner, 2026-11-01)
 
@@ -220,10 +221,11 @@ The second review read this plan against ukubi-game's main. Each finding and its
 
 - **Outage replays** (real incidents replayed in the sim as puzzles): a later engineer track; costly, and friends come
   first.
-- **A general quest engine:** one quest serves the thesis; more quests come when tests ask for them. (Mobs are back:
-  plan/21, 2026-11-02.)
+- **A general quest engine:** one quest serves the thesis; more quests come when tests ask for them.
 - **Guest multiplayer:** plan/18's decision stands.
-- **Voice chat:** nothing asks for it; moderation cost. (Opt-in PvP is back: plan/21, 2026-11-02.)
+- **Voice chat:** nothing asks for it; moderation cost.
+
+Reversed by plan/21 (2026-11-02): mobs, and opt-in PvP, which this list once dropped.
 - **A static fallback when the cluster is down:** owner decision 8.
 
 ## Owner answers (2026-11-01, night)
