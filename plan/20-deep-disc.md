@@ -301,3 +301,8 @@ and the ship still lands there.
 1. Start with the five effects today's data drives (eruption, sag and steam, cracks, shimmer, fire), and the four that
    need new atlas fields later?
 2. Visitors: the plain puffs and steam (no names, no host health), or nothing on the mountain for visitors?
+
+### T2b owner answers (2026-11-02)
+1. **Yes:** the five effects today's data drives first (eruption, sag and steam, cracks, shimmer, fire); the four that
+   need new atlas fields (corona, scree, glacier, strata) later, each when its field exists.
+2. **Yes:** visitors see the plain puffs and steam (no app named, no host health), as in the table's visitor column.
