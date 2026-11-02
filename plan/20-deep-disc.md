@@ -261,48 +261,56 @@ and the ship still lands there.
 - **Questions this adds (for the build's plan, not blocking):** whether reaching a summit on foot unlocks something (a
   secret, a badge on the settler's card), and whether the hard path is timed (a best time on the summit board).
 
-## T2b · The living mountain (draft, 2026-11-02)
+## T2b · The living mountain (after one doubt cycle, 2026-11-02)
 
-> The owner: "the mountain is alive, with eruption and all following cluster events like the previous mountain". This
-> drafts which of the old mountain's effects come back on the enormous mountain (the cluster), what drives each in the
-> game's live data today, and what visitors see. Render-only: nothing here enters `HexLand`, the `LandSpec` or the land's
-> hash. Built after T2 (the mountain must stand first); gets its own doubt cycle.
+> The owner: "the mountain is alive, with eruption and all following cluster events like the previous mountain".
+> Render-only: nothing here enters `HexLand`, the `LandSpec` or the land's hash, and nothing moves a walkable surface
+> (a sag or a crack is a colour, a decal or a plume, never displaced ground the rider, the ship or a climbing path stands
+> on). Built after T2. One doubt cycle (16 findings) folded in: the first draft's eruption source and visitor rule were
+> wrong, and the owner's first approval was given on them; the questions below are asked again.
 
-### What the game's live data carries today (ukubi-game, the owner's `/api/town/live` and `/api/cockpit`)
-- `looks[id]`: each building's health, `fire`, raiders (alerts), parts down; `banners` and `centre`: the alerts.
-- `health`: each host's, VM's and container's state (`town.CarrierHealth`, owner only).
-- `land.hosts`: each host's CPU and memory over its capacity (owner only).
-- `deploys` (the cockpit): each app's Argo image, sync and health (owner only).
-- `weather`, `moons`, `units`, `sites`, `wonders`.
-- Not carried today: pod restarts and OOMs, commits, traffic (rps, owner only in atlas). The old effects that need them
-  wait for a live field (an atlas change, named below), never invented.
+### What the data carries (checked against the code)
+- **Owner live frame** (`/api/town/live`, polled every 5 s): `looks` (each drawn building's health, `fire` = a critical
+  seen alert, `raiders` = seen alerts, `unseen` = alerts its building does not watch), `banners` (civ-level alerts with no
+  node: not attributable to one mountain), `centre` (alerts on undrawn nodes), `health` (hosts, VMs and LXC containers),
+  `land.hosts` (CPU and memory, use may exceed capacity), `weather` (a CPU bucket), `moons`.
+- **Not in the live frame:** `deploys` live only in `/api/cockpit`, read when the Advisors tab opens (no poll). Sync is a
+  level (`argocd_app_info` sync_status), not an event: a resync of a Synced app shows nothing, a failed sync often leaves
+  health Healthy. Atlas does not query `argocd_app_sync_total` (the old mountain's eruption source). Atlas already sends
+  per-app `RPS` (`contract.AppLive`) and the day's critical alerts and degraded apps (`contract.Live.Day`).
+- **Public frame** (the visitor page): `live.states{}` (coarse: healthy, degraded, maintenance; Down maps to degraded),
+  `weather`, `moons`, `residents`, `keeper`, `at`, `public`. No deploy, no alert, no host. The public pod pulls every 15 s.
 
-### The effects (the old mountain's model, its source here, the visitor rule)
-| Effect | The old model | Source today | Owner | Visitors |
+### Every model of the old mountain (f1a53b2), with its source here
+| Model | What it showed | Source here | When | Visitors |
 |---|---|---|---|---|
-| **Eruption** on a sync | eruption: lava per Argo sync ok, an ash puff on a failed one | `deploys` sync changes between two polls (OutOfSync → Synced: lava; a sync to a Degraded health: ash) | yes | a plain smoke puff on any sync, no app named |
-| **Sag, steam, red glow** on alerts | cauldron: sag by severity, steam on critical, a flood past 30 min critical | `banners` / `looks.raiders` on the cluster's buildings (nodes, network, storage), by severity and age | yes | steam when a cluster building is degraded (the coarse state buildings already show) |
-| **Cracks, dark faces** when a host or node is down | mountain: bedrock slabs per host, colour by ready | `health` (hosts, VMs) | yes | none (host health is owner only: "visitors must not see host health") |
-| **Heat shimmer** by load | shimmer: by CPU | `land.hosts` CPU over capacity | yes | none |
-| **Fire on the slopes** | (the town's fire) | `looks.fire` on a cluster building | yes | as buildings show it today |
-| **Summit corona** by traffic | lightning: St. Elmo's fire by rps | needs traffic in the live frame (atlas) | later | none |
-| **Scree** per restart | scree: a pebble per restart, a boulder per OOM | needs pod restarts (atlas) | later | none |
-| **Glacier** by commits | glacier: snowfall from commits | needs commits (the GitHub feed atlas already reads) | later | the snow, no repo named |
-| **Strata ash lines** per incident | strata: ash bands per incident | needs an incident history (atlas) | later | the bands, no titles |
+| eruption | lava per Argo sync, ash per failed one | needs `argocd_app_sync_total{app,phase}` in atlas's contract (a counter: no sync is missed between polls), forwarded as per-app sync counts in the owner live frame | after an atlas change | owner's choice (Q2) |
+| cauldron (sag, steam, red glow) | alerts by severity and age | the cluster group's buildings' `raiders` + `unseen`, and `centre` alerts on cluster hosts and VMs (needs `Alert.startsAt` typed); a colour and steam, no displaced ground | now | steam when a cluster building's coarse state is degraded (already public) |
+| bedrock cracks (mountain) | a host or VM not ready | `health`, filtered to the cluster's hosts and VMs (no LXC), one face per host; read from the same forced-merged map the underside uses | now | none (host health is owner only) |
+| shimmer | CPU heat | `land.hosts` CPU over capacity, clamped to 0..1 (none when capacity is 0) | now | the public `weather` bucket (already public) |
+| summit crystals | one crystal per app, glow by health | `looks` health of the cluster's buildings | now | coarse states (already public) |
+| lightning corona | traffic (rps) | `contract.AppLive.RPS`, already in the game's frame: forward its sum | now (a game change) | none (rps is owner only) |
+| magma dykes | a build in flight | needs builds in atlas (CI runs) | later | none |
+| aquifers | one pool per storage pool | needs storage pools in atlas | later | none |
+| scree | pod restarts, OOMs | needs restarts in atlas | later | none |
+| glacier | snowfall from commits | needs commits in the live frame (atlas reads GitHub) | later | snow only |
+| strata ash lines | incidents | `Day.Critical` now (the day's critical alerts), a history later | partly now | bands, no titles |
+| river | public traffic bytes | needs bytes in atlas | later | none |
+- **Fire** is not separate: `looks.fire` is a critical seen alert, the cauldron's steam; one effect, not two.
 
-### Shape (to settle in the doubt cycle)
-- One module, `world-mountain-life.ts`, reading the live frame each poll and the cockpit's deploys, holding only page
-  state (no server state, no land state), drawing pooled effects (a few sprites and one particle system, as the barrels'
-  blast pool) on the enormous mountain's summit and faces.
-- The visitor page reads only the public snapshot (its coarse states), so the rules above hold by construction.
-- Budgets: the effects' draws and triangles counted at orbit and close, on both tiers.
+### Shape
+- One module, `world-mountain-life.ts`, reading each owner live frame (no new poller); the visitor page reads only its
+  public frame. Diffs seed silently on the first frame, ignore transitions from "" or Unknown, freeze while not
+  connected, and cap how many effects play at once.
+- Effects drawn from instanced or `Points` pools with a stated draw count each (not the barrels' 5 meshes a blast),
+  measured at orbit and close on both tiers before merge.
+- `Building.group` typed in TypeScript (the JSON already carries it); the massif's summit and face hexes exposed by T2.
 
-### Questions for the owner (before T2b's build)
-1. Start with the five effects today's data drives (eruption, sag and steam, cracks, shimmer, fire), and the four that
-   need new atlas fields later?
-2. Visitors: the plain puffs and steam (no names, no host health), or nothing on the mountain for visitors?
-
-### T2b owner answers (2026-11-02)
-1. **Yes:** the five effects today's data drives first (eruption, sag and steam, cracks, shimmer, fire); the four that
-   need new atlas fields (corona, scree, glacier, strata) later, each when its field exists.
-2. **Yes:** visitors see the plain puffs and steam (no app named, no host health), as in the table's visitor column.
+### Questions for the owner (asked again)
+1. **Eruption needs an atlas change** (the Argo sync counter in the contract, forwarded in the live frame). Do it as part
+   of T2b, or start without eruptions?
+2. **A visitor eruption puff would tell visitors when and how often you deploy** (never shown to them before). Keep it for
+   visitors (one new public field, a sync counter, no app named), or eruptions for you only?
+3. **The models the first draft left out:** summit crystals (app health) and the corona (traffic) can come now; magma
+   (builds), aquifers (storage pools), scree, glacier and river need atlas fields later. Which do you want on the
+   mountain?
