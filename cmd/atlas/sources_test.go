@@ -201,10 +201,10 @@ func TestAlertsContract(t *testing.T) {
 	}
 }
 
-// TestJoinerOrder: the join's stages run in this order, each name on its own function (rps adds to what apps
-// found, appsignals reads what both left).
+// TestJoinerOrder: the join's stages run in this order, each name on its own function (rps and syncs add to what apps
+// found, appsignals reads what they left).
 func TestJoinerOrder(t *testing.T) {
-	want := []joiner{{"apps", joinApps}, {"rps", joinRPS}, {"ready", joinReady}, {"probes", joinProbes}, {"land", joinLand},
+	want := []joiner{{"apps", joinApps}, {"rps", joinRPS}, {"syncs", joinSyncs}, {"ready", joinReady}, {"probes", joinProbes}, {"land", joinLand},
 		{"appsignals", joinAppSignals}, {"probeday", joinProbeDay}, {"pods", joinPods}, {"addons", joinAddons}, {"day", joinDay}}
 	got := joiners()
 	same := len(got) == len(want)

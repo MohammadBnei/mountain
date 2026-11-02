@@ -461,3 +461,34 @@ func TestLiveHealth(t *testing.T) {
 		t.Errorf("alertsAt %d -> %d, %d frames for two equal answers (want 1: the first)", first, l.st.AlertsAt, len(c.send)-n)
 	}
 }
+
+// TestSyncCounts: atlas's first poll only seeds (the controller's past syncs are not news); then each series' rise is
+// counted, so several syncs between two polls are all there; a counter that goes down was reset and counts from 0
+// again, a series that vanishes and comes back counts nothing twice, a series first seen later counts from 0, Error
+// and Failed are failed syncs, and an app off the graph is not in the frame. The counts never go down.
+func TestSyncCounts(t *testing.T) {
+	rl, _ := realms.Load()
+	l := newLive(rl, NewHub(false, func() []byte { return nil }, nil), nil)
+	p := &promPoll{l: l, idx: testIndex}
+	series := func(name, phase string) map[string]string { return map[string]string{"name": name, "phase": phase} }
+	ok, errd, failed, off := series("wird", "Succeeded"), series("wird", "Error"), series("wird", "Failed"), series("not-in-graph", "Succeeded")
+	for i, step := range []struct {
+		s                  []sample
+		syncs, syncsFailed uint64
+	}{
+		{[]sample{{ok, 5}, {errd, 1}, {off, 5}}, 0, 0},    // atlas starts: seeded, nothing counted
+		{[]sample{{ok, 7}, {errd, 1}, {off, 6}}, 2, 0},    // two syncs between polls
+		{[]sample{{ok, 1}, {errd, 0}}, 3, 0},              // the controller restarted: 1 new sync, none failed
+		{[]sample{{errd, 2}}, 3, 2},                       // a series gone; two failures
+		{[]sample{{ok, 1}, {errd, 2}}, 3, 2},              // back where it was: nothing new
+		{[]sample{{ok, 1}, {errd, 2}, {failed, 1}}, 3, 3}, // a phase's first sync: its series is new
+	} {
+		p.prom = promMap{ans: map[string][]sample{"syncs": step.s}}
+		if err := p.poll(context.Background(), time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		if a := l.st.Apps["app:wird"]; a.Syncs != step.syncs || a.SyncsFailed != step.syncsFailed || len(l.st.Apps) > 1 {
+			t.Errorf("step %d: apps %+v, want wird %d ok, %d failed", i, l.st.Apps, step.syncs, step.syncsFailed)
+		}
+	}
+}
