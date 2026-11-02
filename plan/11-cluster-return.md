@@ -16,6 +16,8 @@ This file covers both sessions' work: mine (mountain/atlas, the bridge's I-steps
 4. **3b (agent-fleet 6.25.0) → B1b** (core 6.24.0 has no bridge client, so restarting it means nothing before 3b), and
    3b → I1 if one firing alert must give one proposal from the first alert (the dedup ships in 6.25.0).
 5. I3 last, then 3e after 3b.
+6. **9a: #399 before #157** (each check passing first). **9b only after plan/21 phase 4 has merged and the
+   `ukubi-realm` image exists: #400, then #158.**
 
 ## 1. The platform is up (you)
 - [ ] The 5 k8s nodes are `Ready`: `kubectl get nodes`.
@@ -144,39 +146,38 @@ From the other session (it runs 3a, 3b and 3e; you click Run where it can't):
       merged on the admin bypass with zero reviews.
 - [ ] Optional: the "now" rulesets (no delete or force-push on main, immutable agent-fleet tags, no numeric branches).
 
-## 9. The shared world (plan/21 phase 0b, prepared 2026-11-02 during the outage)
-Code merged on ukubi-game while the cluster was down: the land and the physics in Go (#149, #151, #154), then the
-WASM client and the realm service (phases 3 and 4) as they land. The realm needs its own deploy; two draft PRs hold it.
-Merge nothing below before the realm image (`ukubi-realm`) has been built once.
-- [ ] **you:** Infisical (root project), create:
-  - `DBUSER_REALM_PASSWORD`, and put its SCRAM verifier in infra-bootstrap `pigsty/pigsty.yml` (the role's `password`
-    line is commented out until then: a Pigsty run before that makes a role nobody can log in as);
-  - two Ed25519 key pairs, base64: `UKUBI_REALM_OWNER_TICKET_KEY` / `UKUBI_REALM_OWNER_TICKET_PUBKEY` (the owner pod
-    signs owner tickets) and `UKUBI_REALM_FRIEND_TICKET_KEY` / `UKUBI_REALM_FRIEND_TICKET_PUBKEY` (the public pod signs
-    friend tickets). The realm holds only the two public keys;
-  - `UKUBI_GAME_VISITORS_TOKEN` (the friends' sign-in: nothing set it before).
-- [ ] **you:** Pigsty: the `dbuser_realm` role and its database. Note: `dbuser_game`/`gamedb` are not in `pigsty.yml` on
-      main either; add them in the same run if the game's DB was made by hand.
-- [ ] Confirm the names marked `TODO(realm): confirm` in both drafts against cmd/realm's Config (port 7420, flags
-      `--listen`, `--snapshot`, `--origins`), then take the drafts out of draft:
-  - infra-bootstrap #399: the registry entry, `realm.bnei.dev` IngressRoute (websockets), the DB secret, the
-    CiliumNetworkPolicy (realm → ukubi-game public snapshot :7411, realm → Postgres, ingress → realm);
-  - ukubi-game #157: `helm/realm.yaml`, and the friends' sign-in turned on in `helm/values.yaml` and
-    `helm/public.yaml`, with the ticket keys as optional secret refs (no key: the world plays solo).
-- [ ] **you:** before #157, check live that `dbuser_game`/`gamedb` and the visitors migration 0002 exist (visitor
-      writes fail at runtime without them, not at boot); after the Pigsty run, `SELECT rolpassword IS NULL FROM
-      pg_authid WHERE rolname='dbuser_realm'` is true until you add the verifier.
-- [ ] **you:** merge in this order, with no owner-pod restart in between: #399; wait until `ukubi-game-config` and
-      `ukubi-game-public-oidc` have rendered every key (`kubectl -n ukubi-game get secret … -o jsonpath='{.data}'`
-      lists the key names); then #157 at once. Why: #399 puts `UKUBI_GAME_VISITORS_TOKEN` in the owner's Secret, which
-      the owner refuses without #157's `--visitors-listen` (and #157's flag refuses to start without the token). #157
-      also turns on the owner's ingress policy (only the public pod reaches :7412, plan/19) with the realm's read of
-      :7411. world.bnei.dev then shows a sign-in (plan/18 V3).
-- [ ] The ticket keys reach the pods only once cmd/game mints tickets (plan/21 phase 4): their refs stay commented
-      until then. The realm image `ukubi-realm` must have been built once by app.yml before the registry entry syncs.
-- [ ] Check: `https://realm.bnei.dev` answers the websocket upgrade; `kubectl -n ukubi-realm logs deploy/ukubi-realm`
+## 9. The shared world (plan/21, prepared 2026-11-02 during the outage)
+Two independent parts, each its own pair of draft PRs. 9a can run as soon as the platform is up; 9b waits for the realm
+code (plan/21 phase 4) to be merged and its image built. Each PR body has its own "Merge order and checks".
+
+### 9a. The friends' sign-in (infra-bootstrap #399, ukubi-game #157)
+- [ ] **you:** Infisical (root project), create: `UKUBI_WORLD_OIDC_CLIENT_ID`, `UKUBI_WORLD_OIDC_CLIENT_SECRET`,
+      `UKUBI_GAME_PUBLIC_SESSION_KEY`, `UKUBI_GAME_VISITORS_TOKEN` (32 bytes or more), `DBUSER_GAME_PASSWORD` (it feeds
+      the game's DB URL), `AUTHENTIK_SOURCE_GITHUB_CLIENT_ID`/`_SECRET`, `AUTHENTIK_SOURCE_GOOGLE_CLIENT_ID`/`_SECRET`.
+      The `ukubi-world` provider, its blueprint and the sources are already on infra-bootstrap main (#395).
+- [ ] **you:** check live that `dbuser_game`/`gamedb` and the visitors migration 0002 exist (they are not in
+      `pigsty.yml`; visitor writes fail at runtime without them, not at boot).
+- [ ] **you:** merge #399. On its own it changes no running pod: it adds the `ukubi-game-visitors` Secret in both
+      namespaces. Check both rendered every key:
+      `kubectl -n ukubi-game get secret ukubi-game-config ukubi-game-visitors -o jsonpath='{range .items[*]}{.metadata.name}: {.data}{"\n"}{end}' | sed 's/:"[^"]*"/:…/g'`
+      and the same with `-n ukubi-game-public` for `ukubi-game-public-oidc ukubi-game-visitors`.
+- [ ] **you:** merge #157 (visitors listener on the owner, the owner's ingress policy so only the public pod reaches
+      :7412 (plan/19), the public pod's sign-in). Check: world.bnei.dev shows a sign-in (plan/18 V3), a friend signs in,
+      writes a letter, and the owner sees it in the deck.
+
+### 9b. The realm (infra-bootstrap #400 on #399, ukubi-game #158 on #157)
+Only after plan/21 phase 4 (`cmd/realm`) is merged and app.yml has built the `ukubi-realm` image once.
+- [ ] **you:** two Ed25519 key pairs, made with `go run ./cmd/realm --keygen` (base64 of the 32-byte seed, and of the
+      32-byte public key), into Infisical: `UKUBI_REALM_OWNER_TICKET_KEY` / `_PUBKEY` and
+      `UKUBI_REALM_FRIEND_TICKET_KEY` / `_PUBKEY`. The owner pod holds the owner key, the public pod the friend key, the
+      realm only the two public keys. Also `DBUSER_REALM_PASSWORD`.
+- [ ] **you:** Pigsty, from #400's branch (the role and database are on it), with the SCRAM verifier committed there:
+      `pgsql-user.yml` and `pgsql-db.yml` as in section 6, for `dbuser_realm` and its database. The role gets SELECT and
+      INSERT on `realm_events` only.
+- [ ] **you:** merge #400, then #158 (the realm's values; the pods' ticket keys turned on). Check:
+      `https://realm.bnei.dev/healthz` answers 200 once it has a land; `kubectl -n ukubi-realm logs deploy/ukubi-realm`
       shows the land built from the public snapshot and its hash; the owner (game.bnei.dev) and a signed-in friend
-      (world.bnei.dev) see each other ride; stopping the realm shows the banner and the world still plays solo.
+      (world.bnei.dev) see each other ride; stopping the realm shows the banner while the world still plays solo.
 
 ## After all that
 A4 (Hubble metrics, the ServiceMonitor, the Alloy traces Deployment, OTEL in atlas and the bridge) needs the cluster
