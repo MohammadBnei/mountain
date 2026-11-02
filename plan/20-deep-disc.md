@@ -95,3 +95,36 @@ Every place on the disc stands for something real (17). A proposal, to confirm:
 3. **Cavities:** pits and canyons plus caves as interiors now, and tunnels later, as proposed?
 4. **Meaning:** mountains for the heavy platform and caves for data (4), or another reading, or scenery only?
 5. **Order:** T1 first on its own, so the slab can be seen before the terrain work?
+
+## Owner answers (2026-11-02)
+1. **Thickness:** R/φ³, about 128.
+2. **Mountains:** taller, summits by ship only. On foot a rider reaches the foothills (levels to 8, as now); the
+   mountains rise well past them (about 90 units and more), their faces cliffs.
+3. **Cavities:** all three now: pits and canyons, caves as interiors, and real tunnels. And: "for buildings too, let's
+   build rich interior worlds so we can use the same third person view": a building's inside becomes a world walked
+   in the same chase camera as outside, not a separate view.
+4. **Meaning:** mountains for the platform, pits and caves for the data. And: "I don't like the traveling packages.
+   Let's build the connection through apps and things through tunnels or something more coherent with the world": the
+   connections between apps (today's road traffic and its moving packages) run through tunnels in the slab instead.
+
+### What the answers change
+- **Tunnels are the connections.** The roads' traffic (the packages that travel the data and auth roads) goes. A
+  connection between two buildings is a tunnel through the slab: its mouths by each building, its bore lit by its
+  health and load (a glow that pulses with traffic, red when the edge fails). The roads stay on top as the ways people
+  walk. This is 3c built, with its own collision and a second ground for whoever walks or rides in it.
+- **Interiors are worlds.** Buildings and caves share one interior kind: rooms modelled from kit pieces, walked in the
+  third-person chase camera with the same controls, collision and shooting as outside. A building's rooms show its
+  real parts (17's "walk into a service, see its code, pods, history and roads").
+- **Mountains** need no walkable passes to their summits: the foothills keep the climb rule, the faces block, the ship
+  lands on the tops.
+
+### Slices, revised
+- **T1: the slab.** As above.
+- **T2: the mountains.** Peaks past the foothills, cliff colliders, ship landings on the tops, budgets on the phone.
+- **T3: pits and canyons.**
+- **T4: tunnels as connections.** A tunnel per road edge; the packages retired; the bore's ground, collision, light
+  and health; mouths by the buildings.
+- **T5: interior worlds.** One interior kind for buildings and caves, in the chase camera; rooms from kit pieces; a
+  building's real parts inside; cave mouths as doors.
+
+Each slice gets its own short plan section and a doubt cycle before it is built.
