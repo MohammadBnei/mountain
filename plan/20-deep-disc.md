@@ -324,3 +324,74 @@ and the ship still lands there.
    field exists). Summit crystals were not chosen: left out. So the mountain carries, now: eruption (with the atlas
    change), the cauldron's steam and glow, the cracks, the shimmer, the corona; later: magma, aquifers, scree, glacier,
    river, the strata's history.
+
+## T3 · The pits (after one doubt cycle, 2026-11-03)
+
+> Plan/20 §3a: pits and canyons, heightfield carves open to the sky, under the datum, walkable by the climb rule, no
+> overhang. The owner (§4): "pits and caves are the data". Built in Go (internal/land), the WASM rebuilt, like T2.
+> One doubt cycle (16 findings) folded in: the first draft's geometry did not add up, the phone's floor disc hid the
+> pits, the camera called a pit "under the disc", and the exits could end on a hill.
+
+### Owner answers (2026-11-03)
+1. **Both cavities:** the vault (a round quarried pit) and the gorge (a canyon).
+2. **Depth:** the vault's floor about 30 units down (13 levels), the gorge's about 19 (8 levels).
+3. **Bridges over the gorge:** roads keep their routes and cross on bridges.
+4. **Meaning:** the vault for the databases (Postgres, Redis), the gorge for the stores (S3, NFS, backups); a name and
+   a board for now, their life a later slice.
+
+### What T3 adds
+- **Fixed roles** (as the massifs): the spec carries no per-service data, the LandSpec is unchanged. `HexLand.Pits`
+  (name, centre, rings, floor level, the ramps' hexes) on the wire beside `Massifs`, with `PitAt(x, z)` like
+  `MassifAt`; `Dropped` names a cavity no site held.
+- **A `pits` stage** after `massifs`, before `features`. Each cavity's site: blocked as a massif's is (`massifBlocked`:
+  pads, plots, landmarks, wild zones, passes and their ring, fun props, quiet circles, the build ring) plus the massifs'
+  footprints and their ring, never water or a hex next to water (no sea, lake or river pours in); the emptiest such
+  site in the frontier band, apart from the massifs; kept only when `reachOf` from a road reaches its exits. The
+  stage is skipped under `Options.NoMassifs` (the trace loaders' bare land).
+- **Depth is relative:** a floor is its rim's lowest level minus the cavity's depth (13 or 8), so every wall is at
+  least that deep and the rim's own relief is kept.
+- **The vault:** radius 5. Its floor is the inner 2 rings; rings 3 to 5 are walls (a cliff kind, walk false, as the
+  massifs' faces), but for one spiral ramp: a chain of 13 hexes of the rings, one level a hex, with two step solids a
+  rise (the easy path's `massif/step`, so a rider taps up). Its top hex opens onto the rim and is marked a pass, so
+  `features` never turns it into a hill.
+- **The gorge:** two hexes wide, long enough for its floor and a ramp of 8 hexes at each end (at least 20 hexes; it is
+  dropped where no straight-enough run fits). Its walls are the rim's own faces. Each ramp's top is a pass.
+- **Bridges:** where a road crosses the gorge, the road's hexes over it stay at the rim's level as `bridge` hexes: a
+  deck model on them, no blocks under the deck, the gorge drawn on through. The land is one height a point, so the
+  span is a pier a rider in the gorge cannot walk under (T4's second surface is what lets one pass under later); each
+  stretch of the gorge between bridges keeps a ramp out, or is not carved (TestClimbs checks every stretch).
+- **Negative levels:** `Hex.Level` goes under 0 for the first time.
+  - The phone's floor disc (world-terrain.ts, an up-facing disc at WATER_Y − FLOOR_SINK) is holed at each cavity, and
+    each cavity gets a cap under its floor; on the phone tier, sides are drawn for every edge where either hex is a
+    cavity's (the tallest faces belong to the rim hexes, not the cavity's).
+  - `landFloor` stays the relief clamp; the pick ray gets its own floor, the deepest cavity's (Go and TS together).
+  - The map colour clamps the level at 0 and tints depth (a negative level must not overshoot `lerp`).
+  - `underDisc()` (world.ts: `camera.y < 0` today) becomes "under the belly or in the Underside view", so a camera
+    in a pit keeps the buildings, cards and the orbit's chrome.
+  - The realm's height check allows a fall into a cavity (a 30-unit drop is not a teleport to other players).
+  - The y = 0 planes (the residents' close-up target, the tap fallback) use the ground under the camera instead.
+  - The realm's lairs refuse a cavity and its rim (`PitAt` in place.go's `lairAt`), so no mob spawns where it cannot
+    get out.
+- **Kinds (Go and TS together):** `quarry` (floors and ramps: dark stone, walk true) and the walls on the existing
+  `cliff` kind; `bridge` (walk true). Each in `KINDS`, `TILE_SY`, `HexKind` and the map colours.
+- **The camera in the gorge:** the gorge is 2 hexes (about 20 units) wide; the chase camera's arm shortens against its
+  walls and rises over them before it folds behind the rider (checked hands-on, both tiers).
+- **Boards:** a name board at each cavity's rim ("The vault: the databases", "The gorge: the stores"), as a summit's.
+
+### Budgets (measured in the build, before merge)
+Desktop and phone at orbit and in each cavity: triangles and draws against T2's (desktop orbit 245k / 69 draws, phone
+122k); the rim ring's sides counted in.
+
+### Tests (Go)
+Placement keeps every exclusion and the reachability of every village; levels unchanged past each cavity's rim ring;
+TestClimbs out of the vault and out of every stretch of the gorge (physics.Step, 3-frame taps) onto a hex `reachOf`
+reaches; the ship lands on each floor; a bridge deck is walked across at the road's level; goldens, pins and the WASM
+re-recorded.
+
+### Sequencing with plan/21
+Land and physics changes are ukubi-2a's area: ping before touching internal/physics or the realm's height check;
+whoever merges second rebases and rebuilds the WASM.
+
+### Later, not T3
+Cave mouths at the vault's floor (T5), tunnel mouths in the gorge's walls and walking under a bridge (T4), the
+cavities' life (a glow per database).
