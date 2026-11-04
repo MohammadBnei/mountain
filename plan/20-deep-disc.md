@@ -528,3 +528,98 @@ Goldens re-recorded.
   under the beds, so neither comes with this shape. Later, with bores at varied depths.
 - A shared underground (other riders seen there). Later, if the private one is liked.
 - Per-connection traffic (needs a source: Prometheus or the mesh). The halls as T5 interior worlds.
+
+## T5 · Interior worlds (draft with the owner's answers, before its doubt cycle, 2026-11-04)
+
+> Plan/20 owner answer 3: "for buildings too, let's build rich interior worlds so we can use the same third person
+> view". Revised slice: one interior kind for buildings and caves, in the chase camera; rooms from kit pieces; a
+> building's real parts inside; cave mouths as doors. Built after T4 (ukubi-game 74fd138).
+
+### Today (ukubi-game main 74fd138)
+- **What's inside today:** a workshop's inside (world-interior.ts, plan/17 D3). GET /api/town/rooms?id= returns its
+  repo's seams (entry, domain, adapters, config) as 8×8 rooms in a row, with bookcases whose books are files. It is
+  drawn as its own scene: three draws, at most 40 draws and 60k triangles.
+- **Limits today:** first person only, and owner only (/api/town/rooms is an owner route). A building with no repo
+  atlas holds gets one empty room. Physics uses `Room`: one box, no colliders.
+- **The building card:** it already knows a building's real parts: `parts` (id, kind, health, why, role, lag,
+  conns), `needs` and `neededBy` (its supply, checked or declared), signals, attacks and risk, decisions and tech.
+  The visitor's card is a coarse cut of it.
+- **T4 halls:** every connected building has a hall under it (its tunnels' meeting point) at level −5.
+- **The realm:** it sees a rider inside as a declared door leave (T4), so the inside stays private, and nothing
+  there needs the realm.
+
+### What T5 adds
+- **One interior kind, a floor plan.** An interior is a set of rooms (rectangles joined by door gaps), walked with T4's
+  floor-plan physics: `World.Under` generalised to `World.Floor` (ground, outline wall, ceiling). Room and its box go,
+  so caves and buildings share one kind. Rooms are built from kit pieces (walls, floors, doorways, props) as
+  instanced draws, unlit like the tunnels, with the same fog to dark.
+- **Third person inside.** The chase camera runs inside as it does under: its arm is kept in the plan and under the
+  ceiling. V still flips to first person. Rooms are 12 by 12 and 5 high, so the arm has room.
+- **A building's rooms are its real parts:**
+  - **the hall** (entry): the building's name, its health-lit sign, and its signals and alerts as glowing boards;
+  - **the parts hall:** one machine or figure per part (pod, VM, replica), lit by its health, with a plaque giving its
+    role, lag and conns; E on one opens its Inspect as the card does;
+  - **the library:** today's code rooms (seams, bookcases), where atlas holds the repo;
+  - **the stair down** to its T4 hall, if it has one: the interior and the tunnels join, so a rider can go building
+    → hall → bore → another building's hall → up into that building, never touching the surface (owner only).
+- **Caves.** A cave mouth in a pit's wall (the vault's lowest ring: the databases) is a door into a cave interior: the
+  same floor-plan kind, its rooms rock (kit rock pieces), one cave per data building (`db:` ids), its parts hall the
+  database's replicas (Patroni roles, lag). The vault becomes the place where you walk into a database.
+- **Data, owner and visitor.**
+  - Owner: GET /api/town/rooms grows the card's parts, signals and supply (atlas already gives them to the card).
+  - Visitor: none (owner answer 3): /api/town/rooms stays an owner route; the public page draws every stair up shut.
+- **Budgets:** at most 60 draws and 90k triangles inside on both tiers (the surface and tunnels are hidden, as under).
+
+### Later, not T5
+- Live per-part metrics on the machines (CPU, memory gauges), and units at work walking the rooms (the residents
+  inside).
+- Interiors for the capital, the control room (it keeps its own room today) and the carriers.
+
+### Owner answers (2026-11-04)
+1. **Rooms:** all four: the entry hall, the parts hall, the code library, the stair down to the tunnels.
+2. **Caves:** in the vault (one per database, at its lowest ring) **and in the mountains' faces** (the platform's
+   services: a cave per platform building of the massifs' groups, its mouth on a terrace of its massif).
+3. **Visitors: owner only**, as today. Visitors walk the tunnels (T4) but no stair up leads them into a building: on
+   the public page a hall's stair is closed (drawn shut, no door).
+4. **Camera: third person** inside, V flips to first person.
+
+### The doubt cycle's changes (2026-11-04; these override the lines above where they differ)
+- **Leaves across the stair.** The join of interiors and tunnels needs one realm rule: a DOOR leave (from the
+  building's door) or an UNDER leave may come back at any portal of the network of that building's hall, or at the door
+  of any building whose hall is on that network, once `tunnelled`'s path-length time allows (hall to hall; the same
+  building's door at once). The client: arriving in a building by its stair sets `back` (the way out by its door) and
+  the layer, and `go()`'s under guard lets the stair through. Tests for every pair: door to door, door to portal,
+  portal to door, and a refusal across two networks. A building with no hall has no stair.
+- **The stair is client-side**, no land change: a door at a fixed point in each hall (its centre, offset clear of the
+  bore mouths by a hash of the id), entered by E, gated by `p.doors` (owner). On the public page it is drawn shut and
+  does nothing.
+- **Caves are second doors of their building**, never second interiors. A db building's cave mouth is in the vault, a
+  platform building's in its massif. Inside is the same interior as through its surface door. The realm's
+  `hasPad`/`atDoor` accept either door of an id. The client's door map holds a list per id, each with its facing.
+- **Cave mouth sites** are a pure function of the public pads, in sorted id order:
+  - **Vault:** on the floor's ring-2 hexes, at most 12.
+  - **Massifs:** on walkable ledge and trailhead hexes of the building's group's massif, at most 9 a massif.
+  - **Overflow:** an overflow building, or one whose massif or vault is Dropped, has no cave (recorded in `Dropped`).
+  - **Entry:** mouths are entered by E only, never by walking near, so crossing the vault floor never drops a rider in.
+  - **Public page:** mouths are drawn shut.
+  - **Test:** a reach test from a path climbs to every massif mouth.
+- **Physics keeps `physics.Room`**, extended to a list of boxes joined by door gaps (the union the bound, walls where
+  the union ends), plus a ceiling. The exit and `Spent` stay as they are; the WASM room slot grows to carry the boxes.
+  No land, hash or realm change for interiors.
+- **The control room** moves to the new kind as a one-room plan, keeping its panel hooks and tests.
+- **Chase camera:** reachOf scans from the pivot outward and stops at the first point outside, so it never looks
+  through a wall into the next room. Walls are thicker than the arm's near clearance. A chase test between two rooms.
+- **The library** keeps its shelves, re-laid in 12×12 rooms with ceilings. It shows only when the building's code
+  repo is its own (`CodeRepo != GitopsRepo`), never the whole gitops tree.
+- **E on a machine** opens the card drawer at that part's row (no part inspector exists on the disc yet).
+- **No route changes:** the interior reads the card (`/api/town/card`, owner) beside the rooms. Each room degrades
+  on its own: no repo means no library, a card failure means the hall and parts hall say "unknown".
+- **Budgets:**
+  - Caps: at most 24 machines a parts hall and 6 boards in the entry hall, each with a "+N more".
+  - One draw per kit piece type.
+  - A gate step inside the most parts-heavy building on the phone tier, at 60 draws and 90k triangles at most.
+- **Clicks inside:** in third person a click never shoots (picks a book or a machine, as today); labels hide by their
+  distance from the rider, not the camera.
+- **Today, corrected:** halls exist only for buildings at one end of a supply road whose both ends have pads.
+- **Kit pieces:** the builder lists the model ids it uses from the kit manifest; a piece the kit lacks is made as
+  simple merged geometry.
