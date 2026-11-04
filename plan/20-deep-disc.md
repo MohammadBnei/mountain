@@ -395,3 +395,136 @@ whoever merges second rebases and rebuilds the WASM.
 ### Later, not T3
 Cave mouths at the vault's floor (T5), tunnel mouths in the gorge's walls and walking under a bridge (T4), the
 cavities' life (a glow per database).
+
+## T4 · Tunnels as connections (after two doubt cycles and the owner's answers, 2026-11-04)
+
+> Plan/20 owner answer 4: "I don't like the traveling packages. Let's build the connection through apps and things
+> through tunnels or something more coherent with the world". Built after T3 (ukubi-game d37983b).
+
+### Today (ukubi-game main d37983b)
+- The connections are atlas's `lenses.supply`: one road per needed service, `{from, to, via, checked?}`, data
+  (postgres, s3) or auth (oidc, forwardauth, infisical). The dev world has 35, most of them ending at a few hubs
+  (authentik, infisical, the Postgres proxies). The public page has the same roads, `via` reduced to data|auth, no
+  `checked`. The realm already receives them (realm/land.go WorldOfTown passes `Lenses.Supply` to BuildWith).
+- They show twice: world-roads.ts draws straight overlay lines read from the orbit; world-carts.ts runs the "packages"
+  (carts on the road hexes, boats on the rivers). world-people.ts imports `routeOf`, `wayXZ`, `alongInto`, `fnv` from
+  world-carts.ts, so the module stays.
+- No live signal is per connection: the frame carries each building's health (`looks`), not an edge's traffic.
+- The land is one heightfield. Everything that collides, aims or senses reads it in 2D or at the surface:
+  `Ground.OK` and its building footprints (physics/motion.go), step.go's NearAt, the realm's `solids.NearAt`,
+  `heightAt`'s swim clamp, `ResolveFall`, the anchor after 0.5 s of silence (realm.go), mobs' aggro and chase
+  (mobs/mob.go), build reach (build.go), item drops (resources.go), Burst's Overlap, world-shot.ts's rays, the chase
+  camera's floor (world-chase.ts). A shared second layer would touch every one of them (the doubt cycle's main finding).
+
+### Owner answers (2026-11-03)
+1. **Underground: private**, like a building's inside. The page sends no pose while its rider is under
+   (world-realm.ts:27 already does so inside a building); no other rider sees it there, no mob senses it, nothing is
+   built, shot or dropped there. The realm's one new rule: a rider that went silent at a portal comes back only at a
+   portal (the anchor after 0.5 s of silence otherwise accepts any spot).
+2. **Ways down: open ramps carved into the land**, not stair-heads.
+3. **The packages: carts and boats both retired.**
+4. **Visitors walk the tunnels too**, with the visitor's coarse health states.
+
+### What the answers change
+A ramp is real heightfield, as the pits' ramps are: hexes a level lower each, with the step solids at a third and two
+thirds of each rise (pit.go), walked and checked like any surface. Its length is its depth in hexes, so the network is
+not at level −17 (a 17-hex ramp per hall): it lies **just under the deepest bed**, and goes round the pits instead of
+under them.
+
+### What T4 adds
+- **The network.** Every building at one end of a supply road gets a **hall** under it; every road is a **bore** to
+  the other end's hall, one per unordered pair and kind (from the supply roads, before landOf's per-pair dedupe). The
+  floor of all of it at **level −5** (about 11.7 units under the datum), its ceiling (6 units up) under `landFloor`
+  (the deepest bed, about −5.2), so no bore opens into the sea, a lake or a river. A bore follows a hex path between its
+  halls (breadth first, never a pit's hex nor its rim ring), so it never opens into the vault or the gorge. The supply
+  graph may have several components; each is its own network.
+- **Sized for the chase camera and the bike.** Bores 7 wide and 6 high (the bike's turn radius is 3); a hall's radius
+  grows with its bores (6, plus 1 per bore past three), so the hubs are wide halls, never a knot of crossing tubes.
+- **Ramps down.** Each hall gets one ramp, placed in a `tunnels` stage after `pits`: from a free surface hex at level 0
+  or 1 near its building's pad (off the door side, the lanes, the props, the plots; the props' `clearAt` reservation
+  in landOf extended to it), down a hex a level to level −5 (five or six hexes), the cut's sides cliffs as the gorge's
+  are. Its last hex's far edge is the **portal**: an arch drawn over that cliff face, the side quads behind it left
+  out, the bore starting there at the same floor height, so the ramp's floor runs on into the bore. A hall with no room
+  for a ramp is recorded in `HexLand.Dropped`; its bores are still walkable from the other halls.
+- **The floor plan.** The same stage computes it: the union of halls (discs), bores (capsules along their hex paths)
+  and each ramp's portal, flat at level −5, with a ceiling per point. Drawn from that same 2D union (walls extruded from
+  its outline, a floor and a ceiling), so a wall drawn is a wall felt, and no tube cuts another's inside. Ramps,
+  portals and the floor plan are on the wire (wire.go, as Pits) and in `HexHash`: a change of the supply roads reloads
+  the pages, as any land change does.
+- **Physics under.** Its own `physics.Land` (as `ShipLand` is): the floor plan's floor, its outline as the wall, its
+  ceiling capping jumps (airLand); no surface walls, solids or water. A rider on a ramp's last hex walking through the
+  portal goes under (no fade: the floors meet); walking back out of a portal returns it to the surface physics on that
+  ramp's last hex. The ship is set down at a ramp's top; it does not go down.
+- **Camera under.** The chase keeps its arm inside the floor plan (shortened at a wall, under the ceiling), so the
+  view stays third-person. "Under" is the rider's layer, not the camera's y.
+- **The bores lit by their ends' health.** Emissive and unlit (no scene light reaches them; day and night alike): a
+  strip along each bore's floor in its kind's colour (data orange, auth blue, the overlay's), steady when both ends are
+  healthy, amber when either is degraded, red when either is down. On the public page the visitor's coarse states
+  (world-public.ts: no down, so never red). Owner page only: a declared, not checked road runs dimmer; a missing
+  `checked` counts as proven, as world-roads.ts does. No pulses: nothing per connection would drive them. Each hall
+  carries its building's name.
+- **Drawn only under.** The network is one group, shown only while the rider is under; the far surface groups are
+  hidden then. The ramps are land (their hexes in the land's chunks); the arches one instanced draw.
+- **The packages retired.** buildCarts and its frame go; world-carts.ts keeps the ways the residents walk. Gates:
+  dev/calm-gate.mjs's carts (day against night) and boats-on-rivers steps go, with `__world.calm.carts` and `cartsAt`;
+  the README's carts lines too. The overlay stays.
+- **Residents and mobs** never route down a ramp (their walk grids refuse ramp hexes, as they refuse cliffs).
+
+### Coordination
+- Agreed with ukubi-2a (2026-11-03): this slice builds all of it; ukubi-2a reviews the draft PR before the WASM merge.
+  Their conditions: no building under and nothing hit across layers hold because nothing is placed, shot or dropped
+  under and the realm drops silent riders (below); no wall on a ramp is a new refusal in build.go (below).
+
+### The second doubt cycle's changes (2026-11-04; these override the lines above where they differ)
+- **Silence, one rule for all.** Today a rider silent over 0.5 s (or reconnecting) may come back anywhere
+  (realm.go:451, the anchor branch). ResolveFall's anchor branch now accepts a pose only (a) within top speed × gap of
+  the last pose, (b) at a portal of the same network as the portal the rider left by, with the gap at least the
+  tunnel path's length over the bike's under speed, or (c) at a door or the spawn. A reconnect is keyed on the
+  player's last pose, not on `p.pose == nil`.
+- **Silent riders leave the world.** fight.sync and snapshot leave out a player silent over maxDt: no ghost at a
+  ramp's foot (nor at a building's door, today's same bug), no mob target, never downed while away. Tested.
+- **Ramp sites from the spec.** landOf picks each hall's ramp from spec data (pads are flat at level 0, the paths,
+  rivers and lakes), before `funOf`/`clearAt` place the props; plotsOf skips ramp hexes; a test checks every ramp hex
+  keeps its step solids (decor `massif/step`, collided by the WASM and the realm alike). Ramps never sit on a road or
+  ford hex.
+- **The portal opens the cliff.** The ramp's last hex (level −5) borders a higher hex whose column (stackOf) would
+  fill the bore's mouth: stackOf stops that hex's column at the bore's ceiling (−5.67) above the portal edge, and the
+  arch frames the opening. The portal links to its hall by an explicit capsule in the floor plan.
+- **Phone tier.** Ramp hexes count as pit hexes (pitHexes, pitOutlines): a hole in the map floor and a dark cap,
+  counted in the budget.
+- **Halls and bores keep clear** of every ramp hex and its ring (except their own portal) and of the pits' near ring;
+  a hall's radius is capped where it would reach one. The ceiling is then −5.67 everywhere.
+- **Physics under is `World.Under *Floor`**, beside `Room` (not a `physics.Land`: Step reads `Ground.Hex`
+  directly): its own ground, bound and outline test, both rides allowed, and a new ceiling clamp in stepAir (`Peak`
+  raises a floor, it caps nothing). Go and the TS mirror, with a parity test.
+- **Bores are 9 wide, string-pulled** (straight runs between hex centres that see each other clear of obstacles), and
+  the bike under is capped at 7.5 u/s (its turn radius 3 there). The chase arm and its pitch are kept under the ceiling.
+- **The chase and the rays switch with the layer:** the injected `ground` and `landAt` read the floor plan under
+  (world-chase's floor and sight, world-shot's rays); a chase test under a level-0 hex.
+- **Building.** build.go refuses Place where RampAt or PitAt; a rebuild that carves a ramp under existing pieces
+  removes them and returns them to their owners.
+- **Mobs** refuse ramp hexes in every direction (walk.go, beside `ontoCliff`). Residents walk the road hexes only, and
+  ramps never sit on them.
+- **Hashing.** HexHash (Go) and hexHash (world-hex.ts) gain the ramps, portals and floor plan explicitly; a test where
+  only the floor plan changes and the hash does too.
+- **Health colours.** Public maintenance (the default for unmeasured) is a dim neutral strip.
+- **Who gets a hall.** Roads whose both ends have pads, keyed by the sorted pair and roadKind; a test that the owner's
+  and the public inputs give the same floor plan.
+- **Edge cases.** A page reloaded under starts at the spawn (allowed by the silence rule). The ship never enters a
+  portal; its rider dismounts as anywhere. While under, every surface group is hidden, not only the far ones.
+
+### Budgets
+Measured before merge on both tiers, at orbit (the ramps' cuts, the arches) and under (a hub's hall and a long bore),
+added to dev/world-gate.mjs as T2 and T3 did.
+
+### Tests
+Go: the floor plan (halls, bores round pits, ceilings under landFloor, components, portals), ramps (a level a hex, the
+step solids, a climb out with physics.Step, dropped halls), determinism; the portal transitions; the ceiling cap; the
+realm's portal-only return. Client: the floor plan from the WASM matches Go's; the health colours (owner and public).
+Goldens re-recorded.
+
+### Not T4, said plainly
+- Walking under a bridge and mouths in the gorge's walls (T3 named both for T4): the bores go round the pits and lie
+  under the beds, so neither comes with this shape. Later, with bores at varied depths.
+- A shared underground (other riders seen there). Later, if the private one is liked.
+- Per-connection traffic (needs a source: Prometheus or the mesh). The halls as T5 interior worlds.
