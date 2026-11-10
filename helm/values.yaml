@@ -15,7 +15,7 @@ image:
   # infra-bootstrap belongs after this repo's first CI run has replaced this
   # line, or the first sync is an ImagePullBackOff against a tag that was
   # never built (hq/wird have the same rule).
-  tag: "9d82f8224ecc"
+  tag: "e4baae09a4c2"
 
 service:
   port: 8080
@@ -62,8 +62,52 @@ envFrom:
       optional: true
   # The game's machine principal (cmd/atlas/machine.go, infra-bootstrap ADR-0068):
   # MOUNTAIN_MACHINE_CERT (authentik's signing certificate, PEM), _ISSUER, _CLIENT_ID (the
-  # atlas-api provider's) and _SUB (atlas-game). None is secret. Unset until the game is
-  # deployed: the bearer path stays off. All or none: some set and atlas refuses to start.
+  # atlas-api provider's) and _SUB (atlas-game). None is secret, so they are plain env below.
+  # All or none: some set and atlas refuses to start.
+
+env:
+  - name: MOUNTAIN_MACHINE_ISSUER
+    value: https://authentik.bnei.dev/application/o/atlas-api/
+  - name: MOUNTAIN_MACHINE_CLIENT_ID
+    value: atlas-api
+  - name: MOUNTAIN_MACHINE_SUB
+    value: atlas-game
+  # authentik's "authentik Self-signed Certificate", the atlas-api provider's signing key
+  # (taken from its x5c, 2026-11-10; sha256 A7:E9:E3:DB:...:5F:83:67:B8, expires 2027-08-18).
+  # Rotation: add the new PEM after this one, then drop the old after the switch.
+  - name: MOUNTAIN_MACHINE_CERT
+    value: |
+      -----BEGIN CERTIFICATE-----
+      MIIFUjCCAzqgAwIBAgIQVLuPFjSmRGGcUwdXhSg43zANBgkqhkiG9w0BAQsFADAd
+      MRswGQYDVQQDDBJhdXRoZW50aWsgMjAyNi41LjYwHhcNMjYwODE3MjIzMDI2WhcN
+      MjcwODE4MjIzMDI2WjBWMSowKAYDVQQDDCFhdXRoZW50aWsgU2VsZi1zaWduZWQg
+      Q2VydGlmaWNhdGUxEjAQBgNVBAoMCWF1dGhlbnRpazEUMBIGA1UECwwLU2VsZi1z
+      aWduZWQwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQC6r/TtR4qLUoHF
+      Ylv1T3izn4t4n3L1d2VAF0GSpcAiikyY5lEQyaTCR/m+eFTLAIITchiWSZgM5WbF
+      MNcEF5K7NW5bOY7I4jfULrPDPXn8OoC8Xp1ts3LBuQ7fACv4zuf9LGliDgF8Nn17
+      ON6/Ei6d3TmFJdzVBnK09m5DLEvM1lKJNIBRLSzgHLgr6YXOhK/NKNL9LdVsSexZ
+      rt531O2hosseYThYL2EvIfW6eIxuCtguBg21mNWW8Z5adUNQRT8q+g8uDp7FdTVh
+      eKBTfgDUYPtFTZsCzbR5dD6mev0ThMTdf9/wOs1/E0NEpntpRuCcESztG77DXSuQ
+      qiUy7yTx0Y4Exq328m4dNpWvH8YBuQZkZsr3nJjOEQJhenFyA0QTtMn7Y1t5coo/
+      cHA3910DU1IOB75OOfMBXoYQuXfe137um2o3F2d0qHD15FicKWSb366mcDCK+59F
+      9GDfQnwRY5HNi5vzWinmS15b+exZBBI/HsEh7z6yHk+XldpMP7gu4rwQzhFNr5pu
+      enDhYDiAkXBGYfartKfIVbVf3RmmgbbYU1yIiQ/WqaE0Iu6wniNCEUQ7qz4TiRCf
+      JjT/glo1YOv95Wv606v3DJz6jIH+ZaHEO/99JE3SEfXDipK5ETApv2Sq+t7eYydA
+      Ydyu1c6UsOwktHziWWMbZHovbLfZKQIDAQABo1UwUzBRBgNVHREBAf8ERzBFgkNI
+      OWFzOGU5YnRzUWR2RUJSSWQ1OTFGVXdWN0dlSWpkcThST3R4cERoLnNlbGYtc2ln
+      bmVkLmdvYXV0aGVudGlrLmlvMA0GCSqGSIb3DQEBCwUAA4ICAQCtdmtzXK74n0hA
+      tndXurMvifBU7D7Lv2mu4lR9FKVDGOVy2nCxkGoRta5PdLyMeENfb9olQ0O7pPG0
+      pQr9RVjt3Hn7hKjkrJlcXxACk3W8VsXCP18Ngq5q3yngSzVFp2Bp8jMvD08zO/yP
+      oov5GAQXQ3ARuwZgXL6UW55B+rNFCDXbPw3ANq2DNAc636u6rGvKWFj3geRhlwEg
+      kmLO+nAxUCIuzlJ+WuyJPgkIWlrE8V6v0cIhKy6WO0PFAqle99XFLiIO+VLyUeo3
+      iaDTMQYsG280kPDrdLw7Rw20YlJsiivMRyn/u212XOb9dZ7ajKfSQP6hHvUej1wY
+      Ex48aUCn8Hn+jqdKvo+XWqbAYQIgu8WeE3d05mX6Y97zAikfPrdL1/ZjJHjsmRT3
+      GzoQeBeKmXYoTnKj50RPx5H5bKSugWEGnpRTfJ93i2ILPS7TjqptDLOfl0Clz49z
+      TiARrxFXAuPMlcBj6mTdpbiFjafB/yvDJTioHnw9Fu/4UoYcK5nUGQ63uHFX1R+M
+      wYaFJ//VBeeZ7Z2bFNTXR0XcG6eI2ubhB+JNrtAa0O0u9NqClTtQ1WKKv9rA9cVc
+      r3bMWO3ti5CPXMJSzC5ud5ALTal9h4sDLBC5RLe2+YAcJ5DSIiIwOfVD1yzDM1I4
+      ZXrIHr1+99YTXY9QuNIBf/q+ixd/hQ==
+      -----END CERTIFICATE-----
 
 # MOUNTAIN_GITHUB_TOKEN (Infisical mountain-8c-cz, synced to the Secret mountain-infisical
 # and loaded verbatim via envFrom): the read-only token atlas polls the repos with (contents
