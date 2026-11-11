@@ -226,6 +226,8 @@ The second review read this plan against ukubi-game's main. Each finding and its
 - **Voice chat:** nothing asks for it; moderation cost.
 
 Reversed by plan/21 (2026-11-02): mobs, and opt-in PvP, which this list once dropped.
+Reversed by plan/22 (2026-11-11): voice chat. Strangers came, and the owner asked for proximity voice, chat and mail
+with reactive moderation.
 - **A static fallback when the cluster is down:** owner decision 8.
 
 ## Owner answers (2026-11-01, night)
