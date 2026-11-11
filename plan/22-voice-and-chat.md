@@ -79,20 +79,20 @@ Self-hosted LiveKit cannot enforce subscriptions from the server. `canSubscribe`
 - **Spikes** (first step of P4):
   - **S1:** confirm that publisher permissions block a modded `setSubscribed(true)`. Confirm that the closed-by-default permission survives a reconnect and a republish. Confirm the SID-based kick leaves a new tab alone. Find the paths the SDK needs (for the IngressRoute and CSP), e.g. `/rtc/validate`.
   - **S2:** Freebox UDP hairpin from the LAN. If it fails, test a second (LAN) candidate. If Pion's 1:1 NAT allows only one, fall back to split-horizon `voice.bnei.lan` with a LAN-only LiveKit `node_ip`. This one is unverified.
-- **Settings:** `UKUBI_REALM_LIVEKIT_URL` (internal API), `_PUBLIC_URL` (wss), `_KEY` and `_SECRET`, plus `UKUBI_REALM_ID_SECRET`. All go in `envVars` (`cmd/realm/config.go:30`) and the README table.
+- **Settings:** `UKUBI_REALM_LIVEKIT_URL` (internal API), `_PUBLIC_URL` (wss), `_KEY` and `_SECRET`, plus `UKUBI_REALM_ID_SECRET` and `UKUBI_REALM_OWNER_SUB`. All go in `envVars` (`cmd/realm/config.go:30`) and the README table.
   - The dev keys `devkey`/`secret` are refused outside `--dev`, the same guard as the ticket dev keys (`config.go:~88-92`).
 
 ### 3. Parties (realm memory only)
-- Messages: `ClientMsg.party{invite|accept|leave, rider}` and `ServerMsg.party{id, members[]}`.
+- Messages: `ClientMsg.party{invite|accept|leave, voice_id}` and `ServerMsg.party{id, members[]}`.
 - At most 8 members. A party dissolves when its last member leaves, and is lost if the realm restarts.
 - Party membership feeds the hearing rule and the Party channel.
 
 ### 4. Chat
-- Messages: `ClientMsg.say{channel: world|party, text}` (oneof 16) and `ServerMsg.chat{lines[]}` (oneof 12).
+- Messages: `ClientMsg.say{channel: world|party, text}` and `ServerMsg.chat{lines[]}`. Every new message takes the next free oneof field when its phase lands (P1's `who` and `block` come first); no numbers are pinned here.
 - `talk.Line` cleans each line: trim, strip control and format runes but keep `<` and `>`, at most 280 runes. The realm does not import `internal/voice`. Copy `voice.Limit` (about 40 lines) into `talk`.
 - Rate limit: 5 lines per 10 s per subject. Lines over the limit are dropped, and the sender sees "slow down".
 - **World history:** table `realm_chat` (§8), pruned every hour of rows older than 24 h. Join sends the last 24 h, up to 200 lines. `--dev` keeps it in memory.
-- **Party lines:** fanned out to members only, never stored.
+- **Party lines:** fanned out to members only, never stored in `realm_chat`. The realm keeps each player's last 20 lines (both channels) in a memory ring, so a report can quote them; that quote is the only place a party line is written down.
 - **Block:** lines are filtered per receiver, in both directions.
 - **Delivery:** each player has a `chat` channel with a buffer of 64. When the buffer is full, the oldest line is dropped. The socket is never closed for this. `ponytail: 20 players × 5 lines/10 s never fills 64; add gap fetch if it ever does.`
 
@@ -116,15 +116,15 @@ Self-hosted LiveKit cannot enforce subscriptions from the server. `canSubscribe`
 - **Retired:** `/api/visitor/letter`, `/visitors/write/letter` and the keeper's letterbox call the realm. The old visitor JSON fields stay readable for one release.
 
 ### 6. Moderation
-- **Block:** table `realm_blocks`, set with `ClientMsg.block{rider|voice_id, on}`. It applies at once to chat, mail and the hearing rule.
+- **Block:** table `realm_blocks`, set with `ClientMsg.block{voice_id, on}`. It applies at once to chat, mail and the hearing rule.
 - **Mute:** client-side, in localStorage `ukubi-muted` keyed by voice id.
-- **Report:** `ClientMsg.report{rider, why}`. At most 5 per hour per subject.
-  - Creates a `report` mail to the owner with the target's last 20 World and Party lines, **plus the target subject** (owner-only).
+- **Report:** `ClientMsg.report{voice_id, why}`. At most 5 per hour per subject.
+  - Creates a `report` mail to the owner with the target's last 20 World and Party lines (from a per-player ring of recent lines in realm memory, §4), **plus the target subject** (owner-only).
   - Auto-mutes the target for the reporter.
   - Reports from 3 distinct subjects within 1 h create a row in `realm_timeouts(sub, until)` for 24 h: chat and mail are refused, and voice gets the kick sequence (§2). **The owner is never timed out.**
 - **Owner actions:** `ClientMsg.moderate{report_id, lift|ban}`, accepted only from `OWNER_SUB`.
   - `lift` deletes the timeout.
-  - `ban` makes the realm kick that player at once (socket plus voice), with a local ban held until the poll confirms it. The owner's page then POSTs `/api/control/ban {sub}` to the owner pod itself (`internal/play/control.go:185`, `gate.Owner`): it is signed in already, and report mail carries the subject. So no realm→owner route, no token, and the snapshot port stays public.
+  - `ban` makes the realm kick that player at once (socket plus voice), with a local ban held until the poll confirms it. The owner's page then POSTs `/api/control/ban {sub, ban: true}` to the owner pod itself (`internal/play/control.go:185`, `gate.Owner`): it is signed in already, and report mail carries the subject. So no realm→owner route, no token, and the snapshot port stays public.
 - **Ban poll:** the realm polls `/api/public/bans` every 30 s. That catches bans made from the cockpit: kick the socket and voice, refuse at join. All of this is new P1 code: the realm has no ban check today.
   - Until the first poll succeeds after a cold start, **all social is closed** (chat, mail, voice), while movement still works. The last list is kept in memory after that.
   - The owner pod being down at a cold start therefore means no social. This is accepted alongside "realm down".
@@ -211,7 +211,7 @@ Base on main at `0dc697d` or later: #239 and #244 are merged, and no branches ar
   2. The phone walks within 30 m of Player 2 and hears them; walks away and loses them.
   3. Player 2 enters a building and goes silent to outsiders; after joining a party, the party hears them.
   4. Push-to-talk on hold, then the open toggle.
-  5. World chat survives a reload; party lines are not stored.
+  5. World chat survives a reload; party lines are not in history (only a report quotes them).
   6. Mail to an offline player arrives on next join.
   7. Block hides chat, mail and voice both ways.
   8. 3 reports cause a timeout; the owner lifts it; the owner bans from the report and the player drops from voice at once.
