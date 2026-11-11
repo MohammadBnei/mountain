@@ -28,6 +28,7 @@ functions:
   guard/authentik: defence
   guard/secrets: defence
   guard/mesh: defence
+  guard/access: defence
   fleet/control: barracks
   fleet/cluster-access: barracks
   fleet/hermes: barracks
@@ -59,6 +60,7 @@ layers:
   guard/authentik: services
   guard/secrets: services
   guard/mesh: edge
+  guard/access: services
   fleet/control: core
   fleet/cluster-access: core
   fleet/hermes: services
@@ -176,13 +178,14 @@ components:
   app:mountain: { realm: operations, group: atlas, paths: [mountain/] }
   app:ukubi-bridge: { realm: operations, group: events, paths: [ukubi-bridge/] }
 
-  # Guard: identity, secrets, the mesh
+  # Guard: identity, secrets, the mesh, access grants
   app:platform-authentik: { realm: guard, group: authentik }
   app:platform-infisical: { realm: guard, group: secrets }
   app:platform-infisical-operator: { realm: guard, group: secrets }
   app:agent-vault: { realm: guard, group: secrets }
   app:netbird: { realm: guard, group: mesh }
   app:netbird-dashboard: { realm: guard, group: mesh }
+  app:platform-ukubi-game-bounds: { realm: guard, group: access } # the game's ServiceAccount, read RBAC and egress fence (ADR-0069)
 
   # Fleet
   app:agent-fleet-core: { realm: fleet, group: control }
@@ -214,7 +217,6 @@ components:
   app:has-journal: { realm: apps, group: products }
   app:ente-museum: { realm: apps, group: products }
   app:ente-web: { realm: apps, group: products }
-  app:platform-ukubi-game-bounds: { realm: apps, group: products } # the game's ServiceAccount, read RBAC and egress fence (ADR-0069)
   app:ukubi-stt: { realm: apps, group: ai }
 
 # Watchtowers (plan/13 §3 Defence; owner 2026-10-26: only a rule that names a building watches it): node -> its alert
@@ -293,6 +295,7 @@ shapes:
   guard/authentik: [gate]
   guard/secrets: [vault]
   guard/mesh: [tower]
+  guard/access: [gate]
   fleet/cluster-access: [rig]
   fleet/hermes: [mill]
   apps/sites: [wide]
