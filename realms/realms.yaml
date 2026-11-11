@@ -214,6 +214,7 @@ components:
   app:has-journal: { realm: apps, group: products }
   app:ente-museum: { realm: apps, group: products }
   app:ente-web: { realm: apps, group: products }
+  app:platform-ukubi-game-bounds: { realm: apps, group: products } # the game's ServiceAccount, read RBAC and egress fence (ADR-0069)
   app:ukubi-stt: { realm: apps, group: ai }
 
 # Watchtowers (plan/13 §3 Defence; owner 2026-10-26: only a rule that names a building watches it): node -> its alert
