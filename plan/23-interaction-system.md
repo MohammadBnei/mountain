@@ -1,7 +1,7 @@
 # 23 · One input system: the router, focus and the radial
 
-Status: rev 4, 2026-11-11, after doubt cycles 1–3 and the owner's answers (a)–(f). This is the draft for the owner's
-approval.
+Status: approved, 2026-11-11 (rev 4, after doubt cycles 1–3 and the owner's answers (a)–(f); D1–D5 approved as written;
+changes 8, 10 and 12 folded into the one PR by the owner's word).
 
 Sources:
 - the owner interview (memory `interaction-system-intent`);
@@ -460,8 +460,7 @@ row flips in the commit that changes it, with its reason.
 14. **The carried item shows in the box.**
 15. **Block's "try again" moves into the box.**
 
-Changes 8, 10 and 12 fix code that this PR deletes. Folding them in needs the owner's word, because the dev rule says
-"a fix ships first, apart".
+Changes 8, 10 and 12 fix code that this PR deletes. The owner folded them into this PR (2026-11-11).
 
 ## Tests
 
