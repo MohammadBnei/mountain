@@ -1,17 +1,23 @@
 # 24 · One HUD: the dock, the Menu and the panels
 
-Status: draft, 2026-11-12. For the owner's review.
+Status: rev 2, owner answers 2026-11-12.
 
 Sources:
 - the owner interview and the mockup review of 2026-11-12 (memory `hud-design-intent`, `hud-coherence`);
 - the approved mockups: `.wt/hud-mock/DESIGN.md` and `out/*.png` (P1–P6 phone, D1–D4 desktop);
-- the inventory of every current HUD element: `.wt/hud-shots/INVENTORY.md`.
+- the inventory of every current HUD element: `.wt/hud-shots/INVENTORY.md`;
+- the owner's answers to Q1–Q18 (rev 2).
 
 What it changes in other plans:
-- **plan/23.** `#focus` becomes the dock's focus face (§3). The Menu radial drops from 8 `GLOBALS` to 4 (§4). The
-  phone gets a dock inside buildings, which plan/23's "Not doing" excluded.
-- **plan/22.** The P2 chat log moves into People › Chat. P3 mail and P5 party UI plug into People's tabs. P4's mic
-  "near Jump" has no Jump to sit near on foot; its place is set when P4 starts (§12).
+- **plan/23.**
+  - `#focus` becomes the dock's focus face (§3).
+  - The Menu radial drops from 8 `GLOBALS` to 4 (§4).
+  - The phone gets a dock inside buildings, which plan/23's "Not doing" excluded.
+  - The desktop deck leaves explore (§7).
+- **plan/22.**
+  - The P2 chat log moves into People › Chat.
+  - P3 mail and P5 party UI plug into People's tabs.
+  - P4's mic "near Jump" has no Jump to sit near (§12).
 
 ## Context
 
@@ -20,181 +26,110 @@ Every claim was checked on ukubi-game main at `132ffc0` (plan/23, #248). Paths a
 
 ### What is on screen
 
-- **Counts.** The inventory counted 11 floating pieces at rest on the phone and 13 on the desktop, 24 with the phone's
-  Menu open and 36 in a desktop overview with a selection.
-- **Five panel styles:**
-  - glass (`theme.css:7-39`, `:42`);
-  - flat raised + `--shadow-float`;
-  - rem-based glass outside the tokens (`.fight-hud`, `world.css:995`);
-  - bare stroked text;
-  - accent fill.
-- **Four radii on like things:**
-  - `#focus` buttons are r8 inside an r12 card (`world.css:2145`, `:2188`);
-  - pad buttons are r16 (`:94`);
-  - radial buttons are r12;
-  - chat chips are r8.
-- **The glass list is hand-kept in three places** (`theme.css:7`, `:48`, `:86`). `#focus`, `#toast`, `#deck`, `#menubtn`
-  and `#chat` are on none of them.
-- **One thing, three names.** On a desktop hover, `#hottag` (`world-targets.ts:431-439`), a `.bcard` and the focus box
-  all name the same building (inventory, desktop-3).
-- **The phone menu** (`#menubtn`, `world.html:39`) unfolds `#top` into 12 rows. One of those rows is "Menu" (`#deck`),
-  which opens a second menu, the radial.
+The inventory counted 11 floating pieces at rest on the phone, 13 on the desktop, 24 with the phone's Menu open and 36
+in a desktop overview with a selection. It found five panel styles and four radii on like things:
 
-### Hints, chat and the pad
+| Fact | Where |
+|---|---|
+| Glass is a hand-kept list in three places; `#focus`, `#toast`, `#deck`, `#menubtn`, `#chat` are on none | `theme.css:7-39,42,48,86` |
+| Rem-based glass outside the tokens | `.fight-hud`, `world.css:995` |
+| Focus buttons r8 in an r12 card; pad buttons r16; radial r12; chat chips r8 | `world.css:2145,2188,94` |
+| One building named three times on a desktop hover: `#hottag`, a `.bcard`, the box | `world-targets.ts:431-439` |
+| The phone menu unfolds `#top` into 12 rows, one of them "Menu", which opens a second menu | `world.html:39` |
+| Phone hints: `#toast`, 7 s; desktop: the static help line `#line` | `world-modes.ts:129,151-160`; `town-phone.ts:201` |
+| Chat: 4 chips, 5 lines fading after 10 s, a form, `#chatshow`; polled every 500 ms | `world.html:78-84`; `world-chat.ts:6-10`; `world.ts:2358` |
+| The pad shows exploring outside with no panel; at rest on foot: Build, Run, Jump, Skill 2 | `world.html:104`; `world-input.ts:263` |
+| The desktop deck `#bottom` opens on a selection, inside, talk or `?`; cells act, enter, talk, leave, up, weapon, pvp, controls, plus Next | `world.html:89-100`; `world-deck.ts:19-42` |
 
-- **Hints.**
-  - On the phone, one-time hints show in `#toast`, top centre, for `TOAST_MS` 7 s (`world-modes.ts:129,151-160`).
-  - On the desktop, the same words are the static help line `#line` (`town-phone.ts:201`, `world-chrome.ts:244-246`).
-- **Chat** is a log, bottom left: 4 chips, the lines, a form, plus `#chatshow` (`world.html:78-84`).
-  - It shows the last 5 lines, each fading after 10 s (`world-chat.ts:6-10`).
-  - Its visibility is polled every 500 ms (`world.ts:2358-2360`).
-  - Party is a disabled chip.
-- **The pad** (`world.html:104`, `world.css:59-166`) shows exploring outside with no panel open (`world-input.ts:263`).
-  On foot at rest the phone draws Build, Run, Jump and Skill 2 (inventory phone-1).
-- **The ride button** (`#rides`, `world.html:64`) moves into the phone menu at rest and floats otherwise
-  (`world-modes.ts:169`).
+### Movement
 
-### Running
+The rider walks unless asked to run:
+- Shift, or the sprint key (`world-view.ts:456,1195-1196`);
+- the pad's Run toggle (`world-input.ts:235`, `world-view.ts:523`);
+- the gamepad's L3 toggle (`:1684`);
+- a double tap on the ground (`:1923-1927`);
+- an engage's quick second tap (`world.ts:1215,1271`).
 
-The rider walks unless something asks for a run:
-- **Shift held**, or the rebound sprint key (`world-view.ts:456,1195-1196`).
-- **The pad's Run toggle.** It is kept through resets (`world-input.ts:235`, `world-view.ts:523`).
-- **The gamepad's L3 toggle** (`world-view.ts:1684`).
-- **A double tap on the ground** (`world-view.ts:1923-1927`).
-- **An engage's second tap within `DOUBLE_MS`** (`world.ts:1215,1271`).
-
-The read happens in two places:
-- `drive` (`world-view.ts:1436`) for a route;
-- `ridePose` (`:1541`) for the step.
-
-Speeds (`world-ride.ts:45-46`, the same `run` field on every ride):
-- foot: walk 4, run 7 heights a second;
+It is read in two places: `drive` (`world-view.ts:1436`) and `ridePose` (`:1541`). The speeds are:
+- foot: walk 4, run 7 (`world-ride.ts:45-46`);
 - bike: 16 and 26 (`:59-60`);
 - ship: `sprint()` is its boost (`world-view.ts:1398`).
 
-### The focus box today (plan/23)
+Jumps:
+- **Auto-jump** happens only on a route: `advance` reports a ledge (`m.jump`) and `routeHold` holds the jump until
+  landing (`world-view.ts:1466-1469,1544`).
+- **A plain walk** (`walk` with no route: inside, the engage's `walkTo`) never jumps.
+- **A drag on the world** turns the camera's yaw and pitch (`:1240`).
 
-- **Placement.** One element: in `#bottom` on the desktop, fixed in the body on a touch phone
-  (`world-focus.ts:163-170`). It sits over the pad through `--pad-h` (`:172-174`, `world.css:2176-2212`).
-- **No box inside on the phone.** `body:has(#pad[hidden]) #focus` hides it (`world.css:2200`).
-- **The Menu.** `GLOBALS` holds 8 entries (`world-actions.ts:117-139`). It opens from `#deck`, H or Start
-  (`world.ts:2416-2421`, `world-router.ts:237-260`).
-- **The radial** lays out up to 8 items on an ellipse, rx 140 by ry 124 (`world-radial.ts:14-21,51-55`).
-- **Enter opens the chat** while exploring outside (`world.ts:2690`).
+### Fight and build
 
-### The overview
+- **Kits.** Each class has two skills and an ultimate (`world-skills.ts:9-13`).
+  - The Mage's two are both `spell`. Skill 1 casts the selected spell, and Skill 2 cycles it through `MAGE_SPELLS`
+    (frost_bolt, nova, ward; `world-fight.ts:179`, `world.ts:1438-1455`).
+  - The attack is the class's own (`world-skills.ts:23-24`), on a click or a tapped mob.
+- **Build mode** (`world-build.ts`):
+  - Q cycles `ORDER` (wall, floor, stair, sapling; `:40`); the pad's Attack places; R turns; X takes down.
+  - The words show on `.build-hud` (`world.css:1162`, `world-build.ts:210`).
+  - It starts with B, the phone menu's Build row, or the pad's Build (`world-modes.ts:186-216`), only where B works
+    (`canBuild`).
+  - Build zones are the ring 30–45 out from Wolf Meadow, or the rider's own yard lot (`world-build.ts:193`).
 
-- **`#top`** holds:
-  - the health, the world chip, the age and Cluster with its 4 groups (`world.html:41-50`);
-  - Live, Explore (`#mode`), search, Menu, ?, Sound, To see and the account (`:51-60`).
-- **On the right:** the crumbs (`:63`) and the To-see stack (`:70`).
-- **At the bottom left:** the road legend (`#legend`, `town.css:816`).
-- **At the bottom:** the desktop deck `#bottom` (`world.html:89-100`) opens on a selection
-  (`world-deck.ts:41-42`).
+### The focus box, the Menu, the overview, the visitor
 
-### The visitor page
+| Fact | Where |
+|---|---|
+| The box sits in `#bottom` on the desktop, fixed over the pad on the phone (`--pad-h`), hidden inside on the phone | `world-focus.ts:163-174`; `world.css:2176-2212,2200` |
+| `GLOBALS` holds 8 entries; opened by `#deck`, H or Start; an ellipse rx 140 / ry 124 | `world-actions.ts:117-139`; `world.ts:2416-2421`; `world-radial.ts:14-21,51-55` |
+| Enter opens the chat outside | `world.ts:2690` |
+| `#top` holds health, world, age, Cluster and its 4 groups, Live, Explore, search, Menu, ?, Sound, To see, account; crumbs and stack on the right | `world.html:41-63,70` |
+| The visitor page removes `chip`, `island`, `sim`, `account`, `next`, `status`; adds `#signin`, `#sound`, `#under`, `#welcome`; explore only | `world-public.ts:121`; `world-welcome.ts:47`; `world-view.ts:678,803` |
+| Parked P3: #250 (server, open); `realm/p3-mail-ui` (`2d46f61`) adds `world-mail.ts` (`makeMailModel`, `#mail` Inbox and Write), the rider radial's Message, the mail unread on `#deck` | ukubi-game |
 
-- **Removed:** `chip`, `island`, `sim`, `account`, `next` and `status` (`world-public.ts:121`).
-- **Hidden but kept:** the phone-read nodes (`:125`).
-- **Added:** `#signin` (`world.css:1423`), `#sound`, `#under` and `#welcome` (`world-welcome.ts:47`).
-- **No overview.** The world is explore only (`exploreOnly`, `world-view.ts:678,803`).
+## Decisions (owner, 2026-11-12)
 
-### The parked P3 work
+| # | Decision | Shape |
+|---|---|---|
+| 1 | At rest, both tiers: only the map corner (top right) and one Menu button (bottom left) | §1 |
+| 2 | One bottom dock, only in context: **focus** (name, primary, ⋯); **fight** (thin HP row, 2 skill slots, the ultimate with an energy ring; tap a slot fires; long-press opens a radial of the class's skills and a slide assigns, swapping, never firing; kept per class; tap the mob to attack); **build** (Place, Turn, Take down, Done; entered from the yard or Settings); **line** (chat, mail or a one-time hint slides over the dock for about 4 s, a tap opens its panel, then the focus returns; a fight is never covered, lines wait) | §3 |
+| 3 | The Menu radial: Map, People (Chat, Mail, Party), Overview, Settings (controls, wardrobe, sound) | §4–6 |
+| 4 | The overview is a side panel: search, Needs you, a Cockpit link (owner only), "Cluster and districts ›". The desktop deck lives only there; explore on the desktop uses the dock as the phone does | §7 |
+| 5 | One family: `--radius-lg` containers, `--radius-md` buttons, 44 and 56 px buttons, the theme's glass, Jost, 16 px edges, 8 px gaps, tokens only | §2 |
+| 6 | Removed or merged: chat chips and log, toast and tutorial bubble, every always-on pad button, the help line, duplicate labels, crumbs and "PvP off" while exploring, the top bar | fate table |
+| 7 | Full speed by default on every ride. On foot: no Run button, no double-tap run; walk only inside and when arriving at an auto-route target. The bike's and ship's speed button stays; their other controls are unchanged | §8 |
+| 8 | Auto-jump on every walk, tap or route; a swipe up on the world is the manual jump; no Jump button | §8 |
+| 9 | One label per thing, one dock, nothing floats on its own | §3 |
 
-- **Server: #250 (`realm/p3-mail`, open).** It adds `realm_mail`, the wire, caps, forget and `--import-letters`.
-- **UI: `realm/p3-mail-ui` (wip, `2d46f61`).** It adds:
-  - `world-mail.ts`: a pure `makeMailModel` plus a `#mail` chrome with Inbox and Write views;
-  - the rider radial's Message;
-  - the Menu's Mail for everyone while the realm is up;
-  - mail unread on `#deck`'s dot.
+### Defaults the owner did not object to
 
-## Decisions (owner, 2026-11-12, confirmed)
+| Q | Default, owner did not object |
+|---|---|
+| Q4 | Shift and L3 do nothing on foot; C while moving slides (`world-moves.ts:1`) |
+| Q7 | Wood and Iron: one line in Settings › Wardrobe's foot |
+| Q8 | The desktop fight face: 44 px, key caps right button, Q, G |
+| Q9 | One-time hints in the dock line on both tiers, in short words; the full key list in Settings › Controls |
+| Q10 | The phone overview: the same panel, full width less 2 × 16, at the top, capped at 50 vh |
+| Q11 | Inside, the dock shows parts (stairs, machines); a book tap still reads at once (`world-view.ts:1901-1903`) |
+| Q12 | A guest's Sign in in Settings' head; `#welcome` the one third piece on a first visit; the realm-down banner becomes a dock line plus a People note |
+| Q14 | H stays the Menu key; the cap shows the bound key |
+| Q15 | `.fight-boss` is the boss's one label; the world tag skips the boss |
+| Q16 | The legend and the account in the Cluster panel; Underside the carrier's focus act (`world-actions.ts:104`); Secrets and Fleet in the cockpit's quick row |
+| Q17 | The fight face needs `inFight` or a hit within `HURT_MS`; the PvP flag alone does not show it |
+| Q18 | `ARRIVE_WALK` = 3 units, a knob set by feel |
 
-1. **At rest,** exploring on either tier, only the map corner (top right) and one Menu button (bottom left) show.
-2. **One bottom dock,** shown only in context:
-   - **near a thing:** the name, the primary and ⋯ (hold for more);
-   - **in a fight:** a thin own-HP row, then one skill and the ultimate with an energy ring, under the right thumb.
-     There is no Attack button: you tap the mob;
-   - **a chat line, a mail or a one-time hint** slides into the dock line for a few seconds. A tap opens its panel.
-3. **The Menu radial has 4 entries:** Map, People (Chat, Mail, Party tabs), Overview, Settings (controls, wardrobe,
-   sound).
-4. **The overview** gets its own layout. One side panel holds search and "Needs you", plus a "Cluster and districts ›"
-   link to a second panel.
-5. **One component family:**
-   - containers `--radius-lg`; buttons `--radius-md`;
-   - 44 px command buttons; 56 px phone fight buttons;
-   - the theme's glass; Jost;
-   - 16 px edge spacing and 8 px gaps;
-   - tokens only.
-6. **Removed or merged:**
-   - the chat chips and log;
-   - the toast and the tutorial bubble;
-   - the always-on pad buttons (Jump, the bolt, home/Go, ride-swap);
-   - the help line;
-   - duplicate labels;
-   - the crumbs and "PvP off" while exploring;
-   - the top bar while exploring.
-7. **Running is the default on foot.**
-   - The rider walks only inside buildings and when arriving at an auto-route target.
-   - The Run button and the double-tap run go.
-   - Bike and ship controls stay as today.
-8. **One label per thing, one dock,** and nothing floats on its own.
+### New open questions (rev 2)
 
-### Open questions for the owner
+The plan builds each default; each is a one-line swap.
 
-The plan builds the **default** named in each one. Each is a one-line swap if the owner picks otherwise.
-
-- **Q1, a line over a focus.**
-  - The brief says a line overlays briefly. DESIGN.md says "near beats line".
-  - Default: the line overlays the focus for `LINE_MS`, then the focus face returns. A fight still holds the line back.
-- **Q2, the Cockpit's way in.** It is not one of the 4 entries.
-  - Default: C in the overview, as today, plus one "Cockpit ›" row in the overview panel under Needs you.
-  - Without that row, the phone has no way in.
-- **Q3, the fight dock's skill.**
-  - Default: Skill 1 (`world.ts:1449`, the Mage's selected spell).
-  - The Mage's spell cycling (Skill 2, `:1438`) then has no phone button. Q stays on the desktop.
-- **Q4, Shift, L3 and C on foot** now that running is the default.
-  - Default: Shift (or the sprint key) and L3 do nothing on foot; they still sprint on the bike and the ship.
-  - C while moving always slides (`world-moves.ts:1`). A crouch-walk needs a stop first.
-- **Q5, the Run button on the bike and the ship.**
-  - Default: kept there, as "controls stay as today". It goes on foot only.
-- **Q6, Build on the phone.** DESIGN.md moves it "to the radial of the thing (yard)", but no yard focus kind exists.
-  - Default: Build becomes a Settings › Controls toggle where B works.
-  - The build pad (Place, Next piece, Turn, Take down) shows while building, as the bike's pad does.
-- **Q7, Wood and Iron** (`world-fight.ts:902`).
-  - Default: one line in Settings › Wardrobe's foot, beside the kills and ults it already counts.
-- **Q8, the desktop fight dock** (not mocked).
-  - Default: the same face with 44 px buttons and key caps (Skill 1's binding, G), bottom centre.
-- **Q9, desktop hints.** The help line goes.
-  - Default: the same one-time hint ids show in the dock line on both tiers.
-  - The desktop's words are short: "E acts · H menu · Enter chat". The full key list lives in Settings › Controls.
-- **Q10, the phone overview** (not mocked).
-  - Default: the same panel, full width less 2 × 16, at the top. It is capped at 50 vh and scrolls.
-- **Q11, the P6 "Answers board · Read".** Inside, books are not focusable: a tap reads at once
-  (`world-view.ts:1901-1903`).
-  - Default: inside, the dock shows parts only (stairs, machines). A book tap still reads at once.
-- **Q12, a guest's Sign in, `#welcome` and the realm-down banner** at rest.
-  - Default: Sign in moves into Settings' head.
-  - `#welcome` stays a first-visit card in the family, as the one allowed third element.
-  - The banner becomes one dock line, plus a note in People.
-- **Q13, the desktop deck `#bottom`:** its portrait, the commands grid, Next, Up and `#line`.
-  - Default:
-    - explore and inside use the dock and its radial;
-    - the overview keeps the deck for a selection only, restyled;
-    - `#line` goes.
-- **Q14, the Menu's key cap.**
-  - The mockups show `Esc` on the Menu. Plan/23 D1 bound H.
-  - Default: H stays and the cap shows the bound key. Esc keeps its closing chain.
-- **Q15, the boss.**
-  - Default: the boss's top bar (`.fight-boss`) is its one label, and the world tag skips the boss.
-- **Q16, homes for the leftovers.** Default:
-  - the legend and the account go to the Cluster panel;
-  - Underside stays on the carrier's focus act (`world-actions.ts:104`);
-  - Secrets and Fleet stay in the cockpit's quick row.
-- **Q17, PvP on with no mob near.** Today it counts as a fight (`world-modes.ts:30`).
-  - Default: the dock's fight face needs `inFight` or a hit in the last `HURT_MS`. The PvP flag alone stays at rest.
-- **Q18, the arrival walk.**
-  - Default: `ARRIVE_WALK` = 3 units from the route's end. It is a tuning knob, set by feel at QA.
+| N | Question | Default |
+|---|---|---|
+| N1 | What the bike's and ship's speed button does now that full speed is the default | it toggles down to today's cruise (`speed`); Shift and L3 hold it there |
+| N2 | Build's four buttons hold no "Next piece" (wall, floor, stair, sapling) | a long-press on Place opens a radial of `ORDER`; desktop Q still cycles |
+| N3 | "From the yard": `world-yard.ts` is the visitor's builder's-yard quest; building happens in build zones | where `canBuild` holds (the meadow ring, your yard lot), the dock offers "Build zone · Build" |
+| N4 | A swipe up against the camera's pitch drag (`world-view.ts:1240`) | an upward flick under `SWIPE_MS` 220 ms, over `SWIPE_PX` 48, mostly vertical, jumps; slower drags look |
+| N5 | Knight, Barbarian and Rogue have exactly two skills, so their radial only swaps; the Mage has three spells | the pool is the class's skills only, not the attack or the ultimate |
+| N6 | Desktop Q cycles the Mage's spell today | the right button fires slot 1, Q slot 2, every class |
+| N7 | A line during build | it waits, as in a fight |
+| N8 | Inside on the desktop, the deck's Talk and Leave go | Talk is the resident's focus act; Leave is Esc or the door |
 
 ## Shape
 
@@ -202,94 +137,86 @@ The plan builds the **default** named in each one. Each is a one-line swap if th
 
 | Zone | Phone (390×844) | Desktop (1440×900) | Shown |
 |---|---|---|---|
-| Map corner | top right, 72 px circle, inset 16 + safe area | top right, 160 px circle, inset 16 | always, except in the overview (the world is the map) and under the enlarged map |
-| Menu | bottom left, 44×44, inset 16, foot on `env(safe-area-inset-bottom)` + 8 | bottom left, 44 px "Menu" + key cap | always, the same spot in every state |
+| Map corner | top right, 72 px circle, inset 16 + safe area | top right, 160 px circle, inset 16 | always, except in the overview and under the big map |
+| Menu | bottom left, 44×44, inset 16, foot on the safe area + 8 | bottom left, 44 px "Menu" + key cap | always, the same spot in every state |
 | Dock | bottom, from Menu's right edge + 8 to the right inset | bottom centre, max 560 | §3 states only |
 | World tag | over the fight target | the same | a fight target; buildings in the overview |
-| Panels | from the Menu: full width less 2 × 16, above the Menu | left, above the Menu: People 380 wide, Settings 640 | on demand |
+| Panels | full width less 2 × 16, above the Menu | left, above the Menu: People 380, Settings 640, Overview 360 | on demand |
 
-Changes from today:
-- **The phone map** moves from the top left, 64 px (`world.css:1560-1567`), to the top right at 72 px.
-- **The desktop map** goes from 168 px (`:1739`, `--where`) to 160 px, at `top: var(--hud-inset)`, since there is
-  no top bar.
+The phone map moves from the top left at 64 px (`world.css:1560-1567`) to the top right at 72 px. The desktop map goes
+from 168 px (`:1739`, `--where`) to 160 px, at `top: var(--hud-inset)`.
 
 ### 2. The component family
 
-**New custom properties** go in `tokens.css :root`, once, with no per-theme values:
+**New custom properties** go in `tokens.css :root`, once:
 
 ```css
 --hud-inset: var(--space-4);   /* screen edge to any HUD element */
 --hud-gap: var(--space-2);     /* between items, and the dock's padding */
 --hud-row: var(--space-3);     /* between rows in a panel */
 --btn: 44px;                   /* tier 1: Menu, dock actions, ⋯, radial items, tabs, panel controls */
---btn-fight: 56px;             /* tier 2: the phone fight dock's two buttons only */
+--btn-fight: 56px;             /* tier 2: the phone's fight and build dock buttons */
 --map-corner: 72px;            /* 160px at min-width 1200 */
 --dock-max: 560px;             /* the desktop dock's width cap */
---line-ms: 5s;                 /* the dock line's stay (read by world-dock.ts) */
 ```
 
-**One glass class.** `.glass` replaces the three hand-kept `:is()` lists (`theme.css:7-39`, `:48`, `:86`). The rules do
-not change; only the selector does:
-- `.glass` is the container: glass, starfield, `--glass-blur`, `--edge-glow` 1 px, `--shadow-glass`, `--radius-lg`.
-- `.glass-btn` is a free-standing button: glass without the stars, `--radius-md`, `min-height: var(--btn)`.
-- **Ghost** is a button inside glass: `color-mix(in srgb, var(--surface-raised) 55%, transparent)` plus 1 px
-  `--edge-strong`.
+**Classes:**
+- **`.glass`** replaces the three hand-kept `:is()` lists (`theme.css:7-39`, `:48`, `:86`), with the same rules. It is
+  the container: glass, starfield, `--glass-blur`, a 1 px `--edge-glow`, `--shadow-glass` and `--radius-lg`.
+- **`.glass-btn`** is a free-standing button: glass without the stars, `--radius-md`, `min-height: var(--btn)`.
+- **Ghost** is a button in glass: 55% `--surface-raised` plus 1 px `--edge-strong`.
 - **Primary** is an `--accent` fill, an `--accent-strong` edge and `--on-accent` text.
-- **On or pressed** is 2 px `--edge-on` plus `--shadow-glow-soft`. This is today's `theme.css:131` rule, kept.
+- **On or pressed** is today's `theme.css:131` rule.
 
 **Exceptions:**
-- the map: a 50% circle with a 2 px `--edge-strong` ring and one N on the rim, replacing N/E/S/W
-  (`world.html:65`, `world.css:925-956`);
-- key caps: `--radius-xs` 4 px, overline type.
+- the map: a 50% circle with a 2 px `--edge-strong` ring, and one N on the rim instead of N/E/S/W (`world.css:925-956`);
+- key caps: `--radius-xs`, overline type.
 
-**Type:**
-- `--type-title-3` for the dock name and panel titles;
-- `--type-label` for buttons and tags;
-- `--type-body-sm` for chat and alerts;
-- `--type-overline` for hints, section heads and key caps;
-- `--type-metric` for the cluster numbers.
+**Type and colour:**
+- title-3: the dock name and panel titles;
+- label: buttons and tags;
+- body-sm: chat and alerts;
+- overline: hints, heads and caps;
+- metric: cluster numbers;
+- `--game-hot` for the target, `--game-harm` for mob HP, `--game-hp` for own HP, `--game-energy` for the ring;
+- `--danger` for the one unread dot, replacing two dot styles (`world.css:349`).
 
-**State colours:**
-- `--game-hot`: the target's edge and caret;
-- `--game-harm`: mob HP;
-- `--game-hp`: own HP;
-- `--game-energy`: the ultimate's ring;
-- `--danger`: the unread dot. One dot style replaces the red-vs-warning pair (`world.css:349`).
+**`data-hud`** marks every HUD root. The layout gate counts the visible ones.
 
-**Tagging.** Every HUD root carries `data-hud`. The layout gate (§11) counts `[data-hud]` that are visible.
+### 3. The dock: one element, five states
 
-### 3. The dock: one element, four states
-
-**The element.** `world.html` replaces `#focus` (`:107`) with:
+**The element** replaces `#focus` (`world.html:107`):
 
 ```html
 <section id="dock" class="glass" data-hud aria-label="Dock" hidden>
-  <div class="face focus"></div><div class="face fight"></div><div class="face line"></div>
+  <div class="face focus"></div><div class="face fight"></div><div class="face build"></div><div class="face line"></div>
 </section>
 ```
 
 **Ownership.**
-- **`world-dock.ts` (new)** holds the pure state rule and the line queue, and shows one face.
-- **`makeBox` (`world-focus.ts:140`)** still builds the focus face: name, primary, ⋯, note, `tapHold`.
-- **Its placement code goes:** `place()` (`:163-170`), the `--pad-h` observer (`:172-174`), and the phone rules
-  (`world.css:2176-2212`). The dock has one place per tier, and nothing else is ever under it.
+- `world-dock.ts` (new) holds the state rule, the line queue and the fight and build faces.
+- `makeBox` (`world-focus.ts:140`) still builds the focus face, with `tapHold` (name, primary, ⋯, note).
+- **Deleted:** its `place()` (`:163-170`), the `--pad-h` observer (`:172-174`) and the phone rules
+  (`world.css:2176-2212`).
 
 **The state rule (pure, tested):**
 
 ```ts
-export type DockState = 'rest' | 'focus' | 'fight' | 'line';
+export type DockState = 'rest' | 'focus' | 'fight' | 'build' | 'line';
 export interface DockIn {
   view: 'explore' | 'inside' | 'action' | 'flying';
   covered: boolean; // plan/23 covered(): a panel, talk, the sheet
-  fight: boolean;   // inFight || now - hurtAt < HURT_MS (Q17: the PvP flag alone is not)
-  foot: boolean;    // the fight face is on foot only; the bike and the ship keep their pad
-  focus: boolean;   // focus.current() !== null
-  line: boolean;    // a line is up (its LINE_MS not run out)
+  build: boolean;   // build.on()
+  fight: boolean;   // inFight || now - hurtAt < HURT_MS (Q17)
+  foot: boolean;    // fight face on foot; the bike and the ship keep their pad
+  line: boolean;    // a line is up
+  focus: boolean;
 }
 export const dockOf = (d: DockIn): DockState =>
   d.covered || d.view === 'action' || d.view === 'flying' ? 'rest'
-  : d.fight && d.foot ? 'fight'
-  : d.line ? 'line'          // Q1 default: a line overlays the focus briefly
+  : d.build ? 'build'                 // lockToggle refuses while building (world.ts:1155)
+  : d.fight && d.foot ? 'fight'       // never covered: lines wait
+  : d.line ? 'line'                   // over focus or rest, LINE_MS
   : d.focus ? 'focus' : 'rest';
 ```
 
@@ -297,58 +224,55 @@ export const dockOf = (d: DockIn): DockState =>
 
 | State | Contents | Phone | Desktop |
 |---|---|---|---|
-| rest | none: `hidden` | | |
-| focus | name (title-3) over "Hold for more" (overline) · primary (accent) · ⋯ (ghost) | primary is a word (Look, Read, Talk) | "Look `E`", ⋯ titled "More (hold E)": today's `world-focus.ts:256-258` |
-| fight | HP row: "HP" overline, an 8 px bar in `--game-hp`, the number · Skill 1 · Ultimate, its border a conic ring of `--game-energy` filled to `energy / ULT_COST` | 56 px buttons, flush right | 44 px with key caps (Q8) |
-| line | glyph · source overline ("Chat · Sami", "Mail · Sami", "Hint") · one ellipsed line · chevron · a hairline timer | the same | the same |
+| focus | name over "Hold for more" · primary (accent) · ⋯ | primary is a word (Look, Read, Talk, Build) | "Look `E`" and ⋯ "More (hold E)" (`world-focus.ts:256-258`) |
+| fight | HP row ("HP", 8 px `--game-hp` bar, number) over slot 1 · slot 2 · Ultimate (a conic ring of `--game-energy` to `energy / ENERGY_MAX`) | 56 px | 44 px, caps: right button, Q, G |
+| build | Place (primary) · Turn · Take down · Done, plus a note row for the piece and the refusal (`world-build.ts:210`) | 56 px | 44 px, caps: click, R, X, B |
+| line | glyph · source ("Chat · Sami", "Mail", "Hint") · one ellipsed line · chevron · timer hairline | the same | the same |
+
+**The skill slots** live in `world-kit.ts` (new, pure plus storage):
+- **The pool.** `poolOf(cls)` is `MAGE_SPELLS` for the Mage, else `[skill1, skill2]` (`world-skills.ts:9-20`). N5:
+  never the attack nor the ultimate.
+- **Defaults.** `slotsOf(cls)` is the stored pair from `ukubi-slots` (JSON `{cls: [a, b]}`, every access in a `try` as
+  `world-modes.ts:46-73`). Without one, it is the pool's first two.
+- **`assign(slots, i, id)`** puts `id` in slot `i`. If the other slot held it, the two swap.
+- **A tap** fires: `run(id, chest, ultAim(false) ?? ahead(r))` (`world.ts:1461`). This replaces `skill1`, `skill2` and
+  the Mage's `cycleSpell` path (`:1438-1455`).
+- **A long-press** (`tapHold`, `ACT_HOLD_MS`) opens `radial.open('slot', pool…)` above the slot. Release on an item
+  assigns, and nothing fires. The keyboard opens it with Shift+F10 or the context-menu key on a focused slot.
+- **Desktop** (N6): the right button fires slot 1 and Q fires slot 2 (`world-bindings.ts`, labels updated).
+
+**The build face** runs `build.place()` (today's pad Shoot in build mode), `build.turn()`, `build.remove()` and
+`build.toggle()`.
+- Place's long-press opens a radial of `ORDER` (N2).
+- `.build-hud` goes, and its words are the face's note.
 
 **The line queue.**
-- `world-modes.ts`'s `hintQueue` (`:77-98`) moves to `world-dock.ts` unchanged and gains two more sources:
-  - a live chat line (`world-chat.ts` `hear`, `live` only);
-  - a mail item (P3's `hear`, news only).
-- **One line at a time.** A newer line replaces the one showing. A hint waits behind a chat or mail line.
-- **Each shows for `LINE_MS`** (5000). While a fight holds it back, it waits. If it times out unseen, it adds to the
-  Menu's and People's unread count. A hint is marked seen only once shown, as today (`:89`).
-- **A tap on a line:**
-  - chat: People › Chat;
-  - mail: People › Mail on that item;
-  - hint: dismissed.
-- **The line is one `<button>`.**
+- `hintQueue` (`world-modes.ts:77-98`) moves here and gains live chat lines (`world-chat.ts` `hear`, live only) and mail
+  news (P3).
+- One line at a time; a newer one replaces it; a hint waits behind chat or mail.
+- `LINE_MS` = 4000. While a fight or build holds it back it waits. Unseen at timeout, it adds to the unread count.
+- A tap opens People › Chat, People › Mail on that item, or dismisses a hint. The line is one `<button>`.
 
-**Transitions.**
-- The dock rises 8 px and fades in over `--dur-panel`. Its faces cross-fade over `--dur-press`, and its box never
-  moves.
-- **Reduced motion:** no rise and no fade, an instant swap (`@media (prefers-reduced-motion: reduce)`).
-- **The polite live region** speaks a new line and a new focus (`world-focus.ts:271-277`). The fight face is silent,
-  with `aria-live` off: the numbers move too fast.
+**Motion.**
+- The dock rises 8 px and fades over `--dur-panel`. Faces cross-fade over `--dur-press`, and the box never moves.
+- Reduced motion: an instant swap.
+- The polite region speaks a focus and a line (`world-focus.ts:271-277`). The fight face is silent.
 
-**What it replaces:**
-- `#focus` and its two placements;
-- `#toast` (`world.html:111`, `world-modes.ts:147-160,241-244`);
-- `#calm-hint` (`world.html:103`, `world-pastime.ts:202`). The pastime becomes a focus rule: after carried, before tap,
-  `pastime.hint()` gives a `garden` or `water` focus that is already in `INTERACTABLES` (`world-actions.ts:81-97`);
-- on foot, `#pad .skills` (`world.html:104`, `world.css:120-145`);
-- `.fight-hud .vitals` (`world-fight.ts:415-416`): HP goes into the fight face, and energy is the ultimate's ring;
-- `.fight-hud .skills`, the desktop key strip (`world-fight.ts:417`);
-- the desktop `#line` (`town-phone.ts:201`).
+The fate table lists what the dock replaces.
 
-**Labels: one per thing.**
-- **`#hottag`** shows only for a fight target (mob, rider in PvP). It holds the name, a `.mobbar`-style HP bar and a
-  `--game-hot` caret. `targets.mark` gets `tagged: h.kind === 'mob' || ...` (`world-targets.ts:431`).
-- **A focused building** has no tag. Its name is in the dock, and the scene's outline marks it.
-- **`.bcard`s** do not draw in explore (`world-cards.ts` `hidden()` gains `mode === 'explore'`). They stay in the
-  overview.
-- **The target's own `.mobbar`** hides while its tag shows. Other mobs keep theirs.
+**One label per thing.**
+- `#hottag` shows only for a fight target, with the name, an HP bar and a `--game-hot` caret
+  (`world-targets.ts:431`).
+- `.bcard`s do not draw in explore (`world-cards.ts` `hidden()`).
+- The tagged target's `.mobbar` hides while its tag shows.
 
 ### 4. The Menu: 4 entries through `GLOBALS`
 
 **The button.**
-- `#deck` leaves `#top` and becomes `<button id="menu" class="glass-btn" data-hud aria-haspopup="menu">` at the bottom
-  left. It keeps its handler (`world-chrome.ts:172-175`) and `menuOpener` (`world-radial.ts:48`), renamed to `#menu`.
-- **Label:** a grid icon. The desktop adds the word "Menu" and the bound key's cap (Q14).
-- **Unread** is one `--danger` dot for letters, mail and missed lines. Its count is in `aria-label`, as the P3 branch
-  writes it.
-- **While the Menu or a panel is open,** it shows the pressed look and becomes Close (✕, "Close (Esc)").
+- `#deck` leaves `#top` as `<button id="menu" class="glass-btn" data-hud aria-haspopup="menu">`, bottom left.
+- It keeps its handler (`world-chrome.ts:172-175`) and `menuOpener` (`world-radial.ts:48`).
+- One `--danger` dot shows for letters, mail and missed lines. The count is in `aria-label`.
+- While the Menu or a panel is open, it is pressed and reads "Close (Esc)".
 
 **`GLOBALS`** (`world-actions.ts:117-139`) becomes:
 
@@ -359,489 +283,408 @@ export const dockOf = (d: DockIn): DockState =>
 | overview | Overview | owner page | `view.flip()` |
 | settings | Settings | always | `settings.open()` |
 
-- **Gone from the Menu:**
-  - Cockpit (Q2), Mail and Chat: People's tabs;
-  - Controls and Wardrobe: Settings' tabs;
-  - Talk: the resident's or building's focus act already holds it (`:64-72`); inside, the dock shows it.
-- `ActionDeps` loses `cockpit`, `mail`, `chat`, `controls` and `wardrobe`, and gains `people` and `settings`.
+- **Gone from the Menu:** Cockpit (now in the overview), Mail and Chat, Controls and Wardrobe, and Talk (a focus act).
+- **`ActionDeps`** changes to match.
 - **The visitor's Menu:** Map, People (realm up) and Settings.
 
-**The radial's Menu layout.** It is a half circle above the screen's bottom centre. A new `arc(n, r = 130)` sits beside
-`layout` (`world-radial.ts:51`), and `open(..., { arc: true })` picks it.
-- Items are 44 px icon buttons with the label under them (P5).
-- A scrim of `--surface-sunken` at 40% covers the world.
-- The focus radial keeps its ellipse.
+**The layout.** The Menu radial uses a new `arc(n, r = 130)`, a half circle above the bottom centre, beside `layout`
+(`world-radial.ts:51`).
+- Items are 44 px icon buttons with labels under them (P5).
+- A 40% `--surface-sunken` scrim covers the world.
+- The focus, slot and piece radials keep the ellipse.
 
-**Keys stay:** H (or Start) opens the Menu, Esc closes it, M is the map and Tab is the overview.
-
-**`?` (`world-router.ts:244-245`)** opens Settings › Controls, the key list. It was the deck plus `#line`.
+**Keys** stay: H or Start, Esc, M and Tab. `?` (`world-router.ts:244-245`) opens Settings › Controls.
 
 ### 5. People: one panel, three tabs
 
-- **The element.** `<aside id="people" class="glass" data-hud role="dialog" aria-label="People">`. Inside:
-  - a head with the title and Close (Esc);
-  - a `role="tablist"` of three 44 px tabs: Chat, Mail · n, Party.
-- **Non-modal.** It is a chrome in `chromes` (`world.ts:1983-1986`), so Esc closes it in order.
-- **The router.** Its fields are the typing context's.
-- **Chat tab.** `bindChat` (`world-chat.ts:115-204`) is kept and rebinds to the tab's elements:
-  - the log is the last `KEEP` (50) lines, not 5 that fade;
-  - the form is always shown, with the placeholder "Say something" and an `Enter` cap;
-  - **gone:** the 4 chips, the Hide and Show buttons, `#chatshow`, `SHOWN_KEY` and its storage, `FADE_MS`, `SHOW` and
-    `fading`;
-  - the unread count is now lines that came while the tab was not shown. It feeds the Menu dot and the tab's count;
-  - the 500 ms poll (`world.ts:2358-2360`) stays, for `avail`.
-- **Enter (desktop)** opens People › Chat with the input focused, through the same globals path (`world.ts:2690`). A
-  submit or Esc closes the panel and gives focus back to the canvas, as `close()` does today.
-- **Mail tab, the plan/22 P3 hook.**
-  - Until P3 lands, the owner's tab is today's letters inbox (`inbox`, `world-keeper.ts`), moved from `#inbox`, and the
-    visitor's tab is hidden.
-  - P3 drops `world-mail.ts`'s model and its Inbox and Write views in as the tab body: its `#mail` chrome becomes this
-    tab. The rider radial's Message opens People › Mail › Write.
-- **Party tab, the plan/22 P5 hook.** An empty state, "Parties come later", with no controls. P5 fills it, and party
-  chat lives there.
-- **The realm down.** Chat and Party say "The shared world is out of reach". Mail keeps the owner's letters.
-- **Placement:**
-  - desktop: left, above the Menu, 380 wide, up to `100vh - 2 × inset - btn - gap`;
-  - phone: full width less 2 × 16, from the top safe area to above the Menu.
+- **The element.** `<aside id="people" class="glass" data-hud role="dialog" aria-label="People">`. It has a head with
+  Close, and three 44 px tabs: Chat, Mail · n and Party.
+  - It is non-modal, a chrome in `chromes` (`world.ts:1983-1986`).
+  - Its fields are the router's typing context.
+- **Chat.** `bindChat` (`world-chat.ts:115-204`) rebinds to the tab.
+  - The log is the last `KEEP` lines, and the form always shows.
+  - **Gone:** the chips, Hide and Show, `#chatshow`, `SHOWN_KEY`, `FADE_MS`, `SHOW` and `fading`.
+  - Unread counts lines that came while the tab was not shown.
+  - **Desktop Enter** opens it with the input focused (`world.ts:2690`). A submit or Esc closes the panel, and focus
+    goes back to the canvas.
+- **Mail (P3 hook).**
+  - Until P3, the owner's tab is the letters inbox (`world-keeper.ts` `inbox`), moved from `#inbox`. The visitor's tab
+    is hidden.
+  - P3's `world-mail.ts` model and its Inbox and Write views become the tab body. The rider radial's Message opens
+    Write.
+- **Party (P5 hook).** An empty state, "Parties come later".
+- **The realm down.** Chat and Party say "The shared world is out of reach".
 
 ### 6. Settings: one dialog, three tabs
 
-- **One dialog.** `#controls` and `#wardrobe` are two `<dialog>`s today (`world.css:1193-1335`, `world-controls.ts`,
-  `world-wardrobe.ts`). They merge into `<dialog id="settings" class="glass" data-hud>` with tabs Controls, Wardrobe and
-  Sound.
-- **The router.** The modal context's predicate (`world.ts:1547,2669`) becomes `settings.open()`. Its pad polls are
-  kept.
+- **One dialog.** `#controls` and `#wardrobe` (`world.css:1193-1335`) merge into `<dialog id="settings" class="glass"
+  data-hud>`, with tabs Controls, Wardrobe and Sound.
+  - The modal context's predicate (`world.ts:1547,2669`) becomes `settings.open()`.
 - **Controls tab:**
-  - **Ride.** The current ride with a 44 px segmented choice of the rides open to this rider (`rideNext` and `mayRide`,
-    `world-view.ts:674-675`). The click is today's `#ride` handler. 1, 2 and 3 stay keys.
-  - **PvP**, a toggle, from `#pvp` (`world.html:64`) and the deck cell (`world-deck.ts:28`).
-  - **Build** (phone, Q6), from the phone menu's row (`world-modes.ts:186-212`).
-  - Then today's camera, keys and pad-button tables, unchanged.
-- **Wardrobe tab.** Today's body. Its rider preview (`world.ts:1007-1010`) still turns the rider while the tab shows.
-- **Sound tab.** The sound toggle (`#sound`, `world.html:58`, plus the cockpit quick row's Sound, `world.ts:2049`).
-  Plan/22 P4's voice row lands here.
-- **Head:** the title, Close, and a guest's Sign in (Q12).
-- **Gone:**
-  - "Buttons: always / in fights" (`world-modes.ts:187-199`, `PINNED_KEY`): there is no pad on foot to pin;
-  - the phone menu's Controls row.
-- **Placement:**
-  - desktop: docked left, above the Menu, 640 wide;
-  - phone: full width less 2 × 16, top sheet, 60 vh.
+  - **Ride:** a segmented choice of the rides open to this rider (`world-view.ts:674-675`), with `#ride`'s handler.
+    1, 2 and 3 stay keys.
+  - **PvP:** from `#pvp` (`world.html:64`) and the deck cell.
+  - **Build:** a toggle where `canBuild` holds, which opens the build dock. It replaces the phone menu's row
+    (`world-modes.ts:186-212`).
+  - Then today's camera, keys and pad tables.
+- **Wardrobe tab.** Today's body. The rider preview still turns (`world.ts:1007-1010`). Wood and Iron go in its foot
+  (Q7).
+- **Sound tab.** The sound toggle (`#sound`; the cockpit quick row's Sound, `world.ts:2049`). P4's voice row lands here.
+- **Head.** A guest's Sign in (Q12).
+- **Gone:** "Buttons: always / in fights" (`world-modes.ts:187-199`, `PINNED_KEY`).
 
-### 7. The overview layout
+### 7. The overview, and the deck's end
 
-**`#top`** (`world.html:38-61`) is retired on both views. Its pieces go:
+**`#top`** (`world.html:38-61`) is retired on both views; the fate table says where each piece goes.
 
-| Piece | Goes to |
-|---|---|
-| `.mark` | gone |
-| `#mode` Explore | the overview panel's head: "Explore `Tab`" |
-| `#search` + `#find` | the panel's "Find a building `/`" (the input moves; `/` unchanged) |
-| `#deck` | the Menu button (§4) |
-| `#helpbtn` | gone (`?` opens Settings › Controls) |
-| `#sound` | Settings › Sound |
-| `#seecount`, `#stack` (`:59`, `:70`) | the panel's "Needs you · n": the stack's slots, each with "Fly there `Enter`" |
-| `#health`, `.chip.world`, `.age`, `#statsbtn` + `#groups`, `.live` | the Cluster panel |
-| `#account`, `#signin` | the Cluster panel's foot (owner) / Settings' head (guest) |
-
-**`#overview`** is a new `<aside class="glass" data-hud>`, 360 wide, top left at the insets, sized to its content. It
-holds:
-- a head: "Overview" and Explore `Tab`;
+**`#overview`** is a new aside, 360 wide, top left, sized to its content. It holds:
+- a head;
 - Find;
 - Needs you;
-- one row link, "Cluster and districts ›";
-- "Cockpit ›" (Q2, owner only).
+- "Cockpit ›" (owner only; absent from the visitor's DOM);
+- "Cluster and districts ›".
 
-**`#cluster`** is a second panel in the same place, with a back row. It holds:
-- the four metric groups, unchanged (`world.html:45-50`);
+**`#cluster`** has a back row, then:
+- the 4 metric groups (`world.html:45-50`);
 - the health, the world, the age and Live;
-- the villages list (the disc's districts, `villages` in `world.ts`), each a 44 px row that flies there (`ui.go`);
-- the road legend (`#legend`, Q16).
+- the villages list (`villages` in `world.ts`), each row flying there (`ui.go`);
+- the legend (Q16).
 
-**Gone from the overview:**
-- the crumbs (`world.html:63`, `world.css:1794`);
-- the "1 to see" chip;
-- the floating alert card;
-- the corner map, hidden in the overview.
+**The deck becomes the overview's selection view** (decision 4). A pick in the overview replaces Needs you with:
+- a back row;
+- the portrait (`#portrait`);
+- Next as the primary (Enter);
+- the commands as 44 px rows (`#grid` cells: act, enter, up).
 
-**The deck.** `#bottom` shows in the overview only for a selection (Q13), restyled with `.glass`. Its `#line` goes.
+`#bottom` (`world.html:89-100`) is retired, along with `deckOpen`, `body[data-deck]` and its CSS. The deck's other cells
+go:
+- talk: the focus act;
+- leave: Esc or the door (N8);
+- weapon: the slots;
+- pvp, controls: Settings.
 
-**`.bcard` building tags** stay in the overview, restyled to `--radius-lg`, label type and glass.
+**Gone:** the crumbs (`world.html:63`), the "1 to see" chip, the floating alert card, the corner map, and `#line`.
+`.bcard`s stay in the overview, restyled.
 
-### 8. Running by default
+### 8. Speed and jump
 
-**One pure gait rule in `world-ride-step.ts`, tested:**
+**One pure gait rule** in `world-ride-step.ts`:
 
 ```ts
-export const ARRIVE_WALK = 3; // units from a route's or walk's end where the rider slows to a walk (Q18: a knob)
-export interface GaitIn { ride: RideId; inside: boolean; toEnd: number | null; held: boolean }
-// held: Shift / the sprint key / L3 / the pad's Run (the bike's and the ship's only, Q4/Q5)
+export const ARRIVE_WALK = 3; // Q18: a knob
+export interface GaitIn { ride: RideId; inside: boolean; toEnd: number | null; slow: boolean }
+// slow: the bike's or the ship's speed button, Shift, L3 (N1); ignored on foot (Q4)
 export const sprints = (g: GaitIn): boolean =>
-  g.ride !== 'foot' ? g.held
+  g.ride !== 'foot' ? !g.slow
   : !g.inside && (g.toEnd === null || g.toEnd > ARRIVE_WALK);
 ```
 
 **The code changes:**
-- `world-view.ts:1541` becomes `sprint: sprints({ ride, inside: !!inside, toEnd, held: sprint() })`.
-  - `toEnd` is the distance to `walk`, else to the route's last point, else `null`.
-- `:1436` (`drive`'s speed) reads the same rule.
+- `world-view.ts:1541` reads `sprints(...)`, and so does `drive`'s speed (`:1436`). The ship's boost (`:1398`) reads it
+  too.
+  - `toEnd` is the distance to `walk`, else to the route's end.
 - **Deleted:**
   - `walkRun` (`:440,1503,1927,2105`);
-  - the double tap's `isDoubleTap` use and `lastTap` (`:1922-1924`);
-  - `walkTo`'s and `followTo`'s `run` parameter (`:384,388`);
+  - the double tap (`:1922-1924`);
+  - the `run` parameter of `walkTo` and `followTo` (`:384,388`);
   - `engageRun` (`world.ts:1176,1215,1271`).
-- **The pad's Run:**
-  - `data-pad="run"` hides on foot: `body[data-ride="foot"] #pad [data-pad="run"] { display: none }`;
-  - `pad.run` is read only off foot (`world-view.ts:493`);
-  - on the bike and the ship it stays (Q5).
-- **The realm.** The wire's `sprint` (`world-realm-wire.ts:31`) carries the rule's result, so the realm's physics sees
-  the same gait.
-- **Hint words** drop "double tap to run" and "hold Sprint" (`world-chrome.ts:96-99`). The keys line drops "Shift
-  sprint" on foot (`:90`). Settings › Controls names sprint "Sprint (bike, ship)" (`world-bindings.ts:46,69`).
+- **The pad's Run button** hides on foot. On the bike and the ship it becomes the speed toggle: `pad.run` turns into
+  `pad.slow`, which is pressed while cruising (N1).
+- **The realm.** The wire's `sprint` (`world-realm-wire.ts:31`) carries the rule's result.
+- **Hint words** drop "double tap to run" and "hold Sprint" (`world-chrome.ts:90,96-99`). Settings names the key "Slow
+  (bike, ship)" (`world-bindings.ts:46,69`).
 
-The avatar's run clip already follows speed (`runAt`, `world-ride.ts:32`), so nothing changes there.
+**Auto-jump on every walk.**
+- `routeHold`'s jump (`world-view.ts:1466-1469`) extends to a plain `walk`: a `ledgeAhead(pose, dir)` probe, the land
+  height one step ahead (`p.land`, as `stand`).
+- It jumps when the rise is over the step-up and under the jump's reach.
+- Routes keep their own `m.jump`.
+
+**The swipe-up jump.**
+- The router's gesture classifier (`world-router.ts` around `:411-449`) gets a `swipe-up` gesture (N4): shorter than
+  `SWIPE_MS`, past `SWIPE_PX`, with |dy| > 2|dx| going up.
+- It goes to the view's `jump()`. Nothing else swipes.
+- Space stays the desktop jump.
 
 ### 9. Phone and desktop specifics
 
 **Phone (`TOUCH_PHONE`, `world-modes.ts:14`):**
-- **On foot outside, the pad is hidden.**
-  - `padShows` (`world-input.ts:263`) gains `&& a.ride !== 'foot'` for the touch phone.
-  - Off foot it shows as today: Advance, Jump or climb, Attack, and Run.
-  - **Removed on foot:** Lock, Attack, Jump, Run, Build and the skills.
-- **`#mapgo` goes** (`world.html:65`, `world.css:697`). The big map's pop already has "Go to it" and "Guide me here"
-  (`world.html:67`). A set waypoint shows one dock line hint once: "Go from the map".
-- **`#rides` goes** (§6).
-- **`#menubtn`, the phone menu, and `placer`/`put`** (`world-modes.ts:100-114,162-170,172-244`) go. `makeModes`
-  keeps `controlsOf` for the bike and the ship pad and for `data-controls`.
-- **`#pad::after`, the centre dot** (`world.css:155-165`), shows only with the pad, so never on foot.
-- **The sheet** (`#sheet`, `town-phone.ts:121`) stays the Look and details surface, restyled to `.glass`. The dock hides
-  under it (`covered`).
+- **The pad is hidden on foot.** `padShows` (`world-input.ts:263`) gains `&& a.ride !== 'foot'`.
+  - Off foot it shows as today: Advance, Jump or climb, Attack, and the speed toggle.
+  - Lock, Attack, Jump, Run, Build and the skills are gone on foot, and so is the centre dot (`world.css:155-165`).
+- **`#pad .buildpad`** and the `[data-build]` captions go (the build dock).
+- **`#mapgo`** goes (`world.html:65`, `world.css:697`). The big map's pop already has Go to it (`world.html:67`).
+- **`#rides`** goes (§6).
+- **`#menubtn`, the phone menu and `placer`** go (`world-modes.ts:100-114,162-244`). `controlsOf` stays for the bike's
+  and the ship's pad.
+- **`#sheet`** (`town-phone.ts:121`) stays the Look and details surface, `.glass`. The dock hides under it.
 
 **Desktop:**
-- The dock is bottom centre, 560 max.
-- Key caps sit in its buttons.
-- The fight dock is Q8.
-- Hover focus, `HOVER_KEEP_MS` and the freeze over the dock are unchanged (`world-focus.ts:99-108`). `frozen` reads
-  `#dock` instead of `#focus`.
-
-**Narrow non-touch (under 1200, fine pointer)** gets the desktop rules at the phone's sizes. Its dock is full width
-less the Menu.
+- The dock sits at the bottom centre, with key caps.
+- Hover focus, `HOVER_KEEP_MS` and the freeze read `#dock` (`world-focus.ts:99-108`).
+- Inside a building there is no deck (N8).
 
 ### 10. Accessibility
 
-- **Focus order:** Menu, then the dock (primary, ⋯, or the fight buttons, or the line), then any open panel.
-  - The map canvas keeps `tabindex="0"`.
-  - Panels trap nothing. `#settings` is a modal `<dialog>`, and the browser traps there.
+- **Focus order:** Menu, the dock, then an open panel. `#settings` is a modal `<dialog>`; People is not.
 - **Names:**
-  - Menu: "Menu (H), 2 unread";
-  - dock primary: "Look: Library";
-  - ⋯: "More actions for Library";
-  - fight buttons: "Frost bolt", "Ultimate, 60% charged";
-  - the line: "Chat from Sami: …, open People".
-  - Every icon-only button has an `aria-label`.
-- **Live regions:** the focus box's polite region is kept. The line speaks once. The fight face is silent.
-- **Targets:** every control is at least `--btn` (44 px); the phone fight buttons are `--btn-fight` (56 px). The gate
-  checks every control with a box.
-- **Reduced motion:** no dock rise, no face fade, no radial scale (today's `world.css:2253`), and no line timer
-  animation. The timer still runs.
-- **Reduced transparency:** `.glass` falls back to `--surface-glass-solid`, as `theme.css:86` does today, now through
-  one class.
-- **Contrast:** text on glass is `--text` on at least 85% tint; white on `--accent` is 5.2:1 (DESIGN.md).
+  - "Menu (H), 2 unread";
+  - "Look: Library";
+  - "More actions for Library";
+  - "Frost bolt, slot 1 (hold to change)";
+  - "Ultimate, 60% charged";
+  - "Place wall (hold for pieces)";
+  - "Chat from Sami: …, open People".
+- **Live regions:** a focus and a line speak once; fight and build stay silent.
+- **Targets:** at least `--btn`; the phone's fight and build buttons are `--btn-fight`.
+- **Reduced motion:** no rise, fade, radial scale (`world.css:2253`) or timer animation.
+- **Reduced transparency:** `.glass` falls back to `--surface-glass-solid`, through one class (`theme.css:86`).
+- **The swipe-up jump** has no keyboard need: Space jumps.
 
 ### 11. The visitor page
 
 - **The Menu:** Map, People (realm up) and Settings.
-- **At rest:** the map and the Menu. On a first visit, `#welcome` adds a third piece (Q12), restyled into the family
-  (`--radius-lg`, glass, 44 px buttons).
-- **`OWNER_IDS`** (`world-public.ts:121`) gains `overview` and `cluster`.
-- **`PHONE_IDS`** (`:125`) drops `seecount` and keeps the others. `#seecount` is gone with `#top`.
-- **`#under`** goes. Underside stays the carrier's focus act (Q16).
+- **At rest:** 2 pieces, or 3 with `#welcome` on a first visit.
+- **`OWNER_IDS`** (`world-public.ts:121`) gains `overview` and `cluster`. The Cockpit link is never built.
+- **`PHONE_IDS`** (`:125`) drops `seecount`.
+- **`#under`** goes.
+
+### 12. Plan/22 hooks
+
+- **P3:** People › Mail is `world-mail.ts`. Its unread feeds the Menu dot, its news a dock line, and the rider radial's
+  Message opens Write.
+- **P4:** the mic loses its "near Jump" spot. Its place is the owner's call when P4 starts. PTT/OPEN goes in Settings ›
+  Sound.
+- **P5:** People › Party holds members, invite and party chat. Invite and Report join the rider radial.
 
 ## Every current element and its fate
 
-`h` = `world.html`, `c` = `world.css`, `t` = `theme.css`, `tc` = `town.css`. TS paths are under `websrc`.
+`h` = `world.html`, `c` = `world.css`, `t` = `theme.css`, `tc` = `town.css`.
 
 | Element | Where | Fate |
 |---|---|---|
-| `#top` bar | h:38-61; tc:153; c:1405 | removed; pieces in §7 |
+| `#top` bar, `.mark` | h:38-61; c:1405 | removed; pieces in §7 |
 | `#menubtn` + phone menu | h:39; c:1426; `world-modes.ts:172-244` | removed (Menu) |
-| `.mark` | h:40 | removed |
-| `#health` | h:41 | merged into Cluster panel |
-| `.chip.world`, `.age`, `.live` | h:42-43,51 | merged into Cluster panel |
+| `#health`, `.chip.world`, `.age`, `.live` | h:41-43,51 | merged into Cluster panel |
 | `#statsbtn` + `#groups` | h:44-50; c:1729 | merged into Cluster panel |
-| `#mode` Explore | h:52; c:6 | merged into overview head + Menu › Overview (+ Tab) |
-| `#search`, `#find`, `#names` | h:53-55 | merged into overview panel's Find |
-| `#deck` | h:56; c:335; `world-chrome.ts:172` | kept as `#menu`, bottom left |
+| `#mode` Explore | h:52; c:6 | merged into overview head + Menu › Overview + Tab |
+| `#search`, `#find`, `#names` | h:53-55 | merged into overview Find |
+| `#deck` | h:56; c:335 | kept as `#menu`, bottom left |
 | `#helpbtn` | h:57; c:1861 | removed (`?` → Settings › Controls) |
 | `#sound` | h:58; c:267 | merged into Settings › Sound |
-| `#seecount` | h:59 | merged into overview "Needs you · n" + Menu dot |
-| `#account` | h:60; tc:266 | merged into Cluster panel foot (Q16) |
-| `#signin` (guest) | c:1423,1931 | merged into Settings head (Q12) |
+| `#seecount`, `#stack` + chip + card | h:59,70; c:327,1555,1800 | merged into overview Needs you + Menu dot |
+| `#account` | h:60; tc:266 | merged into Cluster panel foot |
+| `#signin` (guest) | c:1423,1931 | merged into Settings head |
 | `#under` (visitor) | c:268 | removed (carrier focus act) |
-| `#sim` | h:62 | kept (sim world only), `.glass` |
-| `#crumbs` | h:63; c:1794; t:11 | removed |
-| `#rides`, `#ride` | h:64; c:27 | merged into Settings › Controls › Ride |
-| `#pvp` | h:64; c:1861 | merged into Settings › Controls |
-| `#worldmap` canvas | h:65; c:616,1560,1774 | kept; top right both tiers, 72/160 |
-| `#mapbtn` | h:65; c:322 | removed (already hidden) |
-| `#compass` N/E/S/W | h:65; c:925 | kept as one N on the rim |
-| `#mapgo` | h:65; c:697 | removed (big map pop's Go to it) |
-| `#secrets` | h:65; c:324 | kept hidden (cockpit quick row) |
-| `#maptip`, `#mappop` | h:66-67; c:725 | kept, `.glass` + family radii |
-| `#lensbtn`, `#lensbox` | h:68-69; c:320 | removed (already hidden) |
-| `#stack` + slot card + "1 to see" chip | h:70; c:327,1555,1800 | merged into overview Needs you |
-| `#realm-banner` | `world-realm.ts:695`; c:970 | merged into a dock line + People note (Q12) |
-| `#card`, `#flow` drawers | h:71-72 | kept, `.glass` |
-| `#inspector`, `#island`, `#reader`, `#talk`, `#quick`, `#yard` | h:73-77,85-86 | kept, `.glass` |
-| `#cockpit` | h:75 | kept; way in Q2 |
-| `#keeper` | `world-keeper.ts` | kept, `.glass` |
+| `#sim` | h:62 | kept (sim world), `.glass` |
+| `#crumbs` | h:63; c:1794 | removed |
+| `#rides`, `#ride`, `#pvp` | h:64; c:27,1861 | merged into Settings › Controls |
+| `#worldmap` | h:65; c:616,1560,1774 | kept; top right, 72/160 |
+| `#compass` | h:65; c:925 | kept as one N |
+| `#mapbtn`, `#lensbtn`, `#lensbox` | h:65,68-69 | removed (already hidden) |
+| `#mapgo` | h:65; c:697 | removed (big map's Go to it) |
+| `#secrets` | h:65; c:324 | kept hidden (cockpit row) |
+| `#maptip`, `#mappop` | h:66-67; c:725 | kept, family |
+| `#realm-banner` | `world-realm.ts:695`; c:970 | merged into a dock line + People note |
+| `#card`, `#flow`, `#inspector`, `#island`, `#reader`, `#talk`, `#quick`, `#yard`, `#keeper` | h:71-77,85-86 | kept, `.glass` |
+| `#cockpit` | h:75 | kept; opened from the overview's Cockpit link |
 | `#inbox` (letters) | `world-keeper.ts` | merged into People › Mail |
-| `#chat` + 4 chips + log + form + note | h:78-83; c:1986-2107 | merged into People › Chat (+ dock line) |
-| `#chatshow`, `#chatcount` | h:84; c:2002 | removed |
-| `#chip` (fleet) | h:87 | kept removed/hidden |
+| `#chat` (chips, log, form, note) | h:78-83; c:1986-2107 | merged into People › Chat + dock line |
+| `#chatshow` | h:84; c:2002 | removed |
+| `#chip` (fleet) | h:87 | kept hidden |
 | `#sheet` | h:88; tc:1155 | kept, `.glass` |
-| `#bottom` deck: `#map`, `#minimap`, `#lenses`, `#legend` | h:90-94 | `#minimap` kept hidden; `#legend` merged into Cluster (Q16) |
-| `#portrait`, `#commands`/`#grid`, `#cmds`, `#next` | h:95-99 | kept in the overview for a selection only (Q13) |
-| `#line` help line | h:97; `town-phone.ts:201` | removed |
-| `#status` debug | h:101 | kept (`?debug=1`) |
-| `#tip` | h:102 | kept |
-| `#calm-hint` | h:103; c:396; `world-pastime.ts:202` | merged into dock focus face |
-| `#pad` Lock, Attack, Jump, Run, Build (foot) | h:104; c:59-118 | removed on foot; kept off foot (bike, ship) |
-| `#pad` Advance | h:104 | kept off foot |
-| `#pad .skills` (Skill 1, 2, Ult) | h:104; c:120-145 | merged into dock fight face (Skill 1 + Ult, Q3) |
-| `#pad .buildpad`, `[data-build]` captions | h:104; c:1659 | kept while building (Q6) |
+| `#bottom` deck (`#map`, `#minimap`, `#lenses`) | h:89-94 | removed (`#minimap` stays hidden) |
+| `#legend` | h:93; tc:816 | merged into Cluster panel |
+| `#portrait`, `#commands`/`#grid`, `#next` | h:95-99 | merged into the overview's selection view |
+| `#cmds` | h:98 | removed |
+| `#line` | h:97; `town-phone.ts:201` | removed |
+| `#status`, `#tip`, `#loader`, `#said` | h:101-102,21,110 | kept |
+| `#calm-hint` | h:103; c:396 | merged into dock focus |
+| `#pad` foot buttons (Lock, Attack, Jump, Run, Build) | h:104; c:59-118 | removed on foot |
+| `#pad` off foot (Advance, Jump/climb, Attack, Run) | h:104 | kept; Run becomes the speed toggle |
+| `#pad .skills` | h:104; c:120-145 | merged into dock fight slots |
+| `#pad .buildpad`, `[data-build]` | h:104; c:1659 | merged into dock build face |
 | `#pad::after` dot | c:155 | kept with the pad only |
-| `#crosshair`, `#hitmark` | h:105-106; c:420,440 | kept |
-| `#focus` box | h:107; c:2112-2212 | merged into `#dock` focus face |
-| `#radial` | h:108; c:2217 | kept; + `arc` layout for the Menu |
+| `#crosshair`, `#hitmark` | h:105-106 | kept |
+| `#focus` | h:107; c:2112-2212 | merged into `#dock` focus face |
+| `#radial` | h:108; c:2217 | kept; + `arc`, slot and piece radials |
 | `#hottag` | h:109; c:509 | kept for a fight target only |
-| `#said`, `.focus-say` | h:110 | kept |
-| `#toast` | h:111; c:1359; `world-modes.ts:147-160` | merged into dock line |
-| `.bcard` name cards | c:546 | kept in the overview only |
-| `.bl`, `.unit`, `.trunk`, `.room`, `.civ` | tc | kept (scene labels) |
-| `.fight-hud .vitals` (HP, energy, Wood/Iron) | `world-fight.ts:415-416,902`; c:995,1733,1818 | HP and energy into dock fight face; Wood/Iron Q7 |
-| `.fight-hud .skills` strip | `world-fight.ts:417` | removed (dock fight face) |
-| `.fight-boss` | `world-fight.ts:428`; c:1068 | kept as the boss's one label (Q15) |
+| `#toast` | h:111; c:1359 | merged into dock line |
+| `.bcard` | c:546 | kept in the overview only |
+| `.bl`, `.unit`, `.trunk`, `.room`, `.civ` | tc | kept |
+| `.fight-hud .vitals` | `world-fight.ts:415-416,902`; c:995,1733 | merged into dock fight (HP, ring); Wood/Iron to Settings |
+| `.fight-hud .skills` | `world-fight.ts:417` | removed |
+| `.fight-boss` | `world-fight.ts:428`; c:1068 | kept (the boss's label) |
 | `.mobbar` | `world-fight.ts:506`; c:1025 | kept; hidden on the tagged target |
-| `.dmg`, `.fight-tick`, `.fight-hurt`, `.fight-downed` | `world-fight.ts` | kept (in-world feedback) |
-| `.build-hud` | c:1162 | kept while building, `.glass` + tokens (Q6) |
-| `#welcome` | `world-welcome.ts:47`; c:1949 | kept, restyled (Q12) |
-| `#controls`, `#wardrobe` dialogs | c:1193-1335 | merged into `#settings` |
-| `#loader` | h:21-34 | kept |
+| `.dmg`, `.fight-tick`, `.fight-hurt`, `.fight-downed` | `world-fight.ts` | kept |
+| `.build-hud` | c:1162 | merged into dock build note |
+| `#welcome` | `world-welcome.ts:47`; c:1949 | kept, restyled |
+| `#controls`, `#wardrobe` | c:1193-1335 | merged into `#settings` |
 
 ## Behaviour changes (only these)
 
-1. **At rest** only the map and the Menu show, on both tiers and both pages. The visitor's first-visit card is the
-   exception.
-2. **The top bar is gone,** in the overview too. Its pieces move per §7.
-3. **The focus box becomes the dock.** On the phone it sits at the bottom, beside the Menu, not over the pad. On the
-   phone it also shows inside a building, for parts.
-4. **The pastime** (plant, fish) is a dock focus, not `#calm-hint`.
-5. **A fight shows the fight face:** HP, Skill 1 and the ultimate. The pad's skills, the vitals card and the desktop
-   key strip go.
-6. **The PvP flag alone no longer shows the fight controls** on the phone (Q17).
-7. **One-time hints show in the dock line on both tiers,** for `LINE_MS`. They were the phone's toast for 7 s and the
-   desktop's static line.
-8. **Chat lines show one at a time in the dock line.** The log lives in People › Chat. The show/hide setting is gone.
-9. **The Menu has 4 entries.** Mail and Chat are People's tabs; Controls and Wardrobe are Settings' tabs. Talk is the
-   focus act only.
-10. **`?` opens Settings › Controls.**
-11. **The ride, PvP and Sound move into Settings.** 1, 2, 3 and P still work.
-12. **The phone's pad is hidden on foot.** Jump, Lock and Attack go. A tapped mob is attacked by its second tap, as
-    plan/23 change 1 already does.
-13. **Go (`#mapgo`) is gone.** The big map's pop holds Go to it.
-14. **Running is the default on foot,** walking inside and within `ARRIVE_WALK` of a walk's or route's end. The Run
-    button and the double tap go on foot. The ground tap and the engage tap no longer differ in gait.
-15. **Shift, the sprint key and L3** sprint only on the bike and the ship (Q4).
-16. **`#hottag` names only a fight target.** `.bcard`s never draw in explore. The target's mob bar folds into its tag.
-17. **The phone map** moves from the top left to the top right, 72 px. The compass shows N only.
-18. **The overview** is the left panel plus the Cluster panel. The crumbs, the To-see chip and card, and the corner map
-    go there.
-19. **One unread dot,** `--danger`, on the Menu: letters, mail and missed lines.
+1. **At rest,** only the map and the Menu show (plus `#welcome` on a visitor's first visit).
+2. **The top bar is gone,** in the overview too.
+3. **The focus box becomes the dock.** On the phone it sits beside the Menu, and it shows inside for parts.
+4. **The pastime is a dock focus.** A build zone offers Build (N3).
+5. **The fight face** has HP, two assignable slots and the ultimate. A long-press assigns from the class's skills,
+   remembered per class. The pad's skills, the vitals and the desktop key strip go.
+6. **Desktop Q fires slot 2.** The Mage's spell cycling is gone (N6).
+7. **Build is a dock face:** Place, Turn, Take down and Done. A long-press on Place picks the piece. It is entered from
+   a build zone's focus or Settings, and the build pad and `.build-hud` go.
+8. **The PvP flag alone no longer shows the fight controls** (Q17).
+9. **One-time hints show in the dock line on both tiers** for 4 s.
+10. **Chat lines show one at a time in the dock line,** never over a fight or build. The log lives in People › Chat,
+    and show/hide is gone.
+11. **The Menu has 4 entries.** `?` opens Settings › Controls.
+12. **The ride, PvP and Sound move into Settings.** 1, 2, 3 and P still work.
+13. **The phone's pad is hidden on foot.** A mob is attacked by tapping it.
+14. **Go (`#mapgo`) is gone.**
+15. **Full speed is the default on every ride.** On foot the rider walks inside and within `ARRIVE_WALK` of the end, and
+    the Run button and the double tap go. On the bike and the ship the speed button toggles down to cruise, as do
+    Shift and L3 (N1).
+16. **Auto-jump on every walk.** A swipe up jumps. The phone has no Jump button on foot.
+17. **`#hottag` names only a fight target,** and `.bcard`s never draw in explore.
+18. **The phone map moves to the top right,** 72 px, with N only.
+19. **The overview is the side panel.** It holds the Cockpit link and the Cluster panel. A selection shows there, and
+    the desktop deck and the crumbs are gone.
+20. **Inside on the desktop,** the deck is gone. Talk is a focus act, and Leave is Esc or the door (N8).
+21. **One unread dot,** `--danger`, on the Menu.
 
 ## Phases: review slices inside one PR
 
-Every commit runs `bun run build` (bun 1.4.x for dist identity), typecheck and `bun test`. Before merge, `go test ./...`
-runs in full. Each gate row flips in the commit that changes it, with its reason.
+Every commit runs `bun run build` (bun 1.4.x for dist identity), typecheck and `bun test`. Before merge,
+`go test ./...` runs in full. Each gate row flips in the commit that changes it.
 
-1. **The proof on main.**
-   - `dev/hud-gate.mjs` (new) records today's counts and overlaps at 320, 390, 430 and 1440, for each state in §Tests.
-   - Rows that will change are marked `changes: N` (this plan's numbers above).
+1. **The proof on main.** `dev/hud-gate.mjs` (new) records today's counts and overlaps.
+   - Rows that will change carry `changes: N`, with N from the list above.
    - Run it twice on main, then break one placement on purpose to see a row fail.
-2. **The family.** The tokens, `.glass`, `.glass-btn` and `data-hud`. No layout moves. Flips nothing.
-3. **Running by default.** `sprints`, the deletions in §8, and the hint words. Flips 14 and 15.
-4. **The dock.**
-   - `world-dock.ts`, `#dock` and the line queue;
-   - `#toast`, `#calm-hint` and the vitals go;
-   - the tag rule.
-   - Flips 3, 4, 5, 6, 7 and 16.
-5. **The Menu and the panels.**
-   - `#menu`, the 4 `GLOBALS` and `arc`;
-   - People, with chat moved in;
-   - Settings, with the dialogs merged, the ride, PvP and sound;
-   - `#menubtn`, the phone menu and `#helpbtn` go.
-   - Flips 8, 9, 10, 11 and 19.
-6. **The pad on foot, `#mapgo`, `#rides` and the map corner.** Flips 1, 12, 13 and 17.
-7. **The overview.** `#top` retired, `#overview`, `#cluster`. Flips 2 and 18.
+2. **The family:** tokens, `.glass`, `.glass-btn`, `data-hud`. Flips nothing.
+3. **Speed and jump:** `sprints`, the deletions, the speed toggle, `ledgeAhead` and the swipe. Flips 15 and 16.
+4. **The dock:** `world-dock.ts`, `world-kit.ts`, the five faces and the line queue; `#toast`, `#calm-hint`, the
+   vitals, `.build-hud` and the build pad go; the tag rule. Flips 3–10 and 17.
+5. **The Menu and the panels:** `#menu`, 4 `GLOBALS`, `arc`, People, Settings; `#menubtn` and `#helpbtn` go. Flips 11,
+   12 and 21.
+6. **The pad on foot, `#mapgo`, `#rides` and the map corner.** Flips 1, 13, 14 and 18.
+7. **The overview:** `#top` and `#bottom` retired, `#overview` with its selection view, `#cluster`. Flips 2, 19 and
+   20.
 8. **The visitor page, accessibility, the README controls table and the gate edits.**
 
 **Gates to update** (labelled edits, each with its reason):
 - **input-gate:**
-  - `clearOf` and `placed` (`dev/input-gate.mjs:296-325`): the box's neighbours become `#dock` versus `#menu` and
-    `#worldmap`. `#pad button`, `#mapgo` and `#chat` go;
-  - `openCockpit` (`:365-367,606`): through Q2's path;
+  - `clearOf` and `placed` (`dev/input-gate.mjs:296-325`): `#dock` against `#menu` and `#worldmap`;
+  - `openCockpit` (`:365-367,606`): Menu → Overview → Cockpit;
   - the Menu rows (`:1751-1766`): 4 entries;
   - the visitor Menu (`:1774-1790`): `["Map","People","Settings"]`;
-  - the phone Menu (`:1997-2013`): `#menu`, not `#menubtn` → `#deck`;
-  - the pad Lock rows (`:279,1024`): the phone foot has no Lock, so they move to a bike or desktop T row;
-  - the box rows (`:1813,1830,1886`): `#dock .primary` and `#dock .more`.
+  - the phone Menu (`:1997-2013`): `#menu`;
+  - pad Lock (`:279,1024`): moves to a bike row or desktop T;
+  - the box rows (`:1813,1830,1886`): `#dock .primary` and `.more`.
 - **world-gate:** `#top > *` (`dev/world-gate.mjs:502`) becomes `[data-hud]`; `#mode` (`:533,558`) becomes Tab.
-- **onfoot-gate:** `#mode` (`:271-275,342-343,483`) becomes Tab or the panel's Explore; `#helpbtn` (`:365-374`) becomes
-  `?`.
-- **aim-gate:** `#mode` (`:99`); `#hottag` on a hovered building (`:247-249`) becomes `#dock .name`, and `#hottag` only
-  on a mob; `#bottom` and `#rides` (`:20`) become `#dock`.
-- **calm-gate:** `#deck` → Cockpit (`:163-165`); the quick row's Sound (`:184,300`) becomes Settings › Sound.
-- **cockpit-gate:** `#deck` → Cockpit (`:230-241`), via Q2's path.
-- **public-gate:** `#hottag` health (`:165`) holds, on a mob; `#ride` (`:184-186`) becomes Settings › Ride.
-- **Already failing on main** (plan/23 build notes), not this PR's:
-  - world-gate: Rimfall, Underside, phone underside;
-  - onfoot and aim: the phone's hidden `#mode` (the row goes with `#mode` here);
-  - public: `/api/land`.
+- **onfoot-gate:** `#mode` (`:271-275,342-343,483`) becomes Tab; `#helpbtn` (`:365-374`) becomes `?`.
+- **aim-gate:** `#mode` (`:99`); `#hottag` on a building (`:247-249`) becomes `#dock .name`; `#bottom` and `#rides`
+  (`:20`) become `#dock`.
+- **calm-gate:** the cockpit path (`:163-165`) and the quick row's Sound (`:184,300`) become Settings › Sound.
+- **cockpit-gate:** `#deck` → Cockpit (`:230-241`) becomes Menu → Overview → Cockpit.
+- **public-gate:** `#hottag` health (`:165`) on a mob; `#ride` (`:184-186`) becomes Settings › Ride.
+- **Already failing on main** (plan/23 build notes): world-gate's Rimfall and Underside rows; onfoot and aim on the
+  phone's `#mode` (that row goes with `#mode`); public's `/api/land`.
 
-**Checks, under the lean-checks rule:**
-- In every commit: unit tests and dist identity.
-- Once, before review: one full manual GPU gate round of world, onfoot, aim, calm, cockpit, public, input and hud.
-- `ci-local --gates` covers world and public only, so input and hud run by hand.
+**Checks (lean-checks):**
+- Every commit: unit tests and dist identity.
+- Once before review: a full manual GPU round of world, onfoot, aim, calm, cockpit, public, input and hud.
+- `ci-local --gates` covers world and public only.
 
 ## Tests
 
-**New tests,** each with a mutation and a positive control:
-- **`world-dock.test.ts`:**
-  - `dockOf`'s order: covered and the overview give rest; fight beats line beats focus; fight on foot only;
-  - the line queue:
-    - one at a time;
-    - a newer line replaces the one showing;
-    - a hint waits behind chat;
-    - a fight holds the line;
-    - a timeout unseen adds to unread;
-    - a hint is marked seen only once shown.
-- **`world-ride-step.test.ts` (new):** `sprints` over foot and ride, inside, `toEnd` around `ARRIVE_WALK`, `held` off
-  foot.
-- **`world-actions.test.ts` (edit):** `GLOBALS` is exactly Map, People, Overview and Settings on the owner page, and Map,
-  People (realm up) and Settings for a visitor. Ids are unique.
-- **`world-chat.test.ts` (edit):** no fade or show state; unread counts while the tab is not shown; `KEEP` trims.
-- **`world-modes.test.ts` (edit):** the menu and the toast go. `hintQueue` moves with its tests to `world-dock.test.ts`.
-- **`world-focus.test.ts` (edit):** the pastime rule sits between carried and tap.
-- **`world-focus-dom.test.ts` (edit):** no `place()`, and no `--pad-h`.
-- **`world-radial.test.ts` (edit):** `arc(n)` puts every item above the centre, with none overlapping at n = 4.
-- **`world-input.test.ts` (edit):** `padShows` is false on foot for a touch phone.
-- **`world-hud-tokens.test.ts` (new, the guard).** It reads `world.css` and `theme.css` and checks the rules for
-  `#dock`, `#menu`, `#people`, `#settings`, `#overview`, `#cluster`, `.glass` and `.glass-btn`:
-  - `border-radius` only through `var(--radius-*)`, or 50% for the map;
-  - no `rem`;
-  - no raw colour;
-  - sizes through `--btn` or `--btn-fight`.
-  - Each banned form gets a mutation.
+Each new test has a mutation and a positive control.
 
-**`dev/hud-gate.mjs` (new),** on `dev/stack-realm.sh`:
-- **Sizes:** 320×568, 390×844 and 430×932 with touch, and 1440×900 with a mouse.
-- **States:**
-  - rest;
-  - near a building;
-  - inside, by a stair;
-  - a fight, forced by a stub mob hit (`HURT_MS`, as the inventory notes);
-  - a chat line;
-  - the Menu open;
-  - People open;
-  - Settings open;
-  - the overview;
-  - the visitor page at rest.
-- **Each row asserts:**
-  - **at rest, `visible('[data-hud]').length === 2`** (`#worldmap`, `#menu`). The visitor's first visit is 3, with
-    `#welcome`;
-  - near: 3; fight: 3 plus the target's `#hottag`; line: 3; inside: 3;
-  - no two visible `[data-hud]` boxes overlap, except the radial's scrim over everything and a panel over the dock;
-  - every box is on screen, and the dock's foot is at or above `env(safe-area-inset-bottom)`;
-  - every `button` in a `[data-hud]` is at least 44×44, and the phone fight buttons are 56×56;
-  - computed `border-radius`: containers 16, buttons 12;
-  - one label: the focused target's name appears in at most one of `#dock .name`, `#hottag` and a visible `.bcard`.
-- **A pixel check:** a screenshot per state and size, diffed against the PR's own first run (no baseline on main). It
-  runs with `--update` to accept.
+| Test | Covers |
+|---|---|
+| `world-dock.test.ts` (new) | `dockOf`: covered and the overview give rest, then build > fight > line > focus; fight on foot only. The queue: one at a time, newer replaces, a hint waits behind chat, fight and build hold lines, a timeout adds to unread, a hint is seen only once shown |
+| `world-kit.test.ts` (new) | `poolOf` per class (the Mage's three spells); defaults are the pool's first two; `assign` swaps; storage per class, junk ignored, a throwing store survives; a long-press release assigns and never fires |
+| `world-ride-step.test.ts` (new) | `sprints` on foot (inside, `toEnd` around `ARRIVE_WALK`, Shift ignored) and on a ride (`slow`) |
+| `world-hud-tokens.test.ts` (new, the guard) | in the rules for `#dock`, `#menu`, `#people`, `#settings`, `#overview`, `#cluster`, `.glass`, `.glass-btn`: radii only through `var(--radius-*)`, no `rem`, no raw colours, sizes through `--btn` or `--btn-fight` |
+| `world-actions.test.ts` | the 4 entries; the visitor's 3 |
+| `world-chat.test.ts` | no fade or show; unread while the tab is hidden |
+| `world-modes.test.ts` | the menu and toast go; `hintQueue` moves |
+| `world-focus.test.ts`, `world-focus-dom.test.ts` | the pastime and build-zone rules; no `place()`, no `--pad-h` |
+| `world-radial.test.ts` | `arc(4)` above the centre, no overlap |
+| `world-input.test.ts` | `padShows` false on foot on a phone |
+| `world-router.test.ts` | `swipe-up` against a slow drag, a sideways flick and a pinch |
+| `world-deck.test.ts` | `deckOpen` retired; `deckShows` kept for the overview's commands |
 
-## Hands-on QA (`dev/stack-realm.sh`, phone emulator 390×844 touch, then 320×568; desktop 1440×900)
+**`dev/hud-gate.mjs` (new)** runs on `dev/stack-realm.sh`.
 
-**Phone:**
-1. At rest on foot: only the map (top right) and the Menu (bottom left). Walk a long route by taps. The rider runs and
-   slows to a walk on arrival. Inside, it walks.
-2. Tap a hall: the dock rises with "Look" and ⋯.
-   - A long-press on Look, slid to Enter, goes in, and no stray click fires.
-   - Walk away: the dock leaves.
-3. Inside, stand on a stair: the dock shows it. Tap a book: it reads at once (Q11).
-4. A wolf hunts you:
-   - the fight face shows HP, Skill 1 and the ultimate under the right thumb;
-   - tap the wolf: the first tap focuses, the second attacks;
-   - the ring fills as energy comes;
-   - the fight ends: the dock leaves.
-5. A second page says something in chat:
-   - it slides into the dock for about 5 s, and a tap opens People › Chat;
-   - during a fight it waits, then shows after.
-6. The Menu: 4 items on an arc, the world dimmed. Then:
-   - People: the tabs, a line typed and sent;
-   - Settings: change the ride to the bike. The pad appears as today; ride back to foot and it goes;
-   - toggle PvP and Sound.
-7. A first-visit hint shows once in the dock, and never again after a reload.
-8. At 320 px: the dock's name ellipses, the primary and ⋯ stay 44 px, and nothing overlaps the Menu.
-9. A guest on the visitor page: the welcome card; the Menu shows Map, People and Settings; Sign in sits in Settings.
+Sizes: 320×568, 390×844 and 430×932 with touch, and 1440×900 with a mouse.
 
-**Desktop:**
-1. At rest: the map and the Menu only. Hover the Library: the dock shows "Look `E`" and the building has no tag. Hold E:
-   the radial opens.
-2. Enter opens People › Chat with the input focused. Esc closes it, and the keys go back to the canvas.
-3. Tab: the overview panel appears.
-   - Find with `/`, and Needs you → Fly there `Enter`.
-   - Cluster and districts › shows the numbers and the villages.
-   - Tab back.
-4. `?` opens Settings › Controls with the key list.
-5. Shift on foot changes nothing; on the bike it sprints (Q4).
-6. In a fight: the HP row and two buttons with key caps (Q8).
-7. Keyboard only, with VoiceOver:
-   - Menu, then its items read aloud, Esc, and focus returns to Menu;
-   - the dock's primary and ⋯ are reachable and named;
-   - a new chat line is spoken once.
-8. Reduced motion: the dock appears and leaves with no rise or fade. Reduced transparency: solid panels.
+States:
+- rest; near a building; inside by a stair;
+- a build zone, then build mode;
+- a fight (a stub mob's hit, `HURT_MS`) and a slot's radial;
+- a chat line at rest, over a focus, and during a fight, where it must wait;
+- the Menu, People and Settings;
+- the overview, with and without a selection;
+- the visitor at rest, and the bike.
+
+| Assertion | Value |
+|---|---|
+| visible `[data-hud]` at rest | **2** (`#worldmap`, `#menu`); 3 on a visitor's first visit |
+| near, inside, build, line | 3; fight: 3 + the target's `#hottag` |
+| overlaps between visible `[data-hud]` boxes | none, except the scrim and a panel over the dock |
+| on screen; the dock's foot clears the safe area | yes |
+| buttons in `[data-hud]` | ≥ 44×44; the phone's fight and build buttons 56×56 |
+| computed radii | containers 16, buttons 12 |
+| one label | the focused target's name in at most one of `#dock .name`, `#hottag`, a visible `.bcard` |
+| explore | `#overview`, `#cluster` and the selection view hidden |
+| visitor DOM | no Cockpit link |
+| pixels | one screenshot per state and size, diffed against the PR's own first run; `--update` accepts |
+
+## Hands-on QA (`dev/stack-realm.sh`; phone emulator 390×844 touch, then 320×568; desktop 1440×900)
+
+| # | Phone: do | Expect |
+|---|---|---|
+| 1 | Rest; tap-walk a long route over ledges; tap at a low wall; swipe up; drag slowly up; go inside | only map and Menu; it runs, jumps by itself, walks on arrival; hops the wall; a swipe jumps, a slow drag looks; inside it walks |
+| 2 | Tap a hall; long-press Look and slide to Enter; walk away | the dock shows Look and ⋯; you go in with no stray click; the dock leaves |
+| 3 | Inside, stand on a stair; tap a book | the dock shows the stair; the book reads at once |
+| 4 | A wolf hunts you; tap it twice; tap a slot; long-press a slot and slide to the other skill; reload; change class | HP, 2 slots and the ultimate under the right thumb; you attack; the slot casts; they swap and nothing fires; kept; each class has its own pair |
+| 5 | Chat from a second page: at rest, over a focus, in a fight; tap the line | about 4 s, then the focus returns; it waits out the fight; People › Chat opens |
+| 6 | Walk into the meadow ring; Build; Place, Turn, Take down; long-press Place; Done | the dock offers Build; the build face works; a floor picked; a refusal shows in its note; Done ends it |
+| 7 | Menu; People: send a line; Settings: bike, then foot; PvP and Sound | 4 items on an arc; the bike runs full speed with its pad and its speed button cruises; on foot the pad goes |
+| 8 | 320 px, every state above | the name ellipses, buttons keep their size, nothing overlaps the Menu |
+| 9 | Guest visitor | welcome card; Menu: Map, People, Settings; Sign in in Settings |
+
+| # | Desktop: do | Expect |
+|---|---|---|
+| 1 | Hover the Library; hold E; go inside; Esc | "Look `E`" in the dock, no tag; the radial; no deck inside; Esc leaves |
+| 2 | Enter, then Esc | People › Chat with the input focused; the keys come back |
+| 3 | Tab; `/`; Fly there; pick a building; back; Cockpit ›; Cluster and districts › | the overview panel, its selection view with Next and the commands, the Cockpit, the cluster numbers and villages |
+| 4 | A fight: right button, Q, G; then B and R, X, Q | slots 1 and 2 and the ultimate; the build face with its caps |
+| 5 | `?` | Settings › Controls |
+| 6 | Keyboard only with VoiceOver: Menu, its items, Esc; a slot's Shift+F10; a chat line | named items, focus back on Menu; the slot radial; the line spoken once |
+| 7 | Reduced motion; reduced transparency | no rise or fade; solid panels |
 
 ## Risks
 
-- **The phone loses manual Jump on foot.** A tap walk over a ledge relies on the route's auto-jump (`routeHold`,
-  `world-view.ts:1544`). A free tap walk into a ledge stalls. QA step 1 walks long routes on purpose.
-- **Running everywhere changes feel.**
-  - Collisions come faster, and C always slides (Q4).
-  - `ARRIVE_WALK` is a knob, set by feel.
-  - The realm's physics sees `sprint: true` far more often. That is the same input range as today's Run toggle.
-- **The fight face flickers** if `inFight` toggles at the hunt radius. The face keeps `HURT_MS` hysteresis by reading
-  `hurtAt` too. If it still flickers, add `FIGHT_HOLD_MS`.
-- **Chat lines show 5 s, one at a time.** A busy chat drops lines from view, not from People. They count as unread.
-- **The desktop deck** (Q13) is the least specified part. Keeping it for the overview selection is the safe default.
-- **A big PR.** Each slice is a commit with its own dist and green tests, as plan/23 did.
-- **Plan/22 P3 and P4 are in flight.**
-  - The P3 UI branch writes `#deck`'s dot and a `#mail` chrome. It rebases onto `#menu` and People › Mail.
-  - P4's mic needs a new place (§12).
-- **The gates already failing on main** may hide a regression. The hud-gate's own rows do not depend on them.
-
-## 12. Plan/22 hooks
-
-- **P3 mail:** People › Mail is `world-mail.ts`'s body. Unread feeds the Menu dot. The rider radial's Message opens
-  Write. A news item enters the dock line.
-- **P4 voice:** the mic is not "near Jump" on foot. Its place (the dock's fight face, a Settings toggle, or a held Menu
-  gesture) is the owner's call when P4 starts. The PTT/OPEN choice goes in Settings › Sound.
-- **P5 party:** People › Party holds the members, invite and party chat. Invite and Report join the rider radial.
+- **Auto-jump on plain walks** may hop at walls the rider should stop at. The probe jumps only for a rise within the
+  jump's reach, and QA walks into walls on purpose.
+- **The swipe-up jump fights the camera's pitch drag.** The thresholds are knobs, and the router test pins a slow drag
+  as a look.
+- **Full speed everywhere changes feel.** Collisions come faster, and C always slides. The bike's cruise is now a
+  press away instead of the default.
+- **The fight face flickers** if `inFight` toggles at the hunt edge. It reads `hurtAt` too; add `FIGHT_HOLD_MS` if
+  needed.
+- **Chat in 4 s lines** hides a busy chat from view, not from People: those lines count as unread.
+- **Slots replace the Mage's cycle.** A Mage used to Q-cycling must relearn. Its stored slots start from today's first
+  two spells.
+- **A big PR.** One slice per commit, each with its dist.
+- **Plan/22 is in flight.** The P3 UI branch rebases onto `#menu` and People › Mail. P4's mic needs a place.
+- **The gates already failing on main** may hide a regression. The hud-gate does not depend on them.
 
 ## Not doing
 
-- Bike and ship controls (a separate discussion): their pad, Advance, Run and climb stay.
-- The mail server (#250), voice and party features beyond their hooks.
-- New themes, the 3D world, or the in-world signs.
+- The bike's and the ship's controls beyond the default speed and the toggle's meaning.
+- The mail server (#250), and voice and party beyond their hooks.
+- New themes, the 3D world, or in-world signs.
 - Rebinding Esc, M, Enter, `?` or Tab.
-- The shooter zone, or a pad hover.
-- A focus-cycle key, or automatic facing focus.
+- The shooter zone, a pad hover, a focus-cycle key, or automatic facing.
 - The town page.
