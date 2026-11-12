@@ -1,19 +1,19 @@
 # 24 · One HUD: the dock, the Menu and the panels
 
-Status: rev 3, owner answers 2026-11-12 and the doubt cycle's fixes.
+Status: approved, 2026-11-12 (rev 4). The owner approved rev 3 with one change: build mode is hidden from the HUD.
 
 Sources:
 - the owner interview and the mockup review of 2026-11-12 (memory `hud-design-intent`, `hud-coherence`);
 - the approved mockups: `.wt/hud-mock/DESIGN.md` and `out/*.png` (P1–P6 phone, D1–D4 desktop);
 - the inventory of every current HUD element: `.wt/hud-shots/INVENTORY.md`;
-- the owner's answers to Q1–Q18 (rev 2) and one doubt cycle (rev 3).
+- the owner's answers to Q1–Q18 (rev 2), one doubt cycle (rev 3), and the owner's approval with build hidden (rev 4).
 
 What it changes in other plans:
 - **plan/23.**
   - `#focus` becomes the dock's focus face (§3), and the Menu drops from 8 `GLOBALS` to 4 (§4).
   - The phone gets a dock inside buildings, and the desktop deck leaves explore (§7).
   - Resource nodes become focusable: plan/23 §5 said "a node is never focused (it is shot)".
-  - D-pad left changes from Build mode to the self radial (§3).
+  - D-pad left changes from Build mode to the self radial (§3). Build mode is hidden from the HUD (§3).
 - **plan/22.** The P2 chat log moves into People › Chat. P3 mail plugs into People › Mail. P5 adds the Party tab. P4's
   mic "near Jump" has no Jump to sit near (§12).
 
@@ -99,10 +99,10 @@ It also found five panel styles and four radii on like things:
 | # | Decision | Shape |
 |---|---|---|
 | 1 | At rest, both tiers: only the map corner (top right) and one Menu button (bottom left) | §1 |
-| 2 | One bottom dock, only in context: focus, fight, build, line | §3 |
+| 2 | One bottom dock, only in context: focus, fight, line | §3 |
 | 3 | The fight face: a thin HP row, 2 skill slots, and the ultimate with an energy ring | §3 |
 | 4 | A tap on a slot fires it. Holding a slot opens a radial of the class's skills, and a slide assigns: it swaps, never fires. The choice is kept per class. A tap on the mob attacks | §3 |
-| 5 | The build face: Place, Rotate, Done (rev 3, for 320 px). The piece choice is a long-press on Place | §3 |
+| 5 | Build mode is hidden (rev 4, the owner: "drop the build thing, it serves no purpose for now (just hide it)"). No HUD entry reaches it; the code stays | §3 |
 | 6 | A line slides over the dock for about 4 s. A tap opens its panel, then the focus returns. A fight is never covered; lines wait | §3 |
 | 7 | The Menu radial: Map, People, Overview, Settings | §4–6 |
 | 8 | The overview is a side panel: search, Needs you, a Cockpit link (owner only), "Cluster and districts ›" | §7 |
@@ -114,9 +114,9 @@ It also found five panel styles and four radii on like things:
 | 14 | Auto-jump on every walk, tap or route. There is no Jump button and no manual jump on the phone (rev 3 cut the swipe) | §8 |
 | 15 | One label per thing, one dock, nothing floats on its own | §3 |
 
-### Defaults the owner did not object to
+### Defaults (owner-approved 2026-11-12)
 
-| Q | Default, owner did not object |
+| Q | Default |
 |---|---|
 | Q4 | Shift and L3 do nothing on foot; C while moving slides (`world-moves.ts:1`) |
 | Q7 | Wood and Iron: one line in Settings › Wardrobe's foot |
@@ -130,21 +130,21 @@ It also found five panel styles and four radii on like things:
 | Q17 | The fight face needs `inFight`, a hit within `HURT_MS`, or Ready; the PvP flag alone does not show it |
 | Q18 | `ARRIVE_WALK` = 3 units, a knob set by feel |
 
-### Defaults for the owner (N)
+### Defaults N1–N14 (owner-approved 2026-11-12)
 
-The plan builds each default, and each is a one-line swap.
+N2, N7 and N9 are dropped with build; their numbers stay so the list keeps its order.
 
 | N | Question | Default |
 |---|---|---|
 | N1 | What does the bike's and ship's speed button do, now that full speed is the default? | It toggles down to today's cruise speed (`speed`). Shift and L3 hold the same toggle there |
-| N2 | Where is the piece choice? | A long-press on Place opens a radial of `ORDER`. Desktop Q still cycles |
-| N3 | How is the self radial opened? (G is the ultimate, and every pad button is taken) | Phone: tap your own rider. Desktop: F, allowed as its own default and read only in explore; in the overview F stays the console's Fleet. Pad: D-pad left, which is Build mode today; Build moves into the self radial, and a stored pad `build` migrates through `MOVED_PAD` |
+| N2 | Where is the piece choice? | Dropped: build hidden |
+| N3 | How is the self radial opened? (G is the ultimate, and every pad button is taken) | Phone: tap your own rider. Desktop: F, allowed as its own default and read only in explore; in the overview F stays the console's Fleet. Pad: D-pad left, which is Build mode today; a stored pad `build` binding migrates to `self` through `MOVED_PAD` |
 | N4 | Is there a manual jump on the phone? | No. Auto-jump picks the height, and the trade-off is recorded in Risks |
 | N5 | What does the skill pool hold? | The class's skills only, not the attack or the ultimate. Knight, Barbarian and Rogue have exactly two, so their radial only swaps; the Mage has three |
 | N6 | How do the slot keys work? | The right button fires slot 1 and Q fires slot 2, for every class. Q, X and LB fire on release when held under 500 ms, not on the press |
-| N7 | What happens to a line during build? | It waits, as in a fight |
+| N7 | What happens to a line during build? | Dropped: build hidden |
 | N8 | What does the inside focus show? | The stair, else a machine, else the building's resident ("Resident · Talk"), else the building ("Hall · Leave · ⋯", ⋯ holding Talk and Look). No people are drawn inside, so "the nearest resident" is the building's own |
-| N9 | Where does Take down go? Q6's owner answer listed it, but rev 3's 320 px face has three buttons | Into Place's long-press radial, after the pieces. Desktop X is unchanged |
+| N9 | Where does Take down go? | Dropped: build hidden |
 | N10 | How long does Ready last? | Until Sheathe, a ride, going inside, or the overview |
 | N11 | How does slot 1 swap on the desktop? (The right button already fires on release however long it is held) | A 500 ms mouse hold on the dock's slot 1 button. Hold Q for slot 2; on the keyboard, picking slot 1's skill in slot 2's radial swaps them, so every arrangement is reachable |
 | N12 | What does Attack on a PvP rider do? | It fires the class attack at the rider's point; the realm judges the hit, as today's PvP clicks do. Attack is the rider's primary only while both have PvP on |
@@ -175,7 +175,7 @@ The plan builds each default, and each is a one-line swap.
 --hud-gap: var(--space-2);     /* between items, and the dock's padding */
 --hud-row: var(--space-3);     /* between rows in a panel */
 --btn: 44px;                   /* tier 1: Menu, dock actions, ⋯, radial items, tabs, panel controls */
---btn-fight: 56px;             /* tier 2: the phone's fight and build dock buttons */
+--btn-fight: 56px;             /* tier 2: the phone's fight dock buttons */
 --map-corner: 72px;            /* 160px at min-width 1200 */
 --dock-max: 560px;             /* the desktop dock's width cap */
 ```
@@ -198,25 +198,24 @@ The plan builds each default, and each is a one-line swap.
 | `panel` | `#people`, `#settings`, `#overview`, `#cluster`, `#card`, `#flow`, `#sheet`, `#talk`, `#yard`, `#keeper`, `#reader`, `#cockpit`, `#quick`, `#island`, `#inspector`, `#radial`, `#mappop`, `#welcome`, `#sim`, `#tip`, `#status` |
 | `world` | `#hottag`, `.mobbar`, `.fight-boss`, `.bcard`, `#maptip`, `#crosshair`, `#hitmark`, `.dmg`, `.fight-tick` |
 
-### 3. The dock: one element, five states
+### 3. The dock: one element, four states
 
 **The element** replaces `#focus` (`world.html:107`):
-`<section id="dock" class="glass" data-hud="dock" aria-label="Dock" hidden>`. It has four faces: focus, fight, build
+`<section id="dock" class="glass" data-hud="dock" aria-label="Dock" hidden>`. It has three faces: focus, fight
 and line.
 
 **Ownership:**
-- `world-dock.ts` (new) holds the state rule, the line queue, and the fight and build faces.
+- `world-dock.ts` (new) holds the state rule, the line queue and the fight face.
 - `makeBox` (`world-focus.ts:140`) still builds the focus face, with `tapHold`.
 - Deleted: `place()`, the `--pad-h` observer (`world-focus.ts:163-174`) and the phone rules (`world.css:2176-2212`).
 
 **The state rule (pure, tested):**
 
 ```ts
-export type DockState = 'rest' | 'focus' | 'fight' | 'build' | 'line';
+export type DockState = 'rest' | 'focus' | 'fight' | 'line';
 export interface DockIn {
   view: 'explore' | 'inside' | 'action' | 'flying';
   covered: boolean; // plan/23 covered(): a panel, talk, the sheet
-  build: boolean;   // build.on()
   fight: boolean;   // inFight || now - hurtAt < HURT_MS || ready (Q17, N10)
   foot: boolean;    // the fight face is on foot; the bike and the ship keep their pad
   line: boolean;    // a line is up and its pacing allows it
@@ -224,7 +223,6 @@ export interface DockIn {
 }
 export const dockOf = (d: DockIn): DockState =>
   d.covered || d.view === 'action' || d.view === 'flying' ? 'rest'
-  : d.build ? 'build'                 // lockToggle refuses while building (world.ts:1155)
   : d.fight && d.foot ? 'fight'       // never covered: lines wait
   : d.line ? 'line'
   : d.focus ? 'focus' : 'rest';
@@ -236,7 +234,6 @@ export const dockOf = (d: DockIn): DockState =>
 |---|---|---|---|
 | focus | name over "Hold for more" · primary · ⋯ | the primary is a word (Look, Talk, Chop, Leave) | "Look `E`", and ⋯ "More (hold E)" |
 | fight | HP row over slot 1 · slot 2 · Ultimate (a conic `--game-energy` ring to `energy / ENERGY_MAX`) | 3 × 56 px | 44 px, caps: right button, Q, G |
-| build | Place (primary) · Rotate · Done, plus a note row for the piece and the refusal (`world-build.ts:210`). 3 × 56 + 2 × 8 = 184 px | 56 px | 44 px, caps: click, R, B |
 | line | glyph · source ("Chat · Sami", "Mail", "Hint", "3 new") · one ellipsed line · chevron · a timer hairline | the same | the same |
 
 **The focus face's new sources** (`focusOf`, `INTERACTABLES`):
@@ -267,10 +264,10 @@ export const dockOf = (d: DockIn): DockState =>
 
 | Part | Rule |
 |---|---|
-| build face | `build.place()` (today's pad Shoot in build), `build.turn()`, `build.toggle()`; Place's long-press: a radial of `ORDER` plus Take down (N2, N9); `.build-hud` goes, its words are the face's note |
-| self radial (N3) | opened by a tap on your own rider (a new touch-only `self` kind in `world-targets.ts`, hit on the avatar's bounds), F, or D-pad left; on the existing ellipse. Entries: Ready (on foot outside, realm up: the fight face with no hit needed, for ward, rally, leap or a PvP opener), Sheathe (N10), and Build where `canBuild` holds. There is no build-zone focus: the dock rests at the yard and in the meadow. `PINNED_KEY` is deleted (`world-modes.ts:44,115-127`) |
-| line queue | `hintQueue` (`world-modes.ts:77-98`) moves here and gains live chat (`world-chat.ts` `hear`) and mail news (P3). A line shows `LINE_MS` 4000; then the focus or rest holds `LINE_GAP_MS` 3000; arrivals meanwhile collapse into one "n new" line that opens People; a hint ranks above chat or mail; fight and build hold lines (N7); a line unseen at its timeout adds to unread. A tap opens People › Chat, People › Mail on the item, or dismisses a hint. The line is one `<button>` |
-| motion | rise 8 px and fade over `--dur-panel`; faces cross-fade over `--dur-press`; the box never moves; reduced motion swaps at once. `#said` speaks a focus and a line once; fight and build stay silent |
+| build, hidden | Build mode has no HUD entry. The router's B (`world-router.ts:321-324`, `toggleBuild`) and the pad's `build` press (`world-view.ts` `padIn({ press: 'build' })`) are gated by one `BUILD_HUD = false` in `world-build.ts`, with the comment `// ponytail: build hidden (owner, 2026-11-12); set BUILD_HUD to re-enable B, the pad's build press and the Controls rows`. The Controls panel hides the Build, Turn and Take-down rows. `#pad .buildpad`, `[data-build]` and `.build-hud` stay in the code, unreachable. `world-build.ts` and the realm's building are untouched |
+| self radial (N3) | opened by a tap on your own rider (a new touch-only `self` kind in `world-targets.ts`, hit on the avatar's bounds), F, or D-pad left; on the existing ellipse. Entries: Ready (on foot outside, realm up: the fight face with no hit needed, for ward, rally, leap or a PvP opener) and Sheathe (N10). Nothing else. The dock rests at the yard and in the meadow. `PINNED_KEY` is deleted (`world-modes.ts:44,115-127`) |
+| line queue | `hintQueue` (`world-modes.ts:77-98`) moves here and gains live chat (`world-chat.ts` `hear`) and mail news (P3). A line shows `LINE_MS` 4000; then the focus or rest holds `LINE_GAP_MS` 3000; arrivals meanwhile collapse into one "n new" line that opens People; a hint ranks above chat or mail; a fight holds lines; a line unseen at its timeout adds to unread. A tap opens People › Chat, People › Mail on the item, or dismisses a hint. The line is one `<button>` |
+| motion | rise 8 px and fade over `--dur-panel`; faces cross-fade over `--dur-press`; the box never moves; reduced motion swaps at once. `#said` speaks a focus and a line once; the fight face stays silent |
 | one label | `#hottag` only for a fight target (`world-targets.ts:431`); `.bcard`s never draw in explore (`world-cards.ts` `hidden()`); the tagged target's `.mobbar` hides |
 
 ### 4. The Menu: 4 entries through `GLOBALS`
@@ -330,7 +327,7 @@ export const dockOf = (d: DockIn): DockState =>
 - **Wardrobe tab.** Today's body, with the rider preview (`world.ts:1007-1010`). Wood and Iron go in its foot.
 - **Sound tab.** `#sound`, plus the quick row's Sound (`world.ts:2049`). P4's voice row lands here.
 - **Head.** A guest's Sign in.
-- **Build** has left Settings: it is the self radial's.
+- **Build** has no row: it is hidden.
 
 ### 7. The overview, and the deck's end
 
@@ -389,7 +386,6 @@ export const sprints = (g: GaitIn): boolean =>
   - Off foot it is as today: Advance, Jump or climb, Attack, and the speed toggle.
   - On foot: no pad, and no centre dot (`world.css:155-165`).
 - **Gone:**
-  - `#pad .buildpad` and `[data-build]`;
   - `#mapgo` (the big map's pop has Go to it, `world.html:67`);
   - `#rides`;
   - `#menubtn`, the phone menu and `placer` (`world-modes.ts:100-114,162-244`).
@@ -408,10 +404,9 @@ export const sprints = (g: GaitIn): boolean =>
   - "Chop: Oak";
   - "Frost bolt, slot 1 (hold to change)";
   - "Ultimate, 60% charged";
-  - "Place wall (hold for pieces)";
   - "Chat from Sami: …, open People".
 - **Live regions:** `#said` speaks a focus and a line once.
-- **Targets:** at least `--btn`; the phone's fight and build buttons are `--btn-fight`.
+- **Targets:** at least `--btn`; the phone's fight buttons are `--btn-fight`.
 - **Keyboard slot swap:** hold Q (N11).
 - **Reduced motion:** no rise, fade, radial scale (`world.css:2253`) or timer animation.
 - **Reduced transparency:** `.glass` falls back to `--surface-glass-solid` (`theme.css:86`).
@@ -478,7 +473,7 @@ export const sprints = (g: GaitIn): boolean =>
 | `#pad` on foot (Lock, Attack, Jump, Run, Build) | h:104; c:59-118 | removed |
 | `#pad` off foot | h:104 | kept (`dock`); Run becomes the speed toggle |
 | `#pad .skills` | c:120-145 | merged into dock fight slots |
-| `#pad .buildpad`, `[data-build]` | c:1659 | merged into dock build face |
+| `#pad .buildpad`, `[data-build]` | c:1659 | hidden (build hidden; code kept) |
 | `#crosshair`, `#hitmark` | h:105-106 | kept (`world`) |
 | `#focus` | h:107; c:2112-2212 | merged into `#dock` |
 | `#radial` | h:108; c:2217 | kept (`panel`); + slot, piece and self radials |
@@ -490,7 +485,7 @@ export const sprints = (g: GaitIn): boolean =>
 | `.fight-hud .skills` | `world-fight.ts:417` | removed |
 | `.fight-boss`, `.mobbar`, `.dmg`, `.fight-tick` | `world-fight.ts:428,506`; c:1025,1068 | kept (`world`); the tagged target's `.mobbar` hides |
 | `.fight-hurt`, `.fight-downed` | `world-fight.ts` | kept (full-screen effects, `world`) |
-| `.build-hud` | c:1162 | merged into dock build note |
+| `.build-hud` | c:1162 | hidden (build hidden; code kept) |
 | `#welcome` | `world-welcome.ts:47`; c:1949 | kept (`panel`) |
 | `#controls`, `#wardrobe` | c:1193-1335 | merged into `#settings` |
 
@@ -510,13 +505,12 @@ export const sprints = (g: GaitIn): boolean =>
    release under 500 ms; a hold opens the slot radial (N6, N11).
 10. **A slot aims at the engaged target** (the locked mob or the focused PvP rider) before `ultAim` or ahead. A world
     long-press on a target fires slot 1 at it.
-11. **The self radial** (your rider, F, D-pad left) holds Ready/Sheathe and, in a build zone, Build. D-pad left no
-    longer toggles build directly.
-12. **Build is a dock face:** Place, Rotate, Done. The pieces and Take down sit on Place's long-press. The build pad,
-    `.build-hud` and the phone menu's Build row go.
+11. **The self radial** (your rider, F, D-pad left) holds Ready and Sheathe. D-pad left no longer toggles build.
+12. **Build mode is hidden.** B, the pad's build press, the pad's Build, the phone menu's Build row and the Controls rows
+    reach nothing; the build code stays behind one flag.
 13. **The PvP flag alone no longer shows the fight face** (Q17).
 14. **Lines.** Hints, chat and mail show in the dock line for 4 s, with 3 s of focus between lines. The lines between
-    collapse into "n new", and a hint goes first. Never over a fight or build.
+    collapse into "n new", and a hint goes first. Never over a fight.
 15. **Chat lives in People › Chat.** Show and hide are gone.
 16. **The Menu has 4 entries.** People shows for everyone, and reads "World offline" while the realm is down. `?` opens
     Settings › Controls.
@@ -543,7 +537,7 @@ before merge. Gate rows flip in the commit that changes them.
 | 1 | The proof on main: `dev/hud-gate.mjs` (new) records today's counts and overlaps; rows that will change carry `changes: N` (the behaviour changes' numbers). Run it twice on main, then break one placement on purpose to see a row fail | none |
 | 2 | The family: tokens, `.glass`, `.glass-btn`, `data-hud` on every surface (the "untagged element" row turns green) | none |
 | 3 | Speed and jump: `sprints`, the deletions, the speed toggle, `ledgeAhead` | 19, 20 |
-| 4 | The dock: `world-dock.ts`, `world-kit.ts`, the faces, the line pacing, the new focus sources (nodes, PvP riders, pastime, inside), `fireSlot` and the holds, the self radial with its key and pad row, the tag rule; `#toast`, `#calm-hint`, the vitals, `.build-hud` and the build pad go | 3–14, 21 |
+| 4 | The dock: `world-dock.ts`, `world-kit.ts`, the faces, the line pacing, the new focus sources (nodes, PvP riders, pastime, inside), `fireSlot` and the holds, the self radial with its key and pad row, the `BUILD_HUD` flag, the tag rule; `#toast`, `#calm-hint`, the vitals, `.build-hud` and the build pad go | 3–14, 21 |
 | 5 | The Menu and the panels: `#menu` with its dots, 4 `GLOBALS`, People, Settings; `#menubtn` and `#helpbtn` go | 15–17, 24 |
 | 6 | The pad on foot, `#mapgo`, `#rides`, the map corner | 1, 18, 22 |
 | 7 | The overview: `#top` and `#bottom` retired; `#overview` with its selection view and Close-to-explore; `#cluster` | 2, 23 |
@@ -560,6 +554,8 @@ before merge. Gate rows flip in the commit that changes them.
 | input | the phone Menu (`:1997-2013`) | `#menu` |
 | input | pad Lock (`:279,1024`) | desktop T on foot |
 | input | the box rows (`:1813,1830,1886`) | `#dock .primary`, `.more` |
+| input | `button-B` (`:811-822`, B starts build) | removed (build hidden); the overview row's "build stayed off" check (`:730-731`) stays |
+| input | new `build-hidden` | on foot in the meadow ring: B, a focused button's B, the pad's D-pad left and the self radial start no build (`__world.realm.building()` stays false), and no build entry is visible |
 | world | `#top > *` (`world-gate.mjs:502`); `#mode` (`:533,558`) | `[data-hud]`; Tab |
 | onfoot | `#mode` (`onfoot-gate.mjs:271-275,342-343,483`); `#helpbtn` (`:365-374`) | Tab; `?` |
 | aim | `#mode` (`aim-gate.mjs:99`); `#hottag` on a building (`:247-249`); `#bottom`, `#rides` (`:20`) | Tab; `#dock .name`; `#dock` |
@@ -582,7 +578,7 @@ Each new test has a mutation and a positive control.
 
 | Test | Covers |
 |---|---|
-| `world-dock.test.ts` (new) | `dockOf`: rest when covered or in the overview, then build > fight > line > focus; fight on foot only; Ready counts as a fight. Pacing: 4 s per line; the 3 s gap; arrivals in the gap collapse to "n new"; a hint before chat; fight and build hold lines; a timeout adds to unread |
+| `world-dock.test.ts` (new) | `dockOf`: rest when covered or in the overview, then fight > line > focus; fight on foot only; Ready counts as a fight. Pacing: 4 s per line; the 3 s gap; arrivals in the gap collapse to "n new"; a hint before chat; a fight holds lines; a timeout adds to unread |
 | `world-kit.test.ts` (new) | `poolOf` per class; defaults; `assign` swaps; storage per class, junk ignored, a throwing store survives; a hold's release assigns and never fires; `fireSlot`'s aim order: given, engaged, then `ultAim`/ahead |
 | `world-ride-step.test.ts` (new) | `sprints` on foot (inside, `toEnd` around `ARRIVE_WALK`, Shift ignored) and on a ride (`slow`); `ledgeAhead`'s rise bounds |
 | `world-actions.test.ts` | the 4 entries; the visitor's 3 and People with the realm down; node Gather labels; rider Attack only in PvP |
@@ -600,7 +596,7 @@ Each new test has a mutation and a positive control.
 
 **States:**
 - rest; near a building; near a tree; inside by a stair; inside a hall with a resident;
-- the self radial; build mode;
+- the self radial (Ready and Sheathe only);
 - a fight (a stub mob's hit, `HURT_MS`); Ready with no mob; a slot's radial;
 - lines: one at rest, one over a focus, two in the gap, one during a fight;
 - the Menu, People (realm up and down), Settings;
@@ -611,12 +607,13 @@ Each new test has a mutation and a positive control.
 |---|---|
 | visible `[data-hud="rest"]` | **2** in every explore state (`#worldmap`, `#menu`); 1 in the overview (no map) |
 | at rest, every other role | 0 visible (a visitor's first visit: 1 `panel`, `#welcome`) |
-| near, inside, build, line | `dock` 1, `panel` 0 |
+| near, inside, line | `dock` 1, `panel` 0 |
 | fight | `dock` 1; `world` includes `#hottag` and the target's `.mobbar` is hidden; `panel` 0 |
 | untagged | fails on any visible `position: fixed` or `absolute` element over `#c` with no `data-hud` |
 | overlaps between visible `rest`, `dock` and `panel` boxes | none, except a panel over the dock and the radial over everything |
 | on screen | every box on screen; the dock's foot clears the safe area |
-| sizes | buttons in `[data-hud]` ≥ 44×44; the phone's fight and build buttons 56×56; the build face ≤ 184 px wide at 320 |
+| sizes | buttons in `[data-hud]` ≥ 44×44; the phone's fight buttons 56×56 |
+| build hidden | in the meadow ring and the yard lot: no Build in the self radial; B, D-pad left's old build press and Settings show no build entry; `body[data-building]` never set; `.build-hud` and `#pad .buildpad` never visible |
 | radii | containers 16, buttons 12 |
 | one label | the focused target's name appears in at most one of `#dock .name`, `#hottag`, a visible `.bcard` |
 | overview closed | the view is explore; `#overview`, `#cluster` hidden |
@@ -632,7 +629,7 @@ Each new test has a mutation and a positive control.
 | 4 | Tap a tree, then tap again | "Oak · Chop"; it is gathered |
 | 5 | A wolf hunts you. Tap it twice; tap a slot; long-press a slot and slide; long-press the wolf; reload; change class | HP, 2 slots and the ultimate. You attack. The slot casts at the wolf. They swap and nothing fires. Slot 1 fires at the wolf. The slots are kept, and each class has its own pair |
 | 6 | Tap your own rider: Ready; cast a ward; Sheathe | The fight face with no mob; it casts; the face leaves |
-| 7 | In the meadow ring, tap your rider: Build. Place; Rotate; long-press Place: floor, then Take down; Done | Build shows only there. The 3-button face fits at 320. A refusal shows in its note |
+| 7 | In the meadow ring and the yard lot: tap your rider; press nothing else | The self radial holds Ready and Sheathe only; no build entry anywhere |
 | 8 | Chat: one line, then three quickly, then one in a fight; a hint pending | About 4 s, then 3 s of focus, then "3 new". The hint shows first. In the fight, the line waits |
 | 9 | PvP on with a second rider; tap them | Attack is the primary; it hits. With PvP off, there is no Attack |
 | 10 | Menu: People, then send a line. Stop the realm | The Menu shows its status dot, and People reads "World offline" |
@@ -647,7 +644,7 @@ Each new test has a mutation and a positive control.
 | 2 | Enter, then Esc | People › Chat with the input focused; the keys come back |
 | 3 | Tab; `/`; Fly there; pick a building; back; Cockpit ›; Cluster ›; Esc twice | The panel, its selection view, the Cockpit, the cluster; back to explore |
 | 4 | Fight: right button, a quick Q, G; hold Q; hold the slot 1 button | Slots 1 and 2 at the target, and the ultimate. The slot 2 radial; the slot 1 radial |
-| 5 | F: Ready, then Build; B, R, X, Q | The self radial; the build face with its caps |
+| 5 | F: Ready, then Sheathe; in the meadow ring press B | The self radial; B does nothing |
 | 6 | Gamepad: tap and hold X and LB; D-pad left; T on foot | Fire versus radial; the self radial; the lock |
 | 7 | `?`; keyboard only with VoiceOver; reduced motion and transparency | Settings › Controls; named items, focus back on Menu, a line spoken once; no rise or fade; solid panels |
 
