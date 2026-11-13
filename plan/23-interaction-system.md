@@ -570,3 +570,51 @@ Changes 8, 10 and 12 fix code that this PR deletes. The owner folded them into t
 - A phone box inside buildings.
 - The shooter zone.
 - Plan/22's features beyond their registry slots.
+
+## Build notes (2026-11-12, after ukubi-game #248)
+
+Shipped as ukubi-game #248 (`132ffc0`). The build followed the code where this plan was wrong or silent:
+
+- **Counts.** Before → after:
+  - window key listeners: 11 → 2;
+  - canvas listeners: 22 → 10 (the plan said 23);
+  - outside-press listeners: 4 → 1;
+  - `stopImmediatePropagation`: 10 → 0;
+  - field-test copies: 8 → 1 (a ninth, in `world-control.ts`, also moved).
+- **Names.** The plan's `Target` type is named `InputAt`; `Target` already exists in `town-types.ts`.
+- **Contexts.** `key(k, e)` still gets the DOM event, because today's handlers read it.
+- **Overview letters.**
+  - R and X are write actions that are always off. In the overview they take the key and run nothing; C opens the Cockpit.
+  - The overview letters skip the bound fight keys, so the deck's Q and P cells no longer run from the keyboard there.
+- **Esc and fields.**
+  - The chat input stops its own Esc, so "one Esc closes the big map and blurs the field" holds only for the find box.
+  - Inside a building the door opens the drawer, so Esc closes the drawer before the Cockpit, then leaves.
+- **Combat and rides.**
+  - The fight context is active wherever today's checks pass, so Q and P still act inside buildings.
+  - 1, 2 and 3 stay in `view.key`.
+- **Release and blur.**
+  - `visibilitychange` still releases only the view.
+  - A rebind still calls `view.release()`.
+  - handBack now runs on the router's bubble keydown, so an Esc that a field or dialog stops no longer hands the pad's look back.
+- **Pointer pipeline.**
+  - Gestures go to named host stages, not to the contexts' `pointer()`.
+  - The long press and the refocus-after-click stay in the view.
+  - The rider-menu and phone-menu closers moved to the one capture pointerdown.
+- **E and carrying.**
+  - With no hover, E's fallback still tries the spawn stone and the guild under the pointer.
+  - The throw threshold moved from 350 ms to 400 ms (`ACT_HOLD_MS`).
+  - Throwing can't happen in the live realm, because nothing puts an item in the hands. The gate stubs a carried item.
+- **Desktop box (the owner's fix).** A focus shows only the box. `deckOpen` does not gain `|| focus`.
+- **Radial placement.** On the phone the focus radial is drawn above the box, and on touch only the item under the thumb (within 16 px) is picked. H and Start open the Menu at the screen centre; `#deck` opens it under the button.
+- **Mobs.**
+  - A tapped mob's focus clears only when `engageAct` would refuse, not by distance.
+  - The mob's Inspect act was dropped (no handler).
+  - A tap on a mob after T engages it.
+- **Gamepad.** The pad's Start passes no opener. H takes only `#deck` or ⋯ as the opener.
+- **Pre-existing, not fixed.**
+  - The middle click's target is read after the hover blanks it, so it locks the mob ahead (`world.ts`, `middlePress`).
+  - At 320 px the chat's Hide chip sits under the ride-swap button (P2).
+- **Gates already failing on main.**
+  - world-gate: Rimfall opacity, the Underside toggle, the phone underside.
+  - onfoot-gate and aim-gate: the phone tier's `#mode` is hidden.
+  - public-gate: the visitor page asks for `/api/land`.
