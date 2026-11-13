@@ -261,6 +261,8 @@ needs:
   app:netbird: [postgres:netbirddb]
   app:netbird-dashboard: [oidc]
   app:hq: [oidc, postgres:hqdb]
+  app:ukubi-game: [oidc, infisical]
+  app:ukubi-game-public: [oidc]
   app:wird: [oidc, postgres:wirddb]
   app:wird-adminweb: ["declared:app:platform-authentik"] # wird-admin-forwardauth, named in wird's own values
   app:silverbullet: [oidc]
