@@ -43,3 +43,25 @@ the owner's word. Each section below is the starting point for that short plan, 
   - a mutation that drops the call and turns the test red;
   - the existing fall tests unchanged.
 - **Behaviour change:** yes, a cheating or desynced client is snapped back sooner. This is listed in the PR.
+
+## Q4. Cache and compress the static files; shorten the loader fade
+
+- **What:** the load profile (`../01-baseline/load-profile.md`) found that `dist/*`, the CSS, the fonts and
+  `world.html` are served by `http.FileServerFS` over the embedded files with no ETag, no Last-Modified and no
+  Cache-Control.
+  - Every reload downloads about 3.0 MB again: `world.js` is 2.17 MB and the wasm 569 KB.
+  - The 89 kit GLBs are revalidated on every reload.
+  - Nothing is compressed: `world.js` is 511 KB gzipped, the wasm 234 KB.
+  - A fixed 450 ms fade (`FADE_MS`) runs before `ready`.
+- **Shape:**
+  - Content-hashed (or build-token) URLs with `Cache-Control: immutable`, or at least an ETag from the embedded
+    file's hash.
+  - gzip or brotli, precompressed at build time so the dist stays byte-identical.
+  - The fade overlaps the first frames instead of delaying `ready`.
+  - First, check what the production ingress already compresses.
+- **Expected gain:** 0.5–2.5 s on every warm reload over a real link, about 2 MB less on a cold load, and 450 ms
+  everywhere. This is likely most of the owner's "few seconds".
+- **Proof:**
+  - response headers asserted in a gate test (`internal/gate`);
+  - a reload in the browser shows 304 or a cache hit for every static file;
+  - `ready` measured before and after.
