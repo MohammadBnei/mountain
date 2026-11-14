@@ -80,3 +80,21 @@ What this binds `ui-core.md` to:
   router's AST guard checks keys today.
 - **Left open:** how the strategy mode looks (flat or schematic, or the same 3D). That waits for the scene research
   (above).
+
+### Open plan/24 HUD points, handed over by session ukubi-73 (2026-11-14)
+The HUD shipped in ukubi-game #252 (`783426e`). These points are open:
+1. **Phone Settings.** It opens with `showModal()` (`world-settings.ts:52`), so while the panel is open the Menu's ×
+   at the bottom is visible but does nothing. The panel's own × and Esc still close it.
+2. **Owner page load.** The page loads in the overview, where the Menu reads "Close". So the first Menu press closes
+   the overview instead of opening the radial.
+3. **Overview pick.** A pick shows in the overview panel's selection view. The details drawer opens only through
+   `#portrait .details` (changed in `3c98e1d`, because on phones the drawer, opened by itself, covered the Menu).
+
+Points 2 and 3 sit in the overview, which plan/25 supersedes (plan/24 rows 8–9), so the new strategy mode settles them.
+Point 1 is an input for ui-core's rule that a modal panel and the Menu's close stay consistent.
+
+**Merge order agreed with ukubi-73:**
+- #253 merges first.
+- plan/22 P3–P5 (mail, voice, party; `internal/realm`, `world-realm*.ts`, `world-people-panel.ts`, `world-dock.ts`,
+  `world-voice.ts`) rebases onto it.
+- The ui-core migration comes after plan/22's UI lands.
