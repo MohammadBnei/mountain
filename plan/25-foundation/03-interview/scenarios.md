@@ -121,4 +121,4 @@ as ghost rooms, and strategy shows a before and after. What you correct while wa
 - **mountain #99** (draft, ukubi-9f, branch `door/f-slice1`) adds `graph.Kinds` in `internal/graph`: a map from each
   of the 13 kinds to a one-line meaning. `Valid`'s id rule is built from it. The PR also adds two new kinds, `pg:`
   (a Patroni member) and `endpoint:` (a VIP or a redirect Service). This is the registry that maps a kind to a room.
-- Check #99's merge state before `world-model.md` relies on it.
+- #99 merged to main as `0e212bf` (2026-11-14). No ukubi-game re-pin needed.
