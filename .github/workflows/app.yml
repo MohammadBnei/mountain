@@ -25,7 +25,7 @@ on:
       - '!plan/**'
 
 jobs:
-  # GitHub-hosted (15-architecture.md): PRs are tested even while the build runner is down. Only build-push
+  # GitHub-hosted (15-architecture.md): PRs are tested even while the build runner is down. Only the image job
   # needs the runner (buildah and the LAN registry).
   test:
     runs-on: ubuntu-latest
