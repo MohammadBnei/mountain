@@ -32,3 +32,35 @@
 - **Phone:** the full mode, touch-first.
 - **More context:** a sibling session (the "scene interview") is working on this subject in parallel. Its findings
   feed this round before `04-architecture/ui-core.md`.
+
+### Input from the scene research (session ukubi-9f, 2026-11-14)
+That session is in a pure research phase. Its positions are owner-confirmed research, not a frozen spec, and its
+architecture v2 was not adopted. The log and the files are in `~/Code/ukubi/design-2026-11/` (`doubt-decisions.md`
+holds the Q numbers below).
+
+What its research positions say about the strategy layer:
+- **The game is the real work:** improvements, feature development and alert handling (Q27). The owner authors or
+  triggers most of it (Q28).
+- **Reward:** the realm grows from real deeds, with no points (Q29). A feature becomes a house and roads, an
+  improvement mends a stratum, and a resolved alert becomes a saga.
+- **The unit is an Operation over agent sessions** (Q34–37).
+  - It is done when the graph verifies that reality changed.
+  - Questions wait with nudges; nothing approves itself.
+  - Risk is shown as zones that mirror the real enforcement.
+- **A "War table"** is the live operations view (Q48). The 3D Hall loaded too slowly on the phone (25–40 s), so a flat
+  view was recommended. The owner has not decided that.
+- **Projection-based and schematic** (Q59): "if we do this that way, here is the possible result". The visual grammar
+  takes after lot-map: pulses, fading routes and clock hands (Q68).
+- **An inbox for every agent's decision cards** (Q64–66).
+- **Current state is never "fine" by default** (Q73–82). It shows live data, else the last observation and its age,
+  else "unknown".
+
+Still open there:
+- the projection interface;
+- whether the War table is flat or 3D;
+- the quiet-day loop (prototypes A to C, Q55);
+- where combat fits.
+
+**What this means for ui-core.** The strategy mode should be the screen for operations, characters and projections.
+It may well be flat or schematic over the shared 3D scene, not a camera mode. The ui-core round must keep both open,
+and it must not fix a shape before the scene research does.
