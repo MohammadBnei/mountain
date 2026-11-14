@@ -22,3 +22,13 @@
   - what carries over from each reference;
   - how you enter and leave the mode;
   - phone against desktop.
+
+### Round 4, first answers (2026-11-14)
+- **What it is for:** running the cluster, growing the town, and people and relations. Military and the realm are left
+  out for now.
+- **Feel:** "CK first, but Civ lenses just behind". Characters and relations lead; the Civ map with its lenses comes
+  second.
+- **Who:** the owner and admins only. Public visitors stay explore-only (ukubi-game #242).
+- **Phone:** the full mode, touch-first.
+- **More context:** a sibling session (the "scene interview") is working on this subject in parallel. Its findings
+  feed this round before `04-architecture/ui-core.md`.
