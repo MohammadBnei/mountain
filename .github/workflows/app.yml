@@ -1,18 +1,11 @@
-# Test, build the atlas image on the build-runner LXC, push it to the in-cluster
-# Zot registry, then pin the tag in helm/values.yaml so ArgoCD rolls it out.
-# Copied from hq's .github/workflows/app.yml; its gotchas, paid for once:
-#   - every buildah call goes through sudo (rootless splits the auth file)
-#   - --tls-verify=false on login AND push (plain HTTP; LE can't issue for .lan)
-#   - the deploy job needs always() && result == 'success'
-#   - --layers, or buildah caches nothing; --pull=newer, or the Go base image
-#     stays at the patch the box first pulled
-#   - the bump pushes with GITHUB_TOKEN, which never triggers another run
-#     (and helm/** is not a trigger path, so the bump cannot loop either)
+# Test, then call the shared image.yml (ukubi-ci): it builds the atlas image on the build-runner LXC, pushes it to
+# the in-cluster Zot registry, and pins <sha>@<digest> in helm/values.yaml so ArgoCD rolls it out. The bump
+# (GITHUB_TOKEN) never triggers another run, and helm/** is not a trigger path, so it cannot loop either.
 name: app
 
 on:
   workflow_dispatch:
-  # PRs run the test job only: build-push and deploy are guarded to push/workflow_dispatch.
+  # PRs run the test job only: the image job is guarded to push/workflow_dispatch.
   pull_request:
     branches: [main]
   push:
@@ -30,20 +23,6 @@ on:
       - '.github/workflows/app.yml'
       - '!helm/**'
       - '!plan/**'
-
-env:
-  REGISTRY: registry.bnei.lan:5000
-  # Not a secret, and an empty secret cost agent-fleet a release once.
-  REGISTRY_USER: ci
-  IMAGE: mountain
-  # The registry password comes from the shared platform-commons project over
-  # GitHub OIDC (infra-bootstrap ADR-0049). The identity binds a repository
-  # allowlist (MohammadBnei/mountain is on it) plus event_name
-  # push/workflow_dispatch only.
-  INFISICAL_DOMAIN: https://infisical.bnei.dev
-  INFISICAL_PROJECT_SLUG: platform-commons-76pb
-  INFISICAL_ENV: dev
-  INFISICAL_IDENTITY_ID: 19807471-d73a-48d4-9e58-1dc34255ef77
 
 jobs:
   # GitHub-hosted (15-architecture.md): PRs are tested even while the build runner is down. Only build-push
@@ -130,118 +109,17 @@ jobs:
       - name: DB tests
         run: go test -race -run '^TestDB' -v ./cmd/atlas/
 
-  build-push:
+  # Build, push and deploy live in the shared ukubi-ci workflow (digest-pinned tag, stale-run guard, deploy job).
+  # Its concurrency groups replace the old app-build/app-deploy ones.
+  image:
     needs: [test, db-test]
     # Registry creds are readable only on push/workflow_dispatch (OIDC claim).
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, ukubi-build]
-    concurrency:
-      group: app-build
-      cancel-in-progress: true
-    permissions:
-      contents: read
-      id-token: write # the Infisical OIDC login
-    outputs:
-      tag: ${{ steps.tag.outputs.value }}
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Compute the image tag
-        id: tag
-        run: echo "value=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
-
-      # Not baked into the runner image; a no-op after the first run.
-      - name: Ensure buildah
-        run: command -v buildah || (sudo apt-get update -qq && sudo apt-get install -y -qq buildah)
-
-      # Only REGISTRY_PASSWORD, not the whole environment.
-      - name: Read the registry password from Infisical
-        uses: Infisical/secrets-action@v1.0.12
-        with:
-          method: oidc
-          identity-id: ${{ env.INFISICAL_IDENTITY_ID }}
-          oidc-audience: infisical.bnei.dev
-          domain: ${{ env.INFISICAL_DOMAIN }}
-          project-slug: ${{ env.INFISICAL_PROJECT_SLUG }}
-          env-slug: ${{ env.INFISICAL_ENV }}
-          secret-path: /
-          secret-name: REGISTRY_PASSWORD
-          export-type: env
-
-      # GitHub masks only secrets.*; an unmasked Infisical value leaked a token
-      # in this estate once.
-      - name: Mask the fetched password
-        run: echo "::add-mask::$REGISTRY_PASSWORD"
-
-      - name: Registry login
-        run: |
-          set -euo pipefail
-          [ -n "${REGISTRY_PASSWORD:-}" ] || { echo "::error::Infisical returned no REGISTRY_PASSWORD"; exit 1; }
-          printf '%s' "$REGISTRY_PASSWORD" | sudo buildah login \
-            --tls-verify=false \
-            --username "$REGISTRY_USER" \
-            --password-stdin "$REGISTRY"
-
-      - name: Build and push
-        env:
-          TAG: ${{ steps.tag.outputs.value }}
-        run: |
-          set -euo pipefail
-          sudo buildah bud \
-            --isolation chroot \
-            --format docker \
-            --layers \
-            --pull=newer \
-            -f Dockerfile \
-            -t "$REGISTRY/$IMAGE:$TAG" \
-            .
-          sudo buildah push --tls-verify=false "$REGISTRY/$IMAGE:$TAG"
-
-      # Its own step, so a failed push does not leave the tag in the shared store.
-      - name: Remove the local image
-        if: always()
-        env:
-          TAG: ${{ steps.tag.outputs.value }}
-        run: sudo buildah rmi "$REGISTRY/$IMAGE:$TAG" || true
-
-  deploy:
-    needs: build-push
-    # A dispatch on another branch builds that branch; only main deploys.
-    if: always() && needs.build-push.result == 'success' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    concurrency:
-      group: app-deploy
-      cancel-in-progress: false
+    uses: MohammadBnei/ukubi-ci/.github/workflows/image.yml@03a616159bbadc9503ed4b218659e3705c55d858 # v0.3.0
+    with:
+      runs-on: '["self-hosted","ukubi-build"]'
+      image: mountain
+    # image.yml's build job reads the registry password over OIDC, its deploy job pushes the bump.
     permissions:
       contents: write
-    env:
-      TAG: ${{ needs.build-push.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: main
-
-      - name: Bump the pinned image tag
-        run: |
-          set -euo pipefail
-          [ -n "$TAG" ] || { echo "::error::empty image tag"; exit 1; }
-          sed -i -E "s/^(  tag: \")[^\"]+(\")/\1${TAG}\2/" helm/values.yaml
-          # A no-op sed is the real failure mode: it commits nothing and the
-          # deploy looks green while the cluster keeps the old image.
-          grep -q "tag: \"${TAG}\"" helm/values.yaml \
-            || { echo "::error::tag bump did not land in helm/values.yaml"; exit 1; }
-
-      - name: Commit and push
-        run: |
-          set -euo pipefail
-          git config user.name "mountain-ci"
-          git config user.email "noreply@bnei.dev"
-          git add helm/values.yaml
-          git diff --cached --quiet && exit 0
-          git commit -m "chore(deploy): bump mountain image to ${TAG}"
-          # main also takes local pushes; retry if it moves under us.
-          for i in 1 2 3; do
-            git pull --rebase origin main && git push origin HEAD:main && exit 0
-            sleep 5
-          done
-          echo "::error::could not push the tag bump"; exit 1
+      id-token: write

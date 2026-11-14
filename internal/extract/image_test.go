@@ -25,6 +25,7 @@ func TestImageAttr(t *testing.T) {
 	write("wird", "helm/values-notag.yaml", "image:\n  repository: other\nresources: {}\n")
 	write("wird", "helm/tag.txt", "image:\n  tag: from-a-text-file\n")
 	write("wird", "helm/Chart.yaml", "name: wird\n")
+	write("wird", "helm/values-digest.yaml", "image:\n  tag: \"abc123def456@sha256:0000000000000000000000000000000000000000000000000000000000000000\"\n")
 	write("dev", "helm/values.yaml", "image:\n  tag: abc\n")
 
 	repos := Repos{
@@ -43,6 +44,7 @@ func TestImageAttr(t *testing.T) {
 	git("app:layered", "wird", "main", "helm/values.yaml,helm/values-prod.yml")
 	git("app:reversed", "wird", "main", "helm/values-prod.yml,helm/values.yaml")
 	git("app:later-unset", "wird", "main", "helm/values.yaml,helm/values-notag.yaml")
+	git("app:digest", "wird", "main", "helm/values-digest.yaml")
 	git("app:notag", "wird", "main", "helm/values-notag.yaml")
 	git("app:missing-file", "wird", "main", "helm/nope.yaml")
 	git("app:chart-dir", "wird", "main", "helm")
@@ -56,7 +58,7 @@ func TestImageAttr(t *testing.T) {
 
 	image(repos, &g)
 
-	want := map[string]string{"app:layered": "0.20.0", "app:reversed": "3f2a9c1", "app:later-unset": "3f2a9c1", "app:two-sources": "0.20.0"}
+	want := map[string]string{"app:layered": "0.20.0", "app:reversed": "3f2a9c1", "app:later-unset": "3f2a9c1", "app:two-sources": "0.20.0", "app:digest": "abc123def456"}
 	for _, n := range g.Nodes {
 		got, ok := n.Attrs["image"]
 		if w, should := want[n.ID]; should && got != w {
