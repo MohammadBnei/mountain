@@ -271,12 +271,17 @@ func (d *door) askMetrics(ctx context.Context, hc *http.Client, src, base string
 			unknown = append(unknown, Unknown{About: a.about, What: a.what, Reason: "no series in the last " + lookback, Cite: cite})
 			continue
 		}
+		n := len(res[i].series)
 		if a.sum {
 			res[i].series = []promSeries{sumSeries(res[i].series)}
 		}
 		for _, s := range res[i].series {
 			age := t.Sub(s.At).Seconds()
-			what := map[string]any{"metric": map[string]any{"name": metricName(a.selector), "of": a.what, "value": s.V, "labels": s.L}}
+			m := map[string]any{"name": metricName(a.selector), "of": a.what, "value": s.V, "labels": s.L}
+			if a.sum {
+				m["sum_of_series"] = n
+			}
+			what := map[string]any{"metric": m}
 			if age > limit.Seconds() {
 				unknown = append(unknown, Unknown{About: a.about, What: a.what, Cite: cite,
 					Reason: fmt.Sprintf("last sample %.0fs old, past %s's freshness limit %s", age, src, limit),
@@ -342,7 +347,8 @@ func promRange(ctx context.Context, hc *http.Client, base, q string) ([]promSeri
 	return out, nil
 }
 
-// sumSeries is the sum of the series' last values, as old as the oldest of them, labelled with what they share.
+// sumSeries is the sum of the series' last values, as old as the oldest of them, labelled with what they share
+// (the fact says how many it summed).
 func sumSeries(ss []promSeries) promSeries {
 	out := promSeries{L: map[string]string{}, At: ss[0].At}
 	maps.Copy(out.L, ss[0].L)
@@ -357,7 +363,6 @@ func sumSeries(ss []promSeries) promSeries {
 			}
 		}
 	}
-	out.L["series"] = strconv.Itoa(len(ss))
 	return out
 }
 

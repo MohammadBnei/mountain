@@ -166,7 +166,7 @@ func TestStatePostgres(t *testing.T) {
 			conns = &ans.Facts[i]
 		}
 	}
-	if conns == nil || conns.What["metric"].(map[string]any)["value"] != 66.0 || conns.AgeS != 6 {
+	if conns == nil || conns.What["metric"].(map[string]any)["value"] != 66.0 || conns.What["metric"].(map[string]any)["sum_of_series"] != 2 || conns.AgeS != 6 {
 		t.Errorf("connections: the sum of the databases' backends, as old as the oldest: %+v", conns)
 	}
 	for _, f := range ans.Facts {
