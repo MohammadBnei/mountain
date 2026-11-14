@@ -136,3 +136,48 @@ func serveFromProcess() (Config, error) { return loadConfig(os.Args[1:], os.Gete
 func projectFromProcess() (dir, dsn string, drop bool, err error) {
 	return parseProject(os.Args[2:], os.Getenv, os.Stderr)
 }
+
+// doorOpts are `atlas resolve` and `atlas state`'s flags (state.go): where the three sources are, and the budget.
+// The defaults are the in-cluster addresses (sources.yaml reach.cluster); from the laptop, point them at ssh
+// port-forwards through k9s (main.go's doc comment).
+type doorOpts struct {
+	Prom, Pigsty string
+	Patroni      []string
+	PerSource    time.Duration
+	Total        time.Duration
+}
+
+// doorFlags is the door commands' FlagSet, writing into o.
+func doorFlags(name string, o *doorOpts) *flag.FlagSet {
+	f := flag.NewFlagSet(name, flag.ContinueOnError)
+	f.StringVar(&o.Prom, "prom-url", "http://platform-prometheus-kube-p-prometheus.monitoring:9090", "the cluster Prometheus (prom-cluster) base URL")
+	f.StringVar(&o.Pigsty, "pigsty-url", "http://pigsty.bnei.lan/vmetrics", "Pigsty VictoriaMetrics (pigsty-vmetrics) base URL")
+	f.Func("patroni-url", "a Patroni REST base URL (patroni-rest); repeat for each member (default http://192.168.1.205:8008 and http://192.168.1.207:8008)", func(s string) error {
+		o.Patroni = append(o.Patroni, strings.TrimSuffix(s, "/"))
+		return nil
+	})
+	f.DurationVar(&o.PerSource, "source-budget", 1500*time.Millisecond, "how long one source may take")
+	f.DurationVar(&o.Total, "budget", 3*time.Second, "how long the whole answer may take")
+	return f
+}
+
+// parseDoor is a door command's flags and its one argument, the name asked. Flags come before the name.
+func parseDoor(name string, args []string, out io.Writer) (doorOpts, string, error) {
+	var o doorOpts
+	f := doorFlags(name, &o)
+	f.SetOutput(out)
+	if err := f.Parse(args); err != nil {
+		return o, "", err
+	}
+	if len(o.Patroni) == 0 {
+		o.Patroni = []string{"http://192.168.1.205:8008", "http://192.168.1.207:8008"}
+	}
+	o.Prom, o.Pigsty = strings.TrimSuffix(o.Prom, "/"), strings.TrimSuffix(o.Pigsty, "/")
+	if f.NArg() != 1 {
+		return o, "", fmt.Errorf("%s: one name is required (atlas %s [flags] <id|alias>)", name, name)
+	}
+	if o.PerSource <= 0 || o.Total <= 0 {
+		return o, "", fmt.Errorf("%s: the budgets must be positive", name)
+	}
+	return o, f.Arg(0), nil
+}
