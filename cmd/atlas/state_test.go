@@ -576,3 +576,171 @@ func TestPromRangeRefuses(t *testing.T) {
 		t.Error("an answer past maxAnswer decoded")
 	}
 }
+
+// TestStateHungPatroni: a Patroni member that accepts and never answers costs the per-source budget, not more: the
+// answer comes back inside the total budget, the members' roles unknown and the source failing (partial). With a
+// healthy member beside it the hung one is only a down member: its answer is the other's.
+func TestStateHungPatroni(t *testing.T) {
+	d := testDoor(t)
+	hung := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer hung.Close()
+	pig := fakeMetrics(t, pgSeries(time.Second), false)
+	o := opts(deadURL(t), pig.URL, hung.URL)
+	start := time.Now()
+	ans, err := d.state(context.Background(), o, http.DefaultClient, "pg-proxmox", time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(start); took > o.PerSource+time.Second {
+		t.Errorf("took %s, the budget is %s per source", took, o.PerSource)
+	}
+	if !ans.Partial || status(ans, srcPatroni) != "failing" {
+		t.Errorf("a hung member alone: partial %v, sources %+v", ans.Partial, ans.Sources)
+	}
+	if u := findUnknown(ans.Unknown, "db:pg-proxmox", "leader"); u == nil || !strings.Contains(u.Reason, "patroni-rest failing") {
+		t.Errorf("leader: %+v", u)
+	}
+	for _, s := range ans.Sources {
+		if s.ID == srcPatroni && s.Ms < o.PerSource.Milliseconds()-100 {
+			t.Errorf("patroni-rest gave up after %d ms, before its budget", s.Ms)
+		}
+	}
+	o.Patroni = []string{hung.URL, fakePatroni(t).URL}
+	start = time.Now()
+	ans, _ = d.state(context.Background(), o, http.DefaultClient, "pg-proxmox", time.Now)
+	if took := time.Since(start); took > o.PerSource+time.Second {
+		t.Errorf("with a healthy member: took %s", took)
+	}
+	if find(ans.Facts, "db:pg-proxmox", "state") == nil || status(ans, srcPatroni) != "ok" {
+		t.Errorf("the healthy member's answer was lost: %+v", ans.Sources)
+	}
+}
+
+// TestStateFutureInSum: a sum with a series dated in the future is unknown (counts kept), never a live undercount.
+func TestStateFutureInSum(t *testing.T) {
+	d := testDoor(t)
+	m1 := []string{"cls", "pg-proxmox", "ins", "pg-proxmox-1", "job", "pgsql"}
+	series := func(ss ...fakeSeries) StateAnswer {
+		pig := fakeMetrics(t, ss, false)
+		ans, err := d.state(context.Background(), opts(deadURL(t), pig.URL, fakePatroni(t).URL), http.DefaultClient, "pg-proxmox-1", fixedNow)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ans
+	}
+	sum := func(ans StateAnswer) map[string]any {
+		for _, f := range ans.Facts {
+			if m, _ := f.What["metric"].(map[string]any); m != nil && m["of"] == "connections" {
+				return m
+			}
+		}
+		return nil
+	}
+	ans := series(ser("pg_db_numbackends", "40", 4*time.Second, append([]string{"datname", "a"}, m1...)...),
+		ser("pg_db_numbackends", "26", -time.Hour, append([]string{"datname", "b"}, m1...)...))
+	m := sum(ans)
+	if m != nil {
+		t.Fatalf("a sum short of a future series is a live fact: %+v", m)
+	}
+	if u := findUnknown(ans.Unknown, "pg:pg-proxmox-1", "connections"); u == nil || !strings.Contains(u.Reason, "1 of 2 series dated in the future") {
+		t.Fatalf("one of two future: %+v", u)
+	}
+	ans = series(ser("pg_db_numbackends", "40", -time.Hour, append([]string{"datname", "a"}, m1...)...),
+		ser("pg_db_numbackends", "26", -time.Hour, append([]string{"datname", "b"}, m1...)...))
+	if sum(ans) != nil {
+		t.Error("an all-future sum is a fact")
+	}
+	if u := findUnknown(ans.Unknown, "pg:pg-proxmox-1", "connections"); u == nil || !strings.Contains(u.Reason, "2 of 2 series dated in the future") {
+		t.Errorf("all future: %+v", u)
+	}
+}
+
+// TestStateTwoClustersOnAVM: a VM hosting members of two Patroni clusters reads each member from its own cluster's
+// answer, never the other's.
+func TestStateTwoClustersOnAVM(t *testing.T) {
+	d := testDoor(t)
+	tbl := `things:
+  vm:pg01: {aliases: []}
+  db:pg-proxmox:
+    aliases:
+      - {source: patroni-rest, field: scope, name: pg-proxmox, status: proven, key: name, at: 2026-11-14}
+  db:redis-main:
+    aliases:
+      - {source: patroni-rest, field: scope, name: pg-other, status: proven, key: name, at: 2026-11-14}
+  pg:pg-proxmox-1:
+    part_of: db:pg-proxmox
+    runs_on: vm:pg01
+    aliases:
+      - {source: patroni-rest, field: name, name: pg-proxmox-1, status: proven, key: ip, at: 2026-11-14}
+  pg:pg-other-1:
+    part_of: db:redis-main
+    runs_on: vm:pg01
+    aliases:
+      - {source: patroni-rest, field: name, name: pg-other-1, status: proven, key: ip, at: 2026-11-14}
+`
+	rl, err := realms.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	al, err := realms.ParseAliases([]byte(tbl), rl, d.reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cd := &door{al: al, reg: d.reg}
+	one := fakePatroniSays(t, `{"scope":"pg-proxmox","members":[{"name":"pg-proxmox-1","role":"leader","state":"running","timeline":1}]}`)
+	other := fakePatroniSays(t, `{"scope":"pg-other","members":[{"name":"pg-other-1","role":"replica","state":"streaming","timeline":7}]}`)
+	ans, err := cd.state(context.Background(), opts(deadURL(t), deadURL(t), one.URL, other.URL), http.DefaultClient, "vm:pg01", fixedNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status(ans, srcPatroni) != "ok" || ans.Partial {
+		t.Errorf("two healthy clusters: partial %v, sources %+v", ans.Partial, ans.Sources)
+	}
+	for m, want := range map[string]string{"pg:pg-proxmox-1": "leader", "pg:pg-other-1": "replica"} {
+		f := find(ans.Facts, m, "role")
+		if f == nil || f.What["role"].(map[string]any)["role"] != want {
+			t.Errorf("%s: %+v, want %s", m, f, want)
+		}
+		if u := findUnknown(ans.Unknown, m, "role"); u != nil {
+			t.Errorf("%s's role unknown: %+v", m, u)
+		}
+	}
+	// A URL answering for a scope nobody asked stays wrong.
+	stray := fakePatroniSays(t, `{"scope":"pg-stray","members":[]}`)
+	ans, _ = cd.state(context.Background(), opts(deadURL(t), deadURL(t), one.URL, other.URL, stray.URL), http.DefaultClient, "vm:pg01", fixedNow)
+	if status(ans, srcPatroni) != "failing" || !ans.Partial {
+		t.Errorf("a stray scope: %+v", ans.Sources)
+	}
+	for _, s := range ans.Sources {
+		if s.ID == srcPatroni && !strings.Contains(s.Error, `scope "pg-stray"`) {
+			t.Errorf("stray error: %q", s.Error)
+		}
+	}
+	// A member with no part_of has no scope to ask for.
+	nb := strings.Replace(tbl, "    part_of: db:redis-main\n", "", 1)
+	al, err = realms.ParseAliases([]byte(nb), rl, d.reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ans, _ = (&door{al: al, reg: d.reg}).state(context.Background(), opts(deadURL(t), deadURL(t), one.URL, other.URL), http.DefaultClient, "vm:pg01", fixedNow)
+	if u := findUnknown(ans.Unknown, "pg:pg-other-1", "role"); u == nil || !strings.Contains(u.Reason, "no cluster scope") {
+		t.Errorf("no part_of: %+v", u)
+	}
+	// All URLs down: each URL's error once, then each cluster's in scope order.
+	ans, _ = cd.state(context.Background(), opts(deadURL(t), deadURL(t), deadURL(t), deadURL(t)), http.DefaultClient, "vm:pg01", fixedNow)
+	for _, s := range ans.Sources {
+		if s.ID != srcPatroni {
+			continue
+		}
+		if c := strings.Count(s.Error, "connection refused"); c != 2 {
+			t.Errorf("each dead URL once: %q", s.Error)
+		}
+		// clusters fold in db id order: db:pg-proxmox before db:redis-main (scope pg-other)
+		i, j := strings.Index(s.Error, "scope pg-proxmox"), strings.Index(s.Error, "scope pg-other")
+		if i < 0 || j < 0 || i > j || strings.Count(s.Error, "no member answered") != 2 {
+			t.Errorf("cluster errors once each, in cluster order: %q", s.Error)
+		}
+	}
+}
