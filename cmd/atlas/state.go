@@ -226,12 +226,27 @@ func (d *door) state(ctx context.Context, o doorOpts, hc *http.Client, name stri
 		})
 	}
 	if len(members) > 0 {
+		// One ask per cluster: a VM may host members of two, and each is read only from its own scope's answers.
+		groups := map[string][]string{}
+		for _, m := range members {
+			c := d.clusterOf(id, []string{m})
+			groups[c] = append(groups[c], m)
+		}
 		run(srcPatroni, func(ctx context.Context) error {
-			facts, unknown, err := d.askPatroni(ctx, hc, o.Patroni, id, members, now)
-			mu.Lock()
-			ans.Facts, ans.Unknown = append(ans.Facts, facts...), append(ans.Unknown, unknown...)
-			mu.Unlock()
-			return err
+			var gw sync.WaitGroup
+			var errs []error
+			for _, c := range slices.Sorted(maps.Keys(groups)) {
+				gw.Add(1)
+				go func() {
+					defer gw.Done()
+					facts, unknown, err := d.askPatroni(ctx, hc, o.Patroni, id, groups[c], now)
+					mu.Lock()
+					ans.Facts, ans.Unknown, errs = append(ans.Facts, facts...), append(ans.Unknown, unknown...), append(errs, err)
+					mu.Unlock()
+				}()
+			}
+			gw.Wait()
+			return errors.Join(errs...)
 		})
 	}
 	wg.Wait()
@@ -287,7 +302,15 @@ func (d *door) askMetrics(ctx context.Context, hc *http.Client, src, base string
 			continue
 		}
 		n := len(res[i].series)
+		future := 0
 		if a.sum {
+			// A series whose last sample is in the future is not fresh: left out of the sum, and the fact says so.
+			// ponytail: when every series is in the future the sum is of all of them and flagged below.
+			keep := slices.DeleteFunc(slices.Clone(res[i].series), func(s promSeries) bool { return t.Sub(s.At) < -maxSkew })
+			if len(keep) > 0 {
+				future, n = n-len(keep), len(keep)
+				res[i].series = keep
+			}
 			res[i].series = []promSeries{sumSeries(res[i].series)}
 		}
 		for _, s := range res[i].series {
@@ -305,6 +328,9 @@ func (d *door) askMetrics(ctx context.Context, hc *http.Client, src, base string
 			m := map[string]any{"name": metricName(a.selector), "of": a.what, "value": s.V, "labels": s.L}
 			if a.sum {
 				m["sum_of_series"] = n
+				if future > 0 {
+					m["excluded_future_series"] = future
+				}
 			}
 			what := map[string]any{"metric": m}
 			if age > limit.Seconds() {

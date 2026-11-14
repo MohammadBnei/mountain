@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func loadAliases(t *testing.T) (*Aliases, *Realms, *Registry) {
@@ -131,5 +132,25 @@ func TestAliasChecks(t *testing.T) {
 		if _, err := ParseAliases([]byte(src), rl, reg); err == nil {
 			t.Errorf("%s: parsed", name)
 		}
+	}
+}
+
+// TestAliasDateUTC: "today" is the UTC date, not the machine's: at 23:30 UTC on the 14th a machine at UTC+14 is
+// already on the 15th, and a row dated the 15th is still after today.
+func TestAliasDateUTC(t *testing.T) {
+	_, rl, reg := loadAliases(t)
+	zone := time.FixedZone("UTC+14", 14*3600)
+	defer func(f func() time.Time, l *time.Location) { now, time.Local = f, l }(now, time.Local)
+	time.Local = zone
+	now = func() time.Time { return time.Date(2026, 11, 14, 23, 30, 0, 0, time.UTC).In(zone) }
+	row := func(at string) string {
+		return "things:\n  vm:pg01:\n    aliases:\n      - {source: pigsty-vmetrics, field: nodename, name: pg01, status: proven, key: mac, at: " + at + "}\n" +
+			"      - {source: repo-declared, field: former-name, name: old, status: historical, key: name, at: " + at + "}\n"
+	}
+	if _, err := ParseAliases([]byte(row("2026-11-14")), rl, reg); err != nil {
+		t.Errorf("the UTC date itself: %v", err)
+	}
+	if _, err := ParseAliases([]byte(row("2026-11-15")), rl, reg); err == nil {
+		t.Error("the local date, a day ahead in UTC, parsed")
 	}
 }

@@ -62,6 +62,9 @@ type Match struct {
 	Alias
 }
 
+// now is the clock the date checks read (a test sets it); they compare in UTC, whatever the machine's zone.
+var now = time.Now
+
 // LoadAliases parses the embedded aliases.yaml against realms.yaml and the source registry.
 func LoadAliases(rl *Realms, reg *Registry) (*Aliases, error) {
 	return ParseAliases(aliasesYAML, rl, reg)
@@ -69,7 +72,7 @@ func LoadAliases(rl *Realms, reg *Registry) (*Aliases, error) {
 
 // ParseAliases reads an alias table and runs its checks (aliases.yaml's header): the first failure is the error.
 func ParseAliases(b []byte, rl *Realms, reg *Registry) (*Aliases, error) {
-	today := time.Now().UTC().Format(time.DateOnly)
+	today := now().UTC().Format(time.DateOnly)
 	var a Aliases
 	d := yaml.NewDecoder(bytes.NewReader(b))
 	d.KnownFields(true)
