@@ -5,10 +5,16 @@ import "testing"
 func TestValid(t *testing.T) {
 	for id, want := range map[string]bool{
 		"app:wird": true, "svc:agent-fleet/core": true, "adr:infra-bootstrap/0064": true, "dns:wird.bnei.dev": true,
-		"App:wird": false, "wird": false, "app:": false, "bad:x": false, "app:with space": false,
+		"pg:pg-proxmox-1": true, "endpoint:pg-proxmox/vip": true,
+		"App:wird": false, "pg:": false, "endpoints:x": false, "wird": false, "app:": false, "bad:x": false, "app:with space": false,
 	} {
 		if Valid(id) != want {
 			t.Errorf("Valid(%q) = %v", id, !want)
+		}
+	}
+	for k, meaning := range Kinds {
+		if meaning == "" || !Valid(k+":x") {
+			t.Errorf("kind %q: meaning %q, Valid(%q:x) = %v", k, meaning, k, Valid(k+":x"))
 		}
 	}
 	if ID(KindApp, "Wird") != "app:wird" {
