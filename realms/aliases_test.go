@@ -82,6 +82,9 @@ func TestResolve(t *testing.T) {
 	if n := a.Names("vm:pg01", "prom-cluster", "target"); !slices.Equal(n, []string{"guest-archive-h2"}) {
 		t.Errorf("pg01's probe names %v", n)
 	}
+	if n := a.Names("vm:pg01", "repo-declared", ""); len(n) != 0 {
+		t.Errorf("a historical name is a live name: %v", n)
+	}
 }
 
 // TestAliasChecks: each load check refuses its case, from a good small table.
@@ -96,10 +99,13 @@ func TestAliasChecks(t *testing.T) {
     aliases:
       - {source: pihole, field: A, name: postgres.bnei.lan, status: declared, key: ip, at: 2026-11-14}
 `
+	add := func(s string) string { return ok + s }
 	if _, err := ParseAliases([]byte(ok), rl, reg); err != nil {
 		t.Fatalf("a good table: %v", err)
 	}
-	add := func(s string) string { return ok + s }
+	if _, err := ParseAliases([]byte(add("  vm:pg02:\n    aliases:\n      - {source: repo-declared, field: former-name, name: postgres-2, status: historical, key: name}\n")), rl, reg); err != nil {
+		t.Errorf("a historical row needs no date: %v", err)
+	}
 	for name, src := range map[string]string{
 		"one name, two ids, one source": add("  vm:pg02:\n    aliases:\n      - {source: pigsty-vmetrics, field: ins, name: PG01, status: proven, key: mac, at: 2026-11-14}\n"),
 		"a VIP as a VM's alias":         add("  vm:pg02:\n    aliases:\n      - {source: terraform-state, field: ipv4, name: 192.168.1.232, status: declared, key: mac, at: 2026-10-17}\n"),
@@ -117,6 +123,10 @@ func TestAliasChecks(t *testing.T) {
 		"a name and from":               add("  vm:pg02:\n    aliases:\n      - {source: prom-cluster, field: target, name: x, from: probes, status: proven, key: ip, at: 2026-11-14}\n"),
 		"no join key":                   strings.Replace(ok, "key: mac, ", "", 1),
 		"a field nobody reads":          strings.Replace(ok, "status: proven", "state: proven", 1),
+		"a date after today":            strings.Replace(ok, "2026-11-14", "2999-01-01", 1),
+		"a historical row's bad date":   add("  vm:pg02:\n    aliases:\n      - {source: repo-declared, field: former-name, name: postgres-2, status: historical, key: name, at: once}\n"),
+		"two endpoints, one VIP":        add("  endpoint:other:\n    vips: [\"192.168.1.232/32\"]\n    aliases: []\n"),
+		"a VIP as a URL":                add("  vm:pg02:\n    aliases:\n      - {source: prom-cluster, field: instance, name: \"http://192.168.1.232:8008/health\", status: proven, key: ip, at: 2026-11-14}\n"),
 	} {
 		if _, err := ParseAliases([]byte(src), rl, reg); err == nil {
 			t.Errorf("%s: parsed", name)

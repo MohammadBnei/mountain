@@ -69,6 +69,7 @@ func LoadAliases(rl *Realms, reg *Registry) (*Aliases, error) {
 
 // ParseAliases reads an alias table and runs its checks (aliases.yaml's header): the first failure is the error.
 func ParseAliases(b []byte, rl *Realms, reg *Registry) (*Aliases, error) {
+	today := time.Now().UTC().Format(time.DateOnly)
 	var a Aliases
 	d := yaml.NewDecoder(bytes.NewReader(b))
 	d.KnownFields(true)
@@ -85,7 +86,10 @@ func ParseAliases(b []byte, rl *Realms, reg *Registry) (*Aliases, error) {
 			if !strings.HasPrefix(id, graph.KindEndpoint+":") {
 				return nil, fmt.Errorf("aliases.yaml: %s has vips, but only an endpoint has addresses of its own", id)
 			}
-			vips[v] = id
+			if o, ok := vips[vipHost(v)]; ok {
+				return nil, fmt.Errorf("aliases.yaml: %s and %s both claim the VIP %s", o, id, v)
+			}
+			vips[vipHost(v)] = id
 		}
 	}
 	owner := map[string]string{} // source + "\x00" + lower name -> id
@@ -95,7 +99,7 @@ func ParseAliases(b []byte, rl *Realms, reg *Registry) (*Aliases, error) {
 			return nil, err
 		}
 		for i, al := range t.Aliases {
-			if err := checkAlias(id, al, reg); err != nil {
+			if err := checkAlias(id, al, reg, today); err != nil {
 				return nil, err
 			}
 			names := []string{al.Name}
@@ -145,8 +149,9 @@ func (a *Aliases) checkThing(id string, t Thing) error {
 	return nil
 }
 
-// checkAlias: a known source, a field and a key, a name or from probes, a known status, and a date on a join.
-func checkAlias(id string, al Alias, reg *Registry) error {
+// checkAlias: a known source, a field and a key, a name or from probes, a known status, and a date on a join (on a
+// historical row, a date if it has one), never after today.
+func checkAlias(id string, al Alias, reg *Registry, today string) error {
 	switch {
 	case reg.Get(al.Source) == nil:
 		return fmt.Errorf("aliases.yaml: %s: source %q is not in sources.yaml", id, al.Source)
@@ -159,21 +164,32 @@ func checkAlias(id string, al Alias, reg *Registry) error {
 	case !slices.Contains([]string{Proven, Declared, Historical}, al.Status):
 		return fmt.Errorf("aliases.yaml: %s %q: status %q is not proven, declared or historical", id, al.Name, al.Status)
 	}
-	if al.Status != Historical {
-		if _, err := time.Parse(time.DateOnly, al.At); err != nil {
-			return fmt.Errorf("aliases.yaml: %s %q: a %s join needs its date (at: YYYY-MM-DD), got %q", id, al.Name, al.Status, al.At)
-		}
+	if al.Status == Historical && al.At == "" {
+		return nil
+	}
+	if _, err := time.Parse(time.DateOnly, al.At); err != nil {
+		return fmt.Errorf("aliases.yaml: %s %q: a %s row's date is at: YYYY-MM-DD (required on a join), got %q", id, al.Name, al.Status, al.At)
+	}
+	if al.At > today { // both YYYY-MM-DD: the string order is the date order
+		return fmt.Errorf("aliases.yaml: %s %q: at %s is after today (%s)", id, al.Name, al.At, today)
 	}
 	return nil
 }
 
-// vipOf reports whether a name is a VIP, bare or with a port.
-func vipOf(vips map[string]string, name string) (string, bool) {
-	host, _, _ := strings.Cut(name, ":")
-	if e, ok := vips[name]; ok {
-		return e, true
+// vipHost is an address in its bare form: no scheme, path or CIDR suffix, no port. ponytail: IPv4 only (an IPv6
+// address would lose its tail at the first colon); the LAN has none.
+func vipHost(s string) string {
+	if _, rest, ok := strings.Cut(s, "://"); ok {
+		s = rest
 	}
-	e, ok := vips[host]
+	s, _, _ = strings.Cut(s, "/")
+	s, _, _ = strings.Cut(s, ":")
+	return s
+}
+
+// vipOf reports whether a name is a VIP in any of its forms (vipHost).
+func vipOf(vips map[string]string, name string) (string, bool) {
+	e, ok := vips[vipHost(name)]
 	return e, ok
 }
 
@@ -218,20 +234,24 @@ func (a *Aliases) Resolve(name string) []Match {
 	return out
 }
 
-// Names are the names a source gives id, for one field ("" = any), in the file's order.
+// Names are the names a source gives id now, for one field ("" = any), in the file's order: historical rows are
+// names the thing no longer has, so a live ask never uses them.
 func (a *Aliases) Names(id, source, field string) []string {
 	var out []string
 	for _, al := range a.Things[id].Aliases {
-		if al.Source != source || (field != "" && al.Field != field) {
-			continue
-		}
-		if al.From == "probes" {
-			out = append(out, probeTargets(a.rl, id)...)
-		} else {
-			out = append(out, al.Name)
+		if al.Source == source && (field == "" || al.Field == field) && al.Status != Historical {
+			out = append(out, a.NamesOf(id, al)...)
 		}
 	}
 	return out
+}
+
+// NamesOf is the names one alias row of id stands for: its name, or the probe targets of a from: probes row.
+func (a *Aliases) NamesOf(id string, al Alias) []string {
+	if al.From == "probes" {
+		return probeTargets(a.rl, id)
+	}
+	return []string{al.Name}
 }
 
 // RunsOn is where id runs: a member's runs_on, or a k8s VM's host from realms.yaml's k8sPlacement; "" = not known
