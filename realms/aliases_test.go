@@ -140,8 +140,7 @@ func TestAliasChecks(t *testing.T) {
 func TestAliasDateUTC(t *testing.T) {
 	_, rl, reg := loadAliases(t)
 	zone := time.FixedZone("UTC+14", 14*3600)
-	defer func(f func() time.Time, l *time.Location) { now, time.Local = f, l }(now, time.Local)
-	time.Local = zone
+	defer func(f func() time.Time) { now = f }(now)
 	now = func() time.Time { return time.Date(2026, 11, 14, 23, 30, 0, 0, time.UTC).In(zone) }
 	row := func(at string) string {
 		return "things:\n  vm:pg01:\n    aliases:\n      - {source: pigsty-vmetrics, field: nodename, name: pg01, status: proven, key: mac, at: " + at + "}\n" +

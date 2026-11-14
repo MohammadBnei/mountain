@@ -226,20 +226,37 @@ func (d *door) state(ctx context.Context, o doorOpts, hc *http.Client, name stri
 		})
 	}
 	if len(members) > 0 {
-		// One ask per cluster: a VM may host members of two, and each is read only from its own scope's answers.
+		// A VM may host members of two clusters: each URL is asked once, and each cluster reads the answers of its own
+		// scope. An answer for a scope no cluster asked is a member failing.
 		groups := map[string][]string{}
 		for _, m := range members {
 			c := d.clusterOf(id, []string{m})
+			if c == "" {
+				mu.Lock()
+				ans.Unknown = append(ans.Unknown, Unknown{About: m, What: "role", Reason: "member has no cluster scope (part_of in aliases.yaml)"})
+				mu.Unlock()
+				continue
+			}
 			groups[c] = append(groups[c], m)
 		}
 		run(srcPatroni, func(ctx context.Context) error {
-			var gw sync.WaitGroup
+			answers := askAll(ctx, hc, o.Patroni)
+			asked := map[string]bool{}
+			for c := range groups {
+				asked[d.scopeOf(c)] = true
+			}
 			var errs []error
+			for _, g := range answers {
+				if g.err == nil && !asked[g.c.Scope] {
+					errs = append(errs, fmt.Errorf("%s: answered for scope %q, asked %q", g.url, g.c.Scope, strings.Join(slices.Sorted(maps.Keys(asked)), ", ")))
+				}
+			}
+			var gw sync.WaitGroup
 			for _, c := range slices.Sorted(maps.Keys(groups)) {
 				gw.Add(1)
 				go func() {
 					defer gw.Done()
-					facts, unknown, err := d.askPatroni(ctx, hc, o.Patroni, id, groups[c], now)
+					facts, unknown, err := d.askPatroni(answers, o.Patroni, id, groups[c], now)
 					mu.Lock()
 					ans.Facts, ans.Unknown, errs = append(ans.Facts, facts...), append(ans.Unknown, unknown...), append(errs, err)
 					mu.Unlock()
@@ -302,14 +319,18 @@ func (d *door) askMetrics(ctx context.Context, hc *http.Client, src, base string
 			continue
 		}
 		n := len(res[i].series)
-		future := 0
 		if a.sum {
-			// A series whose last sample is in the future is not fresh: left out of the sum, and the fact says so.
-			// ponytail: when every series is in the future the sum is of all of them and flagged below.
-			keep := slices.DeleteFunc(slices.Clone(res[i].series), func(s promSeries) bool { return t.Sub(s.At) < -maxSkew })
-			if len(keep) > 0 {
-				future, n = n-len(keep), len(keep)
-				res[i].series = keep
+			// A series dated in the future is not fresh, and a sum without it is an undercount: unknown, never live.
+			k := 0
+			for _, s := range res[i].series {
+				if t.Sub(s.At) < -maxSkew {
+					k++
+				}
+			}
+			if k > 0 {
+				unknown = append(unknown, Unknown{About: a.about, What: a.what, Cite: cite,
+					Reason: fmt.Sprintf("%d of %d series dated in the future (%s's clock or atlas's is wrong): the sum is not stated", k, n, src)})
+				continue
 			}
 			res[i].series = []promSeries{sumSeries(res[i].series)}
 		}
@@ -328,9 +349,6 @@ func (d *door) askMetrics(ctx context.Context, hc *http.Client, src, base string
 			m := map[string]any{"name": metricName(a.selector), "of": a.what, "value": s.V, "labels": s.L}
 			if a.sum {
 				m["sum_of_series"] = n
-				if future > 0 {
-					m["excluded_future_series"] = future
-				}
 			}
 			what := map[string]any{"metric": m}
 			if age > limit.Seconds() {
@@ -448,42 +466,54 @@ type patroniMember struct {
 	Lag      any    `json:"lag"` // a number, or "unknown" while a replica is not streaming
 }
 
-// askPatroni asks every member's REST API for /cluster at once and waits for each answer (within the budget). An
-// answer for another scope than the asked cluster's is that member failing. The answering members must agree on the
-// leader; then the first answer (in --patroni-url order) gives each member's role, the cluster's leader and, for an
-// endpoint, the VM that holds the VIP (vip-manager follows the leader: atlas derives it). With no answer, or members
-// that disagree, those are unknown with the reason. One member down while another answers is not a failing source.
-func (d *door) askPatroni(ctx context.Context, hc *http.Client, urls []string, id string, members []string, now func() time.Time) ([]Envelope, []Unknown, error) {
-	type got struct {
-		url string
-		c   patroniCluster
-		err error
-	}
-	answers := make([]got, len(urls))
+// patroniReply is one member URL's answer to GET /cluster.
+type patroniReply struct {
+	url string
+	c   patroniCluster
+	err error
+}
+
+// askAll asks every member's REST API for /cluster at once and waits for each answer (within the budget).
+func askAll(ctx context.Context, hc *http.Client, urls []string) []patroniReply {
+	answers := make([]patroniReply, len(urls))
 	var wg sync.WaitGroup
 	for i, u := range urls {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			c, err := getPatroni(ctx, hc, u+"/cluster")
-			answers[i] = got{u + "/cluster", c, err}
+			answers[i] = patroniReply{u + "/cluster", c, err}
 		}()
 	}
 	wg.Wait()
+	return answers
+}
+
+// scopeOf is a cluster's Patroni scope: its patroni-rest scope alias, else its name.
+func (d *door) scopeOf(cluster string) string {
+	if n := d.al.Names(cluster, srcPatroni, "scope"); len(n) > 0 {
+		return n[0]
+	}
+	return strings.TrimPrefix(cluster, graph.KindDB+":")
+}
+
+// askPatroni reads the answers of one cluster's scope (others are other clusters' or the caller's to report). The
+// answering members must agree on the leader; then the first answer (in --patroni-url order) gives each member's
+// role, the cluster's leader and, for an endpoint, the VM that holds the VIP (vip-manager follows the leader: atlas
+// derives it). With no answer, or members that disagree, those are unknown with the reason. One member down while
+// another answers is not a failing source.
+func (d *door) askPatroni(answers []patroniReply, urls []string, id string, members []string, now func() time.Time) ([]Envelope, []Unknown, error) {
+	type got = patroniReply
 	kind, _, _ := strings.Cut(id, ":")
 	cluster := d.clusterOf(id, members)
-	scope := strings.TrimPrefix(cluster, graph.KindDB+":")
-	if n := d.al.Names(cluster, srcPatroni, "scope"); len(n) > 0 {
-		scope = n[0]
-	}
+	scope := d.scopeOf(cluster)
 	var good []got
-	var down, wrong []error // members that did not answer; members that answered for another cluster
+	var down []error // members that did not answer
 	for _, g := range answers {
 		switch {
 		case g.err != nil:
 			down = append(down, fmt.Errorf("%s: %w", g.url, g.err))
 		case g.c.Scope != scope:
-			wrong = append(wrong, fmt.Errorf("%s: answered for scope %q, asked %q", g.url, g.c.Scope, scope))
 		default:
 			good = append(good, g)
 		}
@@ -504,7 +534,7 @@ func (d *door) askPatroni(ctx context.Context, hc *http.Client, urls []string, i
 	}
 	if len(good) == 0 {
 		cite := Cite{Source: srcPatroni, Query: "GET " + strings.Join(urls, "/cluster, GET ") + "/cluster"}
-		return nil, noAnswer(srcPatroni+" failing: no member answered for scope "+scope, cite), errors.Join(append(wrong, down...)...)
+		return nil, noAnswer(srcPatroni+" failing: no member answered for scope "+scope, cite), errors.Join(append(down, errors.New("no member answered for scope "+scope))...)
 	}
 	var says []string
 	for _, g := range good {
@@ -513,7 +543,7 @@ func (d *door) askPatroni(ctx context.Context, hc *http.Client, urls []string, i
 	if slices.ContainsFunc(good, func(g got) bool { return patroniLeader(g.c) != patroniLeader(good[0].c) }) {
 		cite := Cite{Source: srcPatroni, Query: "GET " + good[0].url}
 		reason := "patroni-rest members disagree on the leader: " + strings.Join(says, "; ")
-		return nil, noAnswer(reason, cite), errors.Join(append(wrong, errors.New(reason))...)
+		return nil, noAnswer(reason, cite), errors.New(reason)
 	}
 	first := good[0]
 	t := now().UTC()
@@ -560,7 +590,7 @@ func (d *door) askPatroni(ctx context.Context, hc *http.Client, urls []string, i
 			unknown = append(unknown, Unknown{About: id, What: "holder", Reason: "the leader " + cmp.Or(leader, "(none)") + " has no runs_on in aliases.yaml", Cite: cite})
 		}
 	}
-	return facts, unknown, errors.Join(wrong...)
+	return facts, unknown, nil
 }
 
 // patroniLeader is the member an answer names leader (or standby leader), or "".
