@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -26,7 +27,28 @@ const (
 	KindDNS   = "dns"   // a public hostname (dns:wird.bnei.dev)
 	KindADR   = "adr"   // a decision record (adr:infra-bootstrap/0064)
 	KindExt   = "ext"   // an outside service an app declares it needs, a moon (ext:github)
+	// The door's kinds (design-2026-11/door-hybrid-F.md): realms/aliases.yaml names them, no extractor makes them.
+	KindPG       = "pg"       // a Patroni member of a Postgres cluster, by its member name (pg:pg-proxmox-1)
+	KindEndpoint = "endpoint" // an address shared or redirected among things: a VIP, a redirect Service (endpoint:pg-proxmox/vip)
 )
+
+// Kinds is each node kind's meaning, one line each: the table Valid's id rule is built from, and what a reader that
+// maps a kind to something else (plan/25's rooms) reads instead of a switch.
+var Kinds = map[string]string{
+	KindHost:     "a Proxmox host",
+	KindVM:       "a VM, k8s nodes included",
+	KindCT:       "an LXC container",
+	KindApp:      "an ArgoCD Application",
+	KindSvc:      "a component inside a repo",
+	KindRepo:     "a git repository",
+	KindAddon:    "cluster software kubespray installs, no Application",
+	KindDB:       "a data service outside the cluster, by its cluster name",
+	KindDNS:      "a public hostname",
+	KindADR:      "a decision record",
+	KindExt:      "an outside service an app declares it needs, a moon",
+	KindPG:       "a Patroni member of a Postgres cluster, by its member name",
+	KindEndpoint: "an address shared or redirected among things: a VIP, a redirect Service",
+}
 
 // Kinds of edge.
 const (
@@ -96,7 +118,7 @@ type Graph struct {
 	Drift []Drift `json:"drift"`
 }
 
-var idRe = regexp.MustCompile(`^(host|vm|ct|app|svc|repo|dns|adr|addon|db|ext):[a-z0-9][a-z0-9._/@-]*$`)
+var idRe = regexp.MustCompile(`^(` + strings.Join(slices.Sorted(maps.Keys(Kinds)), "|") + `):[a-z0-9][a-z0-9._/@-]*$`)
 
 // ID builds "<kind>:<name>", lower-cased.
 func ID(kind, name string) string { return kind + ":" + strings.ToLower(name) }

@@ -4,6 +4,19 @@
 //	atlas [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--github-url URL]
 //	      [--repos dir] [--every 2m] [--dev] [--graph-fixture file] [--live-fixture file]
 //	atlas project --repos <dir> [--dsn …] [--drop-repos]   (store one projection from local checkouts)
+//	atlas resolve <name>   (the canonical id(s) of a name, each alias's source and status; JSON on stdout)
+//	atlas state [--prom-url URL] [--pigsty-url URL] [--patroni-url URL]... [--source-budget 1.5s] [--budget 3s] <id|alias>
+//
+// resolve and state are the door's first slice (resolve.go, state.go; design-2026-11/door-hybrid-F.md): read-only
+// GETs to the cluster Prometheus, Pigsty's VictoriaMetrics and Patroni's REST API, nothing stored, no route. An
+// ambiguous name is never picked: resolve lists every id, state exits 2 with that list. A name that resolves to
+// nothing exits 1; a state with no fact because every source it asked failed exits 3. From the laptop, forward the three through k9s and point the flags at the forwards:
+//
+//	ssh -o BatchMode=yes -tt -L 19090:127.0.0.1:19090 k9s \
+//	    kubectl -n monitoring port-forward svc/platform-prometheus-kube-p-prometheus 19090:9090 &
+//	ssh -o BatchMode=yes -N -L 18428:pigsty.bnei.lan:80 -L 18008:192.168.1.205:8008 -L 18009:192.168.1.207:8008 k9s &
+//	atlas state --prom-url http://127.0.0.1:19090 --pigsty-url http://127.0.0.1:18428/vmetrics \
+//	    --patroni-url http://127.0.0.1:18008 --patroni-url http://127.0.0.1:18009 pg-proxmox
 //
 // Env: DATABASE_URL (Postgres; empty = memory-only: the latest projection only, no history),
 // MOUNTAIN_GITHUB_TOKEN (read-only token for the repo poll; empty = no poll, --repos or the stored projection only),
@@ -71,6 +84,9 @@ type Opts struct {
 
 func main() {
 	slog.SetDefault(telemetry.NewLogger(logWriter(os.Args))) // plan/15 §7: JSON; the log package comes through it
+	if len(os.Args) > 1 && (os.Args[1] == "resolve" || os.Args[1] == "state") {
+		os.Exit(doorCmd(os.Args[1], os.Args[2:], os.Stdout, os.Stderr))
+	}
 	if len(os.Args) > 1 && os.Args[1] == "project" {
 		dir, dsn, drop, err := projectFromProcess()
 		if err == nil {
@@ -423,9 +439,9 @@ func fatal(err error) {
 func serverLog() *log.Logger { return slog.NewLogLogger(slog.Default().Handler(), slog.LevelError) }
 
 // logWriter is where atlas's JSON lines go: stdout for the service (what Alloy tails), stderr for `atlas project`,
-// whose stdout is its result line.
+// `atlas resolve` and `atlas state`, whose stdout is their result.
 func logWriter(args []string) io.Writer {
-	if len(args) > 1 && args[1] == "project" {
+	if len(args) > 1 && (args[1] == "project" || args[1] == "resolve" || args[1] == "state") {
 		return os.Stderr
 	}
 	return os.Stdout

@@ -1,0 +1,148 @@
+# The alias table (design-2026-11/door-hybrid-F.md stage 1): each thing's canonical id (internal/graph's kind:name),
+# then the names each source calls it, so `atlas resolve` and `atlas state` turn any of them into the id. First slice:
+# the Postgres plane and the 5 k8s VMs, plus what the name `proxmox` can mean. From
+# design-2026-11/alias-table.draft.yaml, re-checked live 2026-11-14 through k9s.
+#
+# An alias: {source, field, name, status, key, at, note}
+#   source  a sources.yaml id: whose name it is
+#   field   the label or field the name is found in (ins, target, node, instance, A, vmid, ...)
+#   status  proven     the join key's value was seen equal in both sources, live, on the date `at`
+#           declared   two repo files agree; nothing live checked it (`at`: the files' date)
+#           historical a name the thing no longer has (still found in docs and old messages)
+#   key     what proves the name is this thing: mac, ip, hostname, name (the source uses the id's own name), ...
+#   at      the day the join was proven or declared (required for both)
+#   from    instead of name: probes = the blackbox target realms.yaml's probes: (or pve-<host>) gives this id. That
+#           file stays the one head for the targets; this row only says how the join is known.
+#
+# Load checks (realms.ParseAliases): ids valid (graph.Valid) and, for host/vm/db, listed components of realms.yaml;
+# every source in sources.yaml; one name -> one id per source; a VIP is an endpoint's, never an alias of a machine or
+# a member; declared and proven rows carry a date. A name two sources give to different ids is legal and comes back
+# ambiguous from resolve: `proxmox` is the trap.
+#
+# Placement: a k8s VM's host is realms.yaml's k8sPlacement (resolve reads it there); a member's VM is runs_on here.
+
+things:
+
+  # ---------------------------------------------------------------- the Postgres cluster and its members
+  db:pg-proxmox:
+    aliases:
+      - {source: patroni-rest, field: scope, name: pg-proxmox, status: proven, key: name, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: cls, name: pg-proxmox, status: proven, key: name, at: 2026-11-14}
+      - {source: repo-declared, field: pg_cluster, name: pg-proxmox, status: declared, key: name, at: 2026-11-14, note: "infra-bootstrap pigsty/pigsty.yml"}
+
+  pg:pg-proxmox-1:
+    part_of: db:pg-proxmox
+    runs_on: vm:pg01
+    aliases:
+      - {source: patroni-rest, field: name, name: pg-proxmox-1, status: proven, key: ip, at: 2026-11-14, note: "Patroni host 192.168.1.205 = pigsty ip"}
+      - {source: pigsty-vmetrics, field: ins, name: pg-proxmox-1, status: proven, key: ip, at: 2026-11-14, note: "the same ins also labels pg01's node metrics: the VM is reached by instance, not ins"}
+
+  pg:pg-proxmox-2:
+    part_of: db:pg-proxmox
+    runs_on: vm:pg02
+    aliases:
+      - {source: patroni-rest, field: name, name: pg-proxmox-2, status: proven, key: ip, at: 2026-11-14, note: "Patroni host 192.168.1.207 = pigsty ip"}
+      - {source: pigsty-vmetrics, field: ins, name: pg-proxmox-2, status: proven, key: ip, at: 2026-11-14}
+
+  # vip-manager holds it on the leader. terraform state (2026-10-17) still lists .232 on pg02: never an alias.
+  endpoint:pg-proxmox/vip:
+    fronts: db:pg-proxmox
+    vips: [192.168.1.232]
+    aliases:
+      - {source: pigsty-vmetrics, field: vip, name: 192.168.1.232, status: proven, key: ip, at: 2026-11-14, note: "job pgsql-vip probes it from each member"}
+      - {source: pihole, field: A, name: postgres.bnei.lan, status: declared, key: ip, at: 2026-11-14, note: "infra-bootstrap ansible/playbooks/vars/bnei-lan-records.yml"}
+
+  # ---------------------------------------------------------------- the Pigsty VMs (and their etcd members)
+  vm:pg01:
+    aliases:
+      - {source: prom-cluster, field: target, from: probes, status: proven, key: ip, at: 2026-11-14, note: "trap: -h2 is the HOST (server1), not the member number"}
+      - {source: pigsty-vmetrics, field: instance, name: "192.168.1.205:9100", status: proven, key: mac, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: nodename, name: pg01, status: proven, key: mac, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: ip, name: 192.168.1.205, status: proven, key: mac, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: ins, name: etcd-2, status: proven, key: ip, at: 2026-11-14, note: "the etcd member on this VM (instance 192.168.1.205:2379)"}
+      - {source: terraform-state, field: vmid, name: "205", status: declared, key: mac, at: 2026-10-17}
+      - {source: terraform-state, field: mac, name: "bc:24:11:e8:da:d9", status: declared, key: mac, at: 2026-10-17}
+      - {source: pihole, field: A, name: pg01.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+      - {source: repo-declared, field: former-name, name: postgres-1, status: historical, key: name, note: "renamed in infra-bootstrap #288 (2026-10-11)"}
+
+  vm:pg02:
+    aliases:
+      - {source: prom-cluster, field: target, from: probes, status: proven, key: ip, at: 2026-11-14, note: "trap: -h1 is the HOST (bnei)"}
+      - {source: pigsty-vmetrics, field: instance, name: "192.168.1.207:9100", status: proven, key: mac, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: nodename, name: pg02, status: proven, key: mac, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: ip, name: 192.168.1.207, status: proven, key: mac, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: ins, name: etcd-1, status: proven, key: ip, at: 2026-11-14, note: "trap: etcd-1 is on pg02, etcd-2 on pg01"}
+      - {source: terraform-state, field: vmid, name: "207", status: declared, key: mac, at: 2026-10-17}
+      - {source: terraform-state, field: mac, name: "bc:24:11:30:4c:41", status: declared, key: mac, at: 2026-10-17}
+      - {source: pihole, field: A, name: pg02.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+      - {source: repo-declared, field: former-name, name: postgres-2, status: historical, key: name, note: "renamed in infra-bootstrap #288 (2026-10-11)"}
+
+  vm:pg-etcd-witness:
+    aliases:
+      - {source: prom-cluster, field: target, from: probes, status: proven, key: ip, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: instance, name: "192.168.1.197:9100", status: proven, key: mac, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: ins, name: pg-etcd-witness, status: proven, key: mac, at: 2026-11-14, note: "here ins is the VM (cls nodes)"}
+      - {source: pigsty-vmetrics, field: ip, name: 192.168.1.197, status: proven, key: mac, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: ins, name: etcd-3, status: proven, key: ip, at: 2026-11-14}
+      - {source: terraform-state, field: vmid, name: "303", status: declared, key: mac, at: 2026-10-17}
+      - {source: pihole, field: A, name: pg-etcd-witness.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+
+  # ---------------------------------------------------------------- the k8s node VMs (hosts: realms.yaml k8sPlacement)
+  # The name order is not the IP order: cp-02 is .204, cp-03 .206, the workers .202/.203.
+  vm:k8s-cp-01:
+    aliases:
+      - {source: k8s-api, field: node, name: k8s-cp-01, status: proven, key: ip, at: 2026-11-14}
+      - {source: prom-cluster, field: node, name: k8s-cp-01, status: proven, key: name, at: 2026-11-14}
+      - {source: prom-cluster, field: instance, name: "192.168.1.201:9100", status: proven, key: mac, at: 2026-11-14}
+      - {source: prom-cluster, field: internal_ip, name: 192.168.1.201, status: proven, key: ip, at: 2026-11-14}
+      - {source: terraform-state, field: vmid, name: "201", status: declared, key: mac, at: 2026-10-17}
+      - {source: pihole, field: A, name: k8s-cp-01.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+
+  vm:k8s-cp-02:
+    aliases:
+      - {source: k8s-api, field: node, name: k8s-cp-02, status: proven, key: ip, at: 2026-11-14}
+      - {source: prom-cluster, field: node, name: k8s-cp-02, status: proven, key: name, at: 2026-11-14}
+      - {source: prom-cluster, field: instance, name: "192.168.1.204:9100", status: proven, key: mac, at: 2026-11-14}
+      - {source: prom-cluster, field: internal_ip, name: 192.168.1.204, status: proven, key: ip, at: 2026-11-14}
+      - {source: terraform-state, field: vmid, name: "204", status: declared, key: mac, at: 2026-10-17}
+      - {source: pihole, field: A, name: k8s-cp-02.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+
+  vm:k8s-cp-03:
+    aliases:
+      - {source: k8s-api, field: node, name: k8s-cp-03, status: proven, key: ip, at: 2026-11-14}
+      - {source: prom-cluster, field: node, name: k8s-cp-03, status: proven, key: name, at: 2026-11-14}
+      - {source: prom-cluster, field: instance, name: "192.168.1.206:9100", status: proven, key: mac, at: 2026-11-14}
+      - {source: prom-cluster, field: internal_ip, name: 192.168.1.206, status: proven, key: ip, at: 2026-11-14}
+      - {source: terraform-state, field: vmid, name: "206", status: declared, key: mac, at: 2026-10-17}
+      - {source: pihole, field: A, name: k8s-cp-03.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+
+  vm:k8s-worker-01:
+    aliases:
+      - {source: k8s-api, field: node, name: k8s-worker-01, status: proven, key: ip, at: 2026-11-14}
+      - {source: prom-cluster, field: node, name: k8s-worker-01, status: proven, key: name, at: 2026-11-14}
+      - {source: prom-cluster, field: instance, name: "192.168.1.202:9100", status: proven, key: mac, at: 2026-11-14}
+      - {source: prom-cluster, field: internal_ip, name: 192.168.1.202, status: proven, key: ip, at: 2026-11-14}
+      - {source: terraform-state, field: vmid, name: "202", status: declared, key: mac, at: 2026-10-17}
+      - {source: pihole, field: A, name: k8s-worker-01.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+
+  vm:k8s-worker-02:
+    aliases:
+      - {source: k8s-api, field: node, name: k8s-worker-02, status: proven, key: ip, at: 2026-11-14}
+      - {source: prom-cluster, field: node, name: k8s-worker-02, status: proven, key: name, at: 2026-11-14}
+      - {source: prom-cluster, field: instance, name: "192.168.1.203:9100", status: proven, key: mac, at: 2026-11-14}
+      - {source: prom-cluster, field: internal_ip, name: 192.168.1.203, status: proven, key: ip, at: 2026-11-14}
+      - {source: terraform-state, field: vmid, name: "203", status: declared, key: mac, at: 2026-10-17}
+      - {source: pihole, field: A, name: k8s-worker-02.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+
+  # ---------------------------------------------------------------- what `proxmox` can mean
+  host:bnei:
+    aliases:
+      - {source: prom-cluster, field: target, from: probes, status: proven, key: ip, at: 2026-11-14}
+      - {source: repo-declared, field: former-name, name: proxmox, status: historical, key: name, note: "this host's name until infra-bootstrap #288 (2026-10-11)"}
+
+  # A redirect Service: an endpoint, never an alias of the host it points at.
+  endpoint:proxmox/proxmox:
+    fronts: host:server1
+    aliases:
+      - {source: k8s-api, field: service, name: proxmox, status: proven, key: externalName, at: 2026-11-14, note: "ExternalName 192.168.1.200 = server1, NOT the host once called proxmox"}
+      - {source: k8s-api, field: service, name: proxmox/proxmox, status: proven, key: externalName, at: 2026-11-14}

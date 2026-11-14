@@ -1,0 +1,535 @@
+# The source registry (design-2026-11/door-hybrid-F.md stage 1): one entry per source an agent can read, what it
+# knows, how to reach it and how fresh it is. Verified live 2026-11-14 ~12:15Z unless an entry says otherwise
+# (from design-2026-11/source-registry.draft.yaml). Embedded in atlas (realms.LoadSources); `atlas state` reads the
+# freshness_limit of the sources it asks. No secrets here: auth says what a source needs, never the value.
+#
+# reach.laptop: how an agent on the owner's laptop gets there. Everything on the LAN is reached through
+#   the k9s-dashboard LXC (192.168.1.110, `ssh k9s`, which holds a cluster-admin kubeconfig). Read-only use only.
+#   APISERVER_PROXY = ssh -o BatchMode=yes k9s kubectl get --raw "/api/v1/namespaces/<ns>/services/<svc>:<port>/proxy<path>"
+#   LAN_CURL        = ssh -o BatchMode=yes k9s curl -s -m8 <url>   (GET only)
+# reach.cluster: the in-cluster address a pod would use.
+# freshness: how often the source itself updates (scrape, poll, reconcile). A reader adds its own lag.
+# freshness_limit: past this age a fact from the source is unknown, never its last value (a Go duration). Set on
+#   the sources `atlas state` reads; three scrapes or loops of the source's own cycle.
+# retention: configured, then `actual` where the live store holds less.
+# kind: metrics | alerts | logs | state | events | probe | flows | declared | snapshot | activity | derived
+#
+# Not here on purpose: K8s Secrets, Infisical secret values and agentfleetdb rows (they need credentials).
+# They are listed only as "exists, off-limits" so nobody goes looking.
+
+sources:
+
+  # ---------------------------------------------------------------- cluster plane
+  - id: k8s-api
+    kind: state
+    reach:
+      laptop: "ssh k9s kubectl get|describe|top ..."
+      cluster: "https://kubernetes.default.svc (kube-vip VIP 192.168.1.180 = k8s.bnei.lan:6443)"
+    auth: "cluster-admin kubeconfig on k9s LXC (use read verbs only); in-cluster a ServiceAccount + RBAC"
+    knows:
+      - "nodes (name, InternalIP, systemUUID, machineID, zone label = PVE host)"
+      - "pods (node, podIP, uid, restarts, lastState)"
+      - "deployments/replicasets (image, rollout history)"
+      - "services (incl. ExternalName to LAN IPs)"
+      - "ingressroutes (public DNS)"
+      - "PVCs"
+      - "CRDs of Argo/Longhorn/Cilium/Infisical"
+      - "metrics-server (kubectl top)"
+    freshness: "live (watch)"
+    retention: "current object only; ReplicaSets keep ~10 rollouts"
+    config_ref: [infra-bootstrap/inventory/ukubi/, infra-bootstrap/gitops/]
+
+  - id: k8s-events
+    kind: events
+    reach: { laptop: "ssh k9s kubectl get events -A", cluster: "events.k8s.io/v1" }
+    auth: same as k8s-api
+    knows:
+      - "warnings"
+      - "OOMKilled"
+      - "BackOff"
+      - "scheduling"
+      - "probe failures"
+      - "per object"
+    freshness: live
+    retention: "1h (apiserver --event-ttl default); 10 events held at 12:15Z"
+    config_ref: [infra-bootstrap/inventory/ukubi/group_vars/k8s_cluster/k8s-cluster.yml]
+
+  - id: k8s-audit
+    kind: logs
+    reach: { laptop: "via loki, {job=\"kube-apiserver-audit\"}", cluster: "same" }
+    auth: none (Loki is unauthenticated)
+    knows:
+      - "who did what to which object (apiserver audit events)"
+    freshness: "seconds (Alloy tails /var/log/kubernetes/audit on the 3 CPs)"
+    retention: "168h (Loki); the Alloy comment says 14d, which is wrong"
+    config_ref: [infra-bootstrap/gitops/platform/values/alloy/values.yaml, docs/adr/0040]
+
+  - id: prom-cluster
+    kind: metrics
+    reach:
+      laptop: "APISERVER_PROXY monitoring/platform-prometheus-kube-p-prometheus:9090 /api/v1/query"
+      cluster: "http://platform-prometheus-kube-p-prometheus.monitoring:9090 (no IngressRoute)"
+    auth: none
+    knows:
+      - "k8s nodes (node-exporter by instance=IP:9100, nodename)"
+      - "kubelet/cadvisor (node=k8s name)"
+      - "kube-state-metrics (node, pod, namespace)"
+      - "apiserver"
+      - "etcd (k8s)"
+      - "coredns"
+      - "longhorn"
+      - "argocd_app_info"
+      - "traefik"
+      - "zot"
+      - "netbird"
+      - "agent-fleet-core"
+      - "mountain (atlas)"
+      - "provisioner"
+      - "blackbox probe_success"
+      - "ALERTS"
+    not_known:
+      - "Proxmox hosts"
+      - "PVE guests other than via blackbox TCP"
+      - "Postgres (that is pigsty-vmetrics)"
+      - "cilium/hubble metrics (not scraped)"
+    freshness: "30s scrape (kubelet probes 10s, traefik and mountain 15s); 22 jobs, ~60 targets"
+    freshness_limit: 90s
+    retention: "7d / 18GB configured; actual: oldest sample 2026-11-12T15:09Z (~45h). Volume moved to local-path on k8s-worker-02 (#414)"
+    config_ref: [infra-bootstrap/gitops/platform/values/prometheus/values.yaml, gitops/platform/common-app-chart/templates/servicemonitor.yaml]
+
+  - id: blackbox-cluster
+    kind: probe
+    reach: { laptop: "via prom-cluster: probe_success{target=...}", cluster: "platform-blackbox-exporter-prometheus-blackbox-exporter.monitoring:9115" }
+    auth: none
+    knows:
+      - "pve-bnei/pve-server1/pve-ex-laptop (TCP :8006)"
+      - "guest-archive-h1/h2 (Patroni /health)"
+      - "guest-witness (etcd TLS)"
+      - "guest-granary (Garage :3900)"
+      - "guest-cellar (NFS :2049)"
+      - "guest-forge (build-runner :22)"
+      - "guest-mill (hermes :9119)"
+      - "netbird"
+      - "ext-github"
+      - "ext-anthropic"
+      - "ext-cloudflare"
+    freshness: "30s"
+    freshness_limit: 90s
+    retention: "as prom-cluster"
+    notes: "instance label = the probed URL, target label = the probe name. 14 series, the duplicate seen 2026-11-13 is gone."
+    config_ref: [infra-bootstrap/gitops/platform/values/blackbox-exporter/values.yaml]
+
+  - id: alertmanager-cluster
+    kind: alerts
+    reach:
+      laptop: "APISERVER_PROXY monitoring/platform-prometheus-kube-p-alertmanager:9093 /api/v2/alerts"
+      cluster: "http://platform-prometheus-kube-p-alertmanager.monitoring:9093; https://alertmanager.bnei.dev (authentik forwardauth)"
+    auth: "none in-cluster; authentik session on the public route"
+    knows:
+      - "firing alerts with labels"
+      - "silences"
+      - "receivers discord + thot (agent-fleet webhook)"
+    freshness: "live; rules evaluated every 30s by Prometheus"
+    retention: "firing set in memory; silences/nflog 120h default; NO resolved history (and it restarts)"
+    config_ref: [infra-bootstrap/gitops/platform/values/prometheus/values.yaml#alertmanager]
+
+  - id: loki
+    kind: logs
+    reach:
+      laptop: "APISERVER_PROXY monitoring/platform-loki:3100 /loki/api/v1/query_range"
+      cluster: "http://platform-loki.monitoring:3100"
+    auth: "none (auth_enabled: false)"
+    knows:
+      - "all pod stdout/stderr"
+      - "labels app (=app.kubernetes.io/instance)"
+      - "container"
+      - "job (=ns/pod)"
+      - "namespace"
+      - "node"
+      - "pod"
+      - "task_id (fleet)"
+      - "service_name"
+      - "stream"
+    freshness: "seconds (Alloy DaemonSet tails /var/log/pods)"
+    retention: "168h"
+    config_ref: [infra-bootstrap/gitops/platform/values/loki/values.yaml, gitops/platform/values/alloy/values.yaml]
+
+  - id: grafana-cluster
+    kind: derived
+    reach: { laptop: "https://grafana.bnei.dev (authentik OIDC); API needs a service-account token", cluster: "platform-grafana.monitoring:80" }
+    auth: "OIDC session or SA token (none exists for agents)"
+    knows:
+      - "dashboards"
+      - "Grafana-managed alert rules from common-app-chart (a 3rd alert engine, also to Discord)"
+      - "datasources ds-platform-prometheus"
+      - "ds-prometheus (= Pigsty VM, despite the name)"
+      - "ds-loki"
+    freshness: "per query"
+    retention: "none of its own (reads the stores)"
+    config_ref: [infra-bootstrap/gitops/platform/values/grafana/values.yaml, gitops/platform/common-app-chart/templates/grafana-alertrules.yaml]
+
+  - id: argocd
+    kind: state
+    reach:
+      laptop: "ssh k9s kubectl -n argocd get applications.argoproj.io -o json; or prom-cluster argocd_app_info"
+      cluster: "argocd-server.argocd:80; https://argocd.bnei.dev (OIDC)"
+    auth: "kubectl read; the Argo API needs an OIDC/session token"
+    knows:
+      - "48 Applications: sync status"
+      - "health"
+      - "revision"
+      - "history (id, revision, deployedAt)"
+      - "reconciledAt"
+      - "source repo/path"
+      - "dest namespace"
+    freshness: "reconcile ~3 min; metric scrape 30s"
+    retention: "status.history last 10 syncs per app"
+    config_ref: [infra-bootstrap/gitops/bootstrap/*.applicationset.yaml, gitops/bootstrap/argocd-application.yaml, gitops/apps/registry.yaml]
+
+  - id: hubble
+    kind: flows
+    reach:
+      laptop: "not reachable with read verbs alone (needs port-forward or a pod with the hubble CLI)"
+      cluster: "hubble-relay.kube-system:80 (gRPC); hubble-ui.kube-system:80; hubble-metrics :9965 headless"
+    auth: none
+    knows:
+      - "L3/L4/DNS flows and drops per pod (dns, drop, tcp, flow, icmp metrics enabled)"
+    freshness: live
+    retention: "per-node ring buffer (default 4095 flows), minutes; hubble-metrics is NOT scraped by any Prometheus"
+    config_ref: [infra-bootstrap/inventory/ukubi/group_vars/k8s_cluster/k8s-net-cilium.yml]
+
+  - id: longhorn
+    kind: state
+    reach: { laptop: "ssh k9s kubectl -n longhorn-system get volumes,replicas,nodes.longhorn.io; prom-cluster longhorn_*", cluster: same }
+    auth: kubectl read
+    knows:
+      - "volume robustness"
+      - "replica placement per node"
+      - "disk usage"
+      - "rebuilds"
+    freshness: "live CRs; metrics 30s"
+    retention: "current only (metrics 7d)"
+    config_ref: [infra-bootstrap/gitops/platform/values/longhorn/values.yaml]
+
+  - id: traefik
+    kind: metrics
+    reach: { laptop: "prom-cluster traefik_* ; access logs in loki {namespace=\"traefik\"}", cluster: "platform-traefik-metrics.traefik:9100" }
+    auth: none
+    knows:
+      - "requests"
+      - "codes"
+      - "latency per router/service"
+      - "TLS cert expiry; JSON access log lines"
+    freshness: "15s scrape; logs seconds"
+    retention: "7d / 168h"
+    config_ref: [infra-bootstrap/gitops/platform/values/traefik/values.yaml]
+
+  # ---------------------------------------------------------------- Pigsty plane (pg01 VM, 192.168.1.205)
+  - id: pigsty-vmetrics
+    kind: metrics
+    reach:
+      laptop: "LAN_CURL http://pigsty.bnei.lan/vmetrics/api/v1/query  (Prometheus-compatible)"
+      cluster: "http://pigsty.bnei.lan/vmetrics (Grafana datasource uid ds-prometheus)"
+    auth: none
+    knows:
+      - "pg-proxmox-1/-2 (pg_exporter :9630, pgbouncer :9631, patroni :8008, pgbackrest :9854)"
+      - "node metrics of pg01/pg02/pg-etcd-witness (ins label, not hostname)"
+      - "etcd-1/2/3"
+      - "redis-main-1-6379"
+      - "infra (grafana, vmetrics, vlogs, vtraces, vmalert, alertmanager, nginx, blackbox)"
+      - "pgsql-vip probe of 192.168.1.232"
+      - "ping of the 3 nodes"
+    freshness: "10s scrape (vmetrics_scrape_interval)"
+    freshness_limit: 30s
+    retention: "15d (-retentionPeriod); process up 6.7 d"
+    config_ref: [infra-bootstrap/pigsty/pigsty.yml, pigsty/roles/infra/defaults/main.yml]
+
+  - id: pigsty-vlogs
+    kind: logs
+    reach: { laptop: "LAN_CURL http://pigsty.bnei.lan/vlogs/select/logsql/query", cluster: same }
+    auth: none
+    knows:
+      - "Postgres"
+      - "Patroni"
+      - "pgbouncer"
+      - "etcd and syslog lines from the 3 Pigsty nodes (Vector)"
+    freshness: seconds
+    retention: "15d or 50GiB"
+    config_ref: [infra-bootstrap/pigsty/pigsty.yml, pigsty/roles/infra/defaults/main.yml]
+    verified: "config only, not queried"
+
+  - id: pigsty-alerts
+    kind: alerts
+    reach: { laptop: "LAN_CURL http://pigsty.bnei.lan/alertmgr/api/v2/alerts ; /vmalert/vmalert/groups", cluster: same }
+    auth: none
+    knows:
+      - "Pigsty's own Postgres/node/etcd alert rules (vmalert) and a 2nd Alertmanager (:9059)"
+    freshness: live
+    retention: in memory
+    notes: "receiver `default` has NO integrations: Pigsty alerts fire into a void. 0 firing at 12:16Z."
+    config_ref: [infra-bootstrap/pigsty/roles/infra/templates/ (alertmanager, vmalert rules)]
+
+  - id: pigsty-grafana
+    kind: derived
+    reach: { laptop: "LAN_CURL http://pigsty.bnei.lan/ui", cluster: same }
+    auth: "Pigsty default admin (do not use); dashboards also mirrored in grafana-cluster"
+    knows:
+      - "Pigsty PGSQL/NODE dashboards over pigsty-vmetrics"
+    freshness: per query
+    retention: none
+    config_ref: [infra-bootstrap/pigsty/roles/infra/templates/grafana/]
+
+  - id: patroni-rest
+    kind: state
+    reach: { laptop: "LAN_CURL http://192.168.1.205:8008/cluster (or .207)", cluster: "same (CiliumNetworkPolicy must allow :8008)" }
+    auth: "none for GET (password guards unsafe methods only)"
+    knows:
+      - "members pg-proxmox-1/-2"
+      - "role leader/replica"
+      - "state"
+      - "timeline"
+      - "lag"
+      - "tags (spec \"2C.2G.51G\")"
+      - "/history (failovers)"
+    freshness: "live (Patroni loop 10s)"
+    freshness_limit: 30s
+    retention: "current; /history keeps every timeline switch"
+    config_ref: [infra-bootstrap/pigsty/pigsty.yml#pg-proxmox]
+
+  # ---------------------------------------------------------------- hypervisor plane (NOT READABLE today)
+  - id: proxmox-api
+    kind: state
+    reach:
+      laptop: "LAN only: https://192.168.1.{165,200,161}:8006/api2/json ; https://proxmox.bnei.dev is origin-locked and points at .200 only"
+      cluster: "proxmox/proxmox ExternalName -> 192.168.1.200 (server1, NOT the host once called proxmox)"
+    auth: "PVE API token; only a root-scoped token for .165 (terraform) exists. A PVEAuditor token is the missing piece"
+    knows:
+      - "hosts bnei/server1/ex-laptop"
+      - "every VM/LXC (VMID, name, node, status, uptime, cpu, mem, smbios1 uuid, net0 MAC)"
+      - "HA"
+      - "corosync quorum"
+      - "storage"
+    freshness: "live (pvestatd ~10s)"
+    retention: "rrd: hour/day/week/month/year at decreasing resolution"
+    notes: "no pve-exporter, no process-exporter: corosync RSS, host uptime, VM placement are in no metric store. Root SSH (qm/pct) timed out off-LAN."
+    config_ref: [infra-bootstrap/ansible/inventories/proxmox/hosts.yml, terraform/providers.tf, gitops/redirectors/proxmox.yaml]
+    verified: "not reached (2026-11-13 and 2026-11-14)"
+
+  - id: terraform-state
+    kind: snapshot
+    reach: { laptop: "infra-bootstrap/terraform/terraform.tfstate (local file, laptop only)", cluster: none }
+    auth: "file read; holds sensitive attributes, extract only names/ids/MACs"
+    knows:
+      - "VMID"
+      - "PVE node"
+      - "name"
+      - "MAC"
+      - "IPs seen by the guest agent"
+      - "bios type"
+      - "for 13 guests + template 9001"
+    freshness: "last written 2026-10-17 (serial 162): 4 weeks stale"
+    retention: "one .backup"
+    notes: "the only place that ties VMID to MAC without Proxmox access. Shows the PG VIP .232 on pg02: stale (leader is pg01 now)."
+    config_ref: [infra-bootstrap/terraform/*.tf]
+
+  # ---------------------------------------------------------------- LAN services
+  - id: pihole
+    kind: declared
+    reach: { laptop: "LAN: http://192.168.1.55/admin/api (FTL); dig @192.168.1.55 <name>.bnei.lan", cluster: "same" }
+    auth: "DNS: none. FTL API: app password"
+    knows:
+      - "bnei.lan A records (one per machine, PR #288)"
+      - "service records (pve, postgres VIP, pigsty, redis, garage, registry, k8s)"
+      - "DNS query log"
+    freshness: "records on each pihole-configure run; queries live"
+    retention: "FTL query db default 91d (not verified)"
+    config_ref: [infra-bootstrap/ansible/playbooks/vars/bnei-lan-records.yml, ansible/playbooks/pihole-configure.yml]
+    verified: "config only"
+
+  - id: netbird
+    kind: state
+    reach: { laptop: "prom-cluster job=netbird; management API https://netbird.bnei.dev/api (token)", cluster: "netbird.netbird:80,9090" }
+    auth: "PAT for the API; metrics none"
+    knows:
+      - "mesh peers (name, wt0 address, *.bnei.mesh DNS, last seen)"
+      - "server health"
+    freshness: "30s metrics; peers live"
+    retention: "netbirdeventsdb (activity events)"
+    config_ref: [infra-bootstrap/ansible/playbooks/netbird-*.yml, gitops/platform/values/netbird/values.yaml, docs/runbook-netbird.md]
+
+  - id: garage-admin
+    kind: metrics
+    reach: { laptop: "LAN: http://192.168.1.199:3903/metrics (admin API)", cluster: "garage/garage-s3 ExternalName (S3 :3900 only)" }
+    auth: "admin/metrics token"
+    knows:
+      - "buckets"
+      - "sizes"
+      - "node health of the single-node layout"
+    freshness: on request
+    retention: none
+    notes: "not scraped anywhere; only a TCP probe (guest-granary) watches Garage"
+    config_ref: [infra-bootstrap/ansible/playbooks/garage-configure.yml]
+    verified: "config only"
+
+  - id: zot
+    kind: state
+    reach: { laptop: "LAN: http://registry.bnei.lan:5000/v2/_catalog ; prom-cluster job=zot", cluster: "zot.zot:5000 (LB 192.168.1.234)" }
+    auth: "pull is open on the LAN (verify)"
+    knows:
+      - "images and tags that exist"
+      - "push times"
+    freshness: live
+    retention: "40GB bucket quota on Garage"
+    config_ref: [infra-bootstrap/gitops/platform/values/zot/values.yaml]
+
+  - id: hermes-dashboard
+    kind: activity
+    reach: { laptop: "https://hermes.bnei.dev (authentik)", cluster: "hermes/hermes ExternalName -> 192.168.1.72:9119" }
+    auth: authentik OIDC
+    knows:
+      - "Hermes agent (LXC 101) sessions and runs"
+    freshness: live
+    retention: unknown
+    config_ref: [infra-bootstrap/gitops/redirectors/hermes.yaml, docs/adr/0051]
+    verified: "config only"
+
+  # ---------------------------------------------------------------- the ukubi apps as sources
+  - id: atlas
+    kind: derived
+    reach:
+      laptop: "https://mountain.bnei.dev/api/graph | /api/read | /api/tree | /ws (admin session or machine bearer)"
+      cluster: "mountain.mountain:8080 (API, gated), :9090 /metrics (scraped as job=mountain)"
+    auth: "authentik platform-admin session, or the machine principal's bearer (cmd/atlas/machine.go)"
+    knows:
+      - "projected graph over 16 repos, ids host: vm: ct: app: svc: repo: addon: db: dns: adr: ext:"
+      - "live overlay (Argo health and sync, node Ready, probes, per-namespace land use, firing alerts, 24h probe availability)"
+      - "drift"
+    freshness: "live overlay 15s (Prometheus + Alertmanager); repo heads every 2 min"
+    retention: "projection versioned (valid_from/valid_to) in mountaindb, never pruned; live frame in memory, last 50 events"
+    config_ref: [mountain/realms/realms.yaml, mountain/cmd/atlas/config.go, mountain/internal/extract/, mountain/contract/live.go]
+
+  - id: ukubi-game-snapshot
+    kind: snapshot
+    reach: { laptop: "not reachable (netpol: only the public pod may reach :7411)", cluster: "ukubi-game.ukubi-game:7411" }
+    auth: "network policy"
+    knows:
+      - "the world's public snapshot (town drawn from atlas's contract)"
+    freshness: live
+    retention: none
+    notes: "a consumer of atlas, not an independent observer; probes are TCP :7410 only, no app metrics"
+    config_ref: [infra-bootstrap/gitops/platform/ukubi-game/ciliumnetworkpolicy.yaml, ukubi-game/cmd/game/config.go]
+
+  - id: ukubi-bridge
+    kind: events
+    reach: { laptop: "gRPC stream via events.bnei.dev (only /webhook/github is routed publicly)", cluster: "ukubi-bridge.ukubi-bridge:8080" }
+    auth: "authentik OIDC token of a client listed in BRIDGE_API_CLIENTS (ADR-0066)"
+    knows:
+      - "GitHub PR"
+      - "issue"
+      - "review"
+      - "CI events as CloudEvents"
+      - "with trust facts; dead letters"
+    freshness: "real time (webhook) + reconcile lookback"
+    retention: "30d (BRIDGE_RETENTION 720h)"
+    config_ref: [ukubi-bridge/, infra-bootstrap/gitops/bootstrap/ukubi-bridge-secret.yaml]
+
+  - id: agent-fleet
+    kind: activity
+    reach:
+      laptop: "https://fleet.bnei.dev (Connect RPC DashboardService: ListSessions, GetSession, GetTranscript, GetJournal, QueryLogs, QueryMetrics, GetFleetTopology, ListSchedules)"
+      cluster: "agent-fleet-core.agent-fleet:8080 ; :9093 metrics (job=agent-fleet-core)"
+    auth: "authentik OIDC (fleet members); agentfleetdb rows need DB creds: off-limits"
+    knows:
+      - "fleet sessions"
+      - "transcript"
+      - "decisions (questions/permissions/answers)"
+      - "proposals"
+      - "schedules"
+      - "dispatch_decisions"
+      - "knowledge_journal"
+      - "alert-woken thot tasks"
+    freshness: "live per session event"
+    retention: "rows kept; 44 session PVCs, oldest ~88 d"
+    config_ref: [agent-fleet/proto/agentfleet/v1/dashboard.proto, agent-fleet/db/migrations/, infra-bootstrap/gitops/bootstrap/fleet-*.yaml]
+
+  - id: github
+    kind: events
+    reach: { laptop: "gh api (owner's token)", cluster: "via ukubi-bridge or atlas" }
+    auth: "gh CLI token / GitHub App"
+    knows:
+      - "PRs"
+      - "reviews"
+      - "CI runs"
+      - "commits"
+      - "releases for the 16 repos"
+    freshness: live
+    retention: permanent
+    config_ref: []
+
+  # ---------------------------------------------------------------- laptop plane
+  - id: work-signals
+    kind: activity
+    reach: { laptop: "~/.ukubi-signals/YYYY-MM-DD.jsonl", cluster: none }
+    auth: "file read (laptop only)"
+    knows:
+      - "laptop Claude Code hook events: session start/end"
+      - "prompt"
+      - "tool start/ok/error"
+      - "notification; seat = cwd basename; names only"
+    freshness: "per hook event; only sessions with the spike plugin loaded write"
+    retention: "one file per day, never pruned (spike)"
+    config_ref: [design-2026-11/spike-signals/plugins/ukubi-signals/hooks/signal.py]
+
+  - id: claude-laptop
+    kind: activity
+    reach: { laptop: "~/.claude/projects/*/memory/*.md ; ~/.claude/projects/**/*.jsonl ; ~/.claude/history.jsonl", cluster: none }
+    auth: file read
+    knows:
+      - "owner intents and grants (memory)"
+      - "full transcripts"
+      - "every typed prompt; incident write-ups (corosync outage 2026-11-10)"
+    freshness: "per write"
+    retention: "transcripts ~35 d; memory and history unbounded"
+    config_ref: [claude-config/]
+
+  - id: repo-declared
+    kind: declared
+    reach: { laptop: "git show origin/main:<path> in infra-bootstrap, mountain, agent-fleet, ukubi-game", cluster: "atlas extract" }
+    auth: "git (SSH)"
+    knows:
+      - "desired state: Argo apps"
+      - "ansible inventories"
+      - "bnei.lan records"
+      - "terraform resources"
+      - "pigsty.yml"
+      - "ADRs"
+      - "ARCHITECTURE.md claims"
+    freshness: "per merge (local checkouts lag; use origin/main)"
+    retention: permanent
+    notes: "claims, not observations: every fact from here is a dated ref, never live state"
+    config_ref: [infra-bootstrap/ARCHITECTURE.md, infra-bootstrap/docs/infrastructure-actual.md (self-declared stale since 2026-08-31)]
+
+  # ---------------------------------------------------------------- exists, off-limits for agents
+  - id: infisical
+    kind: state
+    reach: { laptop: "https://infisical.bnei.dev", cluster: "platform-infisical-backend.infisical:8080" }
+    auth: "machine identity; secrets out of scope"
+    knows:
+      - "secret metadata and audit log (who read which secret when)"
+    freshness: live
+    retention: "infisicaldb"
+    notes: "audit log is the only part an observability surface could want; reading it needs a scoped identity that does not exist"
+    config_ref: [infra-bootstrap/gitops/platform/values/infisical/values.yaml]
+
+  - id: authentik
+    kind: events
+    reach: { laptop: "https://authentik.bnei.dev/api/v3/events/events/", cluster: "platform-authentik-server.authentik:80" }
+    auth: "API token (none for agents)"
+    knows:
+      - "logins"
+      - "failed logins"
+      - "policy denials"
+      - "per app"
+    freshness: live
+    retention: "authentik event retention (default 365d, not verified)"
+    config_ref: [infra-bootstrap/gitops/platform/values/authentik/values.yaml, gitops/bootstrap/authentik-blueprint-*.yaml]
