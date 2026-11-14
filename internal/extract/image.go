@@ -37,7 +37,7 @@ func image(repos Repos, g *graph.Graph) {
 				} `yaml:"image"`
 			}
 			if yaml.Unmarshal(b, &v) == nil && v.Image.Tag != "" {
-				tags[e.From] = v.Image.Tag
+				tags[e.From], _, _ = strings.Cut(v.Image.Tag, "@") // CI pins <sha>@<digest>; show the sha
 			}
 		}
 	}
