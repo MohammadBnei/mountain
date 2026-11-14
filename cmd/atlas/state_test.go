@@ -6,30 +6,50 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
-	"fmt"
 	"go/parser"
 	"go/token"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/MohammadBnei/mountain/realms"
 )
 
 var doorNow = time.Date(2026, 11, 14, 12, 30, 0, 0, time.UTC)
 
-// fakeSeries is one series a fake metric source answers: its labels, last value and that sample's age.
+// fakeSeries is one series a fake metric source holds: its labels (__name__ included), its last value as the API
+// writes it, and that sample's age.
 type fakeSeries struct {
 	labels map[string]string
-	v      float64
+	v      string
 	age    time.Duration
 }
 
-// fakeMetrics is a Prometheus-compatible source answering range selectors by the metric's name and one label
-// match (`name{label="value"`), a matrix of each series' last sample; status 500 for every query when fail is set.
-func fakeMetrics(t *testing.T, series map[string][]fakeSeries, fail bool) *httptest.Server {
+// ser is a fakeSeries named name, with the labels given as pairs.
+func ser(name, v string, age time.Duration, kv ...string) fakeSeries {
+	l := map[string]string{"__name__": name}
+	for i := 0; i+1 < len(kv); i += 2 {
+		l[kv[i]] = kv[i+1]
+	}
+	return fakeSeries{l, v, age}
+}
+
+// selectorRe is the one selector form the recipes write: name{label="value",...}[lookback].
+var (
+	selectorRe = regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)\{(.*)\}\[` + lookback + `\]$`)
+	matcherRe  = regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"$`)
+)
+
+// fakeMetrics is a Prometheus-compatible source that evaluates a range selector the way Prometheus does for the
+// recipes' form: a series answers when its name and every label matcher equal (a matcher on a label the series
+// lacks matches nothing), as a matrix of its last two samples. Status 500 for every query when fail is set.
+func fakeMetrics(t *testing.T, series []fakeSeries, fail bool) *httptest.Server {
 	t.Helper()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/query" {
@@ -41,17 +61,33 @@ func fakeMetrics(t *testing.T, series map[string][]fakeSeries, fail bool) *httpt
 			return
 		}
 		q := r.URL.Query().Get("query")
-		if !strings.HasSuffix(q, "["+lookback+"]") {
-			t.Errorf("fake metrics: %q is not a range selector over %s", q, lookback)
+		m := selectorRe.FindStringSubmatch(q)
+		if m == nil {
+			t.Errorf("fake metrics: %q is not name{...}[%s]", q, lookback)
+			return
 		}
-		var res []map[string]any
-		for prefix, ss := range series {
-			if !strings.HasPrefix(q, prefix) {
-				continue
+		want := map[string]string{"__name__": m[1]}
+		for _, part := range strings.Split(m[2], ",") {
+			mm := matcherRe.FindStringSubmatch(part)
+			if mm == nil {
+				t.Errorf("fake metrics: %q in %q is not label=\"value\"", part, q)
+				return
 			}
-			for _, x := range ss {
+			v, err := strconv.Unquote(`"` + mm[2] + `"`)
+			if err != nil {
+				t.Errorf("fake metrics: %q: %v", part, err)
+			}
+			want[mm[1]] = v
+		}
+		res := []map[string]any{}
+		for _, x := range series {
+			ok := true
+			for k, v := range want {
+				ok = ok && x.labels[k] == v
+			}
+			if ok {
 				ts := float64(doorNow.Add(-x.age).UnixMilli()) / 1000
-				res = append(res, map[string]any{"metric": x.labels, "values": [][2]any{{ts - 10, "0"}, {ts, fmt.Sprint(x.v)}}})
+				res = append(res, map[string]any{"metric": x.labels, "values": [][2]any{{ts - 10, "0"}, {ts, x.v}}})
 			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "success", "data": map[string]any{"resultType": "matrix", "result": res}})
@@ -64,13 +100,16 @@ const patroniAnswer = `{"scope":"pg-proxmox","members":[
  {"name":"pg-proxmox-1","role":"leader","state":"running","host":"192.168.1.205","timeline":79},
  {"name":"pg-proxmox-2","role":"replica","state":"streaming","host":"192.168.1.207","timeline":79,"lag":0}]}`
 
-func fakePatroni(t *testing.T) *httptest.Server {
+func fakePatroni(t *testing.T) *httptest.Server { return fakePatroniSays(t, patroniAnswer) }
+
+// fakePatroniSays is a Patroni member whose GET /cluster answers body.
+func fakePatroniSays(t *testing.T, body string) *httptest.Server {
 	t.Helper()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/cluster" {
 			t.Errorf("fake patroni: %s %s", r.Method, r.URL.Path)
 		}
-		_, _ = w.Write([]byte(patroniAnswer))
+		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(s.Close)
 	return s
@@ -83,16 +122,22 @@ func deadURL(t *testing.T) string {
 	return s.URL
 }
 
-func pgSeries(age time.Duration) map[string][]fakeSeries {
-	l1 := map[string]string{"__name__": "x", "ins": "pg-proxmox-1", "cls": "pg-proxmox"}
-	l2 := map[string]string{"ins": "pg-proxmox-2", "cls": "pg-proxmox"}
-	return map[string][]fakeSeries{
-		`pg_up{ins="pg-proxmox-1"`:                      {{l1, 1, age}},
-		`pg_up{ins="pg-proxmox-2"`:                      {{l2, 1, 5 * time.Second}},
-		`pg_db_numbackends{ins="pg-proxmox-1"`:          {{map[string]string{"ins": "pg-proxmox-1", "datname": "a"}, 40, 4 * time.Second}, {map[string]string{"ins": "pg-proxmox-1", "datname": "b"}, 26, 6 * time.Second}},
-		`pg_setting_max_connections{ins="pg-proxmox-1"`: {{l1, 500, 4 * time.Second}},
-		`up{instance="192.168.1.205:9100"`:              {{map[string]string{"job": "node"}, 1, 3 * time.Second}},
-		`probe_success{job="pgsql-vip"`:                 {{map[string]string{"ins": "pg-proxmox-1"}, 1, 2 * time.Second}},
+// pgSeries is Pigsty's series for the cluster, with the label sets seen live on 2026-11-14.
+func pgSeries(age time.Duration) []fakeSeries {
+	m1 := []string{"cls", "pg-proxmox", "ins", "pg-proxmox-1", "instance", "192.168.1.205:9630", "ip", "192.168.1.205", "job", "pgsql"}
+	m2 := []string{"cls", "pg-proxmox", "ins", "pg-proxmox-2", "instance", "192.168.1.207:9630", "ip", "192.168.1.207", "job", "pgsql"}
+	vip := func(ins, ip string) []string {
+		return []string{"cls", "pg-proxmox", "ins", ins, "instance", "192.168.1.232", "ip", ip, "job", "pgsql-vip", "vip", "192.168.1.232"}
+	}
+	return []fakeSeries{
+		ser("pg_up", "1", age, m1...),
+		ser("pg_up", "1", 5*time.Second, m2...),
+		ser("pg_db_numbackends", "40", 4*time.Second, append([]string{"datname", "a"}, m1...)...),
+		ser("pg_db_numbackends", "26", 6*time.Second, append([]string{"datname", "b"}, m1...)...),
+		ser("pg_setting_max_connections", "500", 4*time.Second, m1...),
+		ser("up", "1", 3*time.Second, "cls", "pg-proxmox", "ins", "pg-proxmox-1", "instance", "192.168.1.205:9100", "ip", "192.168.1.205", "job", "node"),
+		ser("probe_success", "1", 2*time.Second, vip("pg-proxmox-1", "192.168.1.205")...),
+		ser("probe_success", "1", 3*time.Second, vip("pg-proxmox-2", "192.168.1.207")...),
 	}
 }
 
@@ -236,7 +281,7 @@ func TestStateStale(t *testing.T) {
 // etcd member (Pigsty) and the role of the member on it (Patroni).
 func TestStateVM(t *testing.T) {
 	d := testDoor(t)
-	prom := fakeMetrics(t, map[string][]fakeSeries{`probe_success{target="guest-archive-h2"`: {{map[string]string{"target": "guest-archive-h2", "pod": "bb-0"}, 1, 20 * time.Second}}}, false)
+	prom := fakeMetrics(t, []fakeSeries{ser("probe_success", "1", 20*time.Second, "target", "guest-archive-h2", "pod", "bb-0", "instance", "http://192.168.1.205:8008/health")}, false)
 	pig, pat := fakeMetrics(t, pgSeries(time.Second), false), fakePatroni(t)
 	ans, err := d.state(context.Background(), opts(prom.URL, pig.URL, pat.URL), http.DefaultClient, "guest-archive-h2", fixedNow)
 	if err != nil {
@@ -368,5 +413,166 @@ func TestDoorFlags(t *testing.T) {
 		if _, _, err := parseDoor("state", args, io.Discard); err == nil {
 			t.Errorf("%v parsed", args)
 		}
+	}
+}
+
+// TestStateVIP: the VIP's probes are selected by the labels Pigsty writes (job pgsql-vip, vip), one per member that
+// probes it, and its holder is derived from the leader.
+func TestStateVIP(t *testing.T) {
+	d := testDoor(t)
+	pig, pat := fakeMetrics(t, pgSeries(time.Second), false), fakePatroni(t)
+	ans, err := d.state(context.Background(), opts(deadURL(t), pig.URL, pat.URL), http.DefaultClient, "postgres.bnei.lan", fixedNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var probes []string
+	for _, f := range ans.Facts {
+		if m, _ := f.What["metric"].(map[string]any); m != nil && f.About == "endpoint:pg-proxmox/vip" && m["of"] == "probe" {
+			probes = append(probes, m["labels"].(map[string]string)["ins"])
+		}
+	}
+	slices.Sort(probes)
+	if !slices.Equal(probes, []string{"pg-proxmox-1", "pg-proxmox-2"}) {
+		t.Errorf("VIP probes from %v, want both members", probes)
+	}
+	h := find(ans.Facts, "endpoint:pg-proxmox/vip", "state")
+	if h == nil || h.What["state"].(map[string]any)["holder"] != "vm:pg01" || h.Who != "atlas" {
+		t.Errorf("holder: %+v", h)
+	}
+}
+
+// TestStateClock: a sample from the future past the skew is unknown; one a little ahead reads as now.
+func TestStateClock(t *testing.T) {
+	d := testDoor(t)
+	m1 := []string{"cls", "pg-proxmox", "ins", "pg-proxmox-1", "job", "pgsql"}
+	pig := fakeMetrics(t, []fakeSeries{ser("pg_up", "1", -time.Minute, m1...), ser("pg_in_recovery", "0", -2*time.Second, m1...),
+		ser("pg_setting_max_connections", "NaN", time.Second, m1...)}, false)
+	ans, err := d.state(context.Background(), opts(deadURL(t), pig.URL, fakePatroni(t).URL), http.DefaultClient, "pg-proxmox-1", fixedNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u := findUnknown(ans.Unknown, "pg:pg-proxmox-1", "up"); u == nil || !strings.Contains(u.Reason, "sample in the future") {
+		t.Errorf("a minute ahead: %+v", u)
+	}
+	var rec *Envelope
+	for i, f := range ans.Facts {
+		if m, _ := f.What["metric"].(map[string]any); m != nil && m["of"] == "in_recovery" {
+			rec = &ans.Facts[i]
+		}
+	}
+	if rec == nil || rec.AgeS != 0 {
+		t.Errorf("2 s ahead is now: %+v", rec)
+	}
+	if u := findUnknown(ans.Unknown, "pg:pg-proxmox-1", "max_connections"); u == nil || !strings.Contains(u.Reason, "not a number") {
+		t.Errorf("NaN: %+v", u)
+	}
+	var out bytes.Buffer
+	if err := json.NewEncoder(&out).Encode(ans); err != nil {
+		t.Errorf("the answer does not encode: %v", err)
+	}
+}
+
+// TestStatePatroniAgrees: an answer for another scope is that member failing, and members that disagree on the
+// leader leave it unknown with what each said.
+func TestStatePatroniAgrees(t *testing.T) {
+	d := testDoor(t)
+	pig := fakeMetrics(t, pgSeries(time.Second), false)
+	other := fakePatroniSays(t, strings.Replace(patroniAnswer, `"scope":"pg-proxmox"`, `"scope":"pg-other"`, 1))
+	ans, _ := d.state(context.Background(), opts(deadURL(t), pig.URL, other.URL, fakePatroni(t).URL), http.DefaultClient, "pg-proxmox", fixedNow)
+	if !ans.Partial || status(ans, srcPatroni) != "failing" || find(ans.Facts, "db:pg-proxmox", "state") == nil {
+		t.Errorf("one member for another scope: partial %v %+v, the other's leader kept", ans.Partial, ans.Sources)
+	}
+	for _, s := range ans.Sources {
+		if s.ID == srcPatroni && !strings.Contains(s.Error, `scope "pg-other", asked "pg-proxmox"`) {
+			t.Errorf("scope error: %q", s.Error)
+		}
+	}
+	ans, _ = d.state(context.Background(), opts(deadURL(t), pig.URL, other.URL), http.DefaultClient, "pg-proxmox", fixedNow)
+	if u := findUnknown(ans.Unknown, "db:pg-proxmox", "leader"); u == nil || !strings.Contains(u.Reason, "no member answered for scope pg-proxmox") {
+		t.Errorf("only another scope: %+v", u)
+	}
+	split := fakePatroniSays(t, strings.NewReplacer(`"role":"leader"`, `"role":"replica"`, `"role":"replica","state":"streaming"`, `"role":"leader","state":"running"`).Replace(patroniAnswer))
+	ans, _ = d.state(context.Background(), opts(deadURL(t), pig.URL, fakePatroni(t).URL, split.URL), http.DefaultClient, "pg-proxmox", fixedNow)
+	u := findUnknown(ans.Unknown, "db:pg-proxmox", "leader")
+	if u == nil || !strings.Contains(u.Reason, "disagree") || !strings.Contains(u.Reason, "says pg-proxmox-1") || !strings.Contains(u.Reason, "says pg-proxmox-2") || !ans.Partial {
+		t.Errorf("a split: %+v partial %v", u, ans.Partial)
+	}
+	if find(ans.Facts, "pg:pg-proxmox-1", "role") != nil {
+		t.Error("a role reported while the members disagree")
+	}
+}
+
+// TestStateExit3: a state whose every source failed has no fact: exit 3, the unknowns still on stdout.
+func TestStateExit3(t *testing.T) {
+	dead := deadURL(t)
+	var out, errb bytes.Buffer
+	code := doorCmd("state", []string{"--prom-url", dead, "--pigsty-url", dead, "--patroni-url", dead, "pg-proxmox"}, &out, &errb)
+	var ans StateAnswer
+	if err := json.Unmarshal(out.Bytes(), &ans); err != nil || code != 3 || !ans.Partial || len(ans.Unknown) == 0 {
+		t.Errorf("exit %d, %v, %s", code, err, errb.String())
+	}
+}
+
+// TestRecipesPerRow: each alias row is asked by its own names with its own status, never a historical one, and a
+// state names the best row it resolved through and whether the name is historical.
+func TestRecipesPerRow(t *testing.T) {
+	d := testDoor(t)
+	tbl := `things:
+  vm:pg01:
+    aliases:
+      - {source: pigsty-vmetrics, field: instance, name: "192.168.1.205:9100", status: proven, key: mac, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: instance, name: "10.0.0.5:9100", status: declared, key: ip, at: 2026-11-14}
+      - {source: pigsty-vmetrics, field: instance, name: "10.0.0.9:9100", status: historical, key: ip}
+      - {source: pihole, field: A, name: pg01.x, status: declared, key: ip, at: 2026-11-14}
+      - {source: terraform-state, field: hostname, name: pg01.x, status: proven, key: mac, at: 2026-11-14}
+      - {source: repo-declared, field: former-name, name: old-pg, status: historical, key: name}
+`
+	rl, err := realms.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	al, err := realms.ParseAliases([]byte(tbl), rl, d.reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cd := &door{al: al, reg: d.reg}
+	asks, _ := cd.recipes("vm:pg01")
+	got := map[string]string{}
+	for _, a := range asks {
+		got[a.selector] = a.via
+	}
+	want := map[string]string{`up{instance="192.168.1.205:9100"}`: "proven", `up{instance="10.0.0.5:9100"}`: "declared"}
+	if len(got) != len(want) || got[`up{instance="192.168.1.205:9100"}`] != "proven" || got[`up{instance="10.0.0.5:9100"}`] != "declared" {
+		t.Errorf("asks %v, want %v", got, want)
+	}
+	ans, err := cd.state(context.Background(), opts(deadURL(t), deadURL(t)), http.DefaultClient, "pg01.x", fixedNow)
+	if err != nil || ans.Via.Source != "terraform-state" || ans.Via.Status != "proven" || ans.Historical {
+		t.Errorf("pg01.x via %+v historical %v (%v)", ans.Via, ans.Historical, err)
+	}
+	ans, err = cd.state(context.Background(), opts(deadURL(t), deadURL(t)), http.DefaultClient, "old-pg", fixedNow)
+	if err != nil || ans.Via.Status != "historical" || !ans.Historical {
+		t.Errorf("old-pg via %+v historical %v (%v)", ans.Via, ans.Historical, err)
+	}
+}
+
+// TestPromRangeRefuses: a status other than 200 and an answer past maxAnswer are errors, not data.
+func TestPromRangeRefuses(t *testing.T) {
+	ok := `{"status":"success","data":{"resultType":"matrix","result":[]}}`
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(ok))
+	}))
+	defer bad.Close()
+	if _, err := promRange(context.Background(), http.DefaultClient, bad.URL, "up{}[10m]"); err == nil || !strings.Contains(err.Error(), "502") {
+		t.Errorf("a 502: %v", err)
+	}
+	big := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"a":"`))
+		_, _ = w.Write(bytes.Repeat([]byte("x"), maxAnswer))
+		_, _ = w.Write([]byte(`"},"values":[]}]}}`))
+	}))
+	defer big.Close()
+	if _, err := promRange(context.Background(), http.DefaultClient, big.URL, "up{}[10m]"); err == nil {
+		t.Error("an answer past maxAnswer decoded")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"math"
 	"net/http"
@@ -27,6 +28,10 @@ const (
 	srcPigsty  = "pigsty-vmetrics"
 	srcPatroni = "patroni-rest"
 )
+
+// maxSkew is how far ahead of atlas's clock a sample may be and still be read as now: past it one of the clocks is
+// wrong, and the age means nothing.
+const maxSkew = 5 * time.Second
 
 // lookback is how far back a metric recipe looks for a series' last sample: far enough to say how stale a stale
 // one is, where an instant query would only say "no data" after Prometheus' 5 min.
@@ -76,14 +81,20 @@ type SourceStatus struct {
 
 // StateAnswer is `atlas state`'s output (§3's GET /api/state, without the route).
 type StateAnswer struct {
-	Asked   string         `json:"asked"`
-	About   string         `json:"about"`
-	Via     realms.Match   `json:"via"` // the alias row the name resolved through
-	At      time.Time      `json:"at"`
-	Partial bool           `json:"partial"` // a source failed or ran out of budget
-	Facts   []Envelope     `json:"facts"`
-	Unknown []Unknown      `json:"unknown"`
-	Sources []SourceStatus `json:"sources"`
+	Asked      string         `json:"asked"`
+	About      string         `json:"about"`
+	Via        realms.Match   `json:"via"`        // the best alias row the name resolved through (proven, declared, historical)
+	Historical bool           `json:"historical"` // the name is one the thing no longer has: every row it hit is historical
+	At         time.Time      `json:"at"`
+	Partial    bool           `json:"partial"` // a source failed or ran out of budget
+	Facts      []Envelope     `json:"facts"`
+	Unknown    []Unknown      `json:"unknown"`
+	Sources    []SourceStatus `json:"sources"`
+}
+
+// statusRank orders alias statuses best first, for the row a state reports it resolved through.
+func statusRank(s string) int {
+	return slices.Index([]string{realms.Proven, realms.Declared, realms.Historical}, s)
 }
 
 // errAmbiguous is a state asked by a name that is more than one thing: the answer is the candidates.
@@ -121,7 +132,10 @@ func (d *door) recipes(id string) (asks []metricAsk, members []string) {
 	seen := map[metricAsk]bool{}
 	for _, a := range about {
 		for _, al := range d.al.Things[a].Aliases {
-			for _, n := range d.al.Names(a, al.Source, al.Field) {
+			if al.Status == realms.Historical {
+				continue // a name the thing no longer has finds nothing live
+			}
+			for _, n := range d.al.NamesOf(a, al) { // this row's own names, asked with this row's status
 				for _, k := range d.askFor(a, al, n) {
 					if !seen[k] {
 						seen[k] = true
@@ -172,7 +186,8 @@ func (d *door) state(ctx context.Context, o doorOpts, hc *http.Client, name stri
 		return StateAnswer{}, errAmbiguous
 	}
 	id := r.IDs[0]
-	ans := StateAnswer{Asked: name, About: id, Via: ms[0], At: now().UTC(), Facts: []Envelope{}, Unknown: []Unknown{}, Sources: []SourceStatus{}}
+	via := slices.MinFunc(ms, func(x, y realms.Match) int { return cmp.Compare(statusRank(x.Status), statusRank(y.Status)) })
+	ans := StateAnswer{Asked: name, About: id, Via: via, Historical: r.Historical, At: now().UTC(), Facts: []Envelope{}, Unknown: []Unknown{}, Sources: []SourceStatus{}}
 	asks, members := d.recipes(id)
 	ctx, cancel := context.WithTimeout(ctx, o.Total)
 	defer cancel()
@@ -277,6 +292,16 @@ func (d *door) askMetrics(ctx context.Context, hc *http.Client, src, base string
 		}
 		for _, s := range res[i].series {
 			age := t.Sub(s.At).Seconds()
+			if s.Bad != "" {
+				unknown = append(unknown, Unknown{About: a.about, What: a.what, Cite: cite, Reason: "last sample is " + strconv.Quote(s.Bad) + ", not a number"})
+				continue
+			}
+			if age < -maxSkew.Seconds() {
+				unknown = append(unknown, Unknown{About: a.about, What: a.what, Cite: cite,
+					Reason: fmt.Sprintf("sample in the future: %.0fs ahead of atlas's clock (%s's clock or atlas's is wrong)", -age, src)})
+				continue
+			}
+			age = max(age, 0) // a clock a little ahead reads as now
 			m := map[string]any{"name": metricName(a.selector), "of": a.what, "value": s.V, "labels": s.L}
 			if a.sum {
 				m["sum_of_series"] = n
@@ -299,13 +324,14 @@ var scrapeLabels = []string{"__name__", "container", "endpoint", "namespace", "p
 
 // promSeries is one series' last sample in a range answer.
 type promSeries struct {
-	L  map[string]string
-	V  float64
-	At time.Time
+	L   map[string]string
+	V   float64
+	Bad string // the last sample's value when it is not a finite number (NaN, ±Inf, not a number)
+	At  time.Time
 }
 
 // promRange asks base's instant query API a range selector and keeps each series' last sample (a value that isn't
-// a number is skipped, as promHTTP does). Prometheus and VictoriaMetrics both answer a matrix.
+// a finite number is kept as Bad). Prometheus and VictoriaMetrics both answer a matrix.
 func promRange(ctx context.Context, hc *http.Client, base, q string) ([]promSeries, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+contract.PromQueryPath+"?query="+url.QueryEscape(q), nil)
 	if err != nil {
@@ -325,27 +351,36 @@ func promRange(ctx context.Context, hc *http.Client, base, q string) ([]promSeri
 			}
 		}
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil || r.Status != "success" {
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("query %.60q: status %d", q, resp.StatusCode)
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAnswer)).Decode(&r); err != nil || r.Status != "success" {
 		return nil, fmt.Errorf("query %.60q: status %d %s %v", q, resp.StatusCode, r.Status, err)
 	}
 	var out []promSeries
 	for _, x := range r.Data.Result {
-		for j := len(x.Values) - 1; j >= 0; j-- {
-			ts, _ := x.Values[j][0].(float64)
-			str, _ := x.Values[j][1].(string)
-			v, err := strconv.ParseFloat(str, 64)
-			if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
-				continue
-			}
-			for _, k := range scrapeLabels {
-				delete(x.Metric, k)
-			}
-			out = append(out, promSeries{L: x.Metric, V: v, At: time.UnixMilli(int64(ts * 1000))})
-			break
+		if len(x.Values) == 0 {
+			continue
 		}
+		last := x.Values[len(x.Values)-1]
+		ts, _ := last[0].(float64)
+		str, _ := last[1].(string)
+		s := promSeries{L: x.Metric, At: time.UnixMilli(int64(ts * 1000))}
+		if v, err := strconv.ParseFloat(str, 64); err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+			s.Bad = str // JSON has no NaN or ±Inf: the series is unknown, never an older sample passed off as its last
+		} else {
+			s.V = v
+		}
+		for _, k := range scrapeLabels {
+			delete(s.L, k)
+		}
+		out = append(out, s)
 	}
 	return out, nil
 }
+
+// maxAnswer bounds what one source's answer may be: a range selector over one thing is a few KB.
+const maxAnswer = 4 << 20
 
 // sumSeries is the sum of the series' last values, as old as the oldest of them, labelled with what they share
 // (the fact says how many it summed).
@@ -354,6 +389,7 @@ func sumSeries(ss []promSeries) promSeries {
 	maps.Copy(out.L, ss[0].L)
 	for _, s := range ss {
 		out.V += s.V
+		out.Bad = cmp.Or(out.Bad, s.Bad)
 		if s.At.Before(out.At) {
 			out.At = s.At
 		}
@@ -386,62 +422,83 @@ type patroniMember struct {
 	Lag      any    `json:"lag"` // a number, or "unknown" while a replica is not streaming
 }
 
-// askPatroni asks every member's REST API for /cluster at once and reads the first answer: each member's role, the
-// cluster's leader and, for an endpoint, the VM that holds the VIP (vip-manager follows the leader: atlas derives
-// it). With no answer, every one of those is unknown with the reason.
+// askPatroni asks every member's REST API for /cluster at once and waits for each answer (within the budget). An
+// answer for another scope than the asked cluster's is that member failing. The answering members must agree on the
+// leader; then the first answer (in --patroni-url order) gives each member's role, the cluster's leader and, for an
+// endpoint, the VM that holds the VIP (vip-manager follows the leader: atlas derives it). With no answer, or members
+// that disagree, those are unknown with the reason. One member down while another answers is not a failing source.
 func (d *door) askPatroni(ctx context.Context, hc *http.Client, urls []string, id string, members []string, now func() time.Time) ([]Envelope, []Unknown, error) {
 	type got struct {
 		url string
 		c   patroniCluster
 		err error
 	}
-	ch := make(chan got, len(urls))
-	for _, u := range urls {
+	answers := make([]got, len(urls))
+	var wg sync.WaitGroup
+	for i, u := range urls {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			c, err := getPatroni(ctx, hc, u+"/cluster")
-			ch <- got{u + "/cluster", c, err}
+			answers[i] = got{u + "/cluster", c, err}
 		}()
 	}
-	var first *got
-	var errs []error
-	for range urls {
-		g := <-ch
-		if g.err == nil {
-			first = &g
-			break
-		}
-		errs = append(errs, fmt.Errorf("%s: %w", g.url, g.err))
-	}
+	wg.Wait()
 	kind, _, _ := strings.Cut(id, ":")
-	cluster := id
-	if kind == graph.KindEndpoint {
-		cluster = d.al.Things[id].Fronts
+	cluster := d.clusterOf(id, members)
+	scope := strings.TrimPrefix(cluster, graph.KindDB+":")
+	if n := d.al.Names(cluster, srcPatroni, "scope"); len(n) > 0 {
+		scope = n[0]
 	}
-	if first == nil {
-		err := errors.Join(errs...)
-		cite := Cite{Source: srcPatroni, Query: "GET " + strings.Join(urls, "/cluster, GET ") + "/cluster"}
+	var good []got
+	var down, wrong []error // members that did not answer; members that answered for another cluster
+	for _, g := range answers {
+		switch {
+		case g.err != nil:
+			down = append(down, fmt.Errorf("%s: %w", g.url, g.err))
+		case g.c.Scope != scope:
+			wrong = append(wrong, fmt.Errorf("%s: answered for scope %q, asked %q", g.url, g.c.Scope, scope))
+		default:
+			good = append(good, g)
+		}
+	}
+	// noAnswer marks every fact the recipe expected unknown, with why.
+	noAnswer := func(reason string, cite Cite) []Unknown {
 		var unknown []Unknown
 		for _, m := range members {
-			unknown = append(unknown, Unknown{About: m, What: "role", Reason: srcPatroni + " failing: no member answered", Cite: cite})
+			unknown = append(unknown, Unknown{About: m, What: "role", Reason: reason, Cite: cite})
 		}
 		if kind == graph.KindDB || kind == graph.KindEndpoint {
-			unknown = append(unknown, Unknown{About: cluster, What: "leader", Reason: srcPatroni + " failing: no member answered", Cite: cite})
+			unknown = append(unknown, Unknown{About: cluster, What: "leader", Reason: reason, Cite: cite})
 		}
 		if kind == graph.KindEndpoint {
-			unknown = append(unknown, Unknown{About: id, What: "holder", Reason: "the VIP follows the Patroni leader, which is unknown", Cite: cite})
+			unknown = append(unknown, Unknown{About: id, What: "holder", Reason: "the VIP follows the Patroni leader, which is unknown: " + reason, Cite: cite})
 		}
-		return nil, unknown, err
+		return unknown
 	}
+	if len(good) == 0 {
+		cite := Cite{Source: srcPatroni, Query: "GET " + strings.Join(urls, "/cluster, GET ") + "/cluster"}
+		return nil, noAnswer(srcPatroni+" failing: no member answered for scope "+scope, cite), errors.Join(append(wrong, down...)...)
+	}
+	var says []string
+	for _, g := range good {
+		says = append(says, g.url+" says "+cmp.Or(patroniLeader(g.c), "no leader"))
+	}
+	if slices.ContainsFunc(good, func(g got) bool { return patroniLeader(g.c) != patroniLeader(good[0].c) }) {
+		cite := Cite{Source: srcPatroni, Query: "GET " + good[0].url}
+		reason := "patroni-rest members disagree on the leader: " + strings.Join(says, "; ")
+		return nil, noAnswer(reason, cite), errors.Join(append(wrong, errors.New(reason))...)
+	}
+	first := good[0]
 	t := now().UTC()
 	cite := Cite{Source: srcPatroni, Query: "GET " + first.url}
 	var facts []Envelope
 	var unknown []Unknown
-	leader := ""
 	for _, m := range members {
 		// The member's Patroni name is its alias there; a member without one is asked by its id's name.
 		name, via := strings.TrimPrefix(m, graph.KindPG+":"), "id"
 		for _, al := range d.al.Things[m].Aliases {
-			if al.Source == srcPatroni && al.Field == "name" {
+			if al.Source == srcPatroni && al.Field == "name" && al.Status != realms.Historical {
 				name, via = al.Name, al.Status
 			}
 		}
@@ -457,17 +514,16 @@ func (d *door) askPatroni(ctx context.Context, hc *http.Client, urls []string, i
 		}
 		facts = append(facts, Envelope{Who: srcPatroni, When: t, About: m, What: map[string]any{"role": role}, AgeS: 0, Via: via, Cite: cite})
 	}
-	for _, x := range first.c.Members {
-		if x.Role == "leader" || x.Role == "standby_leader" {
-			leader = graph.ID(graph.KindPG, x.Name)
-		}
+	leader := ""
+	if n := patroniLeader(first.c); n != "" {
+		leader = graph.ID(graph.KindPG, n)
 	}
 	if kind == graph.KindDB || kind == graph.KindEndpoint {
 		if leader == "" {
 			unknown = append(unknown, Unknown{About: cluster, What: "leader", Reason: "patroni-rest answered with no leader", Cite: cite})
 		} else {
 			facts = append(facts, Envelope{Who: srcPatroni, When: t, About: cluster, AgeS: 0, Via: realms.Proven, Cite: cite,
-				What: map[string]any{"state": map[string]any{"leader": leader, "members": len(first.c.Members)}}})
+				What: map[string]any{"state": map[string]any{"leader": leader, "members": len(first.c.Members), "agreed_by": len(good)}}})
 		}
 	}
 	if kind == graph.KindEndpoint {
@@ -478,7 +534,32 @@ func (d *door) askPatroni(ctx context.Context, hc *http.Client, urls []string, i
 			unknown = append(unknown, Unknown{About: id, What: "holder", Reason: "the leader " + cmp.Or(leader, "(none)") + " has no runs_on in aliases.yaml", Cite: cite})
 		}
 	}
-	return facts, unknown, nil
+	return facts, unknown, errors.Join(wrong...)
+}
+
+// patroniLeader is the member an answer names leader (or standby leader), or "".
+func patroniLeader(c patroniCluster) string {
+	for _, x := range c.Members {
+		if x.Role == "leader" || x.Role == "standby_leader" {
+			return x.Name
+		}
+	}
+	return ""
+}
+
+// clusterOf is the Postgres cluster a Patroni ask is about: the db itself, what an endpoint fronts, or the cluster
+// of the (first) member.
+func (d *door) clusterOf(id string, members []string) string {
+	kind, _, _ := strings.Cut(id, ":")
+	switch {
+	case kind == graph.KindDB:
+		return id
+	case kind == graph.KindEndpoint:
+		return d.al.Things[id].Fronts
+	case len(members) > 0:
+		return d.al.Things[members[0]].PartOf
+	}
+	return id
 }
 
 func getPatroni(ctx context.Context, hc *http.Client, u string) (patroniCluster, error) {
@@ -495,7 +576,7 @@ func getPatroni(ctx context.Context, hc *http.Client, u string) (patroniCluster,
 	if resp.StatusCode != http.StatusOK {
 		return c, fmt.Errorf("status %d", resp.StatusCode)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&c); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAnswer)).Decode(&c); err != nil {
 		return c, fmt.Errorf("decode: %w", err)
 	}
 	return c, nil

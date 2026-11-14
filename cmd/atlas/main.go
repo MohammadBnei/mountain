@@ -10,7 +10,7 @@
 // resolve and state are the door's first slice (resolve.go, state.go; design-2026-11/door-hybrid-F.md): read-only
 // GETs to the cluster Prometheus, Pigsty's VictoriaMetrics and Patroni's REST API, nothing stored, no route. An
 // ambiguous name is never picked: resolve lists every id, state exits 2 with that list. A name that resolves to
-// nothing exits 1. From the laptop, forward the three through k9s and point the flags at the forwards:
+// nothing exits 1; a state with no fact because every source it asked failed exits 3. From the laptop, forward the three through k9s and point the flags at the forwards:
 //
 //	ssh -o BatchMode=yes -tt -L 19090:127.0.0.1:19090 k9s \
 //	    kubectl -n monitoring port-forward svc/platform-prometheus-kube-p-prometheus 19090:9090 &

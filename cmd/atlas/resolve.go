@@ -84,8 +84,9 @@ func (d *door) resolve(name string) resolveAnswer {
 	return a
 }
 
-// doorCmd runs `atlas resolve` or `atlas state` with args, the answer as JSON on stdout: the exit code is 0, 1 for a
-// name that is nothing, 2 for bad flags or an ambiguous name (state).
+// doorCmd runs `atlas resolve` or `atlas state` with args, the answer as JSON on stdout. The exit code is 0; 1 for a
+// name that is nothing (or an answer that could not be written); 2 for bad flags or an ambiguous name (state); 3 for
+// a state that is partial with no fact at all (every source asked failed: the answer is all unknowns).
 func doorCmd(cmd string, args []string, stdout, stderr io.Writer) int {
 	d, err := loadDoor()
 	if err != nil {
@@ -100,7 +101,10 @@ func doorCmd(cmd string, args []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 		r := d.resolve(args[0])
-		_ = enc.Encode(r)
+		if err := enc.Encode(r); err != nil {
+			_, _ = fmt.Fprintln(stderr, "resolve:", err)
+			return 1
+		}
 		if len(r.IDs) == 0 {
 			return 1
 		}
@@ -122,6 +126,13 @@ func doorCmd(cmd string, args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, err)
 		return 1
 	}
-	_ = enc.Encode(ans)
+	if err := enc.Encode(ans); err != nil {
+		_, _ = fmt.Fprintln(stderr, "state:", err)
+		return 1
+	}
+	if ans.Partial && len(ans.Facts) == 0 {
+		_, _ = fmt.Fprintf(stderr, "state: %q: no source answered (partial, no facts)\n", name)
+		return 3
+	}
 	return 0
 }
