@@ -233,38 +233,42 @@ func (d *door) state(ctx context.Context, o doorOpts, hc *http.Client, name stri
 			c := d.clusterOf(id, []string{m})
 			if c == "" {
 				mu.Lock()
-				ans.Unknown = append(ans.Unknown, Unknown{About: m, What: "role", Reason: "member has no cluster scope (part_of in aliases.yaml)"})
+				ans.Unknown = append(ans.Unknown, Unknown{About: m, What: "role", Reason: "member has no cluster scope (part_of in aliases.yaml)",
+					Cite: Cite{Source: srcPatroni, Query: "GET " + strings.Join(o.Patroni, "/cluster, GET ") + "/cluster"}})
 				mu.Unlock()
 				continue
 			}
 			groups[c] = append(groups[c], m)
 		}
-		run(srcPatroni, func(ctx context.Context) error {
-			answers := askAll(ctx, hc, o.Patroni)
-			asked := map[string]bool{}
-			for c := range groups {
-				asked[d.scopeOf(c)] = true
-			}
-			var errs []error
-			for _, g := range answers {
-				if g.err == nil && !asked[g.c.Scope] {
-					errs = append(errs, fmt.Errorf("%s: answered for scope %q, asked %q", g.url, g.c.Scope, strings.Join(slices.Sorted(maps.Keys(asked)), ", ")))
+		if len(groups) > 0 {
+			run(srcPatroni, func(ctx context.Context) error {
+				answers := askAll(ctx, hc, o.Patroni)
+				asked := map[string]bool{}
+				for c := range groups {
+					asked[d.scopeOf(c)] = true
 				}
-			}
-			var gw sync.WaitGroup
-			for _, c := range slices.Sorted(maps.Keys(groups)) {
-				gw.Add(1)
-				go func() {
-					defer gw.Done()
+				var errs, down, byCluster []error // down URLs are reported once, and only when a cluster got no answer
+				for _, g := range answers {
+					switch {
+					case g.err != nil:
+						down = append(down, fmt.Errorf("%s: %w", g.url, g.err))
+					case !asked[g.c.Scope]:
+						errs = append(errs, fmt.Errorf("%s: answered for scope %q, asked %q", g.url, g.c.Scope, strings.Join(slices.Sorted(maps.Keys(asked)), ", ")))
+					}
+				}
+				for _, c := range slices.Sorted(maps.Keys(groups)) {
 					facts, unknown, err := d.askPatroni(answers, o.Patroni, id, groups[c], now)
 					mu.Lock()
-					ans.Facts, ans.Unknown, errs = append(ans.Facts, facts...), append(ans.Unknown, unknown...), append(errs, err)
+					ans.Facts, ans.Unknown = append(ans.Facts, facts...), append(ans.Unknown, unknown...)
 					mu.Unlock()
-				}()
-			}
-			gw.Wait()
-			return errors.Join(errs...)
-		})
+					byCluster = append(byCluster, err)
+				}
+				if slices.ContainsFunc(byCluster, func(e error) bool { return e != nil }) {
+					errs = append(errs, down...)
+				}
+				return errors.Join(append(errs, byCluster...)...)
+			})
+		}
 	}
 	wg.Wait()
 	if len(asks) == 0 && len(members) == 0 {
@@ -508,13 +512,8 @@ func (d *door) askPatroni(answers []patroniReply, urls []string, id string, memb
 	cluster := d.clusterOf(id, members)
 	scope := d.scopeOf(cluster)
 	var good []got
-	var down []error // members that did not answer
 	for _, g := range answers {
-		switch {
-		case g.err != nil:
-			down = append(down, fmt.Errorf("%s: %w", g.url, g.err))
-		case g.c.Scope != scope:
-		default:
+		if g.err == nil && g.c.Scope == scope { // the rest the caller reports, once
 			good = append(good, g)
 		}
 	}
@@ -534,7 +533,7 @@ func (d *door) askPatroni(answers []patroniReply, urls []string, id string, memb
 	}
 	if len(good) == 0 {
 		cite := Cite{Source: srcPatroni, Query: "GET " + strings.Join(urls, "/cluster, GET ") + "/cluster"}
-		return nil, noAnswer(srcPatroni+" failing: no member answered for scope "+scope, cite), errors.Join(append(down, errors.New("no member answered for scope "+scope))...)
+		return nil, noAnswer(srcPatroni+" failing: no member answered for scope "+scope, cite), errors.New("no member answered for scope " + scope)
 	}
 	var says []string
 	for _, g := range good {

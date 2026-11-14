@@ -728,4 +728,19 @@ func TestStateTwoClustersOnAVM(t *testing.T) {
 	if u := findUnknown(ans.Unknown, "pg:pg-other-1", "role"); u == nil || !strings.Contains(u.Reason, "no cluster scope") {
 		t.Errorf("no part_of: %+v", u)
 	}
+	// All URLs down: each URL's error once, then each cluster's in scope order.
+	ans, _ = cd.state(context.Background(), opts(deadURL(t), deadURL(t), deadURL(t), deadURL(t)), http.DefaultClient, "vm:pg01", fixedNow)
+	for _, s := range ans.Sources {
+		if s.ID != srcPatroni {
+			continue
+		}
+		if c := strings.Count(s.Error, "connection refused"); c != 2 {
+			t.Errorf("each dead URL once: %q", s.Error)
+		}
+		// clusters fold in db id order: db:pg-proxmox before db:redis-main (scope pg-other)
+		i, j := strings.Index(s.Error, "scope pg-proxmox"), strings.Index(s.Error, "scope pg-other")
+		if i < 0 || j < 0 || i > j || strings.Count(s.Error, "no member answered") != 2 {
+			t.Errorf("cluster errors once each, in cluster order: %q", s.Error)
+		}
+	}
 }
