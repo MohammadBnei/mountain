@@ -115,3 +115,10 @@ as ghost rooms, and strategy shows a before and after. What you correct while wa
 - The agent-fleet seam the thread uses: a live session, its permissions, and what an agent may do from inside the
   game.
 - How this joins the scene research's Operation and War table (ukubi-9f), so the two do not diverge.
+
+## Inputs for world-model.md
+
+- **mountain #99** (draft, ukubi-9f, branch `door/f-slice1`) adds `graph.Kinds` in `internal/graph`: a map from each
+  of the 13 kinds to a one-line meaning. `Valid`'s id rule is built from it. The PR also adds two new kinds, `pg:`
+  (a Patroni member) and `endpoint:` (a VIP or a redirect Service). This is the registry that maps a kind to a room.
+- Check #99's merge state before `world-model.md` relies on it.
