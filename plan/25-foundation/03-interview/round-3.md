@@ -64,3 +64,19 @@ Still open there:
 **What this means for ui-core.** The strategy mode should be the screen for operations, characters and projections.
 It may well be flat or schematic over the shared 3D scene, not a camera mode. The ui-core round must keep both open,
 and it must not fix a shape before the scene research does.
+
+### Owner requirement on the two modes (2026-11-14)
+The owner's words: "I still want somehow to be able to switch between explore or strategic, and have access to the
+same possibilities."
+
+What this binds `ui-core.md` to:
+- **One switch.** Explore and strategy are two presentations of one state. You can switch at any time, and the
+  selection, focus and open work carry over.
+- **The same possibilities.** Every action is defined once, in one action layer that knows nothing of the view. Each
+  mode only presents those actions:
+  - explore through the dock, the radial and the panels;
+  - strategy through the board, the cards and the inbox.
+- **A check.** A test lists the actions reachable in each mode and fails when the two lists differ, the same way the
+  router's AST guard checks keys today.
+- **Left open:** how the strategy mode looks (flat or schematic, or the same 3D). That waits for the scene research
+  (above).
