@@ -20,6 +20,35 @@ Builders read `../04-architecture/charter.md`. Decision records go to `decisions
 - From W1 on, the gc-against-WASM golden runs in CI.
 - Each phase names its own golden test. A phase that changes feel is played by hand before the merge.
 
+**Test safety: moving the world must never mean hours of test fixes.** Counted on ukubi-game `main`:
+- the 9 browser gates mostly look places up by id (`aim-gate.mjs:136`), with 4 literal-coordinate lines;
+- 15 Go test files use literal hexes or x/z, most of them physics tests on synthetic grids;
+- the real exposure is 10 snapshot goldens (`internal/land/testdata/golden-*.json`, `world-land.fixture.json`,
+  `town/testdata/disc-fixture.json`, ...).
+
+The rules:
+1. **Tests ask the stage.** `stage.Find(path|query)` in Go and `__world.find(query)` in gates, never coordinates.
+   Exposed tests and gate lines migrate in W2, before the world moves; unchanged goldens prove the migration.
+2. **Law goldens and snapshot goldens.**
+   - Law goldens (determinism, no collision, roles present, reachable) survive moves.
+   - Snapshot goldens are regenerated only by one command (`WORLD_GEN=write`, as the registry test does) and reviewed
+     as a diff, never hand-patched.
+3. **A frozen test world.** UI and feel gates run on a space version pinned in testdata. Only the world gates run on
+   the live stage, and they check laws, not places.
+4. **A count before each phase.** Every test touching the world is classed as synthetic, query-by-id or
+   literal-position. The phase's plan states its migration size.
+
+## W0 · Spikes (throwaway branches, in parallel)
+
+| Spike | Partial implementation | Answers |
+|---|---|---|
+| S1 placement | Composer, ranks and law 1 on a toy space (a pinned village, rooms derived from one app, a sunflower decor rule); then the real halls-and-ramps generator ported against massifs | Does pure ranking hold on real stages, at what cost |
+| S2 nav | Layered (hex, floor) graph read from today's disc (tunnel floors, decor solids), a search from the spawn, timed on the 2× disc, compared with the rider route | Bet 2: cost and false answers |
+| S3 visual | Style spec for one family (trees and rocks) behind a URL flag: weighted variants, zoom stops; flag off gives an identical frame golden | Per-frame cost, spec size |
+| S4 test safety | The full test count, plus a `Find` prototype with 2 gates migrated | W2's migration size |
+
+Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted before W1 starts.
+
 ## W1 · Proof of determinism (small, main thread)
 
 - Exp and Hypot join `internal/ptrig`.
@@ -156,5 +185,5 @@ Builders read `../04-architecture/charter.md`. Decision records go to `decisions
 
 ## Order and overlap
 
-W1 → W2 → W3, then W4 and W5 in parallel (server files against page files), then W6 → W7 → W8. W6's nav graph needs
+W0 (spikes) → W1 → W2 → W3, then W4 and W5 in parallel (server files against page files), then W6 → W7 → W8. W6's nav graph needs
 W4's connectors, so it starts after the tunnels and caves rounds of W4.
