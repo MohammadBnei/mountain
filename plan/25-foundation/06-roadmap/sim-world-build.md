@@ -56,16 +56,21 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 - The lint bans every `math` function with an assembly path.
 - `town/`, `internal/land` and `internal/combat` join the exact set.
 - A CI test runs the same inputs through gc and the TinyGo WASM and compares `Float64bits`.
-- **The same PR deletes the 9 GPU gates** and `dev/ci-local.sh --gates`, with the one-line ledger per gate check, and
-  cuts the HUD fixture to "mounts without error" plus screenshots (`../04-architecture/tests.md`).
+- **The same PR deletes the 9 GPU gates** and `dev/ci-local.sh --gates`, with the one-line ledger per gate check, their
+  wiring (`__world` hooks no journey needs, `gate-stack.sh`, `found-gate.mjs`, comments, `CLAUDE.md` lines), keeps the
+  HUD fixture's surface-table rows, fixes its `bun install` step, and adds the bundle and WASM byte budgets
+  (`../04-architecture/tests.md`).
 - **Behaviour:** none (bit-exact by construction). **Proof:** the golden plus a mutation (put `math.Exp` back, and
   the test fails).
 
 ## T1 · One clock (with W2)
 
-- Every clock read in the page (`performance.now`/`Date.now`, 32 in `world.ts`) goes through one injected clock, as
-  the HUD's `UiClock` does.
-- The realm gets a test-only step endpoint; `advance(ms)` steps its ticks and the page's fixed frames together.
+- Every clock read in the page (96 `performance.now`/`Date.now` reads across about 10 files, and the 31 timer sites)
+  goes through one injected clock, as the HUD's `UiClock` does.
+- The realm's step channel becomes an endpoint behind the `teststep` build tag (release answers 404). In step mode its
+  ticker stops and every other ticker goes through the same clock. `advance(ms)` steps its ticks and the page's fixed
+  frames together.
+- CI splits into the per-PR fast path and the nightly slow path (`../04-architecture/tests.md`).
 - **Proof:** a stepped boot on the fixture world gives the same state twice.
 
 ## T2 · Browser journeys (after W3)
