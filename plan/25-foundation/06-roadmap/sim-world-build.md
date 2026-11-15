@@ -8,7 +8,7 @@ layered nav graph, and the composer on the server only.
 **Shape of every phase** (`ui-core-build.md`, the agreed workflow shape):
 - build fan-out on disjoint files, with fast suites in each lane;
 - one integration;
-- gates once, by angle;
+- the safety net once (`../04-architecture/tests.md`);
 - one fix agent per round;
 - the PR, a fresh review, then the merge on the owner's word.
 
@@ -28,13 +28,13 @@ Builders read `../04-architecture/charter.md`. Decision records go to `decisions
   forbid the world from moving.
 
 The rules:
-1. **Tests ask the stage.** `stage.Find(path|query)` in Go and `__world.find(query)` in gates, never coordinates.
-   Exposed tests and gate lines migrate in W2, before the world moves.
+1. **Tests ask the stage.** `stage.Find(path|query)` in Go and `__world.find(query)` in journeys, never coordinates.
+   Exposed tests migrate in W2, before the world moves.
 2. **No snapshot goldens of the world.** The 5 land goldens are deleted at W3. What stays: the gc-against-WASM
    determinism golden (synthetic inputs, not world-shaped) and law tests (no collision, roles present, reachable,
    order-free), which hold however the world moves.
 3. **A frozen test world.** The fixture worlds (`world-land.fixture.json`, `yard-fixture.json`, `disc-fixture.json`,
-   `fiction.json`) are inputs and stay: UI and feel gates run on them. Only the world gates run on the live stage, and
+   `fiction.json`) are inputs and stay: the journeys run on them. Only the world laws run on the live stage, and
    they check laws, not places.
 4. **A count before each phase.** Every test touching the world is classed as synthetic, query-by-id or
    literal-position. The phase's plan states its migration size.
@@ -82,7 +82,7 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
   - `openSpot(land)` replaces the `openX, openZ` constants (`internal/physics/walk_test.go:12`, 50 uses);
   - `Find` in Go and `__world.find(query)` in the page;
   - the law harness;
-  - 47 literal-position and 18 snapshot tests, about 75 id lookups and 14 gate sites, migrated.
+  - 47 literal-position and 18 snapshot tests and about 75 id lookups, migrated (the gate sites go with the gates).
 
 - **Composer:**
   - typed prims at paths;
