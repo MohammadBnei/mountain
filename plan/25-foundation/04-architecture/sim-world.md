@@ -54,17 +54,27 @@ package runs every mover in the realm; the page runs its `Step` to predict its o
   while someone is in it or strategy watches it. A new version starts a new instance; the old one drains. The welcome
   names the version; a portal admits to a version the page holds or can fetch. Interiors and the underside become
   shared instances with their own colliders.
-- **The file-to-map contract.** Written for procedural generation from day one.
-  - Region kinds: each region in a space's files is authored or generated. A generated region names a generator id,
-    a generator version, params and a seed. Today's land build is the first generator and placement the second.
-  - One signature: `generate(bounds, params, graph snapshot, seed) → chunks`. A generator reads nothing else, so a
-    chunk's content id stays honest. Generators are in the exact set and the gc-against-WASM golden covers them.
-  - Pins over generation: authored placements, portals and zones are constraints. A pinned thing never moves because
-    a generator changed.
-  - Seams: where an authored region meets a generated one, or two generated ones meet, the files declare the boundary
-    (height, roads, biome). Neither side guesses the other's edge.
-  - Versions: a new generator version or new params make a new space version, so a new instance under the drain rule.
-    Old versions rebuild from git.
+- **The placement contract.** What a placement generator reads and how every position is written; procedural
+  generation is next, so this interface must not move.
+  - Today: the layout reads `DiscNode{ID, Layer, Civ, Audience}`, roads and anchors (`town/disc.go:106-121`), with
+    skip rules hard-coded on `Kind`, `Function`, `Parent` (`town/place.go:115-128`). Positions come in four forms:
+    axial hexes (`Village.At`, `Lot.Hex`), anchors in thousandths of a unit (`disc.go:120`), float xz (`Disc.At`),
+    then a global `Scale` and snap (`internal/land/land.go:996`). Lots are absolute.
+  - Source interface: one versioned projection, `Element{ID, Kind, Group, Layer, Audience, Parent, Links}`, plus
+    the pins. `Kind` is a registry row saying whether and as what it is placed (building, door, moon, part). Nothing
+    else from atlas is visible, so a new atlas field never moves the map.
+  - One position form: `Pos{Hex{Q,R}, Face}`, integer axial on the space's own grid. World units are derived in one
+    Go function, never stored; the scale lives in the space file.
+  - A tree with relative positions: space, region, site (village), lot, element. A lot is relative to its site, so
+    moving a village moves its lots. Parts fold into their building.
+  - Pins and proposals: each entry in `placements/<space>` is `pinned` (owner) or `proposed`
+    (`generator@version`). A generator writes proposals only, around the pins. An element that leaves the graph keeps
+    its spot reserved until the owner removes it.
+  - No history: a proposal is a function of (projection, pins, generator version), order-free by id hash. Today's
+    stepper becomes the first generator once it reads pins instead of the log.
+  - Generated regions: authored or generated (generator id, version, params, seed); a generator reads only its
+    bounds, the projection and the pins, and declares its seams (height, roads, biome). A new generator version makes
+    a new space version.
 - **Strategy on the whole world.** The realm instance holds the whole space, so strategy is simulated on the full
   world. The page gets one small overview per (space, version), content-addressed and cached forever: hex graph,
   low-res height and biome, zones, placements, portals. Full chunks stream only where the camera zooms in. Long orders
@@ -91,8 +101,8 @@ package runs every mover in the realm; the page runs its `Step` to predict its o
 ## Order
 
 1. **Proof of determinism:** Exp, Hypot, the wider lint, the gc-against-WASM golden.
-2. **The file-to-map contract and the server-built land:** region kinds, the generator signature, pins and seams;
-   land and placement as the first two generators (the new placement system, the stepper as its first version);
+2. **The placement contract and the server-built land:** the `Element` projection and kind registry, one `Pos` form,
+   the relative tree, pins and proposals; the stepper as the first placement generator, reading pins instead of the log;
    `WriteHex` chunks and the strategy overview by content id, the client
    streams instead of building. The town page and old layout retire.
 3. **The `sim` package:** fight and mobs extracted; the ship, lunge and auto-hop in `Step`.
