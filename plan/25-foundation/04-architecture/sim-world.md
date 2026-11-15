@@ -17,7 +17,8 @@ What stands in the way today:
   whose land hash differs is refused at hello ("another land: reload the page", `internal/realm/realm.go:529`), so a
   land change makes every reconnect fail until the page reloads.
 - The layout is history-dependent state: villages and lots are logged as `layout.stepped` events
-  (`game/layout.go:12-19`) and each new layout is stepped from the last (`LayOut`, `town/village.go:792`).
+  (`game/layout.go:12-19`) and each new layout is stepped from the last (`LayOut`, `town/village.go:792`). The log is
+  the source of truth, so the same graph can give two towns; the stepper itself is not the problem.
 - Most land stages are whole-world passes: massifs, pits, tunnels, caves, roads, lairs, the guild hall and village
   placement (doubt finding F3). Chunk-local generation is not possible for them as written.
 - Bit-exactness is claimed, not proven: `math.Exp` (FMA-gated assembly) and `math.Hypot` (assembly) take architecture
@@ -39,8 +40,9 @@ package runs every mover, in the realm, in client prediction and in solo mode.**
 - **The authored layer.** Spaces, portals, zones, regions, placements (villages, lots, the hall, massif and lair sites)
   and generator parameters are versioned files in git, reviewed by PR, pinned by commit sha. Atlas projects them like
   any other repo. A placement changes only when the owner edits it; a new graph node gets a default slot written as a
-  proposal, and nothing placed ever moves on its own. This replaces the logged `LayOut`/`ReLay` and retires the old
-  district layout and the town page. The master control room comes later and writes these files.
+  proposal, and nothing placed ever moves on its own. The stepper stays as a pure projection tool: it turns the graph
+  into proposed placements, and its output becomes a reviewed file, never a logged event. A new, enhanced placement
+  system grows from it. The `layout.stepped` log, the old district layout and the town page retire. The master control room comes later and writes these files.
 - **The world model.** A space is a pure function of (pinned files, graph snapshot, seed, generator version). The server
   builds it whole and cuts it into chunks: the existing binary `WriteHex` form (`internal/land/wire.go`), one file per
   chunk, cached forever. A chunk's id hashes only what the chunk reads. The client streams chunks and no longer builds
@@ -70,7 +72,7 @@ package runs every mover, in the realm, in client prediction and in solo mode.**
 ## Order
 
 1. **Proof of determinism:** Exp, Hypot, the wider lint, the gc-against-WASM golden.
-2. **Authored files and the server-built land:** placements as files, `WriteHex` chunks by content id, the client
+2. **Authored files and the server-built land:** placements as files (proposed by the new placement system, the stepper as a pure function), `WriteHex` chunks by content id, the client
    streams instead of building. The town page and old layout retire.
 3. **The `sim` package:** fight, mobs and placement extracted; the ship, lunge and auto-hop in `Step`.
 4. **Spaces:** one realm instance per (space, version), shared interiors and underside, binary delta snapshots.
