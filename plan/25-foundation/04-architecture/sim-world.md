@@ -48,7 +48,7 @@ package runs every mover in the realm; the page runs its `Step` to predict its o
   Its output becomes a reviewed file, never a logged event. The `layout.stepped` log, the old district layout and the town page retire. The master control room comes later and writes these files.
 - **The world model.** A space is a pure function of (pinned files, graph snapshot, seed, generator version). The server
   builds it whole and cuts it into chunks: the existing binary `WriteHex` form (`internal/land/wire.go`), one file per
-  chunk, cached forever. A chunk's id hashes only what the chunk reads. The client streams chunks and no longer builds
+  chunk, cached forever. Chunk ids are per space version (whole-space stages touch every chunk; `placement.md` F12). The client streams chunks and no longer builds
   land. Decor node ids become (chunk, index).
 - **Spaces in the realm.** One instance per (space, version), each with its own tick, lock, bodies and mobs, loaded
   while someone is in it or strategy watches it. A new version starts a new instance; the old one drains. The welcome
