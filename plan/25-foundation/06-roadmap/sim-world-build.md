@@ -221,5 +221,15 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 
 ## Order and overlap
 
-W0 (spikes) → W1 (with the gate deletion) → W2 with T1 → W3 → T2, then W4 and W5 in parallel (server files against page files), then W6 → W7 → W8. W6's nav graph needs
-W4's connectors, so it starts after the tunnels and caves rounds of W4.
+The real dependencies (owner, 2026-11-15: phases need not wait on each other unless they must):
+
+| Phase | Needs | Wave |
+|---|---|---|
+| W1, W2, W3, W6 | nothing (W3 streams today's land; W6's nav uses today's land, as spike S2 did) | A, in parallel |
+| W5, T1 | W3 (they rewrite the same page files) | B |
+| W4 | W2 (the ranks) | B |
+| W7 | W3 (space versions) | B |
+| T2 | W3 and T1 | C |
+| W8 | W1, W6 and T1 | C |
+
+Each phase is its own PR; the second of two overlapping PRs rebases.
