@@ -56,8 +56,25 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 - The lint bans every `math` function with an assembly path.
 - `town/`, `internal/land` and `internal/combat` join the exact set.
 - A CI test runs the same inputs through gc and the TinyGo WASM and compares `Float64bits`.
+- **The same PR deletes the 9 GPU gates** and `dev/ci-local.sh --gates`, with the one-line ledger per gate check, and
+  cuts the HUD fixture to "mounts without error" plus screenshots (`../04-architecture/tests.md`).
 - **Behaviour:** none (bit-exact by construction). **Proof:** the golden plus a mutation (put `math.Exp` back, and
   the test fails).
+
+## T1 · One clock (with W2)
+
+- Every clock read in the page (`performance.now`/`Date.now`, 32 in `world.ts`) goes through one injected clock, as
+  the HUD's `UiClock` does.
+- The realm gets a test-only step endpoint; `advance(ms)` steps its ticks and the page's fixed frames together.
+- **Proof:** a stepped boot on the fixture world gives the same state twice.
+
+## T2 · Browser journeys (after W3)
+
+- 6 to 10 scripted journeys, desktop and 390 px, on the real game and realm in `--dev`, the frozen fixture world and
+  the shared clock: boot and enter; ride to a house, enter, talk, leave; the map; one fight; a phone tap route; a
+  panel open and close. Each checks for console errors.
+- The QA helper (screenshots per step, no pass/fail).
+- **Budget:** the whole CI net under 60 s. A red run is a real bug.
 
 ## W2 · The stage core
 
@@ -107,21 +124,22 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 ## W4 · Generators, one rank at a time (repeated rounds)
 
 - **Ported in rank order, one round each:**
-  1. halls and ramps (today's inversion);
+  1. tunnel entrances inside houses (removes today's inversion);
   2. the wilds' centres;
-  3. massifs;
-  4. pits;
-  5. tunnels;
-  6. caves;
-  7. roads and the rest;
-  8. decor rules last: the golden trails, sunflowers and grass.
+  3. fun props;
+  4. massifs;
+  5. pits;
+  6. tunnels (halls and bores under the land);
+  7. caves, with their mouths on their massifs;
+  8. roads and the rest;
+  9. decor rules last: the golden trails, sunflowers and grass.
 - **Each generator:**
   - reads only stronger ranks;
   - emits its connectors as nav edges;
   - is pure, with a shuffled-input test.
-- **Halls and ramps first** (spike S1: picking is 7 to 14 times cheaper, no late drop, massifs unchanged). Its laws:
-  no late ramp drop, no prop on a ramp, massifs and trailheads unchanged.
-- **Proof per round:** the law tests (with role stability, law 3), and the owner plays it (massif trailhead reach, tunnel mouths, spirals). No
+- **First, tunnel entrances move inside their houses** (a stair or trapdoor in the interior). The surface ramps and
+  their inversion against massifs go (spike S1, S4). Cave mouths stay on their massifs.
+- **Proof per round:** the law tests, and the owner plays it (massif trailhead reach, tunnel mouths, spirals). No
   snapshot golden.
 - **Behaviour:** the land may shift where the old pipeline's hidden order differs from the ranks. Each shift is named
   in its PR.
@@ -196,5 +214,5 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 
 ## Order and overlap
 
-W0 (spikes) → W1 → W2 → W3, then W4 and W5 in parallel (server files against page files), then W6 → W7 → W8. W6's nav graph needs
+W0 (spikes) → W1 (with the gate deletion) → W2 with T1 → W3 → T2, then W4 and W5 in parallel (server files against page files), then W6 → W7 → W8. W6's nav graph needs
 W4's connectors, so it starts after the tunnels and caves rounds of W4.

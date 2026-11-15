@@ -69,7 +69,7 @@ Go composer runs on the server only.
   1. pins (the owner);
   2. derived projections, for example an app's architecture becoming its house's rooms (atlas's graph and
      `internal/yard`, `archetypes.go:66-90`);
-  3. each generator on its own declared rank, for example halls and ramps, wild centres, fun props, massifs, pits,
+  3. each generator on its own declared rank, for example wild centres, fun props, massifs, pits,
      tunnels, caves (the order is decided when each is ported; spike S1);
   4. decor rules (golden trails, sunflower rings, grass).
 
@@ -91,6 +91,11 @@ Go composer runs on the server only.
   projection, params, seed, version). It has no history and does not depend on id order: per-id hash slots, tested by
   shuffling the input. Its output is points with attributes (path or chunk index, kind, tags, position, face,
   scale), Houdini-style. A changed generator version or params makes a new space version.
+- **What depends on an owner is composed inside it.** An entrance, a door or a mouth is a child of its owner's
+  template, placed in the owner's frame, never searching the shared world for room. Tunnel halls are entered by a
+  stair or trapdoor inside their house (as the clock tower's trapdoor, `world-control.ts:2`); cave mouths open on
+  their own massif (`cave.go:145`). Today's surface ramps, which compete for free hexes and vanish when there is none
+  (`tunnel.go:13-20`; spike S4: a 1-hex move loses 3 of 7), go. Roles stay as tags for queries, not as a law.
 - **Generators emit their connectors.** A generator that makes vertical structure declares its ramps, tunnel
   mouths, stairs, bridges and portals as nav edges, so nobody guesses how levels join.
 - **Decor is anonymous.** Only its rule, params and seed are stored. Land decor instances become `(chunk, index)`
@@ -124,10 +129,7 @@ Go composer runs on the server only.
    - The graph is the sim's coarse nav level, so the proof and the game agree. Spike S2 measured it on the 2× disc:
      about 43k nodes and 250k edges, built in about 150 ms and searched in 1.4 ms, on the server per build.
    - The proof is stated for a rider with jumps, plus a walk-only mode for places that must be reachable on foot.
-3. **Roles are stable.** After a rigid move of a space, every prim of a declared role still exists (tag counts
-   equal). Today a 1-hex move loses 3 of 7 tunnel ramps (`tunnel.go:357-370`) or crashes `stagePasses`
-   (`hex.go:685`) (spike S4).
-4. **Looks never change gameplay.** The visual axis carries no footprint field, and the sim never imports it.
+3. **Looks never change gameplay.** The visual axis carries no footprint field, and the sim never imports it.
    Picking uses footprint colliders, not rendered meshes.
 
 ### Reading the stage
@@ -193,8 +195,8 @@ chunk reads does not hold. `sim-world.md` follows.
 2. Land `Find` and the law harness, and migrate the exposed tests to them (spike S4: 47 literal-position and 18
    snapshot tests, about 75 mechanical id lookups and 14 gate sites, about 70 hours). Then build the composer, the
    position form, the registry rows and law 1 on the seeded pins.
-3. Port the land stages one by one to pure ranked generators, each under the golden test. The halls and ramps come
-   first, because they are today's inversion, then massifs.
+3. Move the tunnel entrances inside their houses (today's inversion goes with them), then port the land stages one by
+   one to pure ranked generators, each under the law tests.
 4. Build the layered nav graph and law 2, and measure its cost.
 5. Remove `Place`, the land build and `hex` from the WASM. The logged layout and the town page retire.
 
