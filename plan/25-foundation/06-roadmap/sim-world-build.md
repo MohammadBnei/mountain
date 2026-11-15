@@ -18,7 +18,7 @@ Builders read `../04-architecture/charter.md`. Decision records go to `decisions
 - The full Go suite (`go test ./...`, with `codecheck`) runs before any merge.
 - The dist stays byte-identical under bun 1.4.x.
 - From W1 on, the gc-against-WASM golden runs in CI.
-- Each phase names its own golden test. A phase that changes feel is played by hand before the merge.
+- Each phase names its own proof (laws, determinism, a playthrough). A phase that changes feel is played by hand before the merge.
 
 **Test safety: moving the world must never mean hours of test fixes.** Counted on ukubi-game `main`:
 - the 9 browser gates mostly look places up by id (`aim-gate.mjs:136`), with 4 literal-coordinate lines;
