@@ -23,18 +23,19 @@ Builders read `../04-architecture/charter.md`. Decision records go to `decisions
 **Test safety: moving the world must never mean hours of test fixes.** Counted on ukubi-game `main`:
 - the 9 browser gates mostly look places up by id (`aim-gate.mjs:136`), with 4 literal-coordinate lines;
 - 15 Go test files use literal hexes or x/z, most of them physics tests on synthetic grids;
-- the real exposure is 10 snapshot goldens (`internal/land/testdata/golden-*.json`, `world-land.fixture.json`,
-  `town/testdata/disc-fixture.json`, ...).
+- the 5 snapshot goldens (`internal/land/testdata/golden-*.json`, read only by `land_test.go:46-50`) exist to prove
+  the Go land build matched the old TS copy float for float (`land_test.go:20`). That port is done; they now only
+  forbid the world from moving.
 
 The rules:
 1. **Tests ask the stage.** `stage.Find(path|query)` in Go and `__world.find(query)` in gates, never coordinates.
-   Exposed tests and gate lines migrate in W2, before the world moves; unchanged goldens prove the migration.
-2. **Law goldens and snapshot goldens.**
-   - Law goldens (determinism, no collision, roles present, reachable) survive moves.
-   - Snapshot goldens are regenerated only by one command (`WORLD_GEN=write`, as the registry test does) and reviewed
-     as a diff, never hand-patched.
-3. **A frozen test world.** UI and feel gates run on a space version pinned in testdata. Only the world gates run on
-   the live stage, and they check laws, not places.
+   Exposed tests and gate lines migrate in W2, before the world moves.
+2. **No snapshot goldens of the world.** The 5 land goldens are deleted at W3. What stays: the gc-against-WASM
+   determinism golden (synthetic inputs, not world-shaped) and law tests (no collision, roles present, reachable,
+   order-free), which hold however the world moves.
+3. **A frozen test world.** The fixture worlds (`world-land.fixture.json`, `yard-fixture.json`, `disc-fixture.json`,
+   `fiction.json`) are inputs and stay: UI and feel gates run on them. Only the world gates run on the live stage, and
+   they check laws, not places.
 4. **A count before each phase.** Every test touching the world is classed as synthetic, query-by-id or
    literal-position. The phase's plan states its migration size.
 
@@ -44,7 +45,7 @@ The rules:
 |---|---|---|
 | S1 placement | Composer, ranks and law 1 on a toy space (a pinned village, rooms derived from one app, a sunflower decor rule); then the real halls-and-ramps generator ported against massifs | Does pure ranking hold on real stages, at what cost |
 | S2 nav | Layered (hex, floor) graph read from today's disc (tunnel floors, decor solids), a search from the spawn, timed on the 2× disc, compared with the rider route | Bet 2: cost and false answers |
-| S3 visual | Style spec for one family (trees and rocks) behind a URL flag: weighted variants, zoom stops; flag off gives an identical frame golden | Per-frame cost, spec size |
+| S3 visual | Style spec for one family (trees and rocks) behind a URL flag: weighted variants, zoom stops; flag off leaves the page as it is | Per-frame cost, spec size |
 | S4 test safety | The full test count, plus a `Find` prototype with 2 gates migrated | W2's migration size |
 
 Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted before W1 starts.
@@ -74,8 +75,8 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
   - a derived collision keeps the last good version and files a proposal;
   - a build report lists every masked and dropped prim;
   - `freeNear` goes.
-- **Proof.** A golden of today's disc: the composer, fed the seeded pins, places every village, lot and building where
-  today's code does. A shuffled-input test shows no dependence on id order.
+- **Proof.** Law tests and a shuffled-input test (no dependence on id order). Optional: one temporary check that the
+  composer, fed the seeded pins, places what today's code does, deleted after the merge.
 - **Behaviour:** none visible. The logged layout stops being the source of truth.
 
 ## W3 · Server-built land, streamed
@@ -86,8 +87,9 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 - The page streams chunks and the overview and no longer builds land.
 - `Place`, `hex` and the land build leave the WASM, which keeps `Step` and nav.
 - The town page, `cmd/townpin` and the old district layout retire.
+- The 5 land snapshot goldens and their TS parity tests are deleted.
 - **Proof:**
-  - a frame golden of the world page before and after, at the same pose;
+  - a look at the world page before and after, at the same pose;
   - load traces against `01-baseline/load-profile.md`;
   - the WASM size.
 - **Behaviour:**
@@ -111,10 +113,8 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
   - reads only stronger ranks;
   - emits its connectors as nav edges;
   - is pure, with a shuffled-input test.
-- **Proof per round:** the land golden of the untouched ranks is identical. The ported rank's diff is reviewed, and the
-  owner plays it (massif trailhead reach, tunnel mouths, spirals).
-- **One deliberate re-baseline** of `world-land.fixture.json` and `dense.json`, at the round where positions move to
-  the new form.
+- **Proof per round:** the law tests, and the owner plays it (massif trailhead reach, tunnel mouths, spirals). No
+  snapshot golden.
 - **Behaviour:** the land may shift where the old pipeline's hidden order differs from the ranks. Each shift is named
   in its PR.
 
@@ -130,8 +130,7 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
   `DECOR` and `Model.Far`.
 - Picking moves from rendered meshes to footprint colliders.
 - **The glTF import pipeline:** a schema row with the footprint taken from the mesh, plus a visual asset.
-- **Proof:** a frame golden under the default theme, identical to before. A second theme renders with no new stage
-  version.
+- **Proof:** a second theme renders with no new stage version; the owner looks at both.
 - **Owner check:** a look at both themes, and one imported model placed by a pin.
 
 ## W6 · The sim package and the layered nav graph
