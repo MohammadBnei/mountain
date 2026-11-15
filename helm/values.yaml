@@ -27,9 +27,11 @@ service:
       port: 9090
 
 # Gated (infra-bootstrap ADR-0065): the whole site sits behind authentik
-# forwardAuth, Middleware/mountain-forwardauth (namespace default, declared in
-# infra-bootstrap with its `mountain-gate` provider: platform-admins only since
-# R10). The chart appends it after the baseline (origin lock, rate limit,
+# forwardAuth, Middleware/admin-forwardauth (namespace default, declared in
+# infra-bootstrap; it forwards no identity headers, which atlas does not read).
+# The outpost picks the provider from the request host, so the `mountain-gate`
+# provider (platform-admins only since R10) still applies; the Middleware object
+# is shared with the other admin hosts. The chart appends it after the baseline (origin lock, rate limit,
 # headers), which stays on (ADR-0053 Decision 5). atlas trusts no forwarded
 # header: its own OIDC sign-in admits platform-admins only and every route but
 # /healthz and /auth/* refuses anyone else (cmd/atlas, deny by default). Revert
@@ -38,7 +40,7 @@ service:
 # Referrer-Policy, so it is set here to match.
 ingress:
   middlewares:
-    - name: mountain-forwardauth
+    - name: admin-forwardauth
       namespace: default
   baseline:
     headers:
