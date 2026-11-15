@@ -264,9 +264,9 @@ needs:
   app:ukubi-game: [oidc, infisical]
   app:ukubi-game-public: [oidc]
   app:wird: [oidc, postgres:wirddb]
-  app:wird-adminweb: ["declared:app:platform-authentik"] # wird-admin-forwardauth, named in wird's own values
+  app:wird-adminweb: ["declared:app:platform-authentik"] # jwt-forwardauth, named in wird's own values
   app:silverbullet: [oidc]
-  app:drop: ["declared:app:platform-authentik"] # drop-forwardauth, named in drop's own values
+  app:drop: ["declared:app:platform-authentik"] # jwt-forwardauth, named in drop's own values
   app:redirectors: [forwardauth, s3] # hermes behind authentik; the S3 redirector is Garage's door
   app:ente-museum: [infisical, s3, postgres:entedb]
   app:ente-web: [infisical]
