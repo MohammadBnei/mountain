@@ -212,6 +212,34 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
   test.
 - **Owner check:** a race and a duel on two phones.
 
+## O1 · Traces where time goes (after W3; owner, 2026-11-15)
+
+Copied from agent-fleet's tracing (fleet #368, #372; infra-bootstrap #443, as told by the kagent session):
+- **The helper.** A small `spans` package like fleet's `provisioner/internal/spans`:
+  - a child-span helper whose tracer comes from the incoming span (`trace.SpanFromContext(ctx).TracerProvider()`,
+    since ukubi-go sets no global provider);
+  - `Redact()` on error text before `RecordError`;
+  - a recorder that logs one INFO line of per-step milliseconds at the end, so timings show without Tempo and on
+    failure.
+- **Child spans** where a step can be slow:
+  - each land stage (`stages`, `internal/land/hex.go:770`);
+  - the space build and the chunk cut (W3);
+  - the composer build and each rank (W2);
+  - the realm's hello and its land load;
+  - chunk and overview serving.
+
+  The 20 Hz tick gets no span; its cost goes into a per-minute timing line.
+- **Attributes:** `space.version`, `space.id`, the player's session where there is one.
+- **The test:** `tracetest.NewSpanRecorder`, as fleet's `TestCreateWorkerPod_EmitsWarmChildSpans` does.
+- **Infra:** the game's deployment gets `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://platform-alloy.monitoring.svc.cluster.local:4318/v1/traces`
+  (the Alloy and Tempo network policy already admits the game). This is an infra PR, left for the owner.
+- **Reading back:** the timing log line first; Tempo by port-forward and `/api/search` when needed.
+- **Pitfalls:**
+  - an incoming `traceparent` is linked, not parented (public endpoints), so cross-service calls are matched by
+    attribute;
+  - set the endpoint only once the backend exists;
+  - Tempo search lags ingestion.
+
 ## Later
 
 - Quest queries resolved by the realm, pinned to a path and space version.
