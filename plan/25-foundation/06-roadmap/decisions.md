@@ -15,3 +15,19 @@
 | D-11 | phone tap | aim phone-low expected one tap on a building to select it | the gate taps twice; name cards drawn and pickable in explore | the gate taps twice: the first focuses, the second runs the primary (plan/23 §5). Checked against main b94fddd: targetClick and the picking chain are the same, and the name cards are hidden outside the orbit there too (`hidden: !view.info().orbit`), so the "cards not in LEGACY" hypothesis does not hold | the gate's one-tap row predates plan/23's tap focus | two-way, owner to confirm | aim phone-low |
 | D-12 | talk, mode | Talk is a `work` action, but the chart refused its panel in strategy (WORLD_PANELS) | Talk opens in strategy; Talk explore only | Talk opens in strategy, as on main: K in the overview talks to the selected building's resident; quick, yard and keeper stay explore's (owner 2026-11-15) | I1 parity: a work action must do in strategy what it does in explore | two-way | I1 "every work action run in strategy opens its panel" |
 | D-13 | panel, boot | The chart refused every panel before boot ready, so a chrome opened while loading (a `?b=` drawer, the keeper's replies) or past the guest's sign-in card shut at once | accept panels while loading and on the sign-in card; hold the open until ready | accept: the loader covers the world and the table shows the panel once it is gone; a failed page opens none. Holding would add a second pending-panel state | the store holds what is open, one owner | two-way, owner to confirm | ui-chart "a panel opened under the loader ..." |
+
+# Decision records (sim-world build, wave A, 2026-11-16)
+
+| id | area | question | taken | why | door |
+|---|---|---|---|---|---|
+| W2-a | placement | Keep the logged layout? | The game log remembers the last good disc per world, below the pins; the pins win | Unpinned lots stay where they were last placed; a restart serves the last disc at once | two-way |
+| W2-b | placement | Where do newcomers get pinned? | The control room's Pins panel lists unpinned, collisions, masked and absent; `GET /api/control/pins` downloads the proposed `pins.json` for a PR | Law 1's proposal needs an owner and a path to git | two-way |
+| W2-c | placement | Re-lay | The re-lay route and button are removed | Pins replace it | two-way |
+| W2-d | placement | Pins seeded from the laptop's sim log | Accepted; no production reseed | The owner is free to move the world | two-way |
+| W3-a | world | Who places buildings? | One placer, `snapDisc` on the server; the space index serves each building's place | The page's own `Place` disagreed with the server with nothing checking | two-way |
+| W6-a | sim | Where does `Step` live? | `internal/physics`; there is no `sim.Step`. The WASM builds `Step` and nav | The page predicts with it | two-way |
+| W6-b | sim | What moves into `internal/sim`? | The fight and the mobs; the realm keeps nodes, items, pieces and plants | The pure parts first | two-way |
+| W6-c | sim | Fight stepping | `Fight.Sync` then `Fight.Step`, with the realm's items stepped between | The realm's items react to the fight | two-way |
+| W6-d | nav | Tap routing | Stays on the surface; routing on the layers (tunnels, caves) is open W6 work | The router can't follow a ramp yet | two-way |
+| W6-e | nav | Law 2 | Runs in the realm's land build; a land that seals a target is refused and the last good land kept | Measured 22 ms today, 84 ms on the 2x disc | two-way |
+| W6-f | sim | Auto-hop ground | Reads the hex ground, not the drawn relief | The step rule uses it; the difference is at most `DIP` | two-way |
