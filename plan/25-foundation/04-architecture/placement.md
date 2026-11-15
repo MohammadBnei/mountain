@@ -192,8 +192,7 @@ chunk reads does not hold. `sim-world.md` follows.
 
 1. Seed the pins file from the current layout snapshot, covering both placers: the logged `LayOut` plan and
    `town/placement.json`.
-2. Land `Find` and the law harness, and migrate the exposed tests to them (spike S4: 47 literal-position and 18
-   snapshot tests, about 75 mechanical id lookups and 14 gate sites, about 70 hours). Then build the composer, the
+2. Land `Find` and the law harness; delete the snapshot and world-pinning tests (`tests.md`). Then build the composer, the
    position form, the registry rows and law 1 on the seeded pins.
 3. Move the tunnel entrances inside their houses (today's inversion goes with them), then port the land stages one by
    one to pure ranked generators, each under the law tests.

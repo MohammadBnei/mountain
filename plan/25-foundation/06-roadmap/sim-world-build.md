@@ -83,11 +83,13 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 
 ## W2 · The stage core
 
-- **First, the test migration** (spike S4, about 70 hours, budgeted here):
-  - `openSpot(land)` replaces the `openX, openZ` constants (`internal/physics/walk_test.go:12`, 50 uses);
-  - `Find` in Go and `__world.find(query)` in the page;
-  - the law harness;
-  - 47 literal-position and 18 snapshot tests and about 75 id lookups, migrated (the gate sites go with the gates).
+- **First, a small test cleanup** (spike S4's count, under the tests ADR's rules; its 70-hour estimate assumed
+  migrating everything and no longer applies):
+  - the 18 snapshot tests are deleted, not migrated;
+  - literal-position tests that pin world details are deleted; synthetic physics tests stay;
+  - `openSpot(land)` replaces the `openX, openZ` constants (`internal/physics/walk_test.go:12`, 50 uses), one edit;
+  - the about 75 id lookups stay as they are;
+  - `Find` in Go and `__world.find(query)` in the page, and the law harness.
 
 - **Composer:**
   - typed prims at paths;
