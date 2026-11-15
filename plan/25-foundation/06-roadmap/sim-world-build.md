@@ -231,8 +231,9 @@ Copied from agent-fleet's tracing (fleet #368, #372; infra-bootstrap #443, as to
   The 20 Hz tick gets no span; its cost goes into a per-minute timing line.
 - **Attributes:** `space.version`, `space.id`, the player's session where there is one.
 - **The test:** `tracetest.NewSpanRecorder`, as fleet's `TestCreateWorkerPod_EmitsWarmChildSpans` does.
-- **Infra:** the game's deployment gets `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://platform-alloy.monitoring.svc.cluster.local:4318/v1/traces`
-  (the Alloy and Tempo network policy already admits the game). This is an infra PR, left for the owner.
+- **Config, not infra:** `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://platform-alloy.monitoring.svc.cluster.local:4318/v1/traces`
+  goes in the game's own `helm/values.yaml` and `helm/realm.yaml` `env:` lists (not a secret; the Alloy network policy
+  already admits the game), in the O1 PR.
 - **Reading back:** the timing log line first; Tempo by port-forward and `/api/search` when needed.
 - **Pitfalls:**
   - an incoming `traceparent` is linked, not parented (public endpoints), so cross-service calls are matched by
