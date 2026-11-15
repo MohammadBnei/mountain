@@ -61,6 +61,12 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 
 ## W2 · The stage core
 
+- **First, the test migration** (spike S4, about 70 hours, budgeted here):
+  - `openSpot(land)` replaces the `openX, openZ` constants (`internal/physics/walk_test.go:12`, 50 uses);
+  - `Find` in Go and `__world.find(query)` in the page;
+  - the law harness;
+  - 47 literal-position and 18 snapshot tests, about 75 id lookups and 14 gate sites, migrated.
+
 - **Composer:**
   - typed prims at paths;
   - ranks by strength;
@@ -113,7 +119,9 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
   - reads only stronger ranks;
   - emits its connectors as nav edges;
   - is pure, with a shuffled-input test.
-- **Proof per round:** the law tests, and the owner plays it (massif trailhead reach, tunnel mouths, spirals). No
+- **Halls and ramps first** (spike S1: picking is 7 to 14 times cheaper, no late drop, massifs unchanged). Its laws:
+  no late ramp drop, no prop on a ramp, massifs and trailheads unchanged.
+- **Proof per round:** the law tests (with role stability, law 3), and the owner plays it (massif trailhead reach, tunnel mouths, spirals). No
   snapshot golden.
 - **Behaviour:** the land may shift where the old pipeline's hidden order differs from the ranks. Each shift is named
   in its PR.
@@ -128,7 +136,9 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 - A keyed patcher onto the three.js scene.
 - **Old tables become style rules:** the look halves of `KINDS` (`world-hex.ts:84`, `world-build.ts:39`), `modelOf`,
   `DECOR` and `Model.Far`.
-- Picking moves from rendered meshes to footprint colliders.
+- Picking moves from rendered meshes to footprint colliders. The decor budget (`pickDecor`) reads the chosen
+  variant's triangles.
+- No sway in v1 unless a BatchedMesh shader patch is costed; zoom stops only for scale and tint (spike S3).
 - **The glTF import pipeline:** a schema row with the footprint taken from the mesh, plus a visual asset.
 - **Proof:** a second theme renders with no new stage version; the owner looks at both.
 - **Owner check:** a look at both themes, and one imported model placed by a pin.
@@ -140,10 +150,12 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
   - fight and mobs pulled out of `internal/realm`;
   - the realm builds all of it, and the WASM builds `Step` and nav.
 - **Nav:** the two-level nav on the layered graph, with (hex, floor) nodes, generator connectors and decor solids
-  narrowing passages.
+  narrowing passages. It replaces `Coarse`, which cannot enter tunnels and refuses every portal ramp (spike S2).
+  Every connector gets the rider-radius check on its ground side.
 - **Law 2:** every addressable prim reachable from the spawn, checked in the build. Its cost is measured on the 2× disc
   first.
 - **Proof:**
+  - law 2 with a seal-a-door-with-decor mutation;
   - the sim golden (frames over seeds);
   - the step bench against `01-baseline/step-bench.md`;
   - law 2 with a mutation (a rock that blocks a door fails the build).

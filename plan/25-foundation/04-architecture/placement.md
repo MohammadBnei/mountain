@@ -69,11 +69,13 @@ Go composer runs on the server only.
   1. pins (the owner);
   2. derived projections, for example an app's architecture becoming its house's rooms (atlas's graph and
      `internal/yard`, `archetypes.go:66-90`);
-  3. each generator on its own declared rank, for example halls and ramps, then massifs, then pits, then tunnels, then
-     caves (the order is decided when each is ported);
+  3. each generator on its own declared rank, for example halls and ramps, wild centres, fun props, massifs, pits,
+     tunnels, caves (the order is decided when each is ported; spike S1);
   4. decor rules (golden trails, sunflower rings, grass).
 
-  A source reads only the stronger ranks' output, as masks and anchors. It never reads a weaker rank or a peer. On
+  A source reads only the stronger ranks' output, as masks and anchors, never a weaker rank. Inside one generator,
+  peers (spacing between ramps, between massifs) resolve by a fixed per-id hash priority: a new prim moves only the
+  lower-priority peers it hits, and the build report lists them (spike S1). On
   the same prim the stronger opinion wins. Readers never see which rank wrote a prim. Today's inversions go: the
   tunnel ramps become their own generator above massifs, and the wilds' centres become a generator above massifs,
   with only the trails below them left as decor.
@@ -119,9 +121,13 @@ Go composer runs on the server only.
      colliders.
    - From each space's spawn, every door, every quest-tagged prim, every portal and every mover anchor needs a
      route. A failure names the prim and the blocker.
-   - The graph is the sim's coarse nav level, so the proof and the game agree. Its cost is measured on the 2× disc
-     before a budget is promised.
-3. **Looks never change gameplay.** The visual axis carries no footprint field, and the sim never imports it.
+   - The graph is the sim's coarse nav level, so the proof and the game agree. Spike S2 measured it on the 2× disc:
+     about 43k nodes and 250k edges, built in about 150 ms and searched in 1.4 ms, on the server per build.
+   - The proof is stated for a rider with jumps, plus a walk-only mode for places that must be reachable on foot.
+3. **Roles are stable.** After a rigid move of a space, every prim of a declared role still exists (tag counts
+   equal). Today a 1-hex move loses 3 of 7 tunnel ramps (`tunnel.go:357-370`) or crashes `stagePasses`
+   (`hex.go:685`) (spike S4).
+4. **Looks never change gameplay.** The visual axis carries no footprint field, and the sim never imports it.
    Picking uses footprint colliders, not rendered meshes.
 
 ### Reading the stage
@@ -145,7 +151,10 @@ Go composer runs on the server only.
   quality tier (phone, desktop), theme variables (season, hour, like Unreal's Material Parameter Collections) and prim
   attributes.
 - **Weighted variants.** Variants are seeded by position (Minecraft-blockstate style): a living spread with no
-  runtime randomness, always inside the footprint. Visual uncertainty is free; footprint uncertainty lives only on
+  runtime randomness. They come from a declared asset list (name, triangles, height, footprint class) and swap only
+  within one footprint class, so they stay inside the footprint.
+- **Selectors read composed data.** Kind and tags come from the stage, never from kit names (today `bigTrees` and the
+  critters match names). Far shapes and the minimap read the same spec, so near and far never drift (spike S3). Visual uncertainty is free; footprint uncertainty lives only on
   the stage, under law 2.
 - **Themes are stylesheets.** Swapping one restyles the world without a new stage version or chunk id.
 - **Under the spec,** a keyed patcher applies the computed result to the three.js scene, keyed by prim path or
@@ -181,14 +190,13 @@ chunk reads does not hold. `sim-world.md` follows.
 
 1. Seed the pins file from the current layout snapshot, covering both placers: the logged `LayOut` plan and
    `town/placement.json`.
-2. Build the composer, the position form, the registry rows and law 1 on the seeded pins, behind a golden test of
-   today's disc.
+2. Land `Find` and the law harness, and migrate the exposed tests to them (spike S4: 47 literal-position and 18
+   snapshot tests, about 75 mechanical id lookups and 14 gate sites, about 70 hours). Then build the composer, the
+   position form, the registry rows and law 1 on the seeded pins.
 3. Port the land stages one by one to pure ranked generators, each under the golden test. The halls and ramps come
    first, because they are today's inversion, then massifs.
 4. Build the layered nav graph and law 2, and measure its cost.
-5. Make one deliberate re-baseline of the decor fixtures (`world-land.fixture.json`, `dense.json`) when positions
-   move to the new form.
-6. Remove `Place`, the land build and `hex` from the WASM. The logged layout and the town page retire.
+5. Remove `Place`, the land build and `hex` from the WASM. The logged layout and the town page retire.
 
 The big-bang rewrite is accepted (owner), done incrementally.
 
