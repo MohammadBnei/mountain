@@ -45,3 +45,10 @@
 | T2-b | tests | The step realm's clock | Starts at the last UTC noon before boot: the bosses up are the same every run; only the time of day is fixed | Tickets are minted on the wall clock, so the realm may not run ahead of it | two-way |
 | W5b-a | placement | How is a decor model pinned? | A `prop` pin kind, directly under `/disc` on an absolute hex, composed at pin strength (wilds shrink round it); it rides the snapshot (`Disc.Pinned`, the layout log, the public face as model + hex); the land spec is v3 only when it has pins | The land stays a function of the snapshot; a pinless land keeps its bytes | two-way |
 | W5b-b | visual | Imported model units | An imported glTF is in metres and placed at scale 1; kit models stay at `DecorScale` | The demo crate is 0.6 m | two-way |
+| W8-a | sim | Start W8? | The owner races and duels on two phones on the live world first; W8 (rewind, replay, lag compensation) is built only if the feel asks for it | Bet 2 of sim-world.md | two-way |
+| W4-e | placement | Roads (W4 round 8) | Open by the owner's word (2026-11-16): roads stay derived until decided | A generator would move the whole world | two-way |
+| W4-f | placement | Decor (W4 round 9) | Decor stays outside the stage: a seeded scatter after composition on the free hexes, no prims, no paths. Round 9 closes | Decor is anonymous; law 1 checks named prims only | two-way |
+| W5b-c | placement | A pin that removes a wild | Pins win; the control room's Pins panel warns when a pin shrinks a wild away | Moving a pin is the owner's tool, never by accident | two-way |
+| W5b-d | placement | Pins on rollout | Accepted: an old layout log gets one extra layout step after the deploy | One-time | two-way |
+| W5b-e | privacy | Pinned props in the public face | Public: model and hex only | World features from the repo, nothing of the cluster | two-way |
+| W5b-f | visual | The demo model | The self-made crate stays; a real asset is one modelimport run and one pin row | Proves the path end to end | two-way |
