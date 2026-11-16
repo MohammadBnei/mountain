@@ -113,3 +113,24 @@ Step plan (from the doubt round, amended): pick (occluders, a `prop` kind, one w
 tap rule, `ActionDef.why`) → camera profiles (arm by context, interior arm, near limit, rider fade; can start now) →
 the height model → the entity index and composition-root moves (after wave 1) → strategy lenses and sheet → CK with
 plan/28.
+
+### The height model (owner, 2026-11-16, after the height investigation)
+
+The investigation found eight notions of height and seven climb thresholds that disagree; hills are flat invisible
+plateaus 3.96 m up, decor circles are flat-topped cylinders as wide as their radius, the trail's own steps block it,
+the realm has no building walls, interiors stand on the outdoor ground (report: session transcript, 2026-11-16).
+
+| # | Decision |
+|---|---|
+| H-1 | **A physics principle, not rules per object.** One collision world of real 3D shapes (hex prisms at their level, hill domes, steep mountain cones, decor profiles, walls to their real height, roof decks, floors, the bank and groove relief); one character controller (`Step`, Go, bit-identical in the WASM and the realm) decides where a rider stands with two numbers; nav is generated from the same world with the same numbers; a small game layer of walkability tags carries design rules only. |
+| H-2 | **Platformer feel:** step height 0.3 m, max slope 35°; jump and double jump as today. |
+| H-3 | **Hills** are walkable domes where their slope allows; mountains are steep cones, climbed by their trails. |
+| H-4 | **The drawn relief** (banks, grooves) is ported into Go: page, route and realm agree. |
+| H-5 | **Lane 6** of wave 1 finishes as built; the height model builds on it. |
+
+Migration, each step proven: the probe facts become red tests (the hill rim floats 3.96 m, the mound 0.9 m, the easy
+trail unreached with its steps, the interior ground not 0, step bands in world units) → the collision world and
+controller as an exact twin of today (a differential test; step-bits bit-identical) → one behaviour change per PR with
+its golden diff reviewed (interior floor, feature profiles, decor profiles, walls and roof decks in the realm too, the
+two numbers) → nav generated from the world, law 2 over decks → the pick and the camera read the same world. The land
+does not move; WASM about +4-8 KB of its 17 KB headroom.
