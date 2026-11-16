@@ -167,7 +167,7 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 - **The glTF import pipeline:** a schema row with the footprint taken from the mesh, plus a visual asset.
 - **Proof:** a second theme renders with no new stage version; the owner looks at both.
 - **Owner check:** a look at both themes, and one imported model placed by a pin.
-- **W5b (split out, decision W5-a):** the imported file is served beside the kit and drawn near and far; then the
+- **W5b (split out, decision W5-a), landed #277:** the imported file is served beside the kit and drawn near and far; then the
   owner check above.
 
 ## W6 · The sim package and the layered nav graph
