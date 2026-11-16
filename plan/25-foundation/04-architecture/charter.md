@@ -62,7 +62,7 @@ The shared story is the workshop loop, in `../03-interview/scenarios.md`. It is 
 
 **Input** (plan/23):
 - One router and context stack, with no listener races.
-- The first tap only focuses; a hold opens the radial.
+- A tap goes by what the thing offers (plan/25 P2-2'): a thing whose only verb is Go onto is walked to; a building, or a thing with several verbs, opens its radial at the screen centre; a mob, the boss and a node are selected first, the second tap engages; the ground walks. A hold opens the radial too. A verb that cannot run now is shown shut with its reason.
 - Esc, M, Enter (chat while exploring outside), Tab and ? are globals.
 - Keyboard shortcuts keep working for everything that is removed.
 
