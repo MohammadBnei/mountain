@@ -145,7 +145,7 @@ does not move; WASM about +4-8 KB of its 17 KB headroom.
 | PR-8' | The card tutorial (lane 4) merges as a first step; the visual-tap tutorial comes with part 2's pick and Go. |
 | Go seam | `standOn(id) → point`: the foot or door now, the top once nav reads the world. Lane 2's door aim and P2-2' Go onto share it. |
 
-Step plan: S0a height characterisation tests (now) · S0b camera profiles (now; plus the world-tree trunk and the
+Step plan (open: the QA terrace failure near (-98, 43) does not reproduce on the fixture land; a live-land repro is still to do): S0a height characterisation tests (now) · S0b camera profiles (now; plus the world-tree trunk and the
 waypoint arrow) · S1 pick (colliders plus ground, prop kind, sticky hover, click to walk) · S2 verbs (tap rule,
 `standOn`, `ActionDef.why`, charter and D-11) · S3 height (step 0.35; bake; interior floor; realm reads `TopAt`, walls and
 roof decks; banks; trail ramps) · S4 mantle · S5 nav reads the world (tops, decks, the nav ⊆ controller law) · S6 entity
