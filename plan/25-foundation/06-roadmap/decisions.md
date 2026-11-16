@@ -31,3 +31,7 @@
 | W6-d | nav | Tap routing | Stays on the surface; routing on the layers (tunnels, caves) is open W6 work | The router can't follow a ramp yet | two-way |
 | W6-e | nav | Law 2 | Runs in the realm's land build; a land that seals a target is refused and the last good land kept | Measured 22 ms today, 84 ms on the 2x disc | two-way |
 | W6-f | sim | Auto-hop ground | Reads the hex ground, not the drawn relief | The step rule uses it; the difference is at most `DIP` | two-way |
+| W4-a | placement | Massif order under ranks | Tallest first, as plan/20 said; only massifs of equal height fall back to the per-id hash | The owner's "the enormous first"; main's sites kept | two-way |
+| W4-b | nav | How does law 2 reach a hall now that the surface ramps are gone? | The hall's stair is a `land.Connector` (the house's pad hex down to the tunnel floor); the nav graph reads every connector | Generators emit their connectors (placement.md) | two-way |
+| W5-a | visual | The glTF import's visual half | Split out to W5b: W5 lands the import's schema row and far look; serving the imported file and drawing it near come next | The decor batches draw only the two kit packs' materials | two-way |
+| O1-a | traces | Spans with no incoming span | The realm's land load and the disc composition (and their land stages and ranks) log their timings only; the space serves and the realm hello reach Tempo | ukubi-go keeps its tracer provider private; a root `Tracing.Start` there is the follow-up | two-way |

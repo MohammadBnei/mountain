@@ -167,6 +167,8 @@ Each spike writes `07-spikes/<name>.md` with its numbers. The plan is adjusted b
 - **The glTF import pipeline:** a schema row with the footprint taken from the mesh, plus a visual asset.
 - **Proof:** a second theme renders with no new stage version; the owner looks at both.
 - **Owner check:** a look at both themes, and one imported model placed by a pin.
+- **W5b (split out, decision W5-a):** the imported file is served beside the kit and drawn near and far; then the
+  owner check above.
 
 ## W6 · The sim package and the layered nav graph
 
@@ -240,6 +242,8 @@ Copied from agent-fleet's tracing (fleet #368, #372; infra-bootstrap #443, as to
     attribute;
   - set the endpoint only once the backend exists;
   - Tempo search lags ingestion.
+- **As built (decision O1-a):** spans with no incoming span (the realm's land load, the disc composition) are
+  log-only until ukubi-go exposes a root tracer; the realm's egress to Alloy needs infra-bootstrap #450.
 
 ## Later
 
