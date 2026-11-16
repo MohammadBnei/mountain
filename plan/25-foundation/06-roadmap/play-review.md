@@ -76,3 +76,21 @@ PR-11 and the tutorial's Go and fight steps wait for it.
 The public face shows real names beside the in-world ones (lane 2). A reload no longer always starts at the spawn
 stone, and the owner's page starts on foot (lane 3). Death costs the carried item (lane 3). The land moves only if lane
 6's test proves it must.
+
+## Part 2 design decisions (owner interview, 2026-11-16, with the fleet session's input)
+
+| # | Decision |
+|---|---|
+| P2-1 | **One pick module** replaces the 6 raycasters: one ray, the nearest solid wins. Grass, flowers and small decor never count as solid; living things (mobs, residents) get a small screen halo (aim assist) so a moving target behind a post stays tappable. Nothing is picked through a solid thing. |
+| P2-2 | **Verbs: the radial always.** A tap on a thing opens its radial (Go onto, Light, Look, Talk, Order…); a tap on the ground walks. Built for growth: a thing's verbs are data (a registry row per kind), since play-testing will keep changing them. |
+| P2-3 | **Standable tops:** crates, barrels, logs, and house roofs (a roof shape per model; one rule in Go physics, its TS twin, the WASM and the realm). |
+| P2-4 | **ECS: bitECS.** Everything interactive is an entity: riders, mobs, residents, critters, buildings, villages, props with verbs or tops, doors, stairs, the camera target, and the fleet's objects (repo, resident, run, need). Dense data stays packed (land hexes, instanced decor: one entity per chunk or batch) for the draw-call budget. Systems run in the one clock's loop. `world.ts` becomes the composition root. |
+| P2-5 | **Camera rig:** follows behind, free look on drag, eases back; lock-on aware (frames the rider and the target); close by context (PR-4), room clamp, walls fade, pinch zoom. |
+| P2-6 | **Strategy view: the 3D world from above, styled** (the visual layering's zoom levels were chosen for this): a strategic look, banners and Civ-style lenses (health, agents working, needs, cost) over the same scene. |
+| P2-7 | **CK interactions for the agent system:** residents (repo, village, world) as characters with portraits, states, traits (their definition) and relations drawn on the map; a CK interaction menu per character (Talk, Order an errand, Ask about, Inspect run, Stop, Warm), greyed with reasons; needs as event windows with choices; a council view (the world resident as ruler, village residents as councillors). |
+| P2-8 | **Modes: a toggle** (Tab) between explore and strategy; the selection carries over (I1). |
+| P2-9 | **Thread panel, both:** face to face with a resident in explore (bubbles in the scene, full transcript one tap away); a side panel for strategy and runs. |
+| P2-10 | **Fleet** (plan/28, the fleet session): owner only for now; residents at three scales (repo, village, world); a game MCP both ways (later round); every fleet decision a game Need tied to its building and village. |
+
+Order to build, proposed: ECS core and the composition root (behaviour-neutral moves first) → pick module and verbs
+registry → camera rig → standable tops → strategy toggle and look → CK characters, menu, events, council (with plan/28).
