@@ -94,3 +94,22 @@ stone, and the owner's page starts on foot (lane 3). Death costs the carried ite
 
 Order to build, proposed: ECS core and the composition root (behaviour-neutral moves first) → pick module and verbs
 registry → camera rig → standable tops → strategy toggle and look → CK characters, menu, events, council (with plan/28).
+
+### Part 2, amended after its doubt round (owner, 2026-11-16)
+
+The doubt round found most of part 2 already in the code (`world-targets.ts` KINDS and `nearestHit`, `ui-actions.ts`
+FOCUS_ROWS, `world-chase.ts` follow/free/combat/room clamp/fade, pinch, the Tab toggle, `world-lenses.ts`, circle tops).
+The QA bugs are gaps in them. Owner rows that replace P2-2, P2-4 and P2-3, and settle PR-1 and PR-11:
+
+| # | Decision |
+|---|---|
+| P2-2' | **Tap by what the thing offers.** A thing whose only verb is Go onto: the tap goes there. A thing with several verbs, or a building: the tap opens its radial. Mobs, the boss and nodes keep select-then-engage. Ground: walk. `charter.md`'s input rule is updated in the same PR. |
+| PR-1' | **Desktop:** click a mob engages; click the ground walks; F and the slot keys attack and cast; hold F charges the Mage. |
+| PR-11' | **Hover is sticky:** the hot target is kept while it is still under the pointer; a different hit takes over after about 150 ms. |
+| P2-4' | **A thin entity index** (`world-entities.ts`: every interactive thing by its string id, kind, space, position, solid, verbs kind), read by pick, lenses, strategy and CK. No bitECS. Fleet runs and needs live in the ui-core store. `world.ts` becomes a composition root through pure-move PRs after wave 1. |
+| P2-3' | **Height first.** Roofs are a symptom: the height model is badly managed (props on a hex act as an invisible second tile). A height-model investigation and redesign comes before any standable-top work. |
+
+Step plan (from the doubt round, amended): pick (occluders, a `prop` kind, one walk path, sticky hover) → verbs (the
+tap rule, `ActionDef.why`) → camera profiles (arm by context, interior arm, near limit, rider fade; can start now) →
+the height model → the entity index and composition-root moves (after wave 1) → strategy lenses and sheet → CK with
+plan/28.
