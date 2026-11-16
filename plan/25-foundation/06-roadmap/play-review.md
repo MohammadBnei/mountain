@@ -150,3 +150,5 @@ waypoint arrow) · S1 pick (colliders plus ground, prop kind, sticky hover, clic
 `standOn`, `ActionDef.why`, charter and D-11) · S3 height (step 0.35; bake; interior floor; realm reads `TopAt`, walls and
 roof decks; banks; trail ramps) · S4 mantle · S5 nav reads the world (tops, decks, the nav ⊆ controller law) · S6 entity
 index · S7 strategy lenses · S8 CK with plan/28. TS lane S1→S2→S6→S7 beside the Go lane S3→S4→S5.
+
+| PR-4' | Camera foot arm **6.7 m** (owner, 2026-11-16): the whole rider stands above the dock at 1440x900; bike, ship and indoor arms as built (10, 20, 3 m). Free look recentres only while the rider moves; a standing rider is never turned. |
