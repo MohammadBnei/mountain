@@ -134,3 +134,19 @@ controller as an exact twin of today (a differential test; step-bits bit-identic
 its golden diff reviewed (interior floor, feature profiles, decor profiles, walls and roof decks in the realm too, the
 two numbers) → nav generated from the world, law 2 over decks → the pick and the camera read the same world. The land
 does not move; WASM about +4-8 KB of its 17 KB headroom.
+
+### Part 2, after its second doubt round (owner, 2026-11-16)
+
+| # | Decision |
+|---|---|
+| H-1' | Same controller structure (`Step` takes discrete samples; no capsule sweep: WASM headroom, and nothing tunnels at 0.5 m sub-steps). One `TopAt`/blocks reader over baked data, used by `Step`, the realm's checks, nav and the pick. Baked tables ride the land wire, not the WASM. |
+| H-2' | **Step 0.35 m**, one number for physics, nav and the route (only bodies taller than it are walls). **A ledge mantle:** at the top of a jump, with the feet within about 0.5 m under a rim pressed toward, the rider pulls up; a standing jump climbs one level; routes drop the run-up rule. |
+| H-3' | **Bake the real meshes:** hill tiles get height grids, decor radial profiles and pick hulls, baked from the GLBs like the road grooves; the 35° rule is a baked walkable mask (no runtime trig). **Steep flanks slide.** The **easy massif trail is walkable** without jumping (hidden ramp colliders on its steps); medium and hard trails stay jumps. |
+| PR-8' | The card tutorial (lane 4) merges as a first step; the visual-tap tutorial comes with part 2's pick and Go. |
+| Go seam | `standOn(id) → point`: the foot or door now, the top once nav reads the world. Lane 2's door aim and P2-2' Go onto share it. |
+
+Step plan: S0a height characterisation tests (now) · S0b camera profiles (now; plus the world-tree trunk and the
+waypoint arrow) · S1 pick (colliders plus ground, prop kind, sticky hover, click to walk) · S2 verbs (tap rule,
+`standOn`, `ActionDef.why`, charter and D-11) · S3 height (step 0.35; bake; interior floor; realm reads `TopAt`, walls and
+roof decks; banks; trail ramps) · S4 mantle · S5 nav reads the world (tops, decks, the nav ⊆ controller law) · S6 entity
+index · S7 strategy lenses · S8 CK with plan/28. TS lane S1→S2→S6→S7 beside the Go lane S3→S4→S5.
