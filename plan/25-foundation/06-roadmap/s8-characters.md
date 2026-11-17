@@ -1,8 +1,9 @@
-# S8: fleet characters in the game (plan/25 part 2)
+# C1-C2: fleet characters in the game (plan/25 part 2, step S8)
 
 The game side of agent-fleet ADR-0084 §7 (long-lived characters) and ADR-0086 (cards). There is no plan/28: the
 fleet contract is those two ADRs plus the amendment the fleet session is writing (below). S8 runs before S7 (owner,
-2026-11-17): the strategy lenses need the data S8 brings.
+2026-11-17): the strategy lenses need the data S8 brings. Its slices are C1 and C2 (ui-core-build.md already uses
+S7/S8 for other steps).
 
 ## Owner decisions (2026-11-17)
 
@@ -20,56 +21,81 @@ fleet contract is those two ADRs plus the amendment the fleet session is writing
 - `ListCharacters` / `WatchCharacters`: per character `name`, `definition {name, sha}`, `persona`, `state`
   (`stopped | starting | idle | running | held | stopping`) and `why`, `threads [{key, title, running, last_at}]`
   (title: the thread's first owner line, 60 chars), the running turn, `budget {turns_today, limit, held}`, `spawns
-  {used, limit}`, `can_speak`, `open_cards` (cards with subject `standing/<name>`).
-- `StartCharacter` / `StopCharacter`: return the new state at once; the watch pushes every transition.
-- `PostToCharacter(character, text, thread_key)` and `WatchSpeech {character, text, face}`: on main today.
+  {used, limit}`, `can_speak`, `open_cards` (cards whose subject is the character: `CardSubject.kind = character`
+  plus its definition name, a proto addition the amendment carries; today `CardSubject.kind` allows pr, issue, alert,
+  repo and alert_group only, transcript.proto:131).
+- `StartCharacter` / `StopCharacter`: return the new state at once; the watch pushes every transition. This amends
+  ADR-0086:234-235 ("steer and stop stay in the console") as well as ADR-0084 §7; `DashboardService.StartStanding`
+  and `StopStanding` exist (console).
+- `PostToCharacter(character, text, thread_key)` and `WatchSpeech {character, text, face}`: on main today. Speech is
+  live only: core stores no line and drops one nobody watches (ADR-0084:55-58), so a line spoken during a reconnect
+  is lost; the transcript (`ReadCharacterThread`) is the record.
 - `ReadCharacterThread(name, thread, since)` / `WatchCharacterThread`: the console's entry shapes.
 - The game server has no connection to characters: the page calls core with core's own cookie, as the card deck
   does (`world-fleet.ts`). The 17 `game-<repo>` residents stay workers on the game's `fleet/` client.
 
 ## Game side (ukubi-game, TS; the fleet session keeps `internal/play/{agents,residents,cockpit,needs}.go` and `fleet/`)
 
-1. **One fleet client.** `world-fleet.ts`'s `call()` and `ui-live.ts`'s `cards()` copy become one module, plus a
-   Connect server-stream reader for the three watches, with a poll fallback (the deck's 20 s poll) when a stream
-   drops. 401 keeps "Sign in to fleet"; 403 warns once.
-2. **Characters as a figure source.** A small wander module: a character spawns at its `home` and walks the land's
-   ways near it (`roundOf`'s ways, not the residents' building round), page-local and deterministic per day like
-   residents. Drawn within the shared `MAX_DRAWN`, a distinct look (not the tinted barbarian). Registered in the
-   entity index: `kind:'character'`, `verbs:'character'`, `live:true`; `KindId`/`FocusKind` gain `character`, so
-   pick, focus and follow work as for residents. A stopped character stands still at home, greyed.
-3. **The CK menu.** `FOCUS_ROWS` rows for `character`, all `roles: OWNER`: Talk (opens the thread panel on a new
-   or the last thread, `PostToCharacter`), Ask about (Talk prefilled with the focused thing's name), Inspect run
-   (the thread panel on the running or last thread), Stop / Start (one act, `when` by state, `why` from the
-   fleet), Order errand (greyed "not yet"). Each greyed row shows the fleet's `why`.
-4. **Speech.** `WatchSpeech` lines become the figure's bubble (`People.bubble` pattern) and, while the thread
-   panel shows that character, its live line; `face` picks the figure's expression where the look has one.
-5. **The thread panel (P2-9).** `ThreadRef` panels read and watch the character's thread (`Read/WatchCharacterThread`):
-   bubbles in explore, the side panel in strategy and for runs.
-6. **Needs as event windows.** Cards with subject `standing/<name>` open as a window tied to the character (its
-   portrait, the card's options); other cards keep the deck (`panel:card`). A new card while the owner plays
-   surfaces as a notice, never a modal.
-7. **Council.** A new owner panel `council`: the world character as ruler, village characters as councillors
-   (from `home` and `relations`), each with state, budget and open cards; selecting one focuses the figure.
-8. **Portraits.** `persona.portrait` is a key into the game's own portrait registry (images served by the game,
-   `img-src 'self'` unchanged); a missing key falls back to an initial on the character's colour.
-9. **Surfaces.** `PanelKind` gains `council` and `character`; hud-fixture states for each (owner; a held character
-   with its `why`; a stopped one), copied from the `thread` and `card` states.
+1. **One fleet client.** `world-fleet.ts`'s `call()` and `ui-live.ts`'s `cards()` copy become one module. Watches
+   are Connect server streams read with fetch (enveloped `application/connect+json`); core ends a stream at
+   `streamMaxAge`, so reconnecting is routine, and a dropped list watch falls back to the 20 s poll (in ui-live.ts,
+   invariant I8). 401 keeps "Sign in to fleet"; 403 warns once; a stream error arrives in the end frame (HTTP 200).
+   Speech and thread text never enter `UiState` or ui-contracts (I4): they stay in the scene and the panel's reader.
+2. **Characters as a second source inside world-people.** A `Placed` source next to the residents with its own route
+   (spawn at `home`, wander the land's ways within a radius, page-local, the same path for a seed and day), so the
+   nearest-8 draw cap (`MAX_DRAWN`, world-people.ts:865-920) covers residents and characters together. A stopped
+   character stands at home. `at()` returns the wander position even when the figure is not drawn, so the council and
+   focus can reach a far character (world-entities.ts:18). Registered in the entity index (`kind:'character'`,
+   `live:true`); `KindId`, `FocusKind` and a `TargetKind` with `owner:true` (world-targets.ts:56-67, 406-408) gain
+   `character`, so `people.hitOf` does not pick it as a resident.
+3. **Looks and portraits, no new art.** A character wears a rider class body and the wardrobe (world-avatar.ts) in
+   its persona colour; `persona.portrait` names the class and colour. The portrait is the figure rendered once to a
+   small canvas (the game's own pixels, `img-src 'self'` unchanged). `face` is ignored until the kit has expressions.
+4. **The CK menu.** `FOCUS_ROWS` rows for `character`, all `roles: OWNER`: Talk, Ask about, Inspect run, Start,
+   Stop (two rows: labels are static, ui-contracts.ts:241), Order errand (greyed "not yet"). Character state reaches
+   `when`/`why` through new `ActionDeps` and `SceneApi` reads. Ask about prefills only the owner's own buildings,
+   villages and residents, quoted as data, never a name another player chose (the message is trusted T0).
+5. **Speech.** In explore a line is the figure's bubble and the dock's talk line when the figure is drawn, else a
+   notice; the open transcript shows it too. Lines lost in a reconnect are not recovered (the transcript is the record).
+6. **The transcript.** The existing covering `thread` panel (`COVERING`, ui-chart.ts:49-58) reads and watches the
+   character's thread (`Read/WatchCharacterThread`), one tap from the bubble or the dock line (P2-9).
+7. **Needs.** A character card opens in the existing `card` panel with the character's portrait and name; other
+   cards are unchanged. A new card while the owner plays is a notice, never a modal.
+8. **Council, in the overview.** The strategy overview (ui-overview.tsx, plan/24 §7) gains a council section: the
+   world character as ruler, village characters as councillors (from `home` and `relations`), each with state, budget
+   and open cards; selecting one focuses the figure. No new panel kind (one component family).
+9. **Touch points.** `world.ts` registrations only (the entity register at ~2350, the hover and pointer kind checks
+   ~2303 and ~2713, the new `SceneApi` reads), no composition-root moves, edit windows agreed with the fleet session;
+   world-people.ts; world-targets.ts; ui-actions.ts and ui-contracts.ts; ui-overview.tsx; hud-fixture states for a
+   held character's greyed rows and the council section. Tests that change: ui-actions.test.ts `KINDS` and `ORDER`,
+   world-targets.test.ts (the kinds list), and a test that the public page's `kindsFor` has no `character`.
 
-## Slices (each a PR: plan claims checked at file:line, a doubt round, mutation per new test, hands-on at phone size)
+## Slices (each a PR: claims checked at file:line, a doubt round, a mutation per new test, hands-on at phone size)
 
-- **S8a, no fleet change needed:** the one fleet client with stream reader; `WatchSpeech` and `PostToCharacter`
-  wired to a hard-coded owner test character behind a dev flag; the figure source and wander; the entity kind.
-- **S8b, after the amendment lands on core main:** `ListCharacters/WatchCharacters`, the menu rows, Start/Stop,
-  the thread panel reads, need windows, council, portraits, fixture states.
+- **C0, a spike (hours):** a browser fetch reading `WatchSpeech` from fleet.bnei.dev with credentials over the real
+  proxy (Cloudflare idle timeout, buffering), so C1 knows whether streams hold or poll is the norm.
+- **C1, after a dev core accepts the local origin** (`FLEET_ADMIN_ORIGINS`) and ops-lead is started with a `speak`
+  grant: the one fleet client; the character source, wander and entity kind for ops-lead with a hard-coded `home`;
+  speech bubbles; a Talk row (PostToCharacter) and the transcript panel read.
+- **C2, after the amendment lands on core main:** List/WatchCharacters, the remaining rows with Start/Stop, the
+  character cards in `card`, the council section, portraits, fixture states.
 
 ## Proofs
 
-- The wander is deterministic: a golden of positions over a day per seed.
-- The menu: each row's `when`/`why` per state (stopped, starting, idle, running, held, stopping) in `ui-actions.test.ts`;
-  every row is owner-only (a friend's and a guest's chart show none: I7).
-- The client: a fake core (recorded Connect frames) for list, watch, stream drop then poll fallback, 401, 403.
-- Hands-on: ops-lead (the first character) on a local stack against a dev core, at phone size; screenshots of the
-  figure, the menu, a bubble, the council.
+- The wander, by properties (no position goldens): the same seed and day give the same path; the figure stays on
+  ways, within its radius of `home`, off water; a stopped character stands at home.
+- The menu: each row's `when`/`why` per state (stopped, starting, idle, running, held, stopping); every row is
+  owner-only (a friend's and a guest's chart show none: I7).
+- The client: a fake core (recorded Connect frames) for list, watch, stream end and reconnect, poll fallback, 401, 403.
+- Hands-on, phone emulator, real taps: tap ops-lead, open its menu, Talk, see the bubble and the transcript; stop
+  core mid-stream and see it recover; sign out of the fleet and see "Sign in to fleet"; the public page shows no
+  character. Browsers closed and stacks stopped after.
+
+## Security
+
+Characters are the owner's: `api/fleet` is owner-only (main.go:172), the public pod refuses `--fleet-web`, core checks
+the caller on every RPC, and characters are page-local, so the realm never sends them to anyone. A friend beside the
+owner sees the owner talking to nobody. Every check beyond the hidden rows is core's.
 
 ## Open (to settle with the fleet session in its doubt pass)
 
