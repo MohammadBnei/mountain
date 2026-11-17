@@ -38,10 +38,18 @@ S7/S8 for other steps).
 
 1. **One fleet client.** `world-fleet.ts`'s `call()` and `ui-live.ts`'s `cards()` copy become one module. Watches
    are Connect server streams read with fetch (enveloped `application/connect+json`); core ends a stream at
-   `streamMaxAge`, so reconnecting is routine, and a dropped list watch falls back to the 20 s poll (in ui-live.ts,
-   invariant I8). 401 keeps "Sign in to fleet"; 403 warns once; a stream error arrives in the end frame (HTTP 200).
+   `streamMaxAge` (90 s, under Cloudflare's 100 s; speech.go:138), so a clean end-stream means "reconnect now". A
+   dropped WatchCharacters falls back to polling ListCharacters and a dropped WatchCharacterThread to
+   ReadCharacterThread `since` (the poll in ui-live.ts, invariant I8); WatchSpeech has no fallback (live only, a full
+   buffer drops a line, speech.go:21-23, :98) and sends nothing before its first line, or an empty first frame once the
+   amendment lands. Every call carries `X-Fleet-Dashboard: 1` (dashboard/interceptor.go:35-55). Three open watches
+   leave three of the browser's six HTTP/1.1 connections per host for every other call. 401 keeps "Sign in to fleet"; 403 warns once; a stream error arrives in the end frame (HTTP 200).
    Speech and thread text never enter `UiState` or ui-contracts (I4): they stay in the scene and the panel's reader.
-2. **Characters as a second source inside world-people.** A `Placed` source next to the residents with its own route
+2. **Characters as a second source inside world-people.** `home` is the game's to resolve (the fleet only checks
+   its syntax): `world` is the capital (/disc/default); `village:<group>` is an atlas node group from mountain's graph
+   (apps, code, data, default, fleet, guard, operations, platform: world/pins.json); `building:<atlas id>` such as
+   `repo:agent-fleet`; an unknown or absent id falls back to `world` with a warning, never an error. A group rename in
+   mountain is the breaking change. A `Placed` source next to the residents with its own route
    (spawn at `home`, wander the land's ways within a radius, page-local, the same path for a seed and day), so the
    nearest-8 draw cap (`MAX_DRAWN`, world-people.ts:865-920) covers residents and characters together. A stopped
    character stands at home. `at()` returns the wander position even when the figure is not drawn, so the council and
@@ -53,12 +61,20 @@ S7/S8 for other steps).
    small canvas (the game's own pixels, `img-src 'self'` unchanged). `face` is ignored until the kit has expressions.
 4. **The CK menu.** `FOCUS_ROWS` rows for `character`, all `roles: OWNER`: Talk, Ask about, Inspect run, Start,
    Stop (two rows: labels are static, ui-contracts.ts:241), Order errand (greyed "not yet"). Character state reaches
-   `when`/`why` through new `ActionDeps` and `SceneApi` reads. Ask about prefills only the owner's own buildings,
-   villages and residents, quoted as data, never a name another player chose (the message is trusted T0).
+   `when`/`why` through new `ActionDeps` and `SceneApi` reads. Ask about prefills only atlas ids and character names the
+   game resolved, quoted as data, editable, sent only by the owner's own action: never a player-chosen string (realm
+   friend or settler names, chat, signs), since the message is trusted T0.
+   Speech, thread entries and persona fields are model-authored and render on game.bnei.dev, the origin that holds
+   PostToCharacter and AnswerDecision: they render with textContent only (world-fleet.ts:11), and a test feeds a
+   hostile speech line and a hostile entry and checks no element is created.
 5. **Speech.** In explore a line is the figure's bubble and the dock's talk line when the figure is drawn, else a
    notice; the open transcript shows it too. Lines lost in a reconnect are not recovered (the transcript is the record).
 6. **The transcript.** The existing covering `thread` panel (`COVERING`, ui-chart.ts:49-58) reads and watches the
-   character's thread (`Read/WatchCharacterThread`), one tap from the bubble or the dock line (P2-9).
+   character's thread (`Read/WatchCharacterThread`), one tap from the bubble or the dock line (P2-9). It lists the
+   character's open decisions of every kind (questions, permissions, cards: `Decision.character` and `thread_key`,
+   from the amendment), answers them by option, and links to the console where the owner's own words are needed (the
+   `agent.decision_confirm_required` path). A turn waits on them until its 15-minute deadline. Thread keys the game
+   mints match `^[a-z0-9][a-z0-9-]{0,31}$` (transcript/thread.go:20).
 7. **Needs.** A character card opens in the existing `card` panel with the character's portrait and name; other
    cards are unchanged. A new card while the owner plays is a notice, never a modal.
 8. **Council, in the overview.** The strategy overview (ui-overview.tsx, plan/24 §7) gains a council section: the
@@ -74,8 +90,8 @@ S7/S8 for other steps).
 
 - **C0, a spike (hours):** a browser fetch reading `WatchSpeech` from fleet.bnei.dev with credentials over the real
   proxy (Cloudflare idle timeout, buffering), so C1 knows whether streams hold or poll is the norm.
-- **C1, after a dev core accepts the local origin** (`FLEET_ADMIN_ORIGINS`) and ops-lead is started with a `speak`
-  grant: the one fleet client; the character source, wander and entity kind for ops-lead with a hard-coded `home`;
+- **C1, on kind-local** (the fleet amendment PR adds its admin origin and a kind-only `dev-speaker` with the speak
+  grant; ops-lead has no speak grant, on purpose), the Mac's race runner paused while it runs (about 5 GB): the one fleet client; the character source, wander and entity kind for dev-speaker;
   speech bubbles; a Talk row (PostToCharacter) and the transcript panel read.
 - **C2, after the amendment lands on core main:** List/WatchCharacters, the remaining rows with Start/Stop, the
   character cards in `card`, the council section, portraits, fixture states.
@@ -87,7 +103,10 @@ S7/S8 for other steps).
 - The menu: each row's `when`/`why` per state (stopped, starting, idle, running, held, stopping); every row is
   owner-only (a friend's and a guest's chart show none: I7).
 - The client: a fake core (recorded Connect frames) for list, watch, stream end and reconnect, poll fallback, 401, 403.
-- Hands-on, phone emulator, real taps: tap ops-lead, open its menu, Talk, see the bubble and the transcript; stop
+- Hands-on on kind-local with the auth gate on and `FLEET_ADMIN_ORIGINS` set to the local game origin (with the
+  gate off, dev origins pass as the fleet's own and the surface allowlist never runs: authz.go:121-125, 145), the
+  `dev-speaker` kind-only character, the game with `--fleet-web` and `--world real`. Phone emulator, real taps: tap
+  dev-speaker, open its menu, Talk, see the bubble and the transcript; stop
   core mid-stream and see it recover; sign out of the fleet and see "Sign in to fleet"; the public page shows no
   character. Browsers closed and stacks stopped after.
 
@@ -99,7 +118,6 @@ owner sees the owner talking to nobody. Every check beyond the hidden rows is co
 
 ## Open (to settle with the fleet session in its doubt pass)
 
-- Connect server streaming from the browser over HTTP/1.1 (core's Connect handler must serve `application/connect+json`
-  streams to the admin origin with credentials); else the watches are polled.
-- `home` values for ops-lead (world), and how village ids match the game's village ids.
+- Streaming is confirmed by the fleet's review (CORS covers AgentService for the admin origin, no ingress buffering,
+  no server write or idle timeout); C0 checks it from a real browser.
 - Thread titles: the 60-char first line is enough for now; explicit titles later if the panel needs them.
