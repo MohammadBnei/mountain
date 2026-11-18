@@ -135,7 +135,7 @@ the mode and form layout.
 - agent-fleet narrows to core and the provisioner.
 
 **Not doing:**
-- The strategy mode's look. It waits for the scene research.
+- The strategy mode's look. It waits for the scene research. (Settled by round 4, 03-interview/round-4-hud.md H-5 and H-9.)
 - The 3D renderers. sim-core and world-model own them.
-- Full phone parity for `work`. A card stack comes first.
+- Full phone parity for `work`. A card stack comes first. (Round 4 H-9: the phone's strategy is a navigation rail.)
 - Fleet cards for the decision records.

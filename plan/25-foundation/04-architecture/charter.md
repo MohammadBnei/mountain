@@ -48,6 +48,8 @@ The shared story is the workshop loop, in `../03-interview/scenarios.md`. It is 
 - At rest, the screen shows only a small map corner and one Menu.
 - One bottom dock shows context: the focus (a name, the primary action, hold for more), the fight (attack, skills,
   ultimate), and incoming lines that slide in.
+  Superseded by round 4 (03-interview/round-4-hud.md, 2026-11-18): no dock at rest; the prompt at the thing, the
+  radial, the slide-in updates and the Needs you tracker take its content; the fight face stays.
 - Social lives in panels.
 
 **Calm and coherence** (`hud-coherence`):

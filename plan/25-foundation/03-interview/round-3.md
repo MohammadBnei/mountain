@@ -76,6 +76,7 @@ What this binds `ui-core.md` to:
   mode only presents those actions:
   - explore through the dock, the radial and the panels;
   - strategy through the board, the cards and the inbox.
+  - Round 4 (round-4-hud.md, "The principle") replaces these two presentation lines; the rule itself stands.
 - **A check.** A test lists the actions reachable in each mode and fails when the two lists differ, the same way the
   router's AST guard checks keys today.
 - **Left open:** how the strategy mode looks (flat or schematic, or the same 3D). That waits for the scene research
