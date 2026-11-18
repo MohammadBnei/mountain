@@ -13,7 +13,7 @@
   and carriers. The owner adds: "physics too, to enable racing, PvP and boss fighting?" So the core must carry
   authoritative contact between players and with bosses, not only movement.
 
-## Round 4 (to come): the strategy view
+## Round 4 (to come): the strategy view (settled in round-4-hud.md, 2026-11-18)
 - The references: Civilization V and VII (hex map, the yields read on the map, lenses), Age of Empires III (a home city,
   a real-time economy) and Crusader Kings (characters, relations, intrigue).
 - The working bet: a separate mode on the same 3D scene, with its own HUD, kept free of explore.
