@@ -25,10 +25,10 @@ on:
       - '!plan/**'
 
 jobs:
-  # GitHub-hosted (15-architecture.md): PRs are tested even while the build runner is down. Only the image job
-  # needs the runner (buildah and the LAN registry).
+  # Self-hosted like every job here: GitHub-hosted runners are billing-locked (the runner has no Chrome, so the
+  # gate selftest below stays a local pre-merge step).
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ukubi-build]
     permissions:
       contents: read
     steps:
@@ -36,6 +36,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: false # the self-hosted runner keeps its Go caches; the tar save took ~5 min and failed
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -72,8 +73,7 @@ jobs:
       # The plain build too, for the one wall-clock bound the race build scales (2 s here, 30 s raced).
       - name: TestRenderBounds, plain build
         run: go test -count=1 -run '^TestRenderBounds$' ./cmd/atlas/
-      # GitHub's Ubuntu image ships Chrome, so the gate selftest runs here; without a Chrome (another
-      # runner) it stays a local pre-merge step (04).
+      # The gate selftest needs a Chrome, which the build runner lacks; it then stays a local pre-merge step (04).
       - name: www core test + gate selftest (if Chrome)
         run: |
           set -euo pipefail
@@ -86,28 +86,37 @@ jobs:
           fi
 
   # Persistence tests need a real Postgres: TestDB* skip without MOUNTAIN_TEST_DSN (the test job above
-  # has none), so they run here, against a service container.
+  # has none), so they run here, against a postgres started through `sudo buildah` (the runner has no docker
+  # `services:`; the image comes from the ECR mirror of Docker Hub, which rate-limits the LAN's one address).
   db-test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ukubi-build]
     permissions:
       contents: read
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: mountain
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
-    env:
-      MOUNTAIN_TEST_DSN: postgres://postgres:mountain@localhost:5432/postgres?sslmode=disable
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: false # the self-hosted runner keeps its Go caches; the tar save took ~5 min and failed
+      - name: postgres 17 (buildah)
+        run: |
+          port=$((20000 + (GITHUB_RUN_ID + GITHUB_RUN_ATTEMPT * 7919) % 20000)) # a re-run gets its own port
+          ctr=$(sudo buildah from public.ecr.aws/docker/library/postgres:17)
+          echo "PG_CTR=$ctr" >> "$GITHUB_ENV"
+          nohup sudo buildah run --network host --env POSTGRES_PASSWORD=mountain "$ctr" -- \
+            docker-entrypoint.sh postgres -c listen_addresses=127.0.0.1 -p "$port" >"$RUNNER_TEMP/pg.log" 2>&1 &
+          echo "PG_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 60); do (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && break; sleep 2; done
+          (exec 3<>"/dev/tcp/127.0.0.1/$port") || { cat "$RUNNER_TEMP/pg.log"; exit 1; }
+          echo "MOUNTAIN_TEST_DSN=postgres://postgres:mountain@127.0.0.1:$port/postgres?sslmode=disable" >> "$GITHUB_ENV"
       - name: DB tests
-        run: go test -race -run '^TestDB' -v ./cmd/atlas/
+        run: go test -count=1 -race -run '^TestDB' -v ./cmd/atlas/ # -count=1: the runner's Go cache would replay a past pass
+      - name: stop postgres
+        if: always()
+        run: |
+          kill "$PG_PID" 2>/dev/null || true # sudo relays the signal to buildah run, which stops the container
+          sleep 3
+          sudo buildah rm "$PG_CTR" || true
 
   # Build, push and deploy live in the shared ukubi-ci workflow (digest-pinned tag, stale-run guard, deploy job).
   # Its concurrency groups replace the old app-build/app-deploy ones.
@@ -115,7 +124,7 @@ jobs:
     needs: [test, db-test]
     # Registry creds are readable only on push/workflow_dispatch (OIDC claim).
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: MohammadBnei/ukubi-ci/.github/workflows/image.yml@2a202d169153446bccf26ffe30dc39b3f21db273 # v0.4.0
+    uses: MohammadBnei/ukubi-ci/.github/workflows/image.yml@8782d42e1d4e5cd0b8af9d1a14c9d5414976a4c9 # v0.7.0
     with:
       runs-on: '["self-hosted","ukubi-build"]'
       image: mountain
