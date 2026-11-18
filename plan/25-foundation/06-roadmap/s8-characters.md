@@ -16,7 +16,15 @@ S7/S8 for other steps).
 | S8-5 | Order errand shows greyed "not yet": today a spawn goes through talk, gated by the character's `spawns.allow` and budget. |
 | S8-6 | The game MCP and multi-character scenes are later (ADR-0084 §10). |
 
-## The contract (fleet side, ADR-0084 amendment, owner-only, admin origin, browser to core)
+## The contract (agent-fleet main: ADR-0084 amendment #427, built in #428 and #429; owner-only, admin origin, browser to core)
+
+Owner decisions (2026-11-18, fleet side): Stop and thread close are a simple, resumable stop. `StopCharacter` keeps
+every thread's SDK session for Start; `CloseCharacterThread` parks a thread (transcript and session kept), and the
+next `PostToCharacter` on that key resumes it; a 7-day idle close parks too. `Character.threads` lists parked threads
+with `parked: true` (open first, main first). Thread reads return the full transcript, tool results included. There
+is no reopen call: posting to the key reopens. `WatchCharacters` sends a baseline frame, then changes and `removed`,
+and ends at 90 s. `building:<atlas id>` homes use the atlas alphabet (`building:app:mountain`).
+
 
 - `ListCharacters` / `WatchCharacters`: per character `name`, `definition {name, sha}`, `persona`, `state`
   (`stopped | starting | idle | running | held | stopping`) and `why`, `threads [{key, title, running, last_at}]`
@@ -31,6 +39,9 @@ S7/S8 for other steps).
   live only: core stores no line and drops one nobody watches (ADR-0084:55-58), so a line spoken during a reconnect
   is lost; the transcript (`ReadCharacterThread`) is the record.
 - `ReadCharacterThread(name, thread, since)` / `WatchCharacterThread`: the console's entry shapes.
+- `CloseCharacterThread(name, thread)`: parks the thread (the transcript panel's "close").
+- Joins: `CardSubject.kind = character` with `name`; `Decision.character` and `Decision.thread_key` on every decision
+  kind; `WatchSpeechResponse.thread_key`, and one empty first frame.
 - The game server has no connection to characters: the page calls core with core's own cookie, as the card deck
   does (`world-fleet.ts`). The 17 `game-<repo>` residents stay workers on the game's `fleet/` client.
 
@@ -90,6 +101,8 @@ S7/S8 for other steps).
 
 - **C0, a spike (hours):** a browser fetch reading `WatchSpeech` from fleet.bnei.dev with credentials over the real
   proxy (Cloudflare idle timeout, buffering), so C1 knows whether streams hold or poll is the norm.
+- **The fleet side is done**, so C1 and C2 build as one slice against a fake core (recorded Connect frames from
+  agent-fleet's protos); the hands-on runs on kind-local once its model token exists (owner).
 - **C1, on kind-local** (the fleet amendment PR adds its admin origin and a kind-only `dev-speaker` with the speak
   grant; ops-lead has no speak grant, on purpose), the Mac's race runner paused while it runs (about 5 GB): the one fleet client; the character source, wander and entity kind for dev-speaker;
   speech bubbles; a Talk row (PostToCharacter) and the transcript panel read.
