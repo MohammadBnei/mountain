@@ -36,6 +36,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: false # the self-hosted runner keeps its Go caches; the tar save took ~5 min and failed
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -96,9 +97,10 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: false # the self-hosted runner keeps its Go caches; the tar save took ~5 min and failed
       - name: postgres 17 (buildah)
         run: |
-          port=$((20000 + GITHUB_RUN_ID % 20000))
+          port=$((20000 + (GITHUB_RUN_ID + GITHUB_RUN_ATTEMPT * 7919) % 20000)) # a re-run gets its own port
           ctr=$(sudo buildah from public.ecr.aws/docker/library/postgres:17)
           echo "PG_CTR=$ctr" >> "$GITHUB_ENV"
           nohup sudo buildah run --network host --env POSTGRES_PASSWORD=mountain "$ctr" -- \
@@ -108,7 +110,7 @@ jobs:
           (exec 3<>"/dev/tcp/127.0.0.1/$port") || { cat "$RUNNER_TEMP/pg.log"; exit 1; }
           echo "MOUNTAIN_TEST_DSN=postgres://postgres:mountain@127.0.0.1:$port/postgres?sslmode=disable" >> "$GITHUB_ENV"
       - name: DB tests
-        run: go test -race -run '^TestDB' -v ./cmd/atlas/
+        run: go test -count=1 -race -run '^TestDB' -v ./cmd/atlas/ # -count=1: the runner's Go cache would replay a past pass
       - name: stop postgres
         if: always()
         run: |
