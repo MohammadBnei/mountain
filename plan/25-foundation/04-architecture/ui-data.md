@@ -31,7 +31,7 @@ What exists today (ukubi-game main db56ee51, mountain main 5fd2cc7, infra-bootst
   `follow` reconnects a stream that core ends at 90 s, under Cloudflare's 100 s (`fleet-client.ts:7,162`).
 - The page's CSP is `default-src 'self'` with `connect-src 'self'` plus the configured origins, and no `frame-src`
   (`internal/gate/gate.go:244-256`); Grafana has no `allow_embedding` (infra-bootstrap `values/grafana/values.yaml`).
-- The page bundle sits near its budget: world.js 2,475,643 of 2,510,000 bytes (`dev/budgets.sh:20`), about 34 KB left (spike, 2026-11-19).
+- The page bundle sits near its budget: world.js 2,476,870 of 2,510,000 bytes (`dev/budgets.sh:20`) after ukubi-game #318, about 33 KB left; the startup work (S2) takes about 1 KB more.
 
 ## Decision
 
