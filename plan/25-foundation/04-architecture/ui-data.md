@@ -31,8 +31,7 @@ What exists today (ukubi-game main db56ee51, mountain main 5fd2cc7, infra-bootst
   `follow` reconnects a stream that core ends at 90 s, under Cloudflare's 100 s (`fleet-client.ts:7,162`).
 - The page's CSP is `default-src 'self'` with `connect-src 'self'` plus the configured origins, and no `frame-src`
   (`internal/gate/gate.go:244-256`); Grafana has no `allow_embedding` (infra-bootstrap `values/grafana/values.yaml`).
-- The page bundle sits near its budget: world.js 2,461,730 of 2,510,000 bytes (`dev/budgets.sh:20`), about 48 KB
-  left.
+- The page bundle sits near its budget: world.js 2,476,870 of 2,510,000 bytes (`dev/budgets.sh:20`) after ukubi-game #318, about 33 KB left; the startup work (S2) takes about 1 KB more.
 
 ## Decision
 
@@ -68,8 +67,7 @@ Services we own, called through generated Connect clients.
 - **The game uses generated clients only**, fleet's included. `fleet-client.ts` keeps `follow` (its reconnect and
   back-off rules, named in I8's allow-list, `ui-invariants.contract.test.ts:509`) and swaps its hand-rolled transport
   for the generated client. The generated code and the adapters load in the owner-only chunk the owner's boot already
-  loads (`ui-live.ts:20`, `world-characters.ts:14`, `world-fleet.ts:14`): a new bun build entry and a
-  `dev/budgets.sh` line. The public page does not grow.
+  loads (`ui-live.ts:20`, `world-characters.ts:14`, `world-fleet.ts:14`), by dynamic import only: a new bun build entry and a `dev/budgets.sh` line. The spike measured that chunk at 144 KB minified (40.6 KB gzip) with fleet's and telemetry's clients; the runtime is 110 KB of it, so a static import would break world.js's budget. The public page does not grow.
 
 ### 2. Type
 
@@ -149,9 +147,8 @@ ui-core's I1-I9 stand.
 ## Consequences
 
 - mountain gets a buf toolchain and a protos module. atlas grows a Connect API beside its routes, mounted as an
-  `http.Handler` behind its gate, with the two paths added to `machineRoutes`. atlas reads Loki and Tempo for the first
-  time.
-- infra-bootstrap: the monitoring network policy lets mountain's pods reach Loki (:3100) and Tempo's query port. A
+  `http.Handler` behind its gate, with the two paths added to `machineRoutes`. atlas reads Loki and Tempo for the first time, and exports a read-duration metric per source (it has none today), so the bet is checked in production. Log filters prefer a text match: the spike found `detected_level` 2-3 times slower.
+- infra-bootstrap: the monitoring network policy lets mountain's pods reach Loki (:3100) and Tempo (:3200). A
   draft infra PR, applied by the owner.
 - ukubi-game: a forward handler for the telemetry paths behind the owner gate; committed generated TypeScript,
   re-pinned on each schema change (as it re-pins the mountain module); `fleet-client.ts` moves to the generated
@@ -163,6 +160,9 @@ ui-core's I1-I9 stand.
 - The HUD fixture feeds components canned UI types, with no backend.
 
 ## The bet
+
+Spike, 2026-11-19 (ui-data-spike.md): holds on cost.
+
 
 atlas can serve on-demand, per-subject queries (Loki and Tempo as well as Prometheus) beside its live frame without
 slowing the frame's poll. If not, a gateway takes the same `atlas.telemetry.v1` contract and atlas keeps the frame.
@@ -181,4 +181,3 @@ slowing the frame's poll. If not, a gateway takes the same `atlas.telemetry.v1` 
 - The speech tool's new fields on agent-fleet (the short in-character line and the reply choices, round 4 H-10).
 - `Watch`'s caching and its fan-in when several pages watch one subject.
 - The mode at the bridge, inside a building (the `overview` row requires `place !== 'inside'`).
-- The chunk's measured size, in a spike before the build.
