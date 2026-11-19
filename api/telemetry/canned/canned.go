@@ -31,6 +31,10 @@ func Frame(subject string, face telemetryv1.Face, window telemetryv1.Window, con
 	name := subject[strings.LastIndex(subject, ":")+1:] // ponytail: the sim has no graph; the subject's last name stands in for its app
 	ts := []contract.TelemetryTarget{{Namespace: name, App: name}}
 	f := &telemetryv1.Frame{Subject: subject, Face: face, Window: window, AtMs: now.UnixMilli()}
+	if !contract.TelemetryTargetOK(ts[0]) {
+		f.Unknown = "no telemetry for this subject"
+		return f
+	}
 	switch face {
 	case telemetryv1.Face_FACE_METRICS:
 		m := &telemetryv1.Metrics{}
