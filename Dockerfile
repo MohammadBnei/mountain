@@ -5,6 +5,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY embed.go ./
 COPY internal ./internal
+COPY api ./api
 COPY contract ./contract
 COPY realms ./realms
 COPY cmd ./cmd
