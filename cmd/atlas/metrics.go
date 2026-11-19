@@ -2,7 +2,7 @@ package main
 
 // Self-observability on :9090 (plan/15 §7): OpenTelemetry's metrics API, read back through its Prometheus exporter
 // onto today's /metrics, with the series exactly as they were: the same six names and types, HELP texts and label
-// keys, no unit and no histogram. The exporter's own additions are off: no target_info, no otel_scope_* labels, no
+// keys, no unit; and one histogram since, the telemetry faces' read duration per source (telemetry.go). The exporter's own additions are off: no target_info, no otel_scope_* labels, no
 // _total or unit suffix (the counter's name already ends in _total), and its own registry, so no go_* or process_*
 // series. Metrics is the App's, not a package global: the writers hold it and call its methods; a nil *Metrics
 // (`atlas project`, a test that does not read them) records nothing.
@@ -33,7 +33,7 @@ const (
 	labelKind   = "kind"
 )
 
-// Metrics is atlas's six series: five gauges and one counter.
+// Metrics is atlas's seven series: five gauges, one counter and one histogram.
 type Metrics struct {
 	provider *sdkmetric.MeterProvider
 	handler  http.Handler
@@ -44,6 +44,7 @@ type Metrics struct {
 	queryFailed       metric.Float64Counter
 	projectionSeq     metric.Float64Gauge
 	drift             metric.Float64Gauge
+	readSeconds       metric.Float64Histogram
 }
 
 // series is one metric: its name, HELP text and the one label key it may carry ("" = none). The views pin the label
@@ -60,6 +61,7 @@ func newMetrics() (*Metrics, error) {
 	sQueryFailed := series{"mountain_query_failed_total", "Failed PromQL queries (the poll keeps its last answer and goes stale).", labelQuery}
 	sProjectionSeq := series{"mountain_projection_seq", "The latest projection's sequence number.", ""}
 	sDrift := series{"mountain_drift", "Drift in the latest projection, by kind (unassigned = a component realms.yaml does not place).", labelKind}
+	sReadSeconds := series{"mountain_telemetry_read_seconds", "Seconds one telemetry face read took, by source (prom, loki, tempo), failed and timed-out reads included.", labelSource}
 	reg := prometheus.NewRegistry()
 	exp, err := otelprom.New(
 		otelprom.WithRegisterer(reg),
@@ -73,6 +75,9 @@ func newMetrics() (*Metrics, error) {
 	for _, s := range []series{sSourceLastSuccess, sTokenDaysLeft, sWSConnections, sQueryFailed, sProjectionSeq, sDrift} {
 		views = append(views, labelView(s))
 	}
+	// seconds, around the spike's 25-90 ms reads and the 1.5 s budget
+	views = append(views, sdkmetric.NewView(sdkmetric.Instrument{Name: sReadSeconds.name}, sdkmetric.Stream{AttributeFilter: attribute.NewAllowKeysFilter(labelSource),
+		Aggregation: sdkmetric.AggregationExplicitBucketHistogram{Boundaries: []float64{0.025, 0.05, 0.1, 0.25, 0.5, 1, 1.5, 3}}}))
 	m := &Metrics{provider: sdkmetric.NewMeterProvider(sdkmetric.WithReader(exp), sdkmetric.WithResource(resource.Empty()), sdkmetric.WithView(views...))}
 	meter := m.provider.Meter("atlas")
 	var errs []error
@@ -82,10 +87,11 @@ func newMetrics() (*Metrics, error) {
 		return g
 	}
 	m.sourceLastSuccess, m.tokenDaysLeft, m.projectionSeq, m.drift = gauge(sSourceLastSuccess), gauge(sTokenDaysLeft), gauge(sProjectionSeq), gauge(sDrift)
-	var e1, e2 error
+	var e1, e2, e3 error
 	m.wsConnections, e1 = meter.Float64UpDownCounter(sWSConnections.name, metric.WithDescription(sWSConnections.help))
 	m.queryFailed, e2 = meter.Float64Counter(sQueryFailed.name, metric.WithDescription(sQueryFailed.help))
-	if err := errors.Join(append(errs, e1, e2)...); err != nil {
+	m.readSeconds, e3 = meter.Float64Histogram(sReadSeconds.name, metric.WithDescription(sReadSeconds.help))
+	if err := errors.Join(append(errs, e1, e2, e3)...); err != nil {
 		return nil, fmt.Errorf("metrics: %w", err)
 	}
 	m.wsConnections.Add(context.Background(), 0)
@@ -159,5 +165,12 @@ func (m *Metrics) ProjectionSeq(seq float64) {
 func (m *Metrics) DriftCount(kind string, n float64) {
 	if m != nil {
 		m.drift.Record(context.Background(), n, metric.WithAttributes(attribute.String(labelKind, kind)))
+	}
+}
+
+// ReadDuration records one telemetry read from source, in seconds.
+func (m *Metrics) ReadDuration(source string, secs float64) {
+	if m != nil {
+		m.readSeconds.Record(context.Background(), secs, metric.WithAttributes(attribute.String(labelSource, source)))
 	}
 }

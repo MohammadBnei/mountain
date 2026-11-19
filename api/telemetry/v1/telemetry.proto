@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+// atlas's telemetry for one subject (plan/25-foundation/04-architecture/ui-data.md): the right zone's Metrics, Logs
+// and Spans faces. atlas joins a subject (an atlas id) to its Prometheus labels, Loki stream and Tempo service through
+// mountain's contract package; nothing outside atlas writes PromQL, LogQL or TraceQL. Every frame says when its source
+// last answered and, when it could not answer now, why: a backend down or slow is an explicit unknown, never a hang.
+package atlas.telemetry.v1;
+
+option go_package = "github.com/MohammadBnei/mountain/api/telemetry/v1;telemetryv1";
+
+// TelemetryService is read-only: the machine principal may call both methods (atlas's machineRoutes).
+service TelemetryService {
+  // Read answers one frame now. Side-effect free, so a Connect client may send it as a GET.
+  rpc Read(ReadRequest) returns (ReadResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Watch answers a frame now and again on the face's cadence, and ends before 90 s (and before the caller's token or
+  // session does); the client resumes it with the same request.
+  rpc Watch(WatchRequest) returns (stream WatchResponse);
+}
+
+// Face is what is read about the subject.
+enum Face {
+  FACE_UNSPECIFIED = 0;
+  // At most 4 series: requests/s, 5xx/s, p95 latency (s), running pods.
+  FACE_METRICS = 1;
+  // The last 200 lines, newest first.
+  FACE_LOGS = 2;
+  // The last 20 traces, newest first.
+  FACE_SPANS = 3;
+}
+
+// Window is how far back a face reads; unspecified is one hour.
+enum Window {
+  WINDOW_UNSPECIFIED = 0;
+  WINDOW_15M = 1;
+  WINDOW_1H = 2;
+  WINDOW_24H = 3;
+}
+
+message ReadRequest {
+  // An atlas id ("app:agent-fleet-core", "repo:agent-fleet"), or the game's "building:<atlas id>".
+  string subject = 1;
+  Face face = 2;
+  Window window = 3;
+  // Logs only: keep the lines holding this text (a line filter, the fast one). At most 200 bytes.
+  string contains = 4;
+}
+
+message ReadResponse {
+  Frame frame = 1;
+}
+
+message WatchRequest {
+  string subject = 1;
+  Face face = 2;
+  Window window = 3;
+  string contains = 4;
+}
+
+message WatchResponse {
+  Frame frame = 1;
+}
+
+// Frame is one face's answer.
+message Frame {
+  string subject = 1;
+  Face face = 2;
+  Window window = 3;
+  // Unix ms when the source answered the data below; 0 = it never has (no data).
+  int64 at_ms = 4 [jstype = JS_NUMBER];
+  // Why this frame is not fresh (the source down or slow, no join for the subject); empty = fresh. With data, the
+  // data is the last good answer, from at_ms.
+  string unknown = 5;
+  // Grafana Explore for the same queries and window.
+  string explore_url = 6;
+  oneof data {
+    Metrics metrics = 7;
+    Logs logs = 8;
+    Spans spans = 9;
+  }
+}
+
+message Metrics {
+  repeated Series series = 1;
+}
+
+message Series {
+  // One of contract.TelemetrySeries: requests, errors, latency_p95, pods.
+  string name = 1;
+  // "req/s", "s", "pods".
+  string unit = 2;
+  repeated Point points = 3;
+}
+
+message Point {
+  int64 at_ms = 1 [jstype = JS_NUMBER];
+  double value = 2;
+}
+
+message Logs {
+  // Newest first.
+  repeated LogLine lines = 1;
+}
+
+message LogLine {
+  int64 at_ms = 1 [jstype = JS_NUMBER];
+  string line = 2;
+  // The stream's detected_level, when Loki has one.
+  string level = 3;
+  // The stream's service_name.
+  string service = 4;
+}
+
+message Spans {
+  // Newest first.
+  repeated Trace traces = 1;
+}
+
+message Trace {
+  string trace_id = 1;
+  string root_service = 2;
+  string root_name = 3;
+  int64 start_ms = 4 [jstype = JS_NUMBER];
+  int64 duration_ms = 5 [jstype = JS_NUMBER];
+}

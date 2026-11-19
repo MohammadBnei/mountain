@@ -40,6 +40,7 @@ func TestConfigDefaults(t *testing.T) {
 	}
 	want := Config{Opts: Opts{Listen: ":8080", Metrics: ":9090", PromURL: "http://platform-prometheus-kube-p-prometheus.monitoring:9090",
 		AMURL: "http://platform-prometheus-kube-p-alertmanager.monitoring:9093", GHURL: "https://api.github.com", Every: 2 * time.Minute,
+		LokiURL: "http://platform-loki.monitoring:3100", TempoURL: "http://platform-tempo.monitoring:3200", GrafanaURL: "https://grafana.bnei.dev",
 		Cache: "/var/cache/atlas"}}
 	if !reflect.DeepEqual(c, want) {
 		t.Errorf("defaults:\n got %+v\nwant %+v", c, want)
@@ -51,12 +52,15 @@ func TestConfigDefaults(t *testing.T) {
 		"dev=false: allow http://127.0.0.1:* origins and serve /dev/; on a loopback address with sign-in unset, admit everyone",
 		"every=2m0s: how often the tracked heads are checked",
 		"github-url=https://api.github.com: GitHub API base URL",
+		"grafana-url=https://grafana.bnei.dev: Grafana base URL for the faces' Explore links",
 		"graph-fixture=: dev: serve this graph (an /api/graph answer) instead of projecting",
 		"listen=:8080: public listen address",
-		"live-fixture=: dev: serve this live state instead of polling Prometheus and Alertmanager",
+		"live-fixture=: dev: serve this live state instead of polling Prometheus and Alertmanager, and canned telemetry frames",
+		"loki-url=http://platform-loki.monitoring:3100: Loki base URL (the Logs face)",
 		"metrics=:9090: metrics listen address (never routed)",
 		"prom-url=http://platform-prometheus-kube-p-prometheus.monitoring:9090: Prometheus base URL",
 		"repos=: read local checkouts from this directory instead of polling GitHub",
+		"tempo-url=http://platform-tempo.monitoring:3200: Tempo base URL (the Spans face)",
 	}; !reflect.DeepEqual(got, w) {
 		t.Errorf("serve's flags:\n got %q\nwant %q", got, w)
 	}

@@ -1,0 +1,14 @@
+# atlas's protos (plan/25 ui-data.md): one module, api/. No Buf Schema Registry: consumers generate from this repo at a
+# pinned main sha, and `buf breaking` runs in app.yml against main.
+version: v2
+modules:
+  - path: api
+lint:
+  use:
+    - STANDARD
+  except:
+    # api/telemetry/v1 holds atlas.telemetry.v1: the package names the service's owner, the path the repo's layout.
+    - PACKAGE_DIRECTORY_MATCH
+breaking:
+  use:
+    - FILE

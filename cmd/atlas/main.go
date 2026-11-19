@@ -1,7 +1,9 @@
 // Command atlas serves mountain.bnei.dev (plan/10-understanding.md, R10 A2): the system graph projected from the
-// repos, a live overlay from Prometheus and Alertmanager, and the page that draws both. Platform admins only.
+// repos, a live overlay from Prometheus and Alertmanager, and the page that draws both; and, for the game's right
+// zone, atlas.telemetry.v1's faces read from Prometheus, Loki and Tempo per subject (telemetry.go). Platform admins only.
 //
 //	atlas [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--github-url URL]
+//	      [--loki-url URL] [--tempo-url URL] [--grafana-url URL]
 //	      [--repos dir] [--every 2m] [--dev] [--graph-fixture file] [--live-fixture file]
 //	atlas project --repos <dir> [--dsn …] [--drop-repos]   (store one projection from local checkouts)
 //	atlas resolve <name>   (the canonical id(s) of a name, each alias's source and status; JSON on stdout)
@@ -24,7 +26,7 @@
 // MOUNTAIN_OIDC_ISSUER, MOUNTAIN_OIDC_CLIENT_ID, MOUNTAIN_OIDC_CLIENT_SECRET and MOUNTAIN_SESSION_KEY (sign-in; any
 // unset or a key under 32 bytes = every route but /healthz refuses a person, except under --dev on a loopback address),
 // MOUNTAIN_MACHINE_CERT, MOUNTAIN_MACHINE_ISSUER, MOUNTAIN_MACHINE_CLIENT_ID and MOUNTAIN_MACHINE_SUB (the game's
-// machine principal on the town's two reads, machine.go; all or none: unset = off), and
+// machine principal on the town's two reads and the telemetry service's two, machine.go; all or none: unset = off), and
 // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT (the OTLP/HTTP traces URL in full, its /v1/traces path included; unset = no
 // tracer and no span; a malformed one is a WARN line and no tracing). All of it is read once, in config.go; the libraries'
 // own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*) are theirs, and so are OpenTelemetry's: the metrics
@@ -67,7 +69,10 @@ import (
 	"syscall"
 	"time"
 
+	"connectrpc.com/connect"
+
 	"github.com/MohammadBnei/mountain"
+	"github.com/MohammadBnei/mountain/api/telemetry/v1/telemetryv1connect"
 	"github.com/MohammadBnei/mountain/internal/extract"
 	"github.com/MohammadBnei/mountain/realms"
 	"github.com/MohammadBnei/ukubi-go/telemetry"
@@ -76,6 +81,7 @@ import (
 // Opts are the command-line flags plus the env the App reads (config.go).
 type Opts struct {
 	Listen, Metrics, PromURL, AMURL, GHURL, Repos, GraphFixture, LiveFixture string
+	LokiURL, TempoURL, GrafanaURL                                            string
 	Every                                                                    time.Duration
 	Dev                                                                      bool
 	GHToken                                                                  string
@@ -109,15 +115,16 @@ func main() {
 
 // App is the running service: the graph it serves, the live overlay, and the clients that watch both.
 type App struct {
-	Opts    Opts
-	Realms  *realms.Realms
-	Hub     *Hub
-	Graph   *Graphs
-	Live    *Live
-	Files   *repoSet           // the checkouts the last round read: the reader's files (read.go)
-	Build   string             // the served www's build id (/v/<build>/); hello.build
-	Met     *Metrics           // the series on :9090 (nil = not recorded: the tests')
-	Tracing *telemetry.Tracing // a server span per route; nil or empty = none (plan/15 §7)
+	Opts      Opts
+	Realms    *realms.Realms
+	Hub       *Hub
+	Graph     *Graphs
+	Live      *Live
+	Files     *repoSet           // the checkouts the last round read: the reader's files (read.go)
+	Build     string             // the served www's build id (/v/<build>/); hello.build
+	Met       *Metrics           // the series on :9090 (nil = not recorded: the tests')
+	Tracing   *telemetry.Tracing // a server span per route; nil or empty = none (plan/15 §7)
+	Telemetry *Telemetry         // atlas.telemetry.v1 (telemetry.go)
 
 	gate      *gate
 	unread    map[string]string // each source's last read failure (the projector goroutine's, project.go)
@@ -133,6 +140,7 @@ func newApp(o Opts, rl *realms.Realms, www fs.FS, g *gate, gr *Graphs, met *Metr
 	a.Hub = NewHub(o.Dev, a.hello, met)
 	a.Live = newLive(rl, a.Hub, met)
 	a.Live.idx = func() *GraphIndex { return a.Graph.index() }
+	a.Telemetry = newTelemetry(a.Live.idx, met)
 	return a
 }
 
@@ -190,7 +198,11 @@ func run(ctx context.Context, c Config) error {
 		if err := a.Live.loadFixture(o.LiveFixture); err != nil {
 			return err
 		}
+		a.Telemetry.canned = true
 	} else {
+		tl := a.Telemetry
+		tl.prom, tl.loki, tl.tempo = strings.TrimRight(o.PromURL, "/"), strings.TrimRight(o.LokiURL, "/"), strings.TrimRight(o.TempoURL, "/")
+		tl.grafana = o.GrafanaURL
 		hc := &http.Client{Timeout: 10 * time.Second}
 		prom := promHTTP{base: strings.TrimRight(o.PromURL, "/"), hc: hc}
 		alerts := amHTTP{base: strings.TrimRight(o.AMURL, "/"), hc: hc}
@@ -246,6 +258,7 @@ type route struct {
 
 func routeTable(a *App, www fs.FS) []route {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
+	_, tel := telemetryv1connect.NewTelemetryServiceHandler(a.Telemetry, connect.WithReadMaxBytes(4096))
 	return []route{
 		{"GET /healthz", true, true, ok},
 		{"GET /auth/login", true, false, a.gate.onAuth((*Auth).login)},
@@ -256,6 +269,9 @@ func routeTable(a *App, www fs.FS) []route {
 		{"GET /api/graph", false, false, http.HandlerFunc(a.serveGraph)},
 		{"GET /api/read", false, false, http.HandlerFunc(a.serveRead)},
 		{"GET /api/tree", false, false, http.HandlerFunc(a.serveTree)},
+		// atlas.telemetry.v1 over Connect (telemetry.go): Read as a GET (no side effects), Watch as a POST stream
+		{"GET " + telemetryv1connect.TelemetryServiceReadProcedure, false, false, tel},
+		{"POST " + telemetryv1connect.TelemetryServiceWatchProcedure, false, false, tel},
 		{"GET /", false, false, static(www, a.Opts.Dev)},
 	}
 }
