@@ -66,8 +66,11 @@ Services we own, called through generated Connect clients.
   - No Buf Schema Registry. `buf breaking` runs in each owner's CI against its main.
 - **The game uses generated clients only**, fleet's included. `fleet-client.ts` keeps `follow` (its reconnect and
   back-off rules, named in I8's allow-list, `ui-invariants.contract.test.ts:509`) and swaps its hand-rolled transport
-  for the generated client. The generated code and the adapters load in the owner-only chunk the owner's boot already
-  loads (`ui-live.ts:20`, `world-characters.ts:14`, `world-fleet.ts:14`), by dynamic import only: a new bun build entry and a `dev/budgets.sh` line. The spike measured that chunk at 144 KB minified (40.6 KB gzip) with fleet's and telemetry's clients; the runtime is 110 KB of it, so a static import would break world.js's budget. The public page does not grow.
+  for the generated client. The generated code, the adapters and the owner-only components load in an owner chunk by `import()`, from a
+  code-splitting build of world.ts so the chunk shares Preact, the signals and the store with world.js (hud-build.md
+  HB-2; today every dist file is its own entry, and `ui-live.ts`, `world-characters.ts` and `world-fleet.ts` import
+  the fleet client statically into world.js). The spike measured the clients at 144 KB minified (40.6 KB gzip), the
+  runtime 110 KB of it, so a static import would break world.js's budget. The public page does not grow.
 
 ### 2. Type
 
