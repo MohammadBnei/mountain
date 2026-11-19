@@ -45,8 +45,7 @@ bun 1.4.4, `@connectrpc/connect` and `connect-web` 2.3.0, `@bufbuild/protobuf` a
 | Both | 143,747 B | 40.6 KB | 263,348 B |
 
 The runtime is about 110 KB minified; fleet's generated code about 16 KB, telemetry's about 2 KB. world.js rebuilt
-byte-identical (2,475,643 B, no connect or protobuf code in it), 34 KB under budget: the chunk loads by dynamic import
-only.
+byte-identical (2,475,643 B, no connect or protobuf code in it), 34 KB under budget: the clients load in an owner chunk by `import()` only (a code-splitting build, hud-build.md HB-2).
 
 ## Verdict
 
