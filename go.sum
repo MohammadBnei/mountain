@@ -1,3 +1,5 @@
+connectrpc.com/connect v1.21.1 h1:h2kacdlzXpZU2OQFSv98xkjYXNUSr/ptxmGVbS/+CRM=
+connectrpc.com/connect v1.21.1/go.mod h1:fhMcVJ5w6r/yTYhnkEbW6+sIF7OZ5Ay7KYgmfebh2ek=
 github.com/MohammadBnei/ukubi-go v0.1.0 h1:aSwbriR7rqO9y8Gj/Cv8PZpBnYNNEmRrcnlHEQyvCEo=
 github.com/MohammadBnei/ukubi-go v0.1.0/go.mod h1:ruvOhOJlRFJMB6DBFTAnAEaSEbxlcu839n8VVUy++CM=
 github.com/agext/levenshtein v1.2.1 h1:QmvMAjj2aEICytGiWzmxoE0x2KZvE0fvmqMOfy2tjT8=

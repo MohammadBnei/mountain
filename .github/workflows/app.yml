@@ -13,6 +13,9 @@ on:
     paths:
       - 'internal/**'
       - 'contract/**'
+      - 'api/**'
+      - 'buf.yaml'
+      - 'buf.gen.yaml'
       - 'realms/**'
       - 'cmd/**'
       - 'www/**'
@@ -57,6 +60,34 @@ jobs:
           echo "$s  $f" | sha256sum -c -
           tar -xzf "$f" -C "$RUNNER_TEMP" --strip-components=1 "prometheus-3.5.0.linux-$a/promtool"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      # atlas's protos (api/, buf.yaml): lint, the committed Go code matches its generation, and no breaking change
+      # against main (no Buf Schema Registry: main is the baseline; skipped until main has api/).
+      - name: buf 1.75.0
+        run: |
+          set -euo pipefail
+          case "$RUNNER_ARCH" in
+            X64) a=x86_64 s=fad1e38d6909bbb583a4da81d8c02a01046e2cd663bde7e337dd24277393764b ;;
+            ARM64) a=aarch64 s=00eb190aa82df17f393e05b04889cc60a0b13b3259d336e21a87d5f23ab4fd26 ;;
+            *) echo "::error::no buf for $RUNNER_ARCH"; exit 1 ;;
+          esac
+          f="$RUNNER_TEMP/buf"
+          curl -sSfL -o "$f" "https://github.com/bufbuild/buf/releases/download/v1.75.0/buf-Linux-$a"
+          echo "$s  $f" | sha256sum -c -
+          chmod +x "$f"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: buf lint, generate, breaking
+        run: |
+          set -euo pipefail
+          buf lint
+          buf generate
+          git diff --exit-code -- api || { echo "::error::api/: the generated code is stale, run buf generate"; exit 1; }
+          test -z "$(git status --porcelain -- api)" || { echo "::error::api/: buf generate made files not committed"; exit 1; }
+          git fetch --no-tags --depth=1 origin main
+          if git cat-file -e FETCH_HEAD:buf.yaml 2>/dev/null; then
+            buf breaking --against ".git#ref=FETCH_HEAD"
+          else
+            echo "::notice::main has no buf.yaml yet: nothing to break"
+          fi
       - name: go vet
         run: go vet ./...
       # No .golangci config, as in agent-fleet: the defaults (errcheck, govet, ineffassign, staticcheck, unused).

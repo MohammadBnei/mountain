@@ -600,11 +600,13 @@ type GraphIndex struct {
 	Watch  map[string][]string // Prometheus alert name -> the nodes whose watch names it, sorted
 	Kind   map[string]string   // node id -> kind (contract.Classify)
 	RunsOn map[string][]string // runs-on edges, from -> to (contract.Classify)
+	AppNS  map[string]string   // app id -> the namespace it deploys into (the telemetry join)
+	Deploy map[string][]string // repo id -> app ids deploying from it, sorted (git edges; the telemetry join)
 }
 
 func buildIndex(v *atlasView) *GraphIndex {
 	x := &GraphIndex{Seq: v.Seq, Realm: map[string]string{}, NSApps: map[string][]string{}, Has: map[string]bool{}, Into: map[string]string{}, Watch: map[string][]string{},
-		Kind: map[string]string{}, RunsOn: map[string][]string{}}
+		Kind: map[string]string{}, RunsOn: map[string][]string{}, AppNS: map[string]string{}, Deploy: map[string][]string{}}
 	for _, raw := range v.Nodes {
 		var n graph.Node
 		if json.Unmarshal(raw, &n) != nil {
@@ -618,6 +620,7 @@ func buildIndex(v *atlasView) *GraphIndex {
 		}
 		if n.Kind == graph.KindApp && n.Attrs["namespace"] != "" {
 			x.NSApps[n.Attrs["namespace"]] = append(x.NSApps[n.Attrs["namespace"]], n.ID)
+			x.AppNS[n.ID] = n.Attrs["namespace"]
 		}
 		for _, r := range strings.Split(n.Attrs["watch"], ",") {
 			if r = strings.TrimSpace(r); r != "" {
@@ -627,11 +630,20 @@ func buildIndex(v *atlasView) *GraphIndex {
 	}
 	for _, raw := range v.Edges {
 		var e graph.Edge
-		if json.Unmarshal(raw, &e) == nil && e.Kind == graph.EdgeRunsOn && x.Has[e.From] && x.Has[e.To] {
+		if json.Unmarshal(raw, &e) != nil || !x.Has[e.From] || !x.Has[e.To] {
+			continue
+		}
+		switch e.Kind {
+		case graph.EdgeRunsOn:
 			x.RunsOn[e.From] = append(x.RunsOn[e.From], e.To)
+		case graph.EdgeGit:
+			x.Deploy[e.To] = append(x.Deploy[e.To], e.From)
 		}
 	}
 	for _, l := range x.NSApps {
+		slices.Sort(l)
+	}
+	for _, l := range x.Deploy {
 		slices.Sort(l)
 	}
 	for _, l := range x.Watch {

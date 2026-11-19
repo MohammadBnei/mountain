@@ -25,6 +25,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/MohammadBnei/mountain"
+	"github.com/MohammadBnei/mountain/api/telemetry/v1/telemetryv1connect"
 )
 
 const (
@@ -218,6 +219,11 @@ func TestMachineRoutes(t *testing.T) {
 			if r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden {
 				t.Errorf("machine %s: %d", rt.pattern, r.StatusCode)
 			}
+		case "GET " + telemetryv1connect.TelemetryServiceReadProcedure, "POST " + telemetryv1connect.TelemetryServiceWatchProcedure:
+			seen++ // past the gate, Connect refuses an empty request (TestTelemetryMachine calls them)
+			if r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden || r.StatusCode == http.StatusFound {
+				t.Errorf("machine %s: %d", rt.pattern, r.StatusCode)
+			}
 		default:
 			if !refused(r) {
 				t.Errorf("machine on %s: %d %q, want 401", rt.pattern, r.StatusCode, r.Header.Get("WWW-Authenticate"))
@@ -247,8 +253,8 @@ func TestMachineRoutes(t *testing.T) {
 			t.Errorf("machine %s %s: %d, want 401", m[0], m[1], r.StatusCode)
 		}
 	}
-	if seen != 2 {
-		t.Errorf("the machine's routes are gone from the table: %d of 2 seen", seen)
+	if seen != len(machineRoutes) || len(machineRoutes) != 4 {
+		t.Errorf("the machine's routes changed: %d of %d seen, want 4 (a new machine route is a new reach for the game's token: add it here on purpose)", seen, len(machineRoutes))
 	}
 	if r := a.serveReq("GET", "/api/graph?access_token="+strings.TrimPrefix(tok, "Bearer "), nil); r.StatusCode != http.StatusForbidden {
 		t.Errorf("a token in the query: %d, want the cookie path's 403", r.StatusCode)
