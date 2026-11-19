@@ -30,10 +30,11 @@ settled the calls they raised (2026-11-19, below).
   - shared files, edited by both: `world.ts` (the `say()` wiring, the scene feed), `world-scene-api.ts` (the new
     `fast` source for anchors), `world-minimap.ts`. Each HUD PR that touches them rebases on the startup work, not the
     other way round; the minimap marks land after S4 or in their own PR;
-  - HB-2's split changes the dist layout: agreed with the efficient-loading session before H0 lands (its S2 adds
-    Cache-Control for the public files and `Immutable` names).
+  - HB-2's split, agreed with the efficient-loading session (2026-11-19): it lands after S2 (ukubi-game #319); the
+    build line in package.json and `dev/budgets.sh` are this build's. S2 needs no change.
 - **world.js budget.** The committed `dist/world.js` at 07cc9306 is 2,476,983 of 2,510,000 bytes, about 33 KB; S2 adds
-  about 1 KB and S3/S4 more (their estimate is asked for). The split moves owner-only UI out of world.js; each PR
+  about 1 KB; S3 about 1-2 KB and S4 perhaps 5-10 KB (the startup session's guess, not measured; both wait on an
+  owner checkpoint). The split moves owner-only UI out of world.js; each PR
   reports its world.js delta, and H1 reports its own before H2 starts. A budget raise is the owner's call, never a
   lane's. The deletions that free most room (world-control 17.4 KB, town-card 15.7, town-shell 11.3, world-chrome 9.9,
   town-lenses 9.2, cockpit-tabs 6.6, cockpit 3.7) happen in H3.
@@ -68,6 +69,13 @@ H4 runs beside H1 to H3: it is in other repos until its last PR.
 - **The split (HB-2):** `bun build world.ts --splitting` with fixed `--chunk-naming`, an owner entry
   (`ui-owner.ts`) loaded by `import()` only on an owner's page, `dev/budgets.sh` lines per chunk, dist identity kept
   (bun 1.4.2). The public page loads only world.js and the shared chunk.
+  - Caching: a file is immutable only when asked as `?v=<sha256[:12]>` (`internal/play/immutable.go`), and the server
+    adds `?v=` only to html links (pageLinks) and kit manifest paths (kitLinks). A chunk reached by `import()` or a
+    static import gets none and is revalidated on every load; `world-voice-lk.js` has the same gap today
+    (world.ts:3651). Fixed chunk names plus a `jsLinks` rewrite that adds `?v=` to `./chunk-*.js` specifiers in
+    served .js files, one versioning rule; it fixes the voice chunk too.
+  - `world.html` carries `<link rel="modulepreload">` for the shared chunk (versioned by pageLinks), so the split adds
+    no cold round trip (~150 ms on h3) to the boot path.
 - `ui-data.ts`: the UI types (`Series`, `Stat`, `LogLines`, `SpanTree`, `Thread`, `Decision`, `Line`, `Character`,
   `EntityRef`, `Unknown`) and the bundle shape an adapter returns.
 - `ui-layout.ts`: the layout data's types (grid slot, anchor with its three targets, accepted types per slot, default
@@ -189,5 +197,4 @@ First, the portrait explore board (map corner, tracker line, pad) for the owner 
 
 ## Open
 
-- The startup session's estimate of S3/S4's world.js growth.
 - H-13's walk toward the owner: H2b or H6.
