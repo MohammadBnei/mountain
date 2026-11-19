@@ -13,7 +13,7 @@
   and carriers. The owner adds: "physics too, to enable racing, PvP and boss fighting?" So the core must carry
   authoritative contact between players and with bosses, not only movement.
 
-## Round 4 (to come): the strategy view
+## Round 4 (to come): the strategy view (settled in round-4-hud.md, 2026-11-18)
 - The references: Civilization V and VII (hex map, the yields read on the map, lenses), Age of Empires III (a home city,
   a real-time economy) and Crusader Kings (characters, relations, intrigue).
 - The working bet: a separate mode on the same 3D scene, with its own HUD, kept free of explore.
@@ -76,6 +76,7 @@ What this binds `ui-core.md` to:
   mode only presents those actions:
   - explore through the dock, the radial and the panels;
   - strategy through the board, the cards and the inbox.
+  - Round 4 (round-4-hud.md, "The principle") replaces these two presentation lines; the rule itself stands.
 - **A check.** A test lists the actions reachable in each mode and fails when the two lists differ, the same way the
   router's AST guard checks keys today.
 - **Left open:** how the strategy mode looks (flat or schematic, or the same 3D). That waits for the scene research
