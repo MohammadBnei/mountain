@@ -146,3 +146,9 @@ things:
     aliases:
       - {source: k8s-api, field: service, name: proxmox, status: proven, key: externalName, at: 2026-11-14, note: "ExternalName 192.168.1.200 = server1, NOT the host once called proxmox"}
       - {source: k8s-api, field: service, name: proxmox/proxmox, status: proven, key: externalName, at: 2026-11-14}
+
+  # ---------------------------------------------------------------- field managers (realms/system.go, the manager rung)
+  # A creator no applied workload is named after. Convention rank only: a client names its own field manager.
+  platform:talos:
+    aliases:
+      - {source: k8s-api, field: field-manager, name: talos, status: proven, key: name, at: 2026-11-21, note: "the Apply manager of kube-system cilium, coredns, hubble-*: Talos applies them, no Application does"}

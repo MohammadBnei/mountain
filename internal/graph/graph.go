@@ -30,6 +30,8 @@ const (
 	// The door's kinds (design-2026-11/door-hybrid-F.md): realms/aliases.yaml names them, no extractor makes them.
 	KindPG       = "pg"       // a Patroni member of a Postgres cluster, by its member name (pg:pg-proxmox-1)
 	KindEndpoint = "endpoint" // an address shared or redirected among things: a VIP, a redirect Service (endpoint:pg-proxmox/vip)
+	// The cascade's kind (realms/system.go): what the OS lays down on its nodes, no Application (platform:talos).
+	KindPlatform = "platform"
 )
 
 // Kinds is each node kind's meaning, one line each: the table Valid's id rule is built from, and what a reader that
@@ -48,6 +50,7 @@ var Kinds = map[string]string{
 	KindExt:      "an outside service an app declares it needs, a moon",
 	KindPG:       "a Patroni member of a Postgres cluster, by its member name",
 	KindEndpoint: "an address shared or redirected among things: a VIP, a redirect Service",
+	KindPlatform: "what the OS lays down on its nodes, no Application",
 }
 
 // Kinds of edge.

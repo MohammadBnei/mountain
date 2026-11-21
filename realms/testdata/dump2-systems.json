@@ -1,0 +1,1855 @@
+{
+ "_note": "spike S1 dump2 (live Talos cluster, 2026-11-21): apps.json trimmed to each Application's sources and its workloads (plus the tops below); cases are owner chains walked from workloads.json and owners.json, with the top owner's managedFields. An owner the dump does not hold (longhorn.io Node) ends its chain as its ownerReference, no managedFields.",
+ "apps": [
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "agent-fleet-core"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/agent-fleet.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "agent-fleet",
+      "name": "agent-fleet-core",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "agent-vault"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "agent-vault",
+      "name": "agent-vault",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "argocd"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "https://argoproj.github.io/argo-helm"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "argocd",
+      "name": "argocd-applicationset-controller",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "argocd",
+      "name": "argocd-redis",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "argocd",
+      "name": "argocd-repo-server",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "argocd",
+      "name": "argocd-server",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "StatefulSet",
+      "namespace": "argocd",
+      "name": "argocd-application-controller",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "bootstrap"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": []
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "cert-approver"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "https://github.com/alex1989hu/kubelet-serving-cert-approver.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "kubelet-serving-cert-approver",
+      "name": "kubelet-serving-cert-approver",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "dream-analyst"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/dream-analyst.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "dream-analyst",
+      "name": "dream-analyst",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "drop"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/drop.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "drop",
+      "name": "drop",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "editable-blog"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/editable-blog.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "editable-blog",
+      "name": "editable-blog",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "ente-museum"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "ente",
+      "name": "ente-museum",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "ente-web"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "ente",
+      "name": "ente-web",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "forgejo"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "code.forgejo.org/forgejo-helm"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "forgejo",
+      "name": "forgejo",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "has-journal"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/has-journal.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "has-journal",
+      "name": "has-journal",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "hq"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/hq.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "hq",
+      "name": "hq",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "livekit"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "livekit",
+      "name": "livekit",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "longhorn"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "https://charts.longhorn.io"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "DaemonSet",
+      "namespace": "longhorn-system",
+      "name": "longhorn-manager",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "longhorn-system",
+      "name": "longhorn-driver-deployer",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "longhorn-system",
+      "name": "longhorn-global-manager",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "longhorn-system",
+      "name": "longhorn-ui",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "metallb"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "https://metallb.github.io/metallb"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "DaemonSet",
+      "namespace": "metallb-system",
+      "name": "metallb-frr-k8s",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "DaemonSet",
+      "namespace": "metallb-system",
+      "name": "metallb-speaker",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "metallb-system",
+      "name": "metallb-controller",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "metallb-system",
+      "name": "metallb-frr-k8s-statuscleaner",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "metallb-pool"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": []
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "metrics-server"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "https://kubernetes-sigs.github.io/metrics-server/"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "kube-system",
+      "name": "metrics-server",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "mountain"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/mountain.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "mountain",
+      "name": "mountain",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "namespaces"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": []
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "netbird"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "netbird",
+      "name": "netbird",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "netbird-dashboard"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "netbird",
+      "name": "netbird-dashboard",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "pgweb"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "pgweb",
+      "name": "pgweb",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "pi-lab"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/pi-lab.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "pi-lab",
+      "name": "pi-lab",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-actions-runner"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "actions-runner",
+      "name": "actions-runner",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-alloy"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://grafana.github.io/helm-charts"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "DaemonSet",
+      "namespace": "monitoring",
+      "name": "platform-alloy",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-authentik"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://charts.goauthentik.io"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "authentik",
+      "name": "platform-authentik-server",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "authentik",
+      "name": "platform-authentik-worker",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-blackbox-exporter"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://prometheus-community.github.io/helm-charts"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "monitoring",
+      "name": "platform-blackbox-exporter-prometheus-blackbox-exporter",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-dev-services"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "dev-services",
+      "name": "dev-valkey",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "dev-services",
+      "name": "integresql",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "dev-services",
+      "name": "mailpit",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "dev-services",
+      "name": "mock-oauth2",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "StatefulSet",
+      "namespace": "dev-services",
+      "name": "dev-postgres",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-grafana"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://grafana-community.github.io/helm-charts"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "monitoring",
+      "name": "platform-grafana",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-infisical"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "infisical",
+      "name": "platform-infisical-backend",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-infisical-operator"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "infisical",
+      "name": "platform-infisi-controller-manager",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-livekit-bounds"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": []
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-llm-gateway"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "llm-gateway",
+      "name": "llm-gateway",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "llm-gateway",
+      "name": "llm-gateway-private",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "llm-gateway",
+      "name": "llm-gateway-ui",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-local-path-provisioner"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://charts.containeroo.ch"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "local-path-storage",
+      "name": "platform-local-path-provisioner",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-loki"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://grafana-community.github.io/helm-charts"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "StatefulSet",
+      "namespace": "monitoring",
+      "name": "platform-loki",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-nvidia-device-plugin"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://nvidia.github.io/k8s-device-plugin"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "DaemonSet",
+      "namespace": "kube-system",
+      "name": "platform-nvidia-device-plugin",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "DaemonSet",
+      "namespace": "kube-system",
+      "name": "platform-nvidia-device-plugin-mps-control-daemon",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-prometheus"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://prometheus-community.github.io/helm-charts"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "DaemonSet",
+      "namespace": "monitoring",
+      "name": "platform-prometheus-prometheus-node-exporter",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "monitoring",
+      "name": "platform-prometheus-kube-p-operator",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "monitoring",
+      "name": "platform-prometheus-kube-state-metrics",
+      "status": "Synced"
+     },
+     {
+      "group": "monitoring.coreos.com",
+      "kind": "Prometheus",
+      "namespace": "monitoring",
+      "name": "platform-prometheus-kube-p-prometheus",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-provisioner"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "https://github.com/MohammadBnei/agent-fleet.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "DaemonSet",
+      "namespace": "agent-fleet",
+      "name": "worker-image-prepull",
+      "status": "Synced"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "agent-fleet",
+      "name": "provisioner",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-tempo"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://grafana-community.github.io/helm-charts"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "StatefulSet",
+      "namespace": "monitoring",
+      "name": "platform-tempo",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-thot"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "thot",
+      "name": "thot-executor",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-traefik"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "https://traefik.github.io/charts"
+     },
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "traefik",
+      "name": "platform-traefik",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-ukubi-game-bounds"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": []
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-ukubi-meet-bounds"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": []
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "platform-ukubi-realm-bounds"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": []
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "redirectors"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": []
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "root"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": []
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "searxng"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "searxng",
+      "name": "searxng",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "silverbullet"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "silverbullet",
+      "name": "silverbullet",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "ukubi-bridge"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/ukubi-bridge.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "ukubi-bridge",
+      "name": "ukubi-bridge",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "ukubi-game"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/ukubi-game.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "ukubi-game",
+      "name": "ukubi-game",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "ukubi-game-public"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/ukubi-game.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "ukubi-game-public",
+      "name": "ukubi-game-public",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "ukubi-meet"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/ukubi-meet.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "ukubi-meet",
+      "name": "ukubi-meet",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "ukubi-realm"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/ukubi-game.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "ukubi-realm",
+      "name": "ukubi-realm",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "ukubi-stt"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/ukubi-stt.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "ukubi-stt",
+      "name": "ukubi-stt",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "vos-monolith"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/vos-monolith.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "vos",
+      "name": "vos-monolith",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "vos-monolith-dev"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/vos-monolith.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "vos-dev",
+      "name": "vos-monolith-dev",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "wird"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/wird.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "wird",
+      "name": "wird",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "wird-adminweb"
+   },
+   "spec": {
+    "sources": [
+     {
+      "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+     },
+     {
+      "repoURL": "https://github.com/MohammadBnei/wird.git"
+     }
+    ]
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "wird",
+      "name": "wird-adminweb",
+      "status": "Synced"
+     }
+    ]
+   }
+  },
+  {
+   "metadata": {
+    "namespace": "argocd",
+    "name": "zot"
+   },
+   "spec": {
+    "source": {
+     "repoURL": "git@github.com:MohammadBnei/infra-bootstrap.git"
+    }
+   },
+   "status": {
+    "resources": [
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "zot",
+      "name": "zot",
+      "status": "Synced"
+     }
+    ]
+   }
+  }
+ ],
+ "cases": [
+  {
+   "hints": {
+    "owner_chain": [
+     {
+      "group": "",
+      "kind": "Pod",
+      "name": "worker-image-prepull-5w957",
+      "namespace": "agent-fleet"
+     },
+     {
+      "group": "apps",
+      "kind": "DaemonSet",
+      "name": "worker-image-prepull",
+      "namespace": "agent-fleet",
+      "tracking_id": "platform-provisioner:apps/DaemonSet:agent-fleet/worker-image-prepull"
+     }
+    ],
+    "managed_fields": [
+     {
+      "manager": "argocd-controller",
+      "operation": "Apply",
+      "time": "2026-11-20T10:41:18Z"
+     },
+     {
+      "manager": "kube-controller-manager",
+      "operation": "Update",
+      "time": "2026-11-20T11:19:08Z",
+      "subresource": "status"
+     }
+    ]
+   },
+   "want": {
+    "resolution": "applied",
+    "system": "app:platform-provisioner"
+   }
+  },
+  {
+   "hints": {
+    "owner_chain": [
+     {
+      "group": "",
+      "kind": "Pod",
+      "name": "hq-65968b7b9c-6rp6f",
+      "namespace": "hq",
+      "instance": "hq"
+     },
+     {
+      "group": "apps",
+      "kind": "ReplicaSet",
+      "name": "hq-65968b7b9c",
+      "namespace": "hq",
+      "tracking_id": "hq:apps/Deployment:hq/hq",
+      "instance": "hq"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "name": "hq",
+      "namespace": "hq",
+      "tracking_id": "hq:apps/Deployment:hq/hq",
+      "instance": "hq"
+     }
+    ],
+    "managed_fields": [
+     {
+      "manager": "argocd-controller",
+      "operation": "Apply",
+      "time": "2026-11-20T10:40:07Z"
+     },
+     {
+      "manager": "manager",
+      "operation": "Update",
+      "time": "2026-11-20T10:40:52Z"
+     },
+     {
+      "manager": "kube-controller-manager",
+      "operation": "Update",
+      "time": "2026-11-20T11:14:42Z",
+      "subresource": "status"
+     }
+    ]
+   },
+   "want": {
+    "resolution": "applied",
+    "system": "app:hq"
+   }
+  },
+  {
+   "hints": {
+    "owner_chain": [
+     {
+      "group": "",
+      "kind": "Pod",
+      "name": "cilium-57l4v",
+      "namespace": "kube-system"
+     },
+     {
+      "group": "apps",
+      "kind": "DaemonSet",
+      "name": "cilium",
+      "namespace": "kube-system"
+     }
+    ],
+    "managed_fields": [
+     {
+      "manager": "talos",
+      "operation": "Apply",
+      "time": "2026-11-19T19:00:59Z"
+     },
+     {
+      "manager": "kube-controller-manager",
+      "operation": "Update",
+      "time": "2026-11-20T10:39:38Z",
+      "subresource": "status"
+     }
+    ]
+   },
+   "want": {
+    "resolution": "manager",
+    "system": "platform:talos"
+   }
+  },
+  {
+   "hints": {
+    "owner_chain": [
+     {
+      "group": "",
+      "kind": "Pod",
+      "name": "kube-apiserver-esprimo-1",
+      "namespace": "kube-system"
+     },
+     {
+      "group": "",
+      "kind": "Node",
+      "name": "esprimo-1"
+     }
+    ],
+    "managed_fields": [
+     {
+      "manager": "kube-controller-manager",
+      "operation": "Update",
+      "time": "2026-11-19T19:00:52Z"
+     },
+     {
+      "manager": "kubelet",
+      "operation": "Update",
+      "time": "2026-11-19T19:00:52Z"
+     },
+     {
+      "manager": "cilium-operator-generic",
+      "operation": "Update",
+      "time": "2026-11-19T19:01:26Z",
+      "subresource": "status"
+     },
+     {
+      "manager": "kubectl-label",
+      "operation": "Update",
+      "time": "2026-11-20T09:10:07Z"
+     },
+     {
+      "manager": "Talos",
+      "operation": "Update",
+      "time": "2026-11-20T11:53:11Z"
+     },
+     {
+      "manager": "kube-controller-manager",
+      "operation": "Update",
+      "time": "2026-11-21T16:39:01Z",
+      "subresource": "status"
+     },
+     {
+      "manager": "kubelet",
+      "operation": "Update",
+      "time": "2026-11-21T16:48:33Z",
+      "subresource": "status"
+     }
+    ]
+   },
+   "want": {
+    "resolution": "unresolved"
+   }
+  },
+  {
+   "hints": {
+    "owner_chain": [
+     {
+      "group": "",
+      "kind": "Pod",
+      "name": "csi-attacher-575dcfd9dd-r976w",
+      "namespace": "longhorn-system"
+     },
+     {
+      "group": "apps",
+      "kind": "ReplicaSet",
+      "name": "csi-attacher-575dcfd9dd",
+      "namespace": "longhorn-system"
+     },
+     {
+      "group": "apps",
+      "kind": "Deployment",
+      "name": "csi-attacher",
+      "namespace": "longhorn-system"
+     }
+    ],
+    "managed_fields": [
+     {
+      "manager": "longhorn-manager",
+      "operation": "Update",
+      "time": "2026-11-19T21:04:04Z"
+     },
+     {
+      "manager": "kube-controller-manager",
+      "operation": "Update",
+      "time": "2026-11-19T21:04:09Z",
+      "subresource": "status"
+     }
+    ]
+   },
+   "want": {
+    "resolution": "manager",
+    "system": "app:longhorn"
+   }
+  },
+  {
+   "hints": {
+    "owner_chain": [
+     {
+      "group": "",
+      "kind": "Pod",
+      "name": "instance-manager-0add9d9906a8a4f3ab194dcce64d0ae0",
+      "namespace": "longhorn-system"
+     },
+     {
+      "group": "longhorn.io",
+      "kind": "InstanceManager",
+      "name": "instance-manager-0add9d9906a8a4f3ab194dcce64d0ae0",
+      "namespace": "longhorn-system"
+     },
+     {
+      "group": "longhorn.io",
+      "kind": "Node",
+      "name": "esprimo-2",
+      "namespace": "longhorn-system"
+     }
+    ]
+   },
+   "want": {
+    "resolution": "unresolved"
+   }
+  },
+  {
+   "hints": {
+    "owner_chain": [
+     {
+      "group": "",
+      "kind": "Pod",
+      "name": "prometheus-platform-prometheus-kube-p-prometheus-0",
+      "namespace": "monitoring",
+      "instance": "platform-prometheus-kube-p-prometheus"
+     },
+     {
+      "group": "apps",
+      "kind": "StatefulSet",
+      "name": "prometheus-platform-prometheus-kube-p-prometheus",
+      "namespace": "monitoring",
+      "tracking_id": "platform-prometheus:monitoring.coreos.com/Prometheus:monitoring/platform-prometheus-kube-p-prometheus",
+      "instance": "platform-prometheus-kube-p-prometheus"
+     },
+     {
+      "group": "monitoring.coreos.com",
+      "kind": "Prometheus",
+      "name": "platform-prometheus-kube-p-prometheus",
+      "namespace": "monitoring",
+      "tracking_id": "platform-prometheus:monitoring.coreos.com/Prometheus:monitoring/platform-prometheus-kube-p-prometheus",
+      "instance": "platform-prometheus"
+     }
+    ],
+    "managed_fields": [
+     {
+      "manager": "argocd-controller",
+      "operation": "Apply",
+      "time": "2026-11-20T10:40:40Z"
+     },
+     {
+      "manager": "PrometheusOperator",
+      "operation": "Apply",
+      "time": "2026-11-20T11:59:53Z",
+      "subresource": "status"
+     }
+    ]
+   },
+   "want": {
+    "resolution": "applied",
+    "system": "app:platform-prometheus"
+   }
+  }
+ ]
+}

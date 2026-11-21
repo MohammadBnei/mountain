@@ -28,8 +28,14 @@
 // MOUNTAIN_MACHINE_CERT, MOUNTAIN_MACHINE_ISSUER, MOUNTAIN_MACHINE_CLIENT_ID and MOUNTAIN_MACHINE_SUB (the game's
 // machine principal on the town's two reads and the telemetry service's two, machine.go; all or none: unset = off), and
 // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT (the OTLP/HTTP traces URL in full, its /v1/traces path included; unset = no
-// tracer and no span; a malformed one is a WARN line and no tracing). All of it is read once, in config.go; the libraries'
-// own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*) are theirs, and so are OpenTelemetry's: the metrics
+// tracer and no span; a malformed one is a WARN line and no tracing), and ATLAS_BRIDGE_URL and
+// ATLAS_BRIDGE_PASSWORD_FILE (the System tag loop, tags.go: the bridge's base URL and the file holding the bridge-atlas
+// service account's app password; both or the loop is off, one alone a WARN line; it also needs the cluster, read
+// with atlas's service account), ATLAS_BRIDGE_TOKEN_URL (authentik's token endpoint; default
+// https://authentik.bnei.dev/application/o/token/) and ATLAS_BRIDGE_AUTH_HOST (the Host the token request carries, for
+// a token URL that is authentik's in-cluster Service; unset = the URL's own). All of it is read once, in config.go;
+// the libraries' own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*, client-go's KUBERNETES_SERVICE_HOST
+// and _PORT) are theirs, and so are OpenTelemetry's: the metrics
 // SDK always reads OTEL_RESOURCE_ATTRIBUTES, OTEL_SERVICE_NAME, OTEL_METRICS_EXEMPLAR_FILTER and OTEL_GO_X_* (a
 // malformed one is a JSON INFO line on stdout, from OTel's global error handler going through the log package that
 // slog has taken over; some bad values are ignored with no line at all; the exposition is unchanged either way), and
@@ -44,7 +50,9 @@
 // stderr; every other refusal to start is a JSON ERROR line, then exit 1. The libraries' own reads, as above, plus
 // grpc's GRPC_GO_* (linked through ukubi-go, read at init, unused).
 //
-// Read side only: atlas never writes a repo or a live store (CQRS, plan/10).
+// Read side only: atlas never writes a repo or a live store (CQRS, plan/10), but for the System tags it attaches to the
+// bridge's events (tags.go, conception-2026-11-21 §16 decision 6). Only an applied tag may route a wake, and the
+// bridge, not atlas, enforces it: atlas writes every tag with its resolution.
 package main
 
 import (
@@ -208,6 +216,8 @@ func run(ctx context.Context, c Config) error {
 		alerts := amHTTP{base: strings.TrimRight(o.AMURL, "/"), hc: hc}
 		a.Live.start(ctx, prom, alerts, func() *GraphIndex { return a.Graph.index() })
 	}
+
+	startTags(ctx, c.Tags, rl)
 
 	pub := &http.Server{Addr: o.Listen, Handler: routes(a, www), ReadHeaderTimeout: 10 * time.Second, ErrorLog: serverLog()}
 	mx := http.NewServeMux()
