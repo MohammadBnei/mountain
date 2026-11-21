@@ -1,5 +1,5 @@
 # Test, then call the shared image.yml (ukubi-ci): it builds the atlas image on the build-runner LXC, pushes it to
-# the in-cluster Zot registry, and pins <sha>@<digest> in helm/values.yaml so ArgoCD rolls it out. The bump
+# the in-cluster Zot registry, and pins <sha>@<digest> in helm/image.yaml on the `deploy` branch (ArgoCD layers it over helm/values.yaml) so ArgoCD rolls it out. The bump
 # (GITHUB_TOKEN) never triggers another run, and helm/** is not a trigger path, so it cannot loop either.
 name: app
 
@@ -26,6 +26,13 @@ on:
       - '.github/workflows/app.yml'
       - '!helm/**'
       - '!plan/**'
+
+# Forgejo honours only workflow-level concurrency (the job-level groups inside
+# ukubi-ci's image.yml are ignored there): a PR run cancels the older one, a
+# main run queues, so a build whose release tag is already pushed is never cancelled.
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Self-hosted like every job here: GitHub-hosted runners are billing-locked (the runner has no Chrome, so the
@@ -150,14 +157,16 @@ jobs:
           sudo buildah rm "$PG_CTR" || true
 
   # Build, push and deploy live in the shared ukubi-ci workflow (digest-pinned tag, stale-run guard, deploy job).
-  # Its concurrency groups replace the old app-build/app-deploy ones.
+  # The workflow-level group above serialises main runs (Forgejo ignores image.yml's job-level groups).
   image:
     needs: [test, db-test]
     # Registry creds are readable only on push/workflow_dispatch (OIDC claim).
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: MohammadBnei/ukubi-ci/.github/workflows/image.yml@8782d42e1d4e5cd0b8af9d1a14c9d5414976a4c9 # v0.7.0
+    uses: MohammadBnei/ukubi-ci/.github/workflows/image.yml@9af316b5d779b2d5ef3f55b9f11e20b8bf3f6ce8 # v0.11.1
     with:
-      runs-on: '["self-hosted","ukubi-build"]'
+      # The pin file on the deploy branch (ukubi-ci 0.11), not main's values.
+      values-file: helm/image.yaml
+      runs-on: '["ukubi-build"]'
       image: mountain
     # image.yml's build job reads the registry password over OIDC, its deploy job pushes the bump.
     permissions:
