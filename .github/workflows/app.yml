@@ -5,7 +5,11 @@ name: app
 
 on:
   workflow_dispatch:
-  # PRs run the test job only: the image job is guarded to push/workflow_dispatch.
+  # PRs run test and db-test, then a build-only image job (image.yml's guard: no
+  # login, push or bump on a pull_request run). All three run on the build LXC
+  # (ukubi-build, host executor): db-test starts postgres through sudo buildah,
+  # root on that box. The repo is private and Forgejo holds outside PR runs for
+  # approval; moving PR jobs off the host is the CI/CD split.
   pull_request:
     branches: [main]
   push:
@@ -161,7 +165,9 @@ jobs:
   image:
     needs: [test, db-test]
     # Registry creds are readable only on push/workflow_dispatch (OIDC claim).
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # No if: here. Forgejo evaluates a uses: job's if inside the called jobs,
+    # where event_name is workflow_call, so it skipped every build. image.yml's
+    # guard keeps pull_request runs build-only.
     uses: MohammadBnei/ukubi-ci/.github/workflows/image.yml@9af316b5d779b2d5ef3f55b9f11e20b8bf3f6ce8 # v0.11.1
     with:
       # The pin file on the deploy branch (ukubi-ci 0.11), not main's values.
