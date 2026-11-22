@@ -194,7 +194,7 @@ var (
 	laneRe     = regexp.MustCompile(`\blane [A-Z] ADR-\d{4}\b`)
 	mdLinkRe   = regexp.MustCompile(`\[[^\]\n]*\]\(([^)\s]+)\)`)
 	adrLinkRe  = regexp.MustCompile(`(\d{4})-[A-Za-z0-9._-]+\.md(?:#\S*)?$`)
-	urlRepoRe  = regexp.MustCompile(`github\.com/MohammadBnei/([A-Za-z0-9._-]+)/`)
+	urlRepoRe  = regexp.MustCompile(`(?:github\.com|git\.bnei\.dev)/MohammadBnei/([A-Za-z0-9._-]+)/`)
 	prefixedRe = regexp.MustCompile("\\b(infra-bootstrap|agent-fleet|mountain|ukubi-bridge|pi-lab)(?:'s)?[\\s:]+`?(?:ADR[- ]|(?:docs/)?adr/)(\\d{4})\\b")
 	repoPathRe = regexp.MustCompile(`\b(infra-bootstrap|agent-fleet|mountain|ukubi-bridge|pi-lab)/docs/adr/(\d{4})\b`)
 	docsADRRe  = regexp.MustCompile(`\bdocs/adr/(\d{4})\b`)

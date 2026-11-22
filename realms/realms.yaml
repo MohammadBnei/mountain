@@ -231,7 +231,7 @@ watch:
   app:platform-traefik: { prometheus: [TraefikCertExpiringSoon, TraefikCertMetricsMissing] }
   app:platform-longhorn: { prometheus: [LonghornVolumeDegraded, LonghornVolumeFaulted, LonghornNodeNotReady, LonghornDiskAlmostFull, LonghornManagerDown, LonghornMetricsAbsent] }
   app:netbird: { prometheus: [NetBirdUnreachable, NetBirdServerDown] }
-  app:mountain: { prometheus: [MountainSourceStale, MountainTokenExpiring, MountainUnassigned] }
+  app:mountain: { prometheus: [MountainSourceStale, MountainUnassigned] }
   host:bnei: { prometheus: [PVEHostUnreachable, PVEHostProbeStale] }
   host:server1: { prometheus: [PVEHostUnreachable, PVEHostProbeStale] }
   host:ex-laptop: { prometheus: [PVEHostUnreachable, PVEHostProbeStale] }
@@ -251,7 +251,7 @@ general: { grafana: [log-error-rate-spike] }
 # is an outside service (a moon, plan/17 D2): no component, its node made from the row, its health the blackbox
 # probe ext-<name> when there is one.
 needs:
-  app:mountain: [oidc, forwardauth, infisical, postgres:mountaindb, "declared:ext:github"]
+  app:mountain: [oidc, forwardauth, infisical, postgres:mountaindb, "declared:ext:forgejo"] # its repo poll (P4.5)
   app:agent-fleet-core: [oidc, infisical, postgres:agentfleetdb, "declared:ext:github", "declared:ext:anthropic"]
   app:platform-traefik: ["declared:ext:cloudflare"] # its ACME DNS challenge (dnsChallenge provider cloudflare)
   app:pi-lab: ["declared:ext:pi-lab"] # the Raspberry Pi its lab runs on, at a home the cluster cannot reach: no probe

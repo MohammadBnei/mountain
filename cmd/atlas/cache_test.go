@@ -16,12 +16,12 @@ func TestCacheBudget(t *testing.T) {
 	t.Cleanup(func() { cacheBudget = old })
 	ctx := context.Background()
 	sha := func(c string) string { return strings.Repeat(c, 40) }
-	trees := func(g *ghHeads) int { es, _ := os.ReadDir(g.dir); return len(es) }
+	trees := func(g *forgeHeads) int { es, _ := os.ReadDir(g.dir); return len(es) }
 
 	cacheBudget = 2*blockSize + blockSize/2
-	f := newFakeGitHub(t)
+	f := newFakeForge(t)
 	f.head["a@main"], f.head["b@main"], f.head["c@main"] = sha("a"), sha("b"), sha("c")
-	g, err := newGitHub(f.URL, "tok", t.TempDir(), nil)
+	g, err := newForge(f.API, "tok", t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,16 +47,16 @@ func TestCacheBudget(t *testing.T) {
 
 	// held trees fill the budget: the next tree is refused without downloading it
 	cacheBudget = 2 * blockSize
-	before := f.tarballs
-	if _, err := g.checkout(ctx, "c", "main"); err == nil || f.tarballs != before {
-		t.Errorf("c with the budget full: %v, %d tarballs downloaded, want an error and none", err, f.tarballs-before)
+	before := f.archives
+	if _, err := g.checkout(ctx, "c", "main"); err == nil || f.archives != before {
+		t.Errorf("c with the budget full: %v, %d archives downloaded, want an error and none", err, f.archives-before)
 	}
 
 	// a retired tree counts until the next round starts: a, its retired tree and b fill 3 blocks
 	cacheBudget = 3 * blockSize
-	f2 := newFakeGitHub(t)
+	f2 := newFakeForge(t)
 	f2.head["a@main"], f2.head["b@main"] = sha("a"), sha("b")
-	g2, err := newGitHub(f2.URL, "tok", t.TempDir(), nil)
+	g2, err := newForge(f2.API, "tok", t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,7 +2,7 @@
 // repos, a live overlay from Prometheus and Alertmanager, and the page that draws both; and, for the game's right
 // zone, atlas.telemetry.v1's faces read from Prometheus, Loki and Tempo per subject (telemetry.go). Platform admins only.
 //
-//	atlas [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--github-url URL]
+//	atlas [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--forge-url URL]
 //	      [--loki-url URL] [--tempo-url URL] [--grafana-url URL]
 //	      [--repos dir] [--every 2m] [--dev] [--graph-fixture file] [--live-fixture file]
 //	atlas project --repos <dir> [--dsn …] [--drop-repos]   (store one projection from local checkouts)
@@ -21,7 +21,7 @@
 //	    --patroni-url http://127.0.0.1:18008 --patroni-url http://127.0.0.1:18009 pg-proxmox
 //
 // Env: DATABASE_URL (Postgres; empty = memory-only: the latest projection only, no history),
-// MOUNTAIN_GITHUB_TOKEN (read-only token for the repo poll; empty = no poll, --repos or the stored projection only),
+// MOUNTAIN_FORGE_TOKEN (Forgejo read:repository token for the repo poll; empty = no poll, --repos or the stored projection only),
 // ATLAS_CACHE (where the repo poll unpacks the trees it reads, emptied at start; default /var/cache/atlas),
 // MOUNTAIN_OIDC_ISSUER, MOUNTAIN_OIDC_CLIENT_ID, MOUNTAIN_OIDC_CLIENT_SECRET and MOUNTAIN_SESSION_KEY (sign-in; any
 // unset or a key under 32 bytes = every route but /healthz refuses a person, except under --dev on a loopback address),
@@ -88,12 +88,12 @@ import (
 
 // Opts are the command-line flags plus the env the App reads (config.go).
 type Opts struct {
-	Listen, Metrics, PromURL, AMURL, GHURL, Repos, GraphFixture, LiveFixture string
-	LokiURL, TempoURL, GrafanaURL                                            string
-	Every                                                                    time.Duration
-	Dev                                                                      bool
-	GHToken                                                                  string
-	Cache                                                                    string // ATLAS_CACHE
+	Listen, Metrics, PromURL, AMURL, ForgeURL, Repos, GraphFixture, LiveFixture string
+	LokiURL, TempoURL, GrafanaURL                                               string
+	Every                                                                       time.Duration
+	Dev                                                                         bool
+	ForgeToken                                                                  string
+	Cache                                                                       string // ATLAS_CACHE
 }
 
 func main() {

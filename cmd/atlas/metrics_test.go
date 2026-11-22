@@ -23,14 +23,13 @@ func scrape(t *testing.T, m *Metrics) (int, string, string) {
 
 const (
 	helpDrift = "# HELP mountain_drift Drift in the latest projection, by kind (unassigned = a component realms.yaml does not place).\n# TYPE mountain_drift gauge\n"
-	helpToken = "# HELP mountain_github_token_days_left Days until the GitHub token expires.\n# TYPE mountain_github_token_days_left gauge\n"
 	helpSeq   = "# HELP mountain_projection_seq The latest projection's sequence number.\n# TYPE mountain_projection_seq gauge\n"
 	helpQuery = "# HELP mountain_query_failed_total Failed PromQL queries (the poll keeps its last answer and goes stale).\n# TYPE mountain_query_failed_total counter\n"
-	helpSrc   = "# HELP mountain_source_last_success Unix time of the last success per source (prom, alerts, github, projection, db); seeded at start.\n# TYPE mountain_source_last_success gauge\n"
+	helpSrc   = "# HELP mountain_source_last_success Unix time of the last success per source (prom, alerts, forge, projection, db); seeded at start.\n# TYPE mountain_source_last_success gauge\n"
 	helpWS    = "# HELP mountain_ws_connections Open /ws connections.\n# TYPE mountain_ws_connections gauge\n"
 )
 
-// TestMetricsExposition pins the exposition byte for byte: the six names, their types, HELP texts and label keys,
+// TestMetricsExposition pins the exposition byte for byte: the five names, their types, HELP texts and label keys,
 // the number format (the shortest %g, as the hand-written text had), and nothing the exporter would add by default
 // (target_info, otel_scope_* labels, a unit or a second _total). A family nothing has written yet is absent, except
 // the websocket count, which starts at 0.
@@ -50,7 +49,6 @@ func TestMetricsExposition(t *testing.T) {
 
 	m.SourceOK("prom", 1761650000)
 	m.SourceOK("db", 1761650001)
-	m.TokenDays(11.5)
 	m.WSConns(1)
 	m.WSConns(1)
 	m.WSConns(-1)
@@ -61,7 +59,6 @@ func TestMetricsExposition(t *testing.T) {
 	m.DriftCount("unresolved", 106)
 	m.DriftCount("mirror", 0)
 	want := helpDrift + "mountain_drift{kind=\"mirror\"} 0\nmountain_drift{kind=\"unresolved\"} 106\n" +
-		helpToken + "mountain_github_token_days_left 11.5\n" +
 		helpSeq + "mountain_projection_seq 7\n" +
 		helpQuery + "mountain_query_failed_total{query=\"info\"} 2\nmountain_query_failed_total{query=\"pods\"} 1\n" +
 		helpSrc + "mountain_source_last_success{source=\"db\"} 1.761650001e+09\nmountain_source_last_success{source=\"prom\"} 1.76165e+09\n" +
@@ -95,11 +92,10 @@ func TestMetricsLabelViews(t *testing.T) {
 	m.queryFailed.Add(ctx, 1, metric.WithAttributes(attribute.String("query", "info"), extra))
 	m.sourceLastSuccess.Record(ctx, 3, metric.WithAttributes(attribute.String("source", "db"), extra))
 	m.projectionSeq.Record(ctx, 2, metric.WithAttributes(attribute.String("kind", "stray"))) // a series with no label has none
-	m.tokenDaysLeft.Record(ctx, 5, metric.WithAttributes(extra))
 	m.wsConnections.Add(ctx, 1, metric.WithAttributes(extra))
 	_, _, body := scrape(t, m)
 	for _, line := range []string{"mountain_drift{kind=\"mirror\"} 7\n", "mountain_query_failed_total{query=\"info\"} 1\n",
-		"mountain_source_last_success{source=\"db\"} 3\n", "mountain_projection_seq 2\n", "mountain_github_token_days_left 5\n", "mountain_ws_connections 1\n"} {
+		"mountain_source_last_success{source=\"db\"} 3\n", "mountain_projection_seq 2\n", "mountain_ws_connections 1\n"} {
 		if !strings.Contains(body, line) {
 			t.Errorf("missing %q in\n%s", line, body)
 		}
@@ -114,7 +110,6 @@ func TestMetricsLabelViews(t *testing.T) {
 func TestMetricsNil(t *testing.T) {
 	var m *Metrics
 	m.SourceOK("db", 1)
-	m.TokenDays(1)
 	m.WSConns(1)
 	m.QueryFailure("x")
 	m.ProjectionSeq(1)

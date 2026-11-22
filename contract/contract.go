@@ -1,5 +1,5 @@
 // Package contract is what atlas reads from the systems it does not own, on the wire: the PromQL it sends, the
-// Alertmanager request it makes, the labels it joins on, and the GitHub routes it polls. atlas uses it as its own
+// Alertmanager request it makes, the labels it joins on, and the Forgejo routes it polls. atlas uses it as its own
 // copy; ukubi-game's sim mirrors these sources and imports it, so a query atlas adds or changes is a query the
 // sim's mirror must answer (its coverage test fails otherwise). It also holds the live frame atlas sends and how a
 // node's health is read from it (live.go), which the game's town draws. The standard library only: anything may
@@ -103,10 +103,20 @@ const (
 	AnnotationSummary    = "summary"
 )
 
-// GitHubOwner owns every repo atlas reads.
-const GitHubOwner = "MohammadBnei"
+// ForgeOwner owns every repo atlas reads, on Forgejo as on GitHub.
+const ForgeOwner = "MohammadBnei"
 
-// The GitHub REST routes atlas polls, each under /repos/<GitHubOwner>/<repo>, and the Accept header each sends.
+// The Forgejo API routes atlas polls (under --forge-url, /api/v1), each under /repos/<ForgeOwner>/<repo>.
+const (
+	ForgeBranches = "/branches/" // + <branch> (slashes kept): {"commit": {"id": <the head sha>}, …}; a tag never answers
+	ForgeArchive  = "/archive/"  // + <sha>.tar.gz: a gzip tar, a pax global header then one top-level directory, "<repo>/"
+)
+
+// GitHubOwner and the GitHub REST routes atlas polled before it moved to Forgejo. Deprecated: atlas no longer uses
+// them; they stay while ukubi-game's world.go and mirror/github still do.
+const GitHubOwner = ForgeOwner
+
+// The GitHub REST routes, each under /repos/<GitHubOwner>/<repo>, and the Accept header each sends.
 const (
 	GitHubCommits    = "/commits/" // + <branch>, conditional (If-None-Match): the raw head sha
 	GitHubHeadAccept = "application/vnd.github.sha"

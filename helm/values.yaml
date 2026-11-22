@@ -115,11 +115,28 @@ env:
       ZXrIHr1+99YTXY9QuNIBf/q+ixd/hQ==
       -----END CERTIFICATE-----
 
-# MOUNTAIN_GITHUB_TOKEN (Infisical mountain-8c-cz, synced to the Secret mountain-infisical
-# and loaded verbatim via envFrom): the read-only token atlas polls the repos with (contents
-# + metadata read on infra-bootstrap and the realms.yaml sources; a repo it cannot read is
-# left out and logged). Unset = no poll: atlas serves the stored projection only. A5's
-# ukubi-atlas App replaces it. Env is bound at start: restart the pod after a rotation.
+# MOUNTAIN_FORGE_TOKEN (Infisical mountain-8c-cz, synced to the Secret mountain-infisical
+# and loaded verbatim via envFrom): the Forgejo token atlas polls the repos with, scope
+# read:repository, of a user that can read infra-bootstrap and ALL the realms.yaml sources
+# (a repo it cannot read is left out and logged). A restricted Forgejo user (bridge-reader) does
+# not read public repos by the public flag: it needs an explicit read collaborator row on every
+# source, public ones too (as argocd-reader has). Check before the image rolls: for each source,
+# curl -H "Authorization: token $T" https://git.bnei.dev/api/v1/repos/MohammadBnei/<repo>/branches/main = 200. Unset = no poll: atlas serves the stored
+# projection only, and source="forge" is seeded once and never renewed, so
+# MountainSourceStale fires a few minutes after start. Env is bound at start: restart the
+# pod after a rotation.
+# The route to Forgejo (open point m3), from infra-bootstrap main (2026-11-21): --forge-url
+# stays at its default, https://git.bnei.dev/api/v1. CoreDNS forwards to the Talos host DNS,
+# which asks Pi-hole first (talos/patches/common/resolver.yaml), and Pi-hole answers
+# git.bnei.dev with the forgejo CT, 192.168.1.214 (bnei_lan_split_horizon, ADR-0078
+# Decision 10). So the poll goes straight to Forgejo's own :443, whose Let's Encrypt
+# certificate (lego, DNS-01) the image's system roots verify: no CA to mount, no Traefik or
+# Cloudflare on the way. With Pi-hole down, 1.1.1.1 answers and the poll goes the public way
+# (Cloudflare, Traefik, gitops/redirectors/forgejo.yaml). No NetworkPolicy selects
+# mountain's pods, so egress to the CT needs no carve-out. Not checked live: a lookup and one
+# authenticated branches/main request from the mountain pod itself (try a throwaway pod in the
+# namespace first). On the Cloudflare fallback a cold archive of a large repo can pass its 100 s
+# origin timeout (524): an error with no pause, aged only if it persists.
 # MOUNTAIN_FP_SALT and VISITORS_ENABLED were the town's; atlas reads neither.
 infisical:
   enabled: true
@@ -207,8 +224,8 @@ extraManifests:
       groups:
         - name: mountain
           rules:
-            # A source that never succeeds ages from start (atlas seeds the gauge): prom, alerts, github and
-            # projection (only while the repo poll runs) and db.
+            # A source that never succeeds ages from start (atlas seeds the gauge): prom, alerts, forge (also
+            # when MOUNTAIN_FORGE_TOKEN is unset), projection (only while the repo poll runs) and db.
             - alert: MountainSourceStale
               expr: time() - max by (source) (mountain_source_last_success{namespace="{{ .Release.Namespace }}"}) > 180
               for: 2m
@@ -217,18 +234,10 @@ extraManifests:
               annotations:
                 summary: "mountain: an atlas source has not succeeded for 5 min"
                 description: >-
-                  prom/alerts: the map says the source is not answering and keeps its last answer. github/projection:
-                  the map keeps its last projection; the log says whether GitHub refused the token or a round was
-                  refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only)
-                  looks the same. Check the atlas log for the source label.
-            - alert: MountainTokenExpiring
-              expr: min(mountain_github_token_days_left{namespace="{{ .Release.Namespace }}"}) < 14
-              for: 1h
-              labels:
-                severity: notice
-              annotations:
-                summary: "mountain: the GitHub token expires in under 14 days"
-                description: Rotate the token in Infisical (mountain-8c-cz) before the repo poll stops; the map then keeps its last projection.
+                  prom/alerts: the map says the source is not answering and keeps its last answer. forge/projection:
+                  the map keeps its last projection; the log says whether Forgejo refused the token, the token is
+                  unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history
+                  is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.
             # A component the repos now have that realms.yaml does not place: it shows as drift, not on an island.
             - alert: MountainUnassigned
               expr: max(mountain_drift{namespace="{{ .Release.Namespace }}", kind="unassigned"}) > 0

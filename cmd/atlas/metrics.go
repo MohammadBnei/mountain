@@ -39,7 +39,6 @@ type Metrics struct {
 	handler  http.Handler
 
 	sourceLastSuccess metric.Float64Gauge
-	tokenDaysLeft     metric.Float64Gauge
 	wsConnections     metric.Float64UpDownCounter // exposed as a gauge: a sum that is not monotonic
 	queryFailed       metric.Float64Counter
 	projectionSeq     metric.Float64Gauge
@@ -55,8 +54,9 @@ type series struct{ name, help, label string }
 // newMetrics builds the provider, its views and the exporter, and the instruments. The websocket count starts at 0
 // (a series from the first scrape, as it has always been); every other series appears with its first write.
 func newMetrics() (*Metrics, error) {
-	sSourceLastSuccess := series{"mountain_source_last_success", "Unix time of the last success per source (prom, alerts, github, projection, db); seeded at start.", labelSource}
-	sTokenDaysLeft := series{"mountain_github_token_days_left", "Days until the GitHub token expires.", ""}
+	// No token-expiry gauge: mountain_github_token_days_left went with the GitHub poll (P4.5). A Forgejo access token
+	// has no expiry (Forgejo 15's AccessToken carries none), so a dead token shows only as forge's last success ageing.
+	sSourceLastSuccess := series{"mountain_source_last_success", "Unix time of the last success per source (prom, alerts, forge, projection, db); seeded at start.", labelSource}
 	sWSConnections := series{"mountain_ws_connections", "Open /ws connections.", ""}
 	sQueryFailed := series{"mountain_query_failed_total", "Failed PromQL queries (the poll keeps its last answer and goes stale).", labelQuery}
 	sProjectionSeq := series{"mountain_projection_seq", "The latest projection's sequence number.", ""}
@@ -72,7 +72,7 @@ func newMetrics() (*Metrics, error) {
 		return nil, err
 	}
 	var views []sdkmetric.View
-	for _, s := range []series{sSourceLastSuccess, sTokenDaysLeft, sWSConnections, sQueryFailed, sProjectionSeq, sDrift} {
+	for _, s := range []series{sSourceLastSuccess, sWSConnections, sQueryFailed, sProjectionSeq, sDrift} {
 		views = append(views, labelView(s))
 	}
 	// seconds, around the spike's 25-90 ms reads and the 1.5 s budget
@@ -86,7 +86,7 @@ func newMetrics() (*Metrics, error) {
 		errs = append(errs, e)
 		return g
 	}
-	m.sourceLastSuccess, m.tokenDaysLeft, m.projectionSeq, m.drift = gauge(sSourceLastSuccess), gauge(sTokenDaysLeft), gauge(sProjectionSeq), gauge(sDrift)
+	m.sourceLastSuccess, m.projectionSeq, m.drift = gauge(sSourceLastSuccess), gauge(sProjectionSeq), gauge(sDrift)
 	var e1, e2, e3 error
 	m.wsConnections, e1 = meter.Float64UpDownCounter(sWSConnections.name, metric.WithDescription(sWSConnections.help))
 	m.queryFailed, e2 = meter.Float64Counter(sQueryFailed.name, metric.WithDescription(sQueryFailed.help))
@@ -130,13 +130,6 @@ func (m *Metrics) Close() error {
 func (m *Metrics) SourceOK(source string, unix float64) {
 	if m != nil {
 		m.sourceLastSuccess.Record(context.Background(), unix, metric.WithAttributes(attribute.String(labelSource, source)))
-	}
-}
-
-// TokenDays records the days until the GitHub token expires.
-func (m *Metrics) TokenDays(days float64) {
-	if m != nil {
-		m.tokenDaysLeft.Record(context.Background(), days)
 	}
 }
 

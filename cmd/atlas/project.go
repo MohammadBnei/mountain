@@ -1,7 +1,7 @@
 package main
 
 // The projector (plan/10 "Projection"): one goroutine. Each round it learns the heads of the repos it reads
-// (GitHub, or local checkouts under --repos), runs the extractors over them, and stores the result when anything
+// (Forgejo, or local checkouts under --repos), runs the extractors over them, and stores the result when anything
 // changed. infra-bootstrap is read first: its registry names the branch every other source is read at (phase 1 of
 // the vector), then the others follow (phase 2).
 //
@@ -22,7 +22,7 @@ import (
 	"github.com/MohammadBnei/mountain/realms"
 )
 
-// heads is where a round's checkouts come from: GitHub tarballs (fetch.go) or local directories.
+// heads is where a round's checkouts come from: Forgejo archives (fetch.go) or local directories.
 type heads interface {
 	// startRound says the reader serves the last round's trees now, not the ones they replaced.
 	startRound()
@@ -119,16 +119,17 @@ func (a *App) project(ctx context.Context) {
 	switch {
 	case a.Opts.Repos != "":
 		src = localHeads(a.Opts.Repos)
-	case a.Opts.GHToken != "":
-		gh, err := newGitHub(a.Opts.GHURL, a.Opts.GHToken, a.Opts.Cache, a.Met)
+	case a.Opts.ForgeToken != "":
+		a.Met.SourceOK("forge", float64(time.Now().Unix())) // seeded: a token or cache that never works still ages into the alert
+		fg, err := newForge(a.Opts.ForgeURL, a.Opts.ForgeToken, a.Opts.Cache, a.Met)
 		if err != nil {
 			slog.Error(fmt.Sprintf("projector: %v: off", err))
 			return
 		}
-		src = gh
-		a.Met.SourceOK("github", float64(time.Now().Unix())) // seeded: a token that never works still ages into the alert
+		src = fg
 	default:
-		slog.Warn("projector: MOUNTAIN_GITHUB_TOKEN unset and no --repos: serving the stored projection only")
+		slog.Warn("projector: MOUNTAIN_FORGE_TOKEN unset and no --repos: serving the stored projection only")
+		a.Met.SourceOK("forge", float64(time.Now().Unix())) // seeded, never renewed: a missing token ages into the alert
 		return
 	}
 	a.Met.SourceOK("projection", float64(time.Now().Unix()))
@@ -142,7 +143,7 @@ func (a *App) project(ctx context.Context) {
 		cancel()
 		switch { // logged once per change, not per round
 		case err != nil && err.Error() != lastErr:
-			slog.Warn(fmt.Sprintf("projector: %v", err)) // a GitHub hiccup; MountainSourceStale alerts on a lasting one
+			slog.Warn(fmt.Sprintf("projector: %v", err)) // a forge hiccup; MountainSourceStale alerts on a lasting one
 			lastErr = err.Error()
 		case err == nil && lastErr != "":
 			slog.Info("projector: recovered")

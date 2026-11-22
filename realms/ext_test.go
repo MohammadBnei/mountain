@@ -33,7 +33,7 @@ func TestExtNeeds(t *testing.T) {
 		t.Fatal(err)
 	}
 	for id, moons := range map[string][]string{
-		"app:mountain":         {"ext:github"},
+		"app:mountain":         {"ext:forgejo"},
 		"app:agent-fleet-core": {"ext:github", "ext:anthropic"},
 		"app:platform-traefik": {"ext:cloudflare"},
 		"app:pi-lab":           {"ext:pi-lab"},

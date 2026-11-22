@@ -1,14 +1,14 @@
 package main
 
-// GitHub heads for the projector (plan/10 "How atlas hears about changes": truth is a poll of each tracked head).
-// Each round asks GitHub for a branch's head sha with a conditional request (a 304 does not count against the rate
-// limit) and downloads the tree as a tarball only when the sha moved. The tree is unpacked into the cache directory
-// (an emptyDir with a sizeLimit: the clones are a cache, never state) and replaces the previous one.
+// Forge heads for the projector (plan/10 "How atlas hears about changes": truth is a poll of each tracked head).
+// Each round asks Forgejo for a branch's head sha (the branch's own route, so a tag of the same name never answers)
+// and downloads the tree as an archive only when the sha moved. The tree is unpacked into the cache directory (an
+// emptyDir with a sizeLimit: the clones are a cache, never state) and replaces the previous one. ponytail: a plain GET
+// each round, no conditional request: Forgejo's API sends no ETag and has no rate limit by default.
 //
-// A move is accepted only forward: a head that is behind the one atlas holds (a stale read) is ignored, and a
-// diverged one (a force-push) is accepted and logged. Credentials: MOUNTAIN_GITHUB_TOKEN, a read-only token, until
-// A5's ukubi-atlas App replaces it; the token is sent to the API host only (Go drops it on the redirect to
-// codeload, whose URL carries its own short-lived token).
+// Every move of a head is taken (checkout says why none is held back). Credentials: MOUNTAIN_FORGE_TOKEN, a Forgejo
+// token with read:repository; it is sent to the API host only (Go drops it on a redirect to another host, as an
+// archive served from object storage would be).
 //
 // The unpacking trusts nothing in the archive: regular files and directories only (no links, devices or FIFOs), paths
 // relative and inside the checkout (os.Root), at most maxTreeBytes in total and maxFileBytes per file (larger files are
@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -41,7 +40,7 @@ import (
 )
 
 const (
-	ghOwner      = contract.GitHubOwner
+	owner        = contract.ForgeOwner
 	maxFileBytes = 8 << 20
 	maxEntries   = 200_000
 	blockSize    = 4 << 10 // the filesystem block: a file or directory uses its size rounded up to it
@@ -58,13 +57,10 @@ var cacheBudget int64 = 4 << 30
 
 var errNoAccess = errors.New("not found (no access)")
 
-type ghHeads struct {
+type forgeHeads struct {
 	url, token, dir string
 	hc              *http.Client
-	etag            map[string]string       // request -> ETag
-	body            map[string][]byte       // request -> last 200 body (a 304 replays it)
 	have            map[string]extract.Repo // repo -> the checkout on disk
-	behind          map[string]string       // repo -> a head seen behind the held one, once
 	retired         []string                // the trees replaced this round, removed when the next round starts (the reader serves them until then)
 	size            map[string]int64        // tree directory -> bytes it uses on disk (held and retired trees)
 	seq             int                     // tree directories are never reused: <repo>-<sha>-<seq>
@@ -72,7 +68,7 @@ type ghHeads struct {
 	met             *Metrics // nil = not recorded
 }
 
-func newGitHub(apiURL, token, dir string, met *Metrics) (*ghHeads, error) {
+func newForge(apiURL, token, dir string, met *Metrics) (*forgeHeads, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
@@ -80,12 +76,12 @@ func newGitHub(apiURL, token, dir string, met *Metrics) (*ghHeads, error) {
 	for _, e := range old {
 		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
-	return &ghHeads{url: strings.TrimRight(apiURL, "/"), token: token, dir: dir, hc: &http.Client{Timeout: 5 * time.Minute},
-		etag: map[string]string{}, body: map[string][]byte{}, have: map[string]extract.Repo{}, behind: map[string]string{}, size: map[string]int64{}, met: met}, nil
+	return &forgeHeads{url: strings.TrimRight(apiURL, "/"), token: token, dir: dir, hc: &http.Client{Timeout: 5 * time.Minute},
+		have: map[string]extract.Repo{}, size: map[string]int64{}, met: met}, nil
 }
 
 // startRound removes the trees the last round replaced: the reader moved off them when that round ended.
-func (g *ghHeads) startRound() {
+func (g *forgeHeads) startRound() {
 	for _, d := range g.retired {
 		_ = os.RemoveAll(d)
 		delete(g.size, d)
@@ -93,12 +89,16 @@ func (g *ghHeads) startRound() {
 	g.retired = nil
 }
 
-func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Repo, error) {
-	b, err := g.get(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo)+contract.GitHubCommits+url.PathEscape(branch), contract.GitHubHeadAccept, true)
+func (g *forgeHeads) checkout(ctx context.Context, repo, branch string) (extract.Repo, error) {
+	b, err := g.get(ctx, "/repos/"+owner+"/"+url.PathEscape(repo)+contract.ForgeBranches+(&url.URL{Path: branch}).EscapedPath())
 	if err != nil {
 		return extract.Repo{}, err
 	}
-	sha := strings.TrimSpace(string(b))
+	var br struct{ Commit struct{ ID string } }
+	if err := json.Unmarshal(b, &br); err != nil {
+		return extract.Repo{}, fmt.Errorf("head of %s: %w", branch, err)
+	}
+	sha := br.Commit.ID
 	if len(sha) != 40 || strings.Trim(sha, "0123456789abcdef") != "" {
 		return extract.Repo{}, fmt.Errorf("head of %s: not a sha", branch)
 	}
@@ -106,27 +106,10 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 	if ok && cur.SHA == sha { // the same tree (a branch retargeted onto the same commit only changes the name)
 		cur.Branch = branch
 		g.have[repo] = cur
-		delete(g.behind, repo)
 		return cur, nil
 	}
-	if ok && cur.Branch == branch {
-		// A head behind the one held is a stale read (a lagging replica) the first time; seen again on the next
-		// round, it is a branch really reset to an older commit, and taken. A compare that fails says nothing:
-		// the head GitHub named is the truth, so it is taken.
-		switch st, err := g.compare(ctx, repo, cur.SHA, sha); {
-		case err != nil:
-			slog.Warn(fmt.Sprintf("projector: %s@%s: compare %s...%s: %v: taking the head", repo, branch, cur.SHA[:12], sha[:12], err))
-		case st == "behind" && g.behind[repo] != sha:
-			slog.Info(fmt.Sprintf("projector: %s@%s: head %s is behind %s: held until the next round says so again", repo, branch, sha[:12], cur.SHA[:12]))
-			g.behind[repo] = sha
-			return cur, nil
-		case st == "behind":
-			slog.Info(fmt.Sprintf("projector: %s@%s: reset back to %s from %s: taken", repo, branch, sha[:12], cur.SHA[:12]))
-		case st == "diverged":
-			slog.Info(fmt.Sprintf("projector: %s@%s: %s does not descend from %s (a force-push): taken", repo, branch, sha[:12], cur.SHA[:12]))
-		}
-	}
-	delete(g.behind, repo)
+	// ponytail: every move is taken, forward or back. The GitHub poll held a head behind the one held for a round (a
+	// lagging replica's stale read); single-node Forgejo has no replica to lag, so a head behind is a real reset.
 	dir, err := g.tree(ctx, repo, sha)
 	if err != nil {
 		return cur, err // cur (when held) is still a whole tree: round reads it, stale, rather than lose the repo
@@ -139,30 +122,17 @@ func (g *ghHeads) checkout(ctx context.Context, repo, branch string) (extract.Re
 	return r, nil
 }
 
-// compare is GitHub's status of head relative to base: ahead, behind, identical or diverged.
-func (g *ghHeads) compare(ctx context.Context, repo, base, head string) (string, error) {
-	b, err := g.get(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo)+contract.GitHubCompare+base+"..."+head+"?per_page=1", contract.GitHubJSONAccept, false)
-	if err != nil {
-		return "", err
-	}
-	var c struct{ Status string }
-	if err := json.Unmarshal(b, &c); err != nil {
-		return "", err
-	}
-	return c.Status, nil
-}
-
 // tree downloads repo at sha and unpacks it into a fresh directory under the cache, within what cacheBudget leaves.
-func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
+func (g *forgeHeads) tree(ctx context.Context, repo, sha string) (string, error) {
 	var used int64
 	for _, n := range g.size {
 		used += n
 	}
 	limit := min(maxTreeBytes, cacheBudget-used)
 	if limit <= 0 {
-		return "", fmt.Errorf("tarball %s: cache budget spent (%d of %d bytes)", sha[:12], used, int64(cacheBudget))
+		return "", fmt.Errorf("archive %s: cache budget spent (%d of %d bytes)", sha[:12], used, int64(cacheBudget))
 	}
-	req, err := g.request(ctx, "/repos/"+ghOwner+"/"+url.PathEscape(repo)+contract.GitHubTarball+sha, contract.GitHubJSONAccept)
+	req, err := g.request(ctx, "/repos/"+owner+"/"+url.PathEscape(repo)+contract.ForgeArchive+sha+".tar.gz")
 	if err != nil {
 		return "", err
 	}
@@ -171,9 +141,8 @@ func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
 		return "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	g.limits(resp.Header)
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("tarball %s: status %d", sha[:12], resp.StatusCode)
+		return "", fmt.Errorf("archive %s: status %d", sha[:12], resp.StatusCode)
 	}
 	g.seq++
 	dir := filepath.Join(g.dir, fmt.Sprintf("%s-%s-%d", repo, sha[:12], g.seq)) // never the held tree's path
@@ -181,14 +150,15 @@ func (g *ghHeads) tree(ctx context.Context, repo, sha string) (string, error) {
 	n, err := unpack(resp.Body, dir, limit)
 	if err != nil {
 		_ = os.RemoveAll(dir)
-		return "", fmt.Errorf("tarball %s: %w", sha[:12], err)
+		return "", fmt.Errorf("archive %s: %w", sha[:12], err)
 	}
 	g.size[dir] = n
 	return dir, nil
 }
 
-// unpack writes a GitHub tarball (one top directory, "<owner>-<repo>-<sha>/") into dir, stripping that directory,
-// and answers the bytes it uses on disk, each file and directory rounded up to blockSize; more than limit is an error.
+// unpack writes a Forgejo archive (git archive's: a pax global header, then one top directory, "<repo>/") into dir,
+// stripping that directory, and answers the bytes it uses on disk, each file and directory rounded up to blockSize;
+// more than limit is an error.
 func unpack(r io.Reader, dir string, limit int64) (int64, error) {
 	zr, err := gzip.NewReader(r)
 	if err != nil {
@@ -262,7 +232,7 @@ func overLimit(total, limit int64) error {
 	return fmt.Errorf("tree refused at %d bytes, over its limit of %d (maxTreeBytes, or what cacheBudget leaves)", total, limit)
 }
 
-func (g *ghHeads) request(ctx context.Context, p, accept string) (*http.Request, error) {
+func (g *forgeHeads) request(ctx context.Context, p string) (*http.Request, error) {
 	if time.Now().Before(g.pauseUntil) {
 		return nil, fmt.Errorf("rate limited until %s", g.pauseUntil.UTC().Format(time.TimeOnly))
 	}
@@ -270,63 +240,37 @@ func (g *ghHeads) request(ctx context.Context, p, accept string) (*http.Request,
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+g.token)
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	req.Header.Set("Accept", accept)
+	req.Header.Set("Authorization", "token "+g.token)
 	return req, nil
 }
 
-// get fetches p; conditional=true sends the last ETag, and a 304 returns the cached body.
-func (g *ghHeads) get(ctx context.Context, p, accept string, conditional bool) ([]byte, error) {
-	req, err := g.request(ctx, p, accept)
+// get fetches p. A 404 is errNoAccess (Forgejo hides a repo the token cannot read). A 429 (Cloudflare's, when the
+// poll goes the public way; Forgejo itself has no rate limit by default) pauses the poll for its Retry-After, at least
+// a minute. A 401 (a token Forgejo does not know) or 403 (one without read:repository) is an error like any other: it
+// does not pause, and forge's last success ages into MountainSourceStale.
+func (g *forgeHeads) get(ctx context.Context, p string) ([]byte, error) {
+	req, err := g.request(ctx, p)
 	if err != nil {
 		return nil, err
-	}
-	if e := g.etag[p]; conditional && e != "" {
-		req.Header.Set("If-None-Match", e)
 	}
 	resp, err := g.hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	g.limits(resp.Header)
 	switch resp.StatusCode {
-	case http.StatusNotModified:
-		g.met.SourceOK("github", float64(time.Now().Unix()))
-		return g.body[p], nil
 	case http.StatusOK:
 		b, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 		if err != nil {
 			return nil, err
 		}
-		if conditional {
-			g.etag[p], g.body[p] = resp.Header.Get("ETag"), b
-		}
-		g.met.SourceOK("github", float64(time.Now().Unix()))
+		g.met.SourceOK("forge", float64(time.Now().Unix()))
 		return b, nil
 	case http.StatusNotFound:
 		return nil, errNoAccess
-	case http.StatusForbidden, http.StatusTooManyRequests:
+	case http.StatusTooManyRequests:
 		ra, _ := strconv.Atoi(resp.Header.Get("Retry-After"))
 		g.pauseUntil = time.Now().Add(max(time.Duration(ra)*time.Second, time.Minute))
 	}
 	return nil, fmt.Errorf("%s: status %d", p, resp.StatusCode)
-}
-
-// limits reads the token's expiry (mountain_github_token_days_left) and pauses before the rate limit runs out.
-func (g *ghHeads) limits(h http.Header) {
-	if exp := h.Get("github-authentication-token-expiration"); exp != "" {
-		for _, layout := range []string{"2006-01-02 15:04:05 MST", "2006-01-02 15:04:05 -0700"} {
-			if t, err := time.Parse(layout, exp); err == nil {
-				g.met.TokenDays(float64(time.Until(t).Round(time.Hour).Hours()) / 24)
-				break
-			}
-		}
-	}
-	left, err1 := strconv.Atoi(h.Get("X-RateLimit-Remaining"))
-	reset, err2 := strconv.ParseInt(h.Get("X-RateLimit-Reset"), 10, 64)
-	if err1 == nil && err2 == nil && left < 100 {
-		g.pauseUntil = time.Unix(reset, 0)
-	}
 }

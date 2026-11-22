@@ -161,14 +161,15 @@ func TestRedactCountsOnce(t *testing.T) {
 	}
 }
 
-// TestRefWithSlash: a GitHub link on a branch named with a slash lands on the file atlas holds; without one, the
+// TestRefWithSlash: a GitHub or Forgejo link on a branch named with a slash lands on the file atlas holds; without one, the
 // ref is the first segment.
 func TestRefWithSlash(t *testing.T) {
 	held := map[string]bool{"docs/a.md": true}
 	exists := func(repo, p string) bool { return repo == "agent-fleet" && held[p] }
-	md := "[x](https://github.com/MohammadBnei/agent-fleet/blob/feat/new-thing/docs/a.md) [y](https://github.com/MohammadBnei/agent-fleet/tree/main/docs/b.md)\n"
+	md := "[x](https://github.com/MohammadBnei/agent-fleet/blob/feat/new-thing/docs/a.md) [y](https://github.com/MohammadBnei/agent-fleet/tree/main/docs/b.md) " +
+		"[z](https://git.bnei.dev/MohammadBnei/agent-fleet/src/branch/feat/new-thing/docs/a.md#L3) [w](https://git.bnei.dev/MohammadBnei/agent-fleet/src/commit/0123abc/docs/c.md)\n"
 	all := string(mustJSON(renderIn("infra-bootstrap", "x.md", "s", []byte(md), func(r string) bool { return r == "agent-fleet" }, exists)))
-	if !strings.Contains(all, `"doc":"agent-fleet/docs/a.md"`) || !strings.Contains(all, `"doc":"agent-fleet/docs/b.md"`) {
+	if strings.Count(all, `"doc":"agent-fleet/docs/a.md"`) != 2 || !strings.Contains(all, `"doc":"agent-fleet/docs/b.md"`) || !strings.Contains(all, `"doc":"agent-fleet/docs/c.md"`) {
 		t.Errorf("refs: %s", all)
 	}
 }

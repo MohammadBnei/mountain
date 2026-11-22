@@ -47,10 +47,9 @@ func waitScrape(t *testing.T, scrape func() string, want ...string) string {
 
 // TestMetricsWritersReach: every writer holds the App's Metrics, so each series a real path writes is in the
 // exposition. A nil *Metrics records nothing by design, so a writer left without it fails silently (no series, and
-// MountainSourceStale or the token rule can never fire on it): here the five wirings are driven through their real
-// paths, over the App newApp builds with a live Metrics: the socket hub (/ws), the live polls (prom failing,
-// alerts answering), the graph store (a projection set), and the repo poll against a GitHub that sends the token's
-// expiry header. serve's own wiring is TestServeMetrics.
+// MountainSourceStale can never fire on it): here the five wirings are driven through their real paths, over the App
+// newApp builds with a live Metrics: the socket hub (/ws), the live polls (prom failing, alerts answering), the graph
+// store (a projection set), and the repo poll against a fake Forgejo. serve's own wiring is TestServeMetrics.
 func TestMetricsWritersReach(t *testing.T) {
 	m, err := newMetrics()
 	if err != nil {
@@ -65,13 +64,8 @@ func TestMetricsWritersReach(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	gh := newFakeGitHub(t)
-	next := gh.Config.Handler
-	gh.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("github-authentication-token-expiration", time.Now().Add(10*24*time.Hour).UTC().Format("2006-01-02 15:04:05 MST"))
-		next.ServeHTTP(w, r)
-	})
-	o := Opts{Dev: true, Every: time.Hour, GHURL: gh.URL, GHToken: "tok", Cache: t.TempDir()}
+	fg := newFakeForge(t)
+	o := Opts{Dev: true, Every: time.Hour, ForgeURL: fg.API, ForgeToken: "tok", Cache: t.TempDir()}
 	a := newApp(o, rl, www, &gate{devOpen: true}, openGraphs(ctx, "", m), m)
 
 	if err := a.Graph.loadFixture("../../www/dev/fixtures/graph.json"); err != nil {
@@ -94,9 +88,8 @@ func TestMetricsWritersReach(t *testing.T) {
 		`mountain_source_last_success{source="db"}`,         // openGraphs
 		`mountain_source_last_success{source="prom"}`,       // Live.start's seed
 		`mountain_source_last_success{source="alerts"}`,     // Live.start, a poll that answered
-		`mountain_source_last_success{source="github"}`,     // the repo poll's client
+		`mountain_source_last_success{source="forge"}`,      // the repo poll's client
 		`mountain_source_last_success{source="projection"}`, // the App's own
-		"mountain_github_token_days_left ",                  // the repo poll's client, from the header
 		"mountain_query_failed_total{query=",                // the live poll
 		"mountain_projection_seq ",                          // Graphs.set
 		`mountain_drift{kind="mirror"}`,                     // Graphs.set

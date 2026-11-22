@@ -58,6 +58,9 @@ frames (02).
   - The toolbar's aiming ring mirrors both rules.
 
 **src_github (`relay/src_github.go`):**
+> 2026-11-21 (P4.5): the relay is gone; atlas, which took over its repo poll, reads Forgejo now
+> (`--forge-url`, `MOUNTAIN_FORGE_TOKEN`, source label `forge`), with no conditional request and no token-expiry
+> header, so `mountain_github_token_days_left` and `MountainTokenExpiring` below are gone. See plan/10 "A2 as built".
 - **Token:** env `MOUNTAIN_GITHUB_TOKEN`, a fine-grained read-only PAT (Actions + Contents + Metadata on the
   `config.yaml` repos and infra-bootstrap; Infisical `mountain-8c-cz`).
 - **Every minute:**
@@ -156,7 +159,7 @@ Limits:
 **Self-observability:**
 - `mountain_source_last_success{source}`, including `source="db"` (Postgres writes + a 30 s ping; memory-only ages)
 - `mountain_unmapped_total`
-- `mountain_github_token_days_left`
+- `mountain_github_token_days_left` (gone, P4.5)
 - `mountain_ws_connections`
 - `mountain_db_dropped_total{reason=full|error}`
 - `mountain_scrub_dropped_total`: scrub replies lost to a full send buffer (the connection is dropped)
@@ -169,7 +172,7 @@ template for them.
 
 Rules (all `severity: notice` → Discord):
 - `MountainSourceStale`
-- `MountainTokenExpiring` (< 14 d)
+- `MountainTokenExpiring` (< 14 d) (gone, P4.5)
 - `MountainUnmapped`
 - `MountainTownEmpty` (R7.1): `mountain_plots == 0` for 15 min, the alarm a broken `pods` query would otherwise never
   raise

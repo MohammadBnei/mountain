@@ -44,7 +44,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	var c Config
 	o := &c.Opts
 	err := serveFlags(o).Parse(args)
-	o.GHToken = getenv("MOUNTAIN_GITHUB_TOKEN") // env, not a flag: a flag value shows in ps and the pod spec
+	o.ForgeToken = getenv("MOUNTAIN_FORGE_TOKEN") // env, not a flag: a flag value shows in ps and the pod spec
 	if o.Cache = getenv("ATLAS_CACHE"); o.Cache == "" {
 		o.Cache = "/var/cache/atlas"
 	}
@@ -99,8 +99,8 @@ func serveFlags(o *Opts) *flag.FlagSet {
 	f.StringVar(&o.LokiURL, "loki-url", "http://platform-loki.monitoring:3100", "Loki base URL (the Logs face)")
 	f.StringVar(&o.TempoURL, "tempo-url", "http://platform-tempo.monitoring:3200", "Tempo base URL (the Spans face)")
 	f.StringVar(&o.GrafanaURL, "grafana-url", "https://grafana.bnei.dev", "Grafana base URL for the faces' Explore links")
-	f.StringVar(&o.GHURL, "github-url", "https://api.github.com", "GitHub API base URL")
-	f.StringVar(&o.Repos, "repos", "", "read local checkouts from this directory instead of polling GitHub")
+	f.StringVar(&o.ForgeURL, "forge-url", "https://git.bnei.dev/api/v1", "Forgejo API base URL")
+	f.StringVar(&o.Repos, "repos", "", "read local checkouts from this directory instead of polling the forge")
 	f.DurationVar(&o.Every, "every", 2*time.Minute, "how often the tracked heads are checked")
 	f.BoolVar(&o.Dev, "dev", false, "allow http://127.0.0.1:* origins and serve /dev/; on a loopback address with sign-in unset, admit everyone")
 	f.StringVar(&o.GraphFixture, "graph-fixture", "", "dev: serve this graph (an /api/graph answer) instead of projecting")
@@ -130,7 +130,7 @@ func parseProject(args []string, getenv func(string) string, out io.Writer) (dir
 // projectFlags is `atlas project`'s FlagSet.
 func projectFlags(dir, dsn *string, drop *bool) *flag.FlagSet {
 	f := flag.NewFlagSet("project", flag.ContinueOnError)
-	f.StringVar(dir, "repos", "", "directory holding the repo checkouts (one per GitHub repo name)")
+	f.StringVar(dir, "repos", "", "directory holding the repo checkouts (one per repo name)")
 	f.StringVar(dsn, "dsn", "", "Postgres URL (default: DATABASE_URL)")
 	f.BoolVar(drop, "drop-repos", false, "accept that repos the last projection read are gone (their nodes close)")
 	return f

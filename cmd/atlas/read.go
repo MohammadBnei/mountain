@@ -6,10 +6,10 @@ package main
 // file comes back as lines. Every string passes a redaction pass first: the clones hold full files, including the
 // deliberate ArgoCD webhook literal (infra-bootstrap argocd-application.yaml) and SCRAM verifiers.
 //
-// Links: http(s) URLs stay external; a relative link, or a github.com link into a repo atlas reads, becomes an
-// in-atlas link {doc: "<repo>/<path>"} (cleaned, never above the repo root); anything else (mailto:, javascript:, a
-// bare #anchor) is dropped to its text. Files are read through os.Root on the checkout, regular files only, at most
-// maxReadBytes, valid UTF-8 without NUL bytes (failed_precondition otherwise, keyed read.too_large or read.not_text).
+// Links: http(s) URLs stay external; a relative link, or a github.com or git.bnei.dev file link into a repo atlas
+// reads, becomes an in-atlas link {doc: "<repo>/<path>"} (cleaned, never above the repo root); anything else (mailto:,
+// javascript:, a bare #anchor) is dropped to its text. Files are read through os.Root on the checkout, regular files
+// only, at most maxReadBytes, valid UTF-8 without NUL bytes (failed_precondition otherwise, keyed read.too_large or read.not_text).
 
 import (
 	"bytes"
@@ -206,7 +206,7 @@ func secretish(s string) bool {
 
 // repoSet is the checkouts the reader serves: each repo at the tree the latest round read it at. A round overlays
 // the repos it read; one it did not read (a failed checkout, a round cut short) keeps its last tree, which the
-// GitHub source removes only when it replaces it, one round after the reader moved on.
+// forge source removes only when it replaces it, one round after the reader moved on.
 type repoSet struct {
 	mu    sync.Mutex
 	repos extract.Repos
@@ -293,8 +293,9 @@ func render(repo, p, sha string, b []byte, inAtlas func(string) bool) Doc {
 	return renderIn(repo, p, sha, b, inAtlas, nil)
 }
 
-// renderIn is render with exists (repo, path → a file atlas holds), which places a GitHub link's ref when the ref has
-// a slash in it (blob/feat/x/docs/a.md: which segments are the branch is only known by which path exists).
+// renderIn is render with exists (repo, path → a file atlas holds), which places a forge link's ref when the ref has
+// a slash in it (blob/feat/x/docs/a.md, src/branch/feat/x/docs/a.md: which segments are the branch is only known by
+// which path exists).
 func renderIn(repo, p, sha string, b []byte, inAtlas func(string) bool, exists func(repo, p string) bool) Doc {
 	d := Doc{Repo: repo, Path: p, SHA: sha}
 	ext := strings.ToLower(path.Ext(p))
@@ -525,7 +526,10 @@ func plain(in []Inline) string {
 }
 
 var (
-	ghBlob = regexp.MustCompile(`^(?i:github\.com)/(?i:MohammadBnei)/([A-Za-z0-9._-]+)/(?:blob|tree)/(.+)$`) // <ref>/<path>, the ref maybe with slashes
+	// blobLink is a file link on GitHub (blob|tree/<ref>/<path>) or Forgejo (src/branch|commit|tag/<ref>/<path>), the
+	// ref maybe with slashes. Raw links (raw.githubusercontent.com, Forgejo's raw/ and media/) stay external, as
+	// they always have.
+	blobLink = regexp.MustCompile(`^(?i:github\.com|git\.bnei\.dev)/(?i:MohammadBnei)/([A-Za-z0-9._-]+)/(?:blob|tree|src/(?:branch|commit|tag))/(.+)$`)
 	// docPath is the character set the page's router takes in an L4 path (router.js PATH): a doc link outside it would
 	// open the map instead of the file, so it stays text.
 	docPath = regexp.MustCompile(`^[A-Za-z0-9._@+,=~ /-]+$`)
@@ -543,7 +547,7 @@ func (w *mdWalker) link(dest string, in []Inline) Inline {
 			*w.n++
 			return Inline{T: "em", In: in}
 		}
-		if m := ghBlob.FindStringSubmatch(u.Host + u.Path); m != nil && w.inAtlas(m[1]) {
+		if m := blobLink.FindStringSubmatch(u.Host + u.Path); m != nil && w.inAtlas(m[1]) {
 			if p := w.refPath(m[1], m[2]); p != "" && docPath.MatchString(p) {
 				return Inline{T: "link", Doc: m[1] + "/" + p, In: in}
 			}

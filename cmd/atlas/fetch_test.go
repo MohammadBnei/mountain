@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/MohammadBnei/mountain/internal/extract"
 	"github.com/MohammadBnei/mountain/realms"
@@ -30,6 +32,9 @@ func tarball(t *testing.T, es ...entry) []byte {
 	tw := tar.NewWriter(zw)
 	for _, e := range es {
 		h := &tar.Header{Name: e.name, Typeflag: e.typ, Linkname: e.link, Mode: 0o644, Size: int64(len(e.body))}
+		if e.typ == tar.TypeXGlobalHeader { // git archive's, the commit id in it
+			h = &tar.Header{Name: e.name, Typeflag: e.typ, PAXRecords: map[string]string{"comment": e.body}}
+		}
 		if e.size > 0 {
 			h.Size = e.size
 		}
@@ -52,12 +57,13 @@ func tarball(t *testing.T, es ...entry) []byte {
 	return buf.Bytes()
 }
 
-// TestUnpack: the top directory is stripped; links, "..", absolute paths and oversized files never land; nothing is
+// TestUnpack: the pax global header is left out and the top directory stripped; links, "..", absolute paths and oversized files never land; nothing is
 // written outside the checkout.
 func TestUnpack(t *testing.T) {
 	base := t.TempDir()
 	dir := filepath.Join(base, "repo")
 	b := tarball(t,
+		entry{name: "pax_global_header", body: "abc", typ: tar.TypeXGlobalHeader},
 		entry{name: "MohammadBnei-x-abc/", typ: tar.TypeDir},
 		entry{name: "MohammadBnei-x-abc/docs/adr/0001.md", body: "# ADR-0001: one", typ: tar.TypeReg},
 		entry{name: "MohammadBnei-x-abc/../../escape.txt", body: "no", typ: tar.TypeReg},
@@ -106,78 +112,91 @@ func TestUnpackBlocks(t *testing.T) {
 	}
 }
 
-// fakeGitHub answers the three calls the poll makes: a branch head (with an ETag), a compare and a tarball.
-type fakeGitHub struct {
+// fakeForge answers the two Forgejo routes the poll makes, under /api/v1 as the real one (API is the base URL to give
+// newForge): a branch (its head commit's id; a name that is only a tag is a 404, as on Forgejo) and an archive, laid
+// out as Forgejo's (a pax global header, then "<repo>/"). status, when set, answers every request instead (with
+// retryAfter as its Retry-After).
+type fakeForge struct {
 	*httptest.Server
-	mu       sync.Mutex
-	head     map[string]string // repo@branch -> sha
-	status   string            // compare answer
-	tarballs int
-	auth     []string
+	API        string
+	mu         sync.Mutex
+	head       map[string]string // repo@branch -> sha
+	tag        map[string]string // repo@tag -> sha: a same-named tag must never answer for a branch
+	status     int
+	retryAfter string
+	archives   int
+	auth       []string
 }
 
-func newFakeGitHub(t *testing.T) *fakeGitHub {
-	f := &fakeGitHub{head: map[string]string{}, status: "ahead"}
+func newFakeForge(t *testing.T) *fakeForge {
+	f := &fakeForge{head: map[string]string{}, tag: map[string]string{}}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.auth = append(f.auth, r.Header.Get("Authorization"))
-		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/repos/MohammadBnei/"), "/")
+		if f.status != 0 {
+			w.Header().Set("Retry-After", f.retryAfter)
+			w.WriteHeader(f.status)
+			return
+		}
+		// the escaped path: a branch sent as feat%2Fx would decode to feat/x in r.URL.Path and pass unseen
+		rest, ok := strings.CutPrefix(r.URL.EscapedPath(), "/api/v1/repos/MohammadBnei/")
+		repo, rest, _ := strings.Cut(rest, "/")
 		switch {
-		case len(parts) == 3 && parts[1] == "commits":
-			sha, ok := f.head[parts[0]+"@"+parts[2]]
+		case !ok:
+			http.NotFound(w, r)
+		case strings.HasPrefix(rest, "branches/"), strings.HasPrefix(rest, "tags/"):
+			kind, name, _ := strings.Cut(rest, "/")
+			refs := f.head
+			if kind == "tags" {
+				refs = f.tag
+			}
+			sha, ok := refs[repo+"@"+name]
 			if !ok {
 				http.NotFound(w, r)
 				return
 			}
-			if r.Header.Get("If-None-Match") == `"`+sha+`"` {
-				w.WriteHeader(http.StatusNotModified)
-				return
-			}
-			w.Header().Set("ETag", `"`+sha+`"`)
-			_, _ = w.Write([]byte(sha))
-		case len(parts) == 3 && parts[1] == "compare":
-			if f.status == "error" {
-				http.Error(w, "gone", http.StatusUnprocessableEntity)
-				return
-			}
-			_, _ = w.Write([]byte(`{"status":"` + f.status + `"}`))
-		case len(parts) == 3 && parts[1] == "tarball":
-			f.tarballs++
-			_, _ = w.Write(tarball(t, entry{name: "top/README.md", body: parts[2], typ: tar.TypeReg}))
+			_, _ = w.Write([]byte(`{"name":"x","commit":{"id":"` + sha + `","message":"m"}}`))
+		case strings.HasPrefix(rest, "archive/") && strings.HasSuffix(rest, ".tar.gz"):
+			f.archives++
+			sha := strings.TrimSuffix(strings.TrimPrefix(rest, "archive/"), ".tar.gz")
+			_, _ = w.Write(tarball(t, entry{name: "pax_global_header", body: sha, typ: tar.TypeXGlobalHeader},
+				entry{name: repo + "/", typ: tar.TypeDir}, entry{name: repo + "/README.md", body: sha, typ: tar.TypeReg}))
 		default:
 			http.NotFound(w, r)
 		}
 	}))
+	f.API = f.URL + "/api/v1"
 	t.Cleanup(f.Close)
 	return f
 }
 
-// TestGitHubHeads: a tarball is fetched only when the head moves; a head behind the one held is ignored; a repo the
-// token cannot read is an error; the token rides every API request.
-func TestGitHubHeads(t *testing.T) {
-	f := newFakeGitHub(t)
+// TestForgeHeads: an archive is fetched only when the head moves, forward or back; a branch with a slash is asked
+// for as is; a repo the token cannot read is an error; the token rides every API request.
+func TestForgeHeads(t *testing.T) {
+	f := newFakeForge(t)
 	sha1, sha2, sha0 := strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40)
 	f.head["infra-bootstrap@main"] = sha1
-	g, err := newGitHub(f.URL, "tok", t.TempDir(), nil)
+	f.tag["infra-bootstrap@main"] = strings.Repeat("d", 40)
+	g, err := newForge(f.API, "tok", t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
 	r, err := g.checkout(ctx, "infra-bootstrap", "main")
-	if err != nil || r.SHA != sha1 || r.Branch != "main" {
+	if err != nil || r.SHA != sha1 || r.Branch != "main" { // the tag main answers with dddd
 		t.Fatalf("first: %+v %v", r, err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(r.Dir, "README.md")); string(b) != sha1 {
 		t.Errorf("tree: %q", b)
 	}
-	if r2, _ := g.checkout(ctx, "infra-bootstrap", "main"); r2 != r || f.tarballs != 1 {
-		t.Errorf("unchanged head refetched: %d tarballs", f.tarballs)
+	if r2, _ := g.checkout(ctx, "infra-bootstrap", "main"); r2 != r || f.archives != 1 {
+		t.Errorf("unchanged head refetched: %d archives", f.archives)
 	}
 	f.head["infra-bootstrap@main"] = sha2
 	r3, err := g.checkout(ctx, "infra-bootstrap", "main")
-	if err != nil || r3.SHA != sha2 || f.tarballs != 2 {
-		t.Fatalf("moved: %+v %v %d", r3, err, f.tarballs)
+	if err != nil || r3.SHA != sha2 || f.archives != 2 {
+		t.Fatalf("moved: %+v %v %d", r3, err, f.archives)
 	}
 	if _, err := os.Stat(r.Dir); err != nil {
 		t.Error("the replaced tree went at once: the reader may still be serving it this round")
@@ -186,35 +205,60 @@ func TestGitHubHeads(t *testing.T) {
 	if _, err := os.Stat(r.Dir); err == nil {
 		t.Error("the tree replaced last round was kept into the next")
 	}
-	f.head["infra-bootstrap@main"], f.status = sha0, "behind"
-	if r4, _ := g.checkout(ctx, "infra-bootstrap", "main"); r4.SHA != sha2 || f.tarballs != 2 {
-		t.Errorf("a head behind was taken: %+v", r4)
-	}
-	g.startRound()
-	if r5, _ := g.checkout(ctx, "infra-bootstrap", "main"); r5.SHA != sha0 || f.tarballs != 3 {
-		t.Errorf("the same head behind, a second round running: a real reset, taken: %+v %d", r5, f.tarballs)
-	}
-	if _, err := os.Stat(r3.Dir); err != nil {
-		t.Error("the tree replaced this round went at once")
+	f.head["infra-bootstrap@main"] = sha0
+	if r4, _ := g.checkout(ctx, "infra-bootstrap", "main"); r4.SHA != sha0 || f.archives != 3 {
+		t.Errorf("a branch reset back was not taken: %+v %d", r4, f.archives)
 	}
 	// a branch retargeted onto the commit already held: no download, and the held tree stays on disk (it was once
 	// deleted as "the old tree", being the same path)
-	f.head["infra-bootstrap@dev"] = sha0
-	r6, err := g.checkout(ctx, "infra-bootstrap", "dev")
-	if _, serr := os.Stat(filepath.Join(r6.Dir, "README.md")); err != nil || r6.Branch != "dev" || f.tarballs != 3 || serr != nil {
-		t.Errorf("retargeted: %+v %v %d %v", r6, err, f.tarballs, serr)
-	}
-	f.status = "error"
-	f.head["infra-bootstrap@dev"] = sha1
-	if r7, _ := g.checkout(ctx, "infra-bootstrap", "dev"); r7.SHA != sha1 {
-		t.Errorf("an unreadable compare pinned the old head: %+v", r7)
+	f.head["infra-bootstrap@feat/x"] = sha0
+	r6, err := g.checkout(ctx, "infra-bootstrap", "feat/x")
+	if _, serr := os.Stat(filepath.Join(r6.Dir, "README.md")); err != nil || r6.Branch != "feat/x" || f.archives != 3 || serr != nil {
+		t.Errorf("retargeted: %+v %v %d %v", r6, err, f.archives, serr)
 	}
 	if _, err := g.checkout(ctx, "agent-fleet", "main"); err != errNoAccess {
 		t.Errorf("no access: %v", err)
 	}
 	for _, a := range f.auth {
-		if a != "Bearer tok" {
+		if a != "token tok" {
 			t.Errorf("request without the token: %q", a)
+		}
+	}
+}
+
+// TestForgeRefusals: a 429 pauses the poll for its Retry-After (at least a minute) and asks nothing until then; a 401
+// or 403 is an error, not errNoAccess, and does not pause.
+func TestForgeRefusals(t *testing.T) {
+	f := newFakeForge(t)
+	f.head["infra-bootstrap@main"] = strings.Repeat("a", 40)
+	ctx := context.Background()
+	for _, st := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		g, err := newForge(f.API, "tok", t.TempDir(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.status = st
+		if _, err := g.checkout(ctx, "infra-bootstrap", "main"); err == nil || errors.Is(err, errNoAccess) || !g.pauseUntil.IsZero() {
+			t.Errorf("%d: %v, paused until %v", st, err, g.pauseUntil)
+		}
+	}
+	g, err := newForge(f.API, "tok", t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for ra, want := range map[string]time.Duration{"": time.Minute, "5": time.Minute, "600": 10 * time.Minute} {
+		g.pauseUntil = time.Time{}
+		f.status, f.retryAfter = http.StatusTooManyRequests, ra
+		start := time.Now()
+		if _, err := g.checkout(ctx, "infra-bootstrap", "main"); err == nil {
+			t.Fatalf("429 (Retry-After %q): no error", ra)
+		}
+		if got := g.pauseUntil.Sub(start); got < want || got > want+5*time.Second {
+			t.Errorf("429 (Retry-After %q): paused %v, want %v", ra, got, want)
+		}
+		f.status, f.auth = 0, nil
+		if _, err := g.checkout(ctx, "infra-bootstrap", "main"); err == nil || len(f.auth) != 0 {
+			t.Errorf("429 (Retry-After %q): asked during the pause: %v, %d requests", ra, err, len(f.auth))
 		}
 	}
 }
@@ -284,5 +328,25 @@ func TestRoundStarts(t *testing.T) {
 	}
 	if h.starts != 2 {
 		t.Errorf("%d round starts in 2 rounds", h.starts)
+	}
+}
+
+// TestProjectNoToken: with no token and no --repos, or a cache directory it cannot create, the projector stops at
+// once, but seeds forge, so that deployment ages into MountainSourceStale instead of going quiet.
+func TestProjectNoToken(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "f")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, o := range map[string]Opts{"no token": {}, "no cache": {ForgeToken: "tok", Cache: filepath.Join(file, "cache")}} {
+		m, err := newMetrics()
+		if err != nil {
+			t.Fatal(err)
+		}
+		(&App{Opts: o, Met: m}).project(context.Background())
+		if _, _, b := scrape(t, m); !strings.Contains(b, `mountain_source_last_success{source="forge"}`) {
+			t.Errorf("%s: forge not seeded:\n%s", name, b)
+		}
+		_ = m.Close()
 	}
 }

@@ -164,6 +164,9 @@ func app(x *Ctx, src graph.Source, name string, spec appSpec, el element) {
 		if repo == "" {
 			continue
 		}
+		if s.Ref != "" && s.Path == "" && hasPath(srcs, repo) { // provisioner: agent-fleet's $values ref at "deploy" (pins only) beside its path source on main: no second edge, no track
+			continue
+		}
 		e := graph.Edge{From: id, To: graph.ID(graph.KindRepo, repo), Kind: graph.EdgeGit, Origin: graph.Declared, Source: src,
 			Attrs: map[string]string{"branch": s.TargetRevision}}
 		switch {
@@ -181,6 +184,11 @@ func app(x *Ctx, src graph.Source, name string, spec appSpec, el element) {
 		x.Node(graph.Node{ID: dns, Kind: graph.KindDNS, Source: src})
 		x.Edge(graph.Edge{From: dns, To: id, Kind: graph.EdgeRoute, Origin: graph.Declared, Source: src})
 	}
+}
+
+// hasPath: one of srcs is a path source of repo, which decides the branch atlas reads; a ref-only source then does not.
+func hasPath(srcs []source, repo string) bool {
+	return slices.ContainsFunc(srcs, func(s source) bool { return s.Path != "" && repoName(s.RepoURL) == repo })
 }
 
 // mirror records where the registry (the human source of truth) and its hand mirror disagree.
@@ -210,10 +218,10 @@ func mirror(x *Ctx, src graph.Source, registry, appset []element) {
 
 var (
 	fieldRe = regexp.MustCompile(`\{\{\s*\.(\w+)\s*\}\}`)
-	ghRe    = regexp.MustCompile(`github\.com[:/]MohammadBnei/([A-Za-z0-9._-]+?)(?:\.git)?/?$`)
+	ghRe    = regexp.MustCompile(`(?:github\.com|git\.bnei\.(?:dev|lan))(?::\d+)?[:/]MohammadBnei/([A-Za-z0-9._-]+?)(?:\.git)?/?$`) // Forgejo's SSH clone host is git.bnei.lan, scp-style or ssh:// with a port
 )
 
-// repoName is the GitHub name of one of the owner's repos, or "" (a chart repository, another host).
+// repoName is the name of one of the owner's repos, on GitHub or Forgejo, or "" (a chart repository, another host).
 func repoName(url string) string {
 	if m := ghRe.FindStringSubmatch(url); m != nil {
 		return m[1]

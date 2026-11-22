@@ -288,6 +288,14 @@ What changed against the table above, and why:
   - The token covers the repos `relay/config.yaml` listed plus infra-bootstrap; **agent-fleet, ukubi-bridge and pi-lab
     need adding to it** (owner, Infisical `mountain-8c-cz`), or their ADRs stay out. A source it can't read is left
     out and logged; a round that loses one the last projection read is refused, never stored as its nodes closing.
+  - **P4.5 (2026-11-21): the poll reads Forgejo, not GitHub.** `--forge-url` (default `https://git.bnei.dev/api/v1`),
+    `MOUNTAIN_FORGE_TOKEN` (read:repository, sent as `Authorization: token`), source label `forge`. The head is the
+    branch's own route (`branches/<branch>`, its `commit.id`: a tag of the same name never answers), the tree
+    `archive/<sha>.tar.gz`. Every head move is taken, a head behind the held one included: the hold above was for
+    GitHub's lagging replicas, and single-node Forgejo has none (a force-push is no longer told apart in the log). No
+    conditional request (no ETag on Forgejo's API) and no token expiry (a Forgejo access token has none), so
+    `mountain_github_token_days_left` and MountainTokenExpiring went; a dead or unset token ages `source="forge"` into
+    MountainSourceStale.
   - A round whose heads did not move runs no extractor.
 - **Memory-only works**: without `DATABASE_URL` atlas keeps the latest projection (no history). The new migration
   series (`cmd/atlas/migrations`, tracked in `atlas_migrations`) drops the town's tables and A1's `atlas_*` first.
@@ -311,8 +319,8 @@ What changed against the table above, and why:
   a restart forgets it): a copied cookie is refused, its sockets close at their next ping with code 4001, and a
   signed-out mark (30 days, cleared by a sign-in) keeps the page from reloading itself into authentik's silent sign-in
   (its socket's probe, a 403 at start); loading the page is a sign-in the person asks for.
-- **Alert rules**: MountainSourceStale (now prom, alerts, github, projection, db), MountainTokenExpiring,
-  MountainUnassigned (drift `unassigned` for 1 h). MountainUnmapped and MountainTownEmpty went with the town.
+- **Alert rules**: MountainSourceStale (now prom, alerts, forge, projection, db), MountainUnassigned (drift
+  `unassigned` for 1 h). MountainUnmapped and MountainTownEmpty went with the town; MountainTokenExpiring with P4.5.
 - **Rollback** is a revert, plus, before the relay image starts again, `DROP TABLE atlas_migrations, atlas_drift,
   atlas_edge_ver, atlas_node_ver, atlas_vector, atlas_projection` (the relay's migrations would meet a schema they
   don't expect). The town's history is gone either way: R10 drops it on purpose.

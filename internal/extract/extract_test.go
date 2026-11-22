@@ -285,6 +285,35 @@ func TestGitops(t *testing.T) {
 	}
 }
 
+// TestForgeHosts: a repo is the owner's on GitHub and on Forgejo (its web name, and its SSH clone host), in a repoURL
+// as in an ADR link; another owner or host is not.
+func TestForgeHosts(t *testing.T) {
+	for url, want := range map[string]string{
+		"https://github.com/MohammadBnei/wird.git":            "wird",
+		"git@github.com:MohammadBnei/ghost.git":               "ghost",
+		"https://git.bnei.dev/MohammadBnei/wird.git":          "wird",
+		"git@git.bnei.lan:MohammadBnei/infra-bootstrap.git":   "infra-bootstrap",
+		"ssh://git@git.bnei.lan:2222/MohammadBnei/pi-lab.git": "pi-lab",
+		"ssh://git@git.bnei.lan/MohammadBnei/pi-lab.git":      "pi-lab",
+		"https://git.bnei.dev/someone/wird.git":               "",
+		"https://gitlab.com/MohammadBnei/wird.git":            "",
+		"https://charts.goauthentik.io":                       "",
+	} {
+		if got := repoName(url); got != want {
+			t.Errorf("repoName(%s) = %q, want %q", url, got, want)
+		}
+	}
+	c := &citer{}
+	for _, target := range []string{
+		"https://github.com/MohammadBnei/agent-fleet/blob/main/docs/adr/0071-z.md",
+		"https://git.bnei.dev/MohammadBnei/agent-fleet/src/branch/main/docs/adr/0071-z.md",
+	} {
+		if k, ok := c.linkTarget("infra-bootstrap", "README.md", target); !ok || k != (adrKey{"agent-fleet", "0071"}) {
+			t.Errorf("%s: %+v %v", target, k, ok)
+		}
+	}
+}
+
 func TestTracked(t *testing.T) {
 	got := map[Track]bool{}
 	for _, tr := range fixture(t).Tracked {
@@ -297,6 +326,25 @@ func TestTracked(t *testing.T) {
 	}
 	if len(got) != 4 {
 		t.Errorf("tracked %v: a chart revision is not a branch", got)
+	}
+}
+
+// provisioner-application.yaml's shape: a ref-only git.bnei.dev source at "deploy" beside a path source on main.
+func TestTrackedSkipsRefOnly(t *testing.T) {
+	x := &Ctx{track: map[Track]bool{}}
+	app(x, graph.Source{}, "provisioner", appSpec{Sources: []source{
+		{RepoURL: "https://git.bnei.dev/MohammadBnei/agent-fleet.git", TargetRevision: "deploy", Ref: "deploy"},
+		{RepoURL: "https://github.com/MohammadBnei/agent-fleet.git", TargetRevision: "main", Path: "helm"},
+	}}, element{})
+	if len(x.track) != 1 || !x.track[Track{"agent-fleet", "main"}] {
+		t.Errorf("tracked %v, want agent-fleet@main only", x.track)
+	}
+	var g graph.Graph
+	if err := g.Merge(x.g); err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if n := len(g.Edges); n != 1 || g.Edges[0].Attrs["branch"] != "main" {
+		t.Errorf("edges %+v, want one agent-fleet edge at main", g.Edges)
 	}
 }
 

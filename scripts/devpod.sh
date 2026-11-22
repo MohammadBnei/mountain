@@ -14,7 +14,7 @@
 #
 #   ARGS='--prom-url=http://invalid' scripts/devpod.sh push     extra atlas flags (reset on every push/up)
 #   GRAPH=www/dev/fixtures/graph.json scripts/devpod.sh push   copied to /app/graph.json, adds --graph-fixture
-#   (no GitHub token in the pod: without GRAPH the page waits for a projection that never comes)
+#   (no forge token in the pod: without GRAPH the page waits for a projection that never comes)
 #   (a pod from before atlas (named relay): `down` + `up` once)
 #
 # ponytail: one pod, no Service/Deployment; the real chart is tested by the

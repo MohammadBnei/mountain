@@ -54,7 +54,7 @@ func TestRules(t *testing.T) {
 			}
 		}
 	}
-	for _, n := range []string{"MountainSourceStale", "MountainTokenExpiring", "MountainUnassigned"} {
+	for _, n := range []string{"MountainSourceStale", "MountainUnassigned"} {
 		if !names[n] {
 			t.Errorf("rule %s missing", n)
 		}

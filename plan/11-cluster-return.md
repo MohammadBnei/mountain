@@ -88,7 +88,8 @@ From the other session (it runs 3a, 3b and 3e; you click Run where it can't):
       they never block CI.
 
 ## 4. atlas's repo token (you, before or right after the mountain build)
-- [ ] Infisical project `mountain-8c-cz`, key `MOUNTAIN_GITHUB_TOKEN`: give the token **Contents: read** and
+- [ ] (Superseded by P4.5, 2026-11-21: the key is now `MOUNTAIN_FORGE_TOKEN`, a Forgejo token with read:repository.)
+      Infisical project `mountain-8c-cz`, key `MOUNTAIN_GITHUB_TOKEN`: give the token **Contents: read** and
       **Metadata: read** on `agent-fleet`, `ukubi-bridge` and `pi-lab` too (it already covers infra-bootstrap, mountain
       and the app repos). Same token, edited in GitHub's fine-grained token settings; the value does not change.
 - [ ] If you replaced the token instead: update the key, then restart the pod (env is read at start):

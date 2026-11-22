@@ -13,8 +13,6 @@ tests:
       # memory-only (DATABASE_URL unset): seeded at start, never refreshed
       - series: 'mountain_source_last_success{namespace="mountain", source="db"}'
         values: '0+0x40'
-      - series: 'mountain_github_token_days_left{namespace="mountain"}'
-        values: '13x300'
       # a component appears that realms.yaml does not place (after 10 min); another namespace's never counts
       - series: 'mountain_drift{namespace="mountain", kind="unassigned"}'
         values: '0x40 1x300'
@@ -32,21 +30,11 @@ tests:
           - exp_labels: { severity: notice, source: alerts }
             exp_annotations:
               summary: "mountain: an atlas source has not succeeded for 5 min"
-              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. github/projection: the map keeps its last projection; the log says whether GitHub refused the token or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
+              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. forge/projection: the map keeps its last projection; the log says whether Forgejo refused the token, the token is unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
           - exp_labels: { severity: notice, source: db }
             exp_annotations:
               summary: "mountain: an atlas source has not succeeded for 5 min"
-              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. github/projection: the map keeps its last projection; the log says whether GitHub refused the token or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
-      - eval_time: 50m
-        alertname: MountainTokenExpiring
-        exp_alerts: []
-      - eval_time: 61m
-        alertname: MountainTokenExpiring
-        exp_alerts:
-          - exp_labels: { severity: notice }
-            exp_annotations:
-              summary: "mountain: the GitHub token expires in under 14 days"
-              description: Rotate the token in Infisical (mountain-8c-cz) before the repo poll stops; the map then keeps its last projection.
+              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. forge/projection: the map keeps its last projection; the log says whether Forgejo refused the token, the token is unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
       - eval_time: 65m
         alertname: MountainUnassigned
         exp_alerts: []

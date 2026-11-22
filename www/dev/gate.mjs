@@ -88,7 +88,7 @@ async function start() {
     ],
     {
       cwd: repo,
-      env: { ...process.env, MOUNTAIN_OIDC_ISSUER: '', MOUNTAIN_GITHUB_TOKEN: '', DATABASE_URL: '' }
+      env: { ...process.env, MOUNTAIN_OIDC_ISSUER: '', MOUNTAIN_FORGE_TOKEN: '', DATABASE_URL: '' }
     }
   );
   srv.stderr.on('data', d => {

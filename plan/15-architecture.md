@@ -380,7 +380,8 @@ These already follow the standard:
    `Metrics` on the app (the last package-level state, the vecs, is gone; `atlas project` and the tests pass none and
    record nothing; the table of the six is locals of `newMetrics`, so no package variable is left). The exposition is the
    same series: names, types, HELP texts and label keys, compared on the built binary before and after (lines sorted,
-   the values of `mountain_source_last_success` and `mountain_github_token_days_left` masked, being clocks), in three
+   the values of `mountain_source_last_success` and `mountain_github_token_days_left` masked, being clocks; the
+   latter is gone since P4.5), in three
    scenarios (a token and a stored projection with one signal failing, local checkouts with one required query failing,
    and nothing configured), with `target_info`, the `otel_scope_*` labels, suffixes and the default registry's
    `go_*`/`process_*` series off; the number format is pinned by `TestMetricsExposition`. The differences: a family

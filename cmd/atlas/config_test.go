@@ -39,7 +39,7 @@ func TestConfigDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := Config{Opts: Opts{Listen: ":8080", Metrics: ":9090", PromURL: "http://platform-prometheus-kube-p-prometheus.monitoring:9090",
-		AMURL: "http://platform-prometheus-kube-p-alertmanager.monitoring:9093", GHURL: "https://api.github.com", Every: 2 * time.Minute,
+		AMURL: "http://platform-prometheus-kube-p-alertmanager.monitoring:9093", ForgeURL: "https://git.bnei.dev/api/v1", Every: 2 * time.Minute,
 		LokiURL: "http://platform-loki.monitoring:3100", TempoURL: "http://platform-tempo.monitoring:3200", GrafanaURL: "https://grafana.bnei.dev",
 		Cache: "/var/cache/atlas"}}
 	if !reflect.DeepEqual(c, want) {
@@ -51,7 +51,7 @@ func TestConfigDefaults(t *testing.T) {
 		"am-url=http://platform-prometheus-kube-p-alertmanager.monitoring:9093: Alertmanager base URL",
 		"dev=false: allow http://127.0.0.1:* origins and serve /dev/; on a loopback address with sign-in unset, admit everyone",
 		"every=2m0s: how often the tracked heads are checked",
-		"github-url=https://api.github.com: GitHub API base URL",
+		"forge-url=https://git.bnei.dev/api/v1: Forgejo API base URL",
 		"grafana-url=https://grafana.bnei.dev: Grafana base URL for the faces' Explore links",
 		"graph-fixture=: dev: serve this graph (an /api/graph answer) instead of projecting",
 		"listen=:8080: public listen address",
@@ -59,7 +59,7 @@ func TestConfigDefaults(t *testing.T) {
 		"loki-url=http://platform-loki.monitoring:3100: Loki base URL (the Logs face)",
 		"metrics=:9090: metrics listen address (never routed)",
 		"prom-url=http://platform-prometheus-kube-p-prometheus.monitoring:9090: Prometheus base URL",
-		"repos=: read local checkouts from this directory instead of polling GitHub",
+		"repos=: read local checkouts from this directory instead of polling the forge",
 		"tempo-url=http://platform-tempo.monitoring:3200: Tempo base URL (the Spans face)",
 	}; !reflect.DeepEqual(got, w) {
 		t.Errorf("serve's flags:\n got %q\nwant %q", got, w)
@@ -101,9 +101,9 @@ func TestConfigEnv(t *testing.T) {
 	if cfg, _ := loadConfig(nil, envOf(full)); *cfg.OIDC != (oidcEnv{Issuer: "https://a/o", ClientID: "m", Secret: "s", Key: key}) {
 		t.Errorf("sign-in: %+v", *cfg.OIDC)
 	}
-	cfg, err := loadConfig([]string{"--repos", "/r"}, envOf(map[string]string{"DATABASE_URL": "postgres://d", "MOUNTAIN_GITHUB_TOKEN": "t",
+	cfg, err := loadConfig([]string{"--repos", "/r"}, envOf(map[string]string{"DATABASE_URL": "postgres://d", "MOUNTAIN_FORGE_TOKEN": "t",
 		"ATLAS_CACHE": "/c", "MOUNTAIN_MACHINE_SUB": "s"}))
-	if err != nil || cfg.DSN != "postgres://d" || cfg.GHToken != "t" || cfg.Cache != "/c" || cfg.Repos != "/r" ||
+	if err != nil || cfg.DSN != "postgres://d" || cfg.ForgeToken != "t" || cfg.Cache != "/c" || cfg.Repos != "/r" ||
 		cfg.Machine != (machineEnv{Sub: "s"}) {
 		t.Errorf("env: %+v %v", cfg, err)
 	}
@@ -115,9 +115,9 @@ func TestConfigEnv(t *testing.T) {
 			t.Errorf("%v --dev: %v", args, err)
 		}
 	}
-	cfg, err = loadConfig([]string{"--nope"}, envOf(map[string]string{"MOUNTAIN_GITHUB_TOKEN": "t"}))
-	if err == nil || cfg.GHToken != "t" {
-		t.Errorf("a bad flag: %v, token %q", err, cfg.GHToken) // the env is read whatever the flags say, as before
+	cfg, err = loadConfig([]string{"--nope"}, envOf(map[string]string{"MOUNTAIN_FORGE_TOKEN": "t"}))
+	if err == nil || cfg.ForgeToken != "t" {
+		t.Errorf("a bad flag: %v, token %q", err, cfg.ForgeToken) // the env is read whatever the flags say, as before
 	}
 }
 

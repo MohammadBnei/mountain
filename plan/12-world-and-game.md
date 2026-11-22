@@ -151,6 +151,13 @@ follow infra-bootstrap's trailers (`Co-Authored-By: ukubi-claude-cloud`, `Agent-
   - receive-pack records who pushed what, as the offline evidence later.
 - **atlas** drops `--repos` and takes `--github-url http://127.0.0.1:7480`, `MOUNTAIN_GITHUB_TOKEN=any`
   (project.go:131-147) and a writable `ATLAS_CACHE`.
+  > 2026-11-21 (P4.5): atlas now takes `--forge-url` and `MOUNTAIN_FORGE_TOKEN` and asks Forgejo's routes
+  > (`branches/<branch>`, `archive/<sha>.tar.gz`). ukubi-game's dev/Procfile:3 and README.md:29-31 run the
+  > LOCAL mountain checkout, so the dev sim breaks when this merges. ukubi-game cannot go first: its branch
+  > needs the contract's `ForgeOwner`/`ForgeBranches`/`ForgeArchive`, which exist only in a mountain commit
+  > holding this change. Order: squash-merge mountain; then on ukubi-game `go get
+  > github.com/MohammadBnei/mountain@<squash sha>` (never the branch sha: it dangles once the branch is
+  > deleted), re-run `go test ./...` and `-tags integration`, and merge ukubi-game right away.
 - **Causal hook:** a push to a tracked branch starts an ArgoCD sync cycle in the sim.
 - **Richer models:** log-normal levels, spikes, a restart sawtooth, disk drift.
 - **Escalation ladders** (e.g. `mem-leak`: warning → CrashLooping → Degraded and a probe failure) climb while
