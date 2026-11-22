@@ -2,6 +2,8 @@ module github.com/MohammadBnei/mountain
 
 go 1.27
 
+toolchain go1.27.4
+
 require (
 	connectrpc.com/connect v1.21.1
 	github.com/MohammadBnei/ukubi-go v0.1.0
