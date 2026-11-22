@@ -5,7 +5,7 @@ name: app
 
 on:
   # push to main and workflow_dispatch only: no job here runs on a pull_request, so a PR never reaches
-  # ukubi-build (the CI/CD split). PRs run test and db-test in checks.yml, on the podman runner; main re-runs
+  # ukubi-build (the CI/CD split). PRs run test and db-test in checks.yml, on the Talos runner; main re-runs
   # them (checks.yml, called below) before the image, so main never deploys untested code until ukubi-cd gates
   # CD. To rebuild the tip: `gh workflow run app.yml --ref main`.
   workflow_dispatch:

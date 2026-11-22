@@ -1,4 +1,4 @@
-# test and db-test, on the podman runner only (ubuntu-latest: rootless, no sudo, no secrets). They run on a PR
+# test and db-test, on the Talos runner (k8s-ubuntu-latest: unprivileged host executor, no sudo, no services:). They run on a PR
 # and from app.yml (workflow_call) on main, whose image job needs them: main never deploys untested code (owner
 # decision, until ukubi-cd gates CD). No image build on a PR (the CI/CD split): images are CD's, built from
 # reviewed main by app.yml. The trailers check lives in trailers.yml, so a title or body edit re-runs it without
@@ -22,10 +22,9 @@ concurrency:
   cancel-in-progress: ${{ github.event.pull_request && true || false }}
 
 jobs:
-  # The podman runner's job container (catthehacker act-24.04) has no Chrome, so the gate selftest below stays a
-  # local pre-merge step.
+  # The Talos runner's image has no system Chrome, so the gate selftest below stays a local pre-merge step.
   test:
-    runs-on: ubuntu-latest
+    runs-on: k8s-ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -110,29 +109,29 @@ jobs:
             echo "::notice::no Chrome on this runner: run 'node www/dev/gate.mjs selftest' locally before merge (04)"
           fi
 
-  # Persistence tests need a real Postgres: TestDB* skip without MOUNTAIN_TEST_DSN (the test job above
-  # has none), so they run here, against a postgres job service reached by its host name. The image comes from
-  # the ECR mirror of Docker Hub, which rate-limits the LAN's one address; the alpine tag because the debian
-  # one fails to start under the podman runner (crun: memory.max, as agent-fleet's go.yml notes).
+  # Persistence tests need a real Postgres: TestDB* skip without MOUNTAIN_TEST_DSN (the test job above has none).
+  # The Talos runner has no service containers, so the database comes from the dev IntegreSQL (ADR-0088,
+  # ukubi-ci's dev-db action); each test makes a schema of its own in it.
   db-test:
-    runs-on: ubuntu-latest
+    runs-on: k8s-ubuntu-latest
     permissions:
       contents: read
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:17-alpine
-        env:
-          POSTGRES_PASSWORD: mountain
-        options: >-
-          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
-          --health-interval 2s --health-retries 30
-    env:
-      MOUNTAIN_TEST_DSN: postgres://postgres:mountain@postgres:5432/postgres?sslmode=disable
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true # the job container starts with an empty ~/go; the runner's cache server restores it
+      - name: Dev database
+        uses: MohammadBnei/ukubi-ci/actions/dev-db@d683f2091575188024f7e1200e619977d9db19ae # ukubi-ci PR 28 head; re-pin to the release
+        with:
+          integresql-url: http://integresql.dev-services.svc.cluster.local:5000
+          postgres-host: dev-postgres.dev-services.svc.cluster.local
+          # An empty template: the tests migrate their own schema.
+          template-hash: mountain
+          timeout-seconds: '120'
       - name: DB tests
-        run: go test -count=1 -race -run '^TestDB' -v ./cmd/atlas/ # -count=1: a restored Go cache would replay a past pass
+        run: MOUNTAIN_TEST_DSN="$DATABASE_URL" go test -count=1 -race -run '^TestDB' -v ./cmd/atlas/ # -count=1: Go cannot track database state
+      - name: Give the dev database back
+        if: always()
+        uses: MohammadBnei/ukubi-ci/actions/dev-db-release@d683f2091575188024f7e1200e619977d9db19ae # ukubi-ci PR 28 head; re-pin to the release
