@@ -348,6 +348,22 @@ func TestTrackedSkipsRefOnly(t *testing.T) {
 	}
 }
 
+func TestMachinesWithoutNodesFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, lanPath)
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte("bnei_lan_hosts: {}\n"), 0o644)
+	rl, _ := realms.Parse([]byte(fixtureRealms))
+	res, err := Run(Repos{"infra-bootstrap": {Dir: dir, SHA: strings.Repeat("i", 40), Branch: "main"}}, rl, []Extractor{machinesExtractor, kubesprayExtractor})
+	if err != nil {
+		t.Fatalf("a missing nodes file and kubespray vars failed the Run: %v", err)
+	}
+	noNode(t, res.Graph, "vm:k8s-cp-01")
+	if !hasDrift(res.Graph, graph.DriftUnresolved, "repo:infra-bootstrap", nodesPath) {
+		t.Error("a missing nodes file raised no drift: the town would lose every k8s node silently")
+	}
+}
+
 func TestMachines(t *testing.T) {
 	g := fixture(t).Graph
 	if h := node(t, g, "host:bnei"); h.Attrs["island"] != "h1" || h.Attrs["ip"] != "192.168.1.165" {

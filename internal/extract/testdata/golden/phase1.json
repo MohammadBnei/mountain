@@ -406,7 +406,7 @@
     },
     "source": {
      "repo": "infra-bootstrap",
-     "path": "inventory/ukubi/hosts.yaml",
+     "path": "terraform/talos/variables.tf",
      "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
     }
    },
@@ -417,11 +417,12 @@
     "group": "nodes",
     "function": "houses",
     "attrs": {
-     "k8s": "worker"
+     "ip": "192.168.1.202",
+     "k8s": "control-plane,etcd"
     },
     "source": {
      "repo": "infra-bootstrap",
-     "path": "inventory/ukubi/hosts.yaml",
+     "path": "terraform/talos/variables.tf",
      "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
     }
    },
@@ -698,7 +699,7 @@
     "origin": "declared",
     "source": {
      "repo": "infra-bootstrap",
-     "path": "inventory/ukubi/hosts.yaml",
+     "path": "terraform/talos/variables.tf",
      "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
     }
    },
@@ -821,7 +822,7 @@
     "detail": "k8s node with no host in realms.yaml k8sPlacement",
     "source": {
      "repo": "infra-bootstrap",
-     "path": "inventory/ukubi/hosts.yaml",
+     "path": "terraform/talos/variables.tf",
      "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
     }
    },

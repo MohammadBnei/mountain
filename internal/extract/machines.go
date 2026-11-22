@@ -1,9 +1,10 @@
 package extract
 
 import (
+	"errors"
 	"fmt"
-	"slices"
-	"strings"
+	"io/fs"
+	"log/slog"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -13,12 +14,12 @@ import (
 )
 
 // machinesExtractor reads the Terraform topology: the Proxmox hosts, the VMs and containers terraform declares, and
-// the k8s nodes from the inventory terraform renders (its k8s_nodes map lives in the uncommitted tfvars).
+// the Talos nodes terraform/talos declares.
 var machinesExtractor = Extractor{Name: "machines", Version: 1, Needs: []string{"infra-bootstrap"}, Run: machines}
 
 const (
-	inventoryPath = "inventory/ukubi/hosts.yaml"
-	lanPath       = "ansible/playbooks/vars/bnei-lan-records.yml"
+	nodesPath = "terraform/talos/variables.tf"
+	lanPath   = "ansible/playbooks/vars/bnei-lan-records.yml"
 	// hiddenMachine is never drawn (the break-glass box, plan/00 Machines row).
 	hiddenMachine = "k9s-dashboard"
 )
@@ -79,7 +80,7 @@ func terraform(x *Ctx, ips map[string]string) error {
 			}
 			attrs := blk.Body.Attributes
 			if _, each := attrs["for_each"]; each {
-				continue // the k8s nodes: read from the inventory instead
+				continue // the k8s nodes: read from terraform/talos instead
 			}
 			if t, ok := literal(attrs["template"]); ok && t == "true" {
 				continue // a VM template is not a machine
@@ -163,35 +164,54 @@ func literal(a *hclsyntax.Attribute) (string, bool) {
 	return "", false
 }
 
-// inventory adds the k8s nodes: their roles from the inventory groups, their host from realms.yaml.
+// inventory adds the k8s nodes: the Talos control planes terraform/talos declares (var.nodes: name => IP), their host
+// from realms.yaml. The kubespray inventory is gone (infra-bootstrap #491); a missing file is a warning, never a failed
+// Run.
 func inventory(x *Ctx, ips map[string]string) error {
-	b, src, err := x.Read("infra-bootstrap", inventoryPath)
+	b, src, err := x.Read("infra-bootstrap", nodesPath)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			// A drift, not only a log line: the town would silently lose every k8s node (R2).
+			slog.Warn("extract machines: " + nodesPath + " not found: no k8s nodes")
+			x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: nodesPath + " not found: no k8s nodes"})
+			return nil
+		}
 		return err
 	}
-	var inv struct {
-		All struct {
-			Hosts    map[string]struct{} `yaml:"hosts"`
-			Children map[string]struct {
-				Hosts map[string]struct{} `yaml:"hosts"`
-			} `yaml:"children"`
-		} `yaml:"all"`
+	f, diags := hclsyntax.ParseConfig(b, nodesPath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return fmt.Errorf("%s: %s", nodesPath, diags.Error())
 	}
-	if err := yaml.Unmarshal(b, &inv); err != nil {
-		return fmt.Errorf("%s: %w", inventoryPath, err)
-	}
-	roleOf := map[string]string{"kube_control_plane": "control-plane", "kube_node": "worker", "etcd": "etcd"}
-	for _, name := range sortedKeys(inv.All.Hosts) {
-		var roles []string
-		for _, g := range sortedKeys(roleOf) {
-			if _, in := inv.All.Children[g].Hosts[name]; in {
-				roles = append(roles, roleOf[g])
+	var nodes map[string]string
+	for _, blk := range f.Body.(*hclsyntax.Body).Blocks {
+		if blk.Type != "variable" || len(blk.Labels) != 1 || blk.Labels[0] != "nodes" {
+			continue
+		}
+		a := blk.Body.Attributes["default"]
+		if a == nil {
+			break
+		}
+		v, d := a.Expr.Value(nil)
+		if d.HasErrors() || !v.Type().IsObjectType() && !v.Type().IsMapType() {
+			x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: nodesPath + ": var.nodes default is not a literal map", Source: src})
+			return nil
+		}
+		nodes = map[string]string{}
+		for k, e := range v.AsValueMap() {
+			if e.Type().FriendlyName() == "string" {
+				nodes[k] = e.AsString()
 			}
 		}
-		slices.Sort(roles)
+	}
+	if len(nodes) == 0 {
+		x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: nodesPath + ": no var.nodes default: no k8s nodes", Source: src})
+		return nil
+	}
+	for _, name := range sortedKeys(nodes) {
 		id := graph.ID(graph.KindVM, name)
-		x.Node(graph.Node{ID: id, Kind: graph.KindVM, Source: src,
-			Attrs: withIP(map[string]string{"k8s": strings.Join(roles, ",")}, ips[name])})
+		// ponytail: every node is labelled control-plane,etcd (true for the 3 Talos nodes today); a worker
+		// (talos-gpu-1) needs a role per node in var.nodes or a second variable.
+		x.Node(graph.Node{ID: id, Kind: graph.KindVM, Source: src, Attrs: withIP(map[string]string{"k8s": "control-plane,etcd"}, nodes[name])})
 		host, ok := x.Realms.K8sPlacement[name]
 		if !ok {
 			x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: id, Detail: "k8s node with no host in realms.yaml k8sPlacement", Source: src})

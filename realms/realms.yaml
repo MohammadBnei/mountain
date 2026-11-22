@@ -87,6 +87,7 @@ k8sPlacement:
   k8s-cp-02: server1
   k8s-worker-02: server1
   k8s-cp-03: ex-laptop
+  talos-cp-3: server1 # VM 210 on server1 (infra-bootstrap ARCHITECTURE.md); esprimo-1/2 are bare metal, on no PVE host
 
 # Where a repo with no docs/adr of its own sends a bare "ADR-NNNN".
 adrHome:
@@ -141,6 +142,9 @@ components:
   vm:k8s-cp-03: { realm: platform, group: nodes }
   vm:k8s-worker-01: { realm: platform, group: nodes }
   vm:k8s-worker-02: { realm: platform, group: nodes }
+  vm:esprimo-1: { realm: platform, group: nodes }
+  vm:esprimo-2: { realm: platform, group: nodes }
+  vm:talos-cp-3: { realm: platform, group: nodes }
   app:platform-longhorn: { realm: platform, group: storage }
   app:platform-local-path-provisioner: { realm: platform, group: storage }
   app:platform-csi-driver-nfs: { realm: platform, group: storage }

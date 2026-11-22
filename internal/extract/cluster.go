@@ -1,7 +1,10 @@
 package extract
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"log/slog"
 	"net/netip"
 	"slices"
 	"strings"
@@ -42,6 +45,10 @@ func kubespray(x *Ctx) error {
 	var cluster graph.Source          // k8s-cluster.yml: where a defaulted add-on is sourced
 	for _, f := range groupVarFiles {
 		b, s, err := x.Read("infra-bootstrap", groupVars+f)
+		if errors.Is(err, fs.ErrNotExist) { // kubespray is gone (infra-bootstrap #491): no add-ons from it, not a failed Run
+			slog.Warn("extract kubespray: " + groupVars + f + " not found: no kubespray add-ons")
+			return nil
+		}
 		if err != nil {
 			return err
 		}
