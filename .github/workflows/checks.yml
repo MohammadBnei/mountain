@@ -32,7 +32,41 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: true # the job container starts with an empty ~/go; the runner's cache server restores it
+          cache: false # the split is explicit, see Cache keys
+      # Cache model (owner decision 2026-11-22): a PR restores and saves; push, tag,
+      # dispatch, schedule and workflow_call from main never restore (a PR job can forge
+      # the cache write key), they run cold and only save. Decided here in shell, not in an if:.
+      # CACHE_EPOCH is a user-level Forgejo variable; bump it to purge every cache at once.
+      - name: Cache keys
+        id: cachekeys
+        env:
+          REF: ${{ github.ref }}
+          EPOCH: ${{ vars.CACHE_EPOCH || 'e1' }}
+        run: |
+          set -euo pipefail
+          pr=false
+          if [[ "$REF" == refs/pull/* ]]; then pr=true; fi
+          h=$({ cat go.mod; [ ! -f go.sum ] || cat go.sum; } | sha256sum | cut -c1-16)
+          {
+            echo "pr=$pr"
+            echo "base=${EPOCH}-go-test-${RUNNER_OS}-${h}"
+            echo "prefix=${EPOCH}-go-test-${RUNNER_OS}-"
+            echo "mod=$(go env GOMODCACHE)"
+            echo "build=$(go env GOCACHE)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Restore Go cache
+        if: steps.cachekeys.outputs.pr == 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ${{ steps.cachekeys.outputs.mod }}
+            ${{ steps.cachekeys.outputs.build }}
+          # Never an exact hit (the run id is new): restore-keys picks the newest entry.
+          key: ${{ steps.cachekeys.outputs.base }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ steps.cachekeys.outputs.base }}-
+            ${{ steps.cachekeys.outputs.prefix }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -87,16 +121,35 @@ jobs:
       # Pinned, not latest, and built with a Go at least as new as go.mod's (v2.14.0 is built with go1.27.1, what
       # agent-fleet's go.yml pins too).
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.14.0
+        run: |
+          set -euo pipefail
+          GOBIN="$RUNNER_TEMP/golangci" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+          "$RUNNER_TEMP/golangci/golangci-lint" run ./...
       # -race: the hub, the live state and the projector are concurrent. Under it TestRenderBounds' wall-clock
       # bound is scaled (cmd/atlas/race_on_test.go).
       - name: go test -race
-        run: go test -race ./...
+        run: |
+          set -euo pipefail
+          # The root package's tests run promtool and git over repo files, which Go's test
+          # cache cannot track: it runs with -count=1 in its own invocation (same flags, so
+          # the compiled binaries are shared); every other package may come from the cache.
+          unc=(.)
+          go list "${unc[@]}" > "$RUNNER_TEMP/uncached.txt"
+          rest=()
+          while IFS= read -r pkg; do rest+=("$pkg"); done < <(go list ./... | grep -vxFf "$RUNNER_TEMP/uncached.txt" || true)
+          [ ${#rest[@]} -eq 0 ] || go test -race "${rest[@]}"
+          go test -race -count=1 "${unc[@]}"
       # The plain build too, for the one wall-clock bound the race build scales (2 s here, 30 s raced).
       - name: TestRenderBounds, plain build
         run: go test -count=1 -run '^TestRenderBounds$' ./cmd/atlas/
+      - name: Save Go cache
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ${{ steps.cachekeys.outputs.mod }}
+            ${{ steps.cachekeys.outputs.build }}
+          key: ${{ steps.cachekeys.outputs.base }}-${{ github.run_id }}
+
       # The gate selftest needs a Chrome, which the job container lacks; it then stays a local pre-merge step (04).
       - name: www core test + gate selftest (if Chrome)
         run: |
@@ -121,7 +174,41 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: true # the job container starts with an empty ~/go; the runner's cache server restores it
+          cache: false # the split is explicit, see Cache keys
+      # Cache model (owner decision 2026-11-22): a PR restores and saves; push, tag,
+      # dispatch, schedule and workflow_call from main never restore (a PR job can forge
+      # the cache write key), they run cold and only save. Decided here in shell, not in an if:.
+      # CACHE_EPOCH is a user-level Forgejo variable; bump it to purge every cache at once.
+      - name: Cache keys
+        id: cachekeys
+        env:
+          REF: ${{ github.ref }}
+          EPOCH: ${{ vars.CACHE_EPOCH || 'e1' }}
+        run: |
+          set -euo pipefail
+          pr=false
+          if [[ "$REF" == refs/pull/* ]]; then pr=true; fi
+          h=$({ cat go.mod; [ ! -f go.sum ] || cat go.sum; } | sha256sum | cut -c1-16)
+          {
+            echo "pr=$pr"
+            echo "base=${EPOCH}-go-dbtest-${RUNNER_OS}-${h}"
+            echo "prefix=${EPOCH}-go-dbtest-${RUNNER_OS}-"
+            echo "mod=$(go env GOMODCACHE)"
+            echo "build=$(go env GOCACHE)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Restore Go cache
+        if: steps.cachekeys.outputs.pr == 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ${{ steps.cachekeys.outputs.mod }}
+            ${{ steps.cachekeys.outputs.build }}
+          # Never an exact hit (the run id is new): restore-keys picks the newest entry.
+          key: ${{ steps.cachekeys.outputs.base }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ steps.cachekeys.outputs.base }}-
+            ${{ steps.cachekeys.outputs.prefix }}
       - name: Dev database
         uses: MohammadBnei/ukubi-ci/actions/dev-db@d683f2091575188024f7e1200e619977d9db19ae # ukubi-ci PR 28 head; re-pin to the release
         with:
@@ -132,6 +219,14 @@ jobs:
           timeout-seconds: '120'
       - name: DB tests
         run: MOUNTAIN_TEST_DSN="$DATABASE_URL" go test -count=1 -race -run '^TestDB' -v ./cmd/atlas/ # -count=1: Go cannot track database state
+      - name: Save Go cache
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ${{ steps.cachekeys.outputs.mod }}
+            ${{ steps.cachekeys.outputs.build }}
+          key: ${{ steps.cachekeys.outputs.base }}-${{ github.run_id }}
+
       - name: Give the dev database back
         if: always()
         uses: MohammadBnei/ukubi-ci/actions/dev-db-release@d683f2091575188024f7e1200e619977d9db19ae # ukubi-ci PR 28 head; re-pin to the release
