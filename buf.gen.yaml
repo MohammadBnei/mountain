@@ -1,4 +1,4 @@
-# Go code for api/, committed (app.yml checks it matches). The plugins are pinned by module version; `go run` builds
+# Go code for api/, committed (checks.yml checks it matches). The plugins are pinned by module version; `go run` builds
 # them from the module cache. Run: buf generate
 version: v2
 plugins:

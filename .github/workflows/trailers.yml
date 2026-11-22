@@ -13,7 +13,7 @@ on:
 
 jobs:
   trailers:
-    runs-on: [self-hosted, ukubi-build]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:

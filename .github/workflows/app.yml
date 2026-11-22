@@ -1,17 +1,14 @@
-# Test, then call the shared image.yml (ukubi-ci): it builds the atlas image on the build-runner LXC, pushes it to
+# Call the shared image.yml (ukubi-ci): it builds the atlas image on the build-runner LXC, pushes it to
 # the in-cluster Zot registry, and pins <sha>@<digest> in helm/image.yaml on the `deploy` branch (ArgoCD layers it over helm/values.yaml) so ArgoCD rolls it out. The bump
 # (GITHUB_TOKEN) never triggers another run, and helm/** is not a trigger path, so it cannot loop either.
 name: app
 
 on:
+  # push to main and workflow_dispatch only: no job here runs on a pull_request, so a PR never reaches
+  # ukubi-build (the CI/CD split). PRs run test and db-test in checks.yml, on the podman runner; main re-runs
+  # them (checks.yml, called below) before the image, so main never deploys untested code until ukubi-cd gates
+  # CD. To rebuild the tip: `gh workflow run app.yml --ref main`.
   workflow_dispatch:
-  # PRs run test and db-test, then a build-only image job (image.yml's guard: no
-  # login, push or bump on a pull_request run). All three run on the build LXC
-  # (ukubi-build, host executor): db-test starts postgres through sudo buildah,
-  # root on that box. The repo is private and Forgejo holds outside PR runs for
-  # approval; moving PR jobs off the host is the CI/CD split.
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
     paths:
@@ -32,142 +29,23 @@ on:
       - '!plan/**'
 
 # Forgejo honours only workflow-level concurrency (the job-level groups inside
-# ukubi-ci's image.yml are ignored there): a PR run cancels the older one, a
-# main run queues, so a build whose release tag is already pushed is never cancelled.
+# ukubi-ci's image.yml are ignored there): a second main run queues, never cancels a running build.
 concurrency:
   group: app-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 jobs:
-  # Self-hosted like every job here: GitHub-hosted runners are billing-locked (the runner has no Chrome, so the
-  # gate selftest below stays a local pre-merge step).
-  test:
-    runs-on: [self-hosted, ukubi-build]
+  # No if: on either uses: job. Forgejo evaluates it inside the called workflow, where event_name is workflow_call.
+  checks:
+    uses: ./.github/workflows/checks.yml
     permissions:
       contents: read
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: false # the self-hosted runner keeps its Go caches; the tar save took ~5 min and failed
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-      # No package.json here, so the pinned Biome comes from npm (www/js and www/dev only).
-      - name: biome
-        run: npx --yes @biomejs/biome@2.6.4 ci .
-      # rules_test.go runs `promtool test rules` (and fails, not skips, under CI without it).
-      - name: promtool 3.5.0
-        run: |
-          set -euo pipefail
-          case "$RUNNER_ARCH" in
-            X64) a=amd64 s=e811827af26d822afb09a4f28314f61b618b12cff5369835a67f674d8b46f39a ;;
-            ARM64) a=arm64 s=173389cc42bf09c4e6e54cb53fa07a5a835d7c261e14775d2183181d6e385d1c ;;
-            *) echo "::error::no promtool for $RUNNER_ARCH"; exit 1 ;;
-          esac
-          f="$RUNNER_TEMP/prom.tgz"
-          curl -sSfL -o "$f" "https://github.com/prometheus/prometheus/releases/download/v3.5.0/prometheus-3.5.0.linux-$a.tar.gz"
-          echo "$s  $f" | sha256sum -c -
-          tar -xzf "$f" -C "$RUNNER_TEMP" --strip-components=1 "prometheus-3.5.0.linux-$a/promtool"
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-      # atlas's protos (api/, buf.yaml): lint, the committed Go code matches its generation, and no breaking change
-      # against main (no Buf Schema Registry: main is the baseline; skipped until main has api/).
-      - name: buf 1.75.0
-        run: |
-          set -euo pipefail
-          case "$RUNNER_ARCH" in
-            X64) a=x86_64 s=fad1e38d6909bbb583a4da81d8c02a01046e2cd663bde7e337dd24277393764b ;;
-            ARM64) a=aarch64 s=00eb190aa82df17f393e05b04889cc60a0b13b3259d336e21a87d5f23ab4fd26 ;;
-            *) echo "::error::no buf for $RUNNER_ARCH"; exit 1 ;;
-          esac
-          f="$RUNNER_TEMP/buf"
-          curl -sSfL -o "$f" "https://github.com/bufbuild/buf/releases/download/v1.75.0/buf-Linux-$a"
-          echo "$s  $f" | sha256sum -c -
-          chmod +x "$f"
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-      - name: buf lint, generate, breaking
-        run: |
-          set -euo pipefail
-          buf lint
-          buf generate
-          git diff --exit-code -- api || { echo "::error::api/: the generated code is stale, run buf generate"; exit 1; }
-          test -z "$(git status --porcelain -- api)" || { echo "::error::api/: buf generate made files not committed"; exit 1; }
-          git fetch --no-tags --depth=1 origin main
-          if git cat-file -e FETCH_HEAD:buf.yaml 2>/dev/null; then
-            buf breaking --against ".git#ref=FETCH_HEAD"
-          else
-            echo "::notice::main has no buf.yaml yet: nothing to break"
-          fi
-      - name: go vet
-        run: go vet ./...
-      # No .golangci config, as in agent-fleet: the defaults (errcheck, govet, ineffassign, staticcheck, unused).
-      # Pinned, not latest, and built with a Go at least as new as go.mod's (v2.14.0 is built with go1.27.1, what
-      # agent-fleet's go.yml pins too).
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.14.0
-      # -race: the hub, the live state and the projector are concurrent. Under it TestRenderBounds' wall-clock
-      # bound is scaled (cmd/atlas/race_on_test.go).
-      - name: go test -race
-        run: go test -race ./...
-      # The plain build too, for the one wall-clock bound the race build scales (2 s here, 30 s raced).
-      - name: TestRenderBounds, plain build
-        run: go test -count=1 -run '^TestRenderBounds$' ./cmd/atlas/
-      # The gate selftest needs a Chrome, which the build runner lacks; it then stays a local pre-merge step (04).
-      - name: www core test + gate selftest (if Chrome)
-        run: |
-          set -euo pipefail
-          node www/dev/core.test.mjs
-          CHROME="${CHROME:-$(command -v google-chrome chromium chromium-browser 2>/dev/null | head -n1 || true)}"
-          if [ -n "$CHROME" ] && [ -f www/dev/gate.mjs ]; then
-            CHROME="$CHROME" node www/dev/gate.mjs selftest
-          else
-            echo "::notice::no Chrome on this runner: run 'node www/dev/gate.mjs selftest' locally before merge (04)"
-          fi
-
-  # Persistence tests need a real Postgres: TestDB* skip without MOUNTAIN_TEST_DSN (the test job above
-  # has none), so they run here, against a postgres started through `sudo buildah` (the runner has no docker
-  # `services:`; the image comes from the ECR mirror of Docker Hub, which rate-limits the LAN's one address).
-  db-test:
-    runs-on: [self-hosted, ukubi-build]
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: false # the self-hosted runner keeps its Go caches; the tar save took ~5 min and failed
-      - name: postgres 17 (buildah)
-        run: |
-          port=$((20000 + (GITHUB_RUN_ID + GITHUB_RUN_ATTEMPT * 7919) % 20000)) # a re-run gets its own port
-          ctr=$(sudo buildah from public.ecr.aws/docker/library/postgres:17)
-          echo "PG_CTR=$ctr" >> "$GITHUB_ENV"
-          nohup sudo buildah run --network host --env POSTGRES_PASSWORD=mountain "$ctr" -- \
-            docker-entrypoint.sh postgres -c listen_addresses=127.0.0.1 -p "$port" >"$RUNNER_TEMP/pg.log" 2>&1 &
-          echo "PG_PID=$!" >> "$GITHUB_ENV"
-          for i in $(seq 60); do (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && break; sleep 2; done
-          (exec 3<>"/dev/tcp/127.0.0.1/$port") || { cat "$RUNNER_TEMP/pg.log"; exit 1; }
-          echo "MOUNTAIN_TEST_DSN=postgres://postgres:mountain@127.0.0.1:$port/postgres?sslmode=disable" >> "$GITHUB_ENV"
-      - name: DB tests
-        run: go test -count=1 -race -run '^TestDB' -v ./cmd/atlas/ # -count=1: the runner's Go cache would replay a past pass
-      - name: stop postgres
-        if: always()
-        run: |
-          kill "$PG_PID" 2>/dev/null || true # sudo relays the signal to buildah run, which stops the container
-          sleep 3
-          sudo buildah rm "$PG_CTR" || true
 
   # Build, push and deploy live in the shared ukubi-ci workflow (digest-pinned tag, stale-run guard, deploy job).
   # The workflow-level group above serialises main runs (Forgejo ignores image.yml's job-level groups).
   image:
-    needs: [test, db-test]
-    # Registry creds are readable only on push/workflow_dispatch (OIDC claim).
-    # No if: here. Forgejo evaluates a uses: job's if inside the called jobs,
-    # where event_name is workflow_call, so it skipped every build. image.yml's
-    # guard keeps pull_request runs build-only.
+    needs: checks
+    # Registry creds are readable only on push/workflow_dispatch (OIDC claim), the only events this workflow has.
     uses: MohammadBnei/ukubi-ci/.github/workflows/image.yml@9af316b5d779b2d5ef3f55b9f11e20b8bf3f6ce8 # v0.11.1
     with:
       # The pin file on the deploy branch (ukubi-ci 0.11), not main's values.

@@ -1,5 +1,5 @@
 # atlas's protos (plan/25 ui-data.md): one module, api/. No Buf Schema Registry: consumers generate from this repo at a
-# pinned main sha, and `buf breaking` runs in app.yml against main.
+# pinned main sha, and `buf breaking` runs in checks.yml against main.
 version: v2
 modules:
   - path: api
