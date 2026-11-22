@@ -135,3 +135,9 @@ jobs:
       - name: Give the dev database back
         if: always()
         uses: MohammadBnei/ukubi-ci/actions/dev-db-release@d683f2091575188024f7e1200e619977d9db19ae # ukubi-ci PR 28 head; re-pin to the release
+
+  # hadolint on the Dockerfile; no image build on a PR (owner decision, CI/CD split).
+  dockerfile:
+    uses: MohammadBnei/ukubi-ci/.github/workflows/dockerfile-lint.yml@d683f2091575188024f7e1200e619977d9db19ae # ukubi-ci PR 28 head; re-pin to the release
+    with:
+      dockerfiles: Dockerfile
