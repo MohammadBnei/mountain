@@ -170,3 +170,10 @@ Decisions so far, in the order the owner took them:
    - **Lasting fix:** the PR that removes the cause is merged. It is the real loot and is counted apart from victory,
      since a restart can win a fight and fix nothing.
    - **Loot:** ops-lead's incident note in its memory, and the transcript as the postmortem draft.
+4. **The monster attacks the building from outside, and the party fights it there** (2026-11-23).
+   - The monster besieges the building: it claws the walls, sits on the roof, chokes its roads.
+   - The fight is on open ground before the building, with a wide camera: the monster, the building, the party and the
+     harm in one view. Never inside the building.
+   - The building shows the real harm (smoke, cracks, residents fleeing) and mends as the monster wears down.
+   - Strategy and explore see the same fight: strategy from above, with the cards and the transcript in the right zone;
+     explore on foot.
