@@ -200,3 +200,20 @@ Decisions so far, in the order the owner took them:
      ops-lead scouts them all, within its spawn limits.
    - An alert that resolves before the owner arrives: the monster leaves, and the transcript says it left before you
      came. No loot, no fake win.
+8. **Hack and slash steers the investigation** (2026-11-23).
+   - The monster's parts are the suspects ops-lead's first scouting names: the claws the last deploy, the jaw the DB
+     pool, the tail memory pressure, the wings the network or the ingress.
+   - A heavy hit on a part asks ops-lead to check that suspect next: one read (logs, metrics, the last deploy's diff).
+     Reads only, so a sword never touches production.
+   - The real result decides the part: ruled out, it breaks off and the monster shrinks; confirmed, it glows as the
+     weak spot.
+   - The cause found, the monster sheds its disguise and shows its true form (for example "the pool exhaustion"). The
+     fix cards come only then.
+   - Rage is the real signal: the error rate climbs and the monster rages; a new alert joins and a second monster comes,
+     or a head grows.
+   - Real limits: hits queue reads within ops-lead's budget (spawn limits, calls per minute). Faster hits stagger the
+     monster with no read behind them, and the game shows it. Button-mashing becomes choosing where to look.
+   - While ops-lead thinks (a long session, a workflow), the monster fights back for feel. The owner dodges, places,
+     and lines up the next part: the next thing to check.
+   - The dock holds the write card and its countdown: approve (a heavy strike lands the change), redirect (a short
+     text), ask why, retreat. Typing slows the clock. On the phone the card is a full-width sheet.
