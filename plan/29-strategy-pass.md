@@ -300,3 +300,20 @@ ADR-0082:110, ADR-0086 §4. Each finding is taken, or waits on the owner.
 7. **Build order prerequisites.** Slice 2 needs alert-responder live (its yaml: not launchable until infra-bootstrap is
    onboarded and `GH_ALERT_RESPONDER` exists). Slice 5 needs ADR-0082's "later ukubi-game PR" and the confirm page.
    Slice 6 needs item 3's amendment and friend sign-in on world.bnei.dev (plan/21 phase 0b).
+
+### Owner decisions on § 7's pending items (2026-11-23)
+
+1. **The scout is alert-responder.** It scouts from the moment the alert fires. The monster's parts come from its typed
+   `findings` and `objects`, with no LLM between them and the picture. ops-lead joins when the owner engages.
+2. **Amend ADR-0086 for in-game answers.** A write card is answered in the game, not only on the confirm page. The
+   countdown becomes real: when it ends, the card is withdrawn, so a late answer cannot run. This is an owner-gated
+   amendment to agent-fleet ADR-0086 §4 (and ADR-0082's `DECISION_WAIT`), written before slice 5.
+3. **"Friends" are admins.** The friends who join a fight are members of `platform-admins`, not public-pod guests. They
+   are trusted like the owner: they write into the agent's thread, see what it reads, and `Admin()` lets them answer
+   cards (ADR-0082). The Rule-of-Two finding does not apply to them. P3 (the engineer friend) is an admin; a public
+   guest never reaches a fight. Open: whether a write needs the owner himself, or any admin.
+4. **The narrator has the same trust as the fleet's sessions.** It reads what ops-lead and the Claude sessions already
+   read, and goes through the same fleet gateway route (so a fast Venice-hosted model such as DeepSeek's flash tier is
+   reachable under the fleet's own key, not the game's). It runs beside core as a fleet component, once per fight, and
+   its events are stored so every viewer sees the same world. With decision 1, the parts' states come from typed
+   findings; the narrator draws the rest.
