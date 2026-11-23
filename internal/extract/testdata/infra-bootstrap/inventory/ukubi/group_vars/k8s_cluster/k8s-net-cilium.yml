@@ -1,7 +1,0 @@
----
-cilium_kube_proxy_replacement: false
-cilium_enable_hubble: true
-cilium_encryption_enabled: true
-cilium_encryption_type: wireguard
-cilium_extra_values:
-  token: not-a-real-value-cilium

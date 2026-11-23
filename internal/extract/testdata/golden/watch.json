@@ -2,100 +2,6 @@
  "Graph": {
   "nodes": [
    {
-    "id": "addon:cilium",
-    "kind": "addon",
-    "realm": "platform",
-    "group": "network",
-    "function": "utility",
-    "attrs": {
-     "encryption": "wireguard",
-     "hubble": "true",
-     "into": "kube-system"
-    },
-    "source": {
-     "repo": "infra-bootstrap",
-     "path": "inventory/ukubi/group_vars/k8s_cluster/k8s-cluster.yml",
-     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
-    }
-   },
-   {
-    "id": "addon:coredns",
-    "kind": "addon",
-    "realm": "platform",
-    "group": "network",
-    "function": "utility",
-    "attrs": {
-     "into": "kube-system"
-    },
-    "source": {
-     "repo": "infra-bootstrap",
-     "path": "inventory/ukubi/group_vars/k8s_cluster/k8s-cluster.yml",
-     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
-    }
-   },
-   {
-    "id": "addon:kube-proxy",
-    "kind": "addon",
-    "realm": "platform",
-    "group": "network",
-    "function": "utility",
-    "attrs": {
-     "into": "kube-system",
-     "mode": "ipvs"
-    },
-    "source": {
-     "repo": "infra-bootstrap",
-     "path": "inventory/ukubi/group_vars/k8s_cluster/k8s-cluster.yml",
-     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
-    }
-   },
-   {
-    "id": "addon:kube-vip",
-    "kind": "addon",
-    "realm": "platform",
-    "group": "network",
-    "function": "utility",
-    "attrs": {
-     "into": "kube-system",
-     "role": "control-plane"
-    },
-    "source": {
-     "repo": "infra-bootstrap",
-     "path": "inventory/ukubi/group_vars/k8s_cluster/addons.yml",
-     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
-    }
-   },
-   {
-    "id": "addon:metallb",
-    "kind": "addon",
-    "realm": "platform",
-    "group": "network",
-    "function": "utility",
-    "attrs": {
-     "into": "metallb-system"
-    },
-    "source": {
-     "repo": "infra-bootstrap",
-     "path": "inventory/ukubi/group_vars/k8s_cluster/addons.yml",
-     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
-    }
-   },
-   {
-    "id": "addon:nodelocaldns",
-    "kind": "addon",
-    "realm": "platform",
-    "group": "network",
-    "function": "utility",
-    "attrs": {
-     "into": "kube-system"
-    },
-    "source": {
-     "repo": "infra-bootstrap",
-     "path": "inventory/ukubi/group_vars/k8s_cluster/k8s-cluster.yml",
-     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
-    }
-   },
-   {
     "id": "adr:agent-fleet/0010",
     "kind": "adr",
     "attrs": {
@@ -1234,7 +1140,6 @@
   "adr": 1,
   "gitops": 1,
   "imports": 1,
-  "kubespray": 1,
   "machines": 1,
   "pass:branchDrift": 1,
   "pass:declare": 1,

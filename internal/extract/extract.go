@@ -142,7 +142,7 @@ func (x *Ctx) Walk(repo string, skip func(dir string) bool, fn func(path string,
 }
 
 // All is every extractor, in run order.
-var All = []Extractor{gitopsExtractor, machinesExtractor, kubesprayExtractor, pigstyExtractor, adrExtractor, importsExtractor}
+var All = []Extractor{gitopsExtractor, machinesExtractor, pigstyExtractor, adrExtractor, importsExtractor}
 
 // Run runs the extractors over repos, places every component in its realm and checks the result.
 func Run(repos Repos, rl *realms.Realms, exs []Extractor) (Result, error) {
