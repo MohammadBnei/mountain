@@ -1,6 +1,6 @@
 # 29 · Strategy pass: fixes, upgrades, and where fun meets work
 
-Status: draft, 2026-11-23. Not approved. Open questions are in § 5.
+Status: draft, 2026-11-23. Order and personas agreed (§ 5); the turn-based fight is under design.
 
 Sources:
 - a hands-on walk of the strategy view on `game.bnei.dev` (desktop, 1400 × 657, with a narrow window tried too) with the
@@ -133,10 +133,11 @@ Each persona is followed by what it wants, what stops it today, and the bridge b
 3. **One action, one path.** An order from explore and an errand from strategy reach the fleet through the same
    command (P2-7, P2-8).
 
-## 5. Open questions for the owner
+## 5. Owner answers (2026-11-23)
 
-1. **Order.** The proposal is one wide PR first: F1, F2, F10 to F14 and U1. The rest of the fixes follow in a second PR.
-   Then U2 to U6.
-2. **Personas.** Are P1 and P2 the only ones that matter now, or do P3 to P5 count yet?
-3. **Alerts as sieges.** Mobs you fight, or a calmer sign (smoke and a drooping banner only)?
-4. **F10.** Which building showed "unreadable"?
+1. **Order: agreed.** One wide PR first: F1, F2, F10 to F14 and U1. The rest of the fixes follow in a second PR, then
+   U2 to U6.
+2. **Personas: P1 (the owner) and P3 (the engineer friend) are essential.** P2, P4 and P5 wait.
+3. **Alerts are mobs you fight, turn by turn.** The LLM does the real work. Each turn the owner answers it, and the
+   exchange is the fight's transcript. This needs a deeper design talk of its own: § 6, to come.
+4. **F10:** the building that showed "unreadable" is still to be named.
