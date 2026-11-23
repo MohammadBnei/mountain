@@ -189,3 +189,14 @@ Decisions so far, in the order the owner took them:
    - When the owner and a friend disagree, ops-lead follows the owner and says so in the thread.
    - A friend sees the cards and their results, redacted. Raw tool output only when it is cleared for guests.
    - With the owner away, friends and agents scout and talk; every write card waits, and the siege goes on.
+7. **A fight starts when the owner engages; ops-lead scouts first** (2026-11-23).
+   - Only alerts routed to the owner (warning and critical, on a building in the world) spawn a monster. Info is a
+     critter that wanders near the building and is never fought. The monster's size follows severity.
+   - ops-lead, already the first responder, scouts from the moment the alert fires, so the transcript holds its first
+     reads and a guess at the cause when the owner arrives.
+   - The fight starts when the owner walks up to the monster or picks the siege card in Needs you. Until then the
+     monster besieges the building, with one gentle notice (a horn at the screen's edge).
+   - Alerts on one building are one pack, fought together. Sieges on several buildings are separate; the owner picks.
+     ops-lead scouts them all, within its spawn limits.
+   - An alert that resolves before the owner arrives: the monster leaves, and the transcript says it left before you
+     came. No loot, no fake win.
