@@ -1,187 +1,132 @@
 # 16. How a change is made: the ukubi dev rules
 
-`15-architecture.md` says what the code looks like. This file says how a change gets there. It is written from the
-standard's rollout (2026-10-27: mountain #49–55, ukubi-game #20–34, ukubi-kit #5–7), and each rule names the
-incident that taught it. Unqualified PR numbers below are the repo the bullet names; the rollout's game PRs were
-#21–#24 (config, the gate's upgrade check and session id, the error model, `internal/`), #25–#27 (the sim
-`Control`, `Forge` and need-source seams), #28–#30 (town.js into registries), #31–#32 (Bun, then TypeScript) and
-#33–#34 (the sim's fix, then its refactor).
+Status: current, 2026-11-23. Revision 2: rewritten from the 2026-10-27 original and the owner's later decisions
+(change-work shape, lean checks, test strategy, big PRs with clean commits). It is the single source of the change
+loop; the workspace `CLAUDE.md` and the Code Standard §2 point here, and the fleet's `change-loop` skill mirrors it for pods.
 
-It is for every agent working on our apps: a cloud or laptop session, or a fleet worker. ukubi-game's and
-ukubi-kit's CLAUDE.md carry a short "Making a change" section that points here. The fleet's `change-loop` skill
-carries the loop itself, because a fleet worker's context doesn't load this file (agent-fleet
-`packs/repo/skills/`, and `fleet-shared/skills/` until ADR-0063's migration removes it). This file is canonical;
-those are its condensed forms.
+`15-architecture.md` says what the code looks like. This file says how a change gets there. It is for every agent
+working on our apps: a laptop session, a cloud session or a fleet worker.
 
-## 1. The loop
-Every non-trivial change (any feature or refactor, or a fix that crosses a module, changes a wire format or claims
-"behaviour unchanged") goes through these steps in order. A step is skipped only on the owner's word.
+## 1. Pick the loop by size
 
-**Two tiers (owner, 2026-10-28).** The light loop is the owner's standing word to skip the doubt cycle and the
-proof-first step for the changes listed below, and the only such standing word; any other skip still needs it. The
-**full loop** below applies to security, auth, wire-format, data and schema changes, and to any "behaviour
-unchanged" claim. The **light loop** (plan, local checks, review) applies to CI, docs, pins, static content and an
-isolated single-module fix. The light loop drops steps 2 and 3 only: the build, the PR and the merge on the owner's
-word (steps 4, 7 and 8) still apply. A change that fits both lists (a workflow's `permissions:` or secrets, a pinned
-auth library) takes the full loop.
+| Change | Loop |
+|---|---|
+| One bug, a few files, docs, a pin, static content | **Light loop** (§2), inline, no workflow |
+| Several slices, many files, security, auth, wire format, data, schema, or a "behaviour unchanged" claim | **Full loop** (§3) |
 
-1. **A short plan.** What changes and what stays, each claim about today's code with its `file:line`, every test it
-   edits and every behaviour it changes (§2).
-2. **A doubt cycle.** A fresh agent is given the plan and the code (not your conclusions), read-only, and asked to
-   disprove the plan. It reports numbered findings, each with a severity, its evidence and a correction. Every
-   finding is taken or answered in the plan. A finding that touches an owner decision goes back to the owner.
-   *The owner rejected a plan that skipped it ("Did you do the mandatory doubt cycle?").*
-3. **The proof first, from the old code** (§3): the golden, harness or byte check is built and run on main before
-   the change is written.
-4. **The build,** in the PR shape the plan chose (§2, order and split).
-5. **Local checks:** the repo's own suites, its gates, and the proof run again: identical, or only the plan's listed
-   differences.
-6. **An independent review** of the diff (§4). Every finding is fixed, or answered with a reason in the PR.
-7. **The PR:** what changed, the proof and its result, every test edit and behaviour change named. Trailers per the
-   repo's attribution rule (its CLAUDE.md; mountain's is `00-decisions.md`: none at all).
-8. **The merge, on the owner's word.** A PR waits for it, unless the owner has told you to merge yourself; then it
-   merges after local verification and CI (§6 for a CI that is red for a reason outside the PR), and the branch is
-   re-synced (§6).
+The size decides the tool: a workflow is only for a large fan-out build. A change that fits both rows takes the full
+loop.
 
-**A change built by many agents (owner, 2026-10-29).** When a change is split across parallel agents, the loop
-above runs in this shape. "The workflow is mostly about parallel implementation": steps 1-3 stay in the main session,
-and steps 4-7 are the multi-agent workflow.
+## 2. Light loop
 
-1. **One holistic plan** for the whole change, not one plan per PR (step 1 above).
-2. **An architecture interview:** the owner answers the open decisions, one question at a time.
-3. **One doubt agent** over the whole plan (step 2 above).
-4. **Parallel builders** on disjoint files, plus a checks lane that proves each new check red before it is trusted.
-5. **One integration** of the builders' work.
-6. **Gates, then reviewers:** the full gates fan in once, then one reviewer per angle (correctness, security and so on).
-7. **A fix fan-out,** at most 2 rounds; then the mutation checks once and a final gate.
-8. **The PR** (step 7 above).
-9. **A fresh code review** of the PR diff. It is mandatory, by an agent that did not build the change.
-10. **The merge on green CI** (step 8 above).
+1. A short plan in your head or the PR: what changes, what stays, each claim about today's code checked.
+2. Edit, run the fast checks (typecheck, unit tests, `go test` on the touched packages), commit.
+3. Open the PR. A fresh review of its diff (§3 step 9). Merge on green CI (§4).
 
-Builders run only the fast suites. Browser gates, image builds and mutation checks run once per round, not per builder.
+No workflow, no doubt agent, no interview. Anything the owner will see or feel still gets a hands-on look first (§3
+step 9).
 
-## 2. Planning
-- **Check every fact against the code before writing it.** Plans have said tests swapped `liveEvery` (they only read
-  it; mountain #51), that atlas spoke Connect's error body (it has no Connect dependency), three@0.186.0 (vendored:
-  0.186.1; game #31), and "a status check" in a client that checks no HTTP status (plan/15 step 5's first doubt
-  cycle).
-- **"Behaviour unchanged" and "tests unedited" are claims to prove, not defaults.** List every test the change
-  edits, with what each edit touches. A refactor may edit a test's setup, package clauses, imports and renamed
-  identifiers, each listed in the PR; never an assertion (plan/15's "unedited" means this). If the design can't keep
-  a claim, change the design, or drop the claim and label the change. *Game #21–#24: TestGate couldn't move without
-  an import cycle, and registering a route only when it exists turned a 501 into a 405. Game #25's plan listed 6 test
-  edits; there were about 16.*
-- **Order is behaviour.** Registry order, map iteration, sort ties, log order within a tick and pass order are all
-  observable somewhere. *three r186 sorts draws by creation id (game #28–#30); the ladder names' order fed the
-  director's roll (game #34); errors printed per civ came out interleaved (kit #7).*
-- **Nil and empty differ on the wire.** A map or slice the old code always allocated stays allocated: `"apps":{}`
-  and `"apps":null` are different frames.
-- **Error text is behaviour** when something compares it: a log that prints only on change, a client that matches a
-  message, a test. Keep the strings, the wrapping and the decoder.
-- **Split and order the PRs.** A fix found during a refactor ships first, apart (game #33 before #34). A security
-  change ships early (game #22). Fix the CI a PR needs before the PR (mountain #50, when the runner was down). A big
-  change is split where each part can be proven alone (town.js in three PRs; Bun, then TypeScript).
-- **Find the consumers outside the repo.** A log format, a metric name, a label or a wire field may be read by
-  another repo, an alert or a dashboard. *Pushing logs over OTLP would have broken the Loki alerts that match on
-  Alloy's `namespace` label (plan/15's doubt cycle).*
-- **A fix covers every path to the state it guards.** List them before writing it. *A4's first sign-out fix closed
-  the open socket only; a socket down at the time, a page brought back with Back and a 403 at start reached the same
-  reload into the sign-in, found by two more reviews (mountain #61).*
-- **Owner decisions are not relitigated.** A plan that needs one changed asks the owner first.
+## 3. Full loop
 
-## 3. Proving a refactor
-- **The proof must reach the code being changed.** Before trusting a golden, check that it exercises the changed
-  path, and break the code on purpose to see it fail. *A frames check with no incident in it (game #25); a golden on
-  a fixture with no watch rows (mountain #52); a gate that checked 3 of 5 looks (game #28–#30); a sim golden that
-  never answered an incident (game #34).*
-- **Build the golden from the old code, and run it twice on main first.** A harness that differs from itself proves
-  nothing. Find the randomness and pin or mask it:
-  - map iteration (a fail-fast loop over a map: which query was asked first is random);
-  - wall-clock fields (pass a fixed `now`, mask what reads `time.Now()`);
-  - float sums over a map, which can move the last bits;
-  - fail one thing per case, so which failure was counted is not random.
-- **Drive the real path.** A golden through a fake skips the code being moved: go through the real client against a
-  local server. Record everything the path writes: the return, the state, every broadcast, the counters.
-- **Methods that worked** (each built for its change, not committed):
-  - **goldens** of a transform's output, compared byte for byte (atlas's projection; the sim's frames over 38 worlds,
-    seeds and intensities, plus the control status body);
-  - **mutation harnesses** for a build's refusals: each case breaks one input on a fresh copy and compares exit
-    codes and error classes, not message text (kit #7, 36 cases);
-  - **dist byte checks** under every engine and platform CI runs (Bun on Linux and macOS, Node);
-  - **test names before and after** (`go test -v`), plus `git diff -M` of moved tests showing only package clauses,
-    imports and renames (game #24–#27);
-  - **old and new binaries side by side** over every flag and env combination: same exit codes and messages
-    (game #21).
-- **Run a harness that starts servers alone.** Two at once collide on ephemeral ports and fail for no reason: the
-  game's integration test failed beside atlas's binary matrix and passed alone (A4).
-- **Every new test gets a mutation.** Disable the code it guards (`if false && bad` in Go, `if (false && bad)` in
-  JS), and check that the test fails for that reason. A mutation that breaks the build (an unused import) is a false
-  "caught".
-- **A test needs a positive control.** A gate test that only checks refusals passes on a gate that refuses
-  everything (game #22).
-- **Screenshots are not a check:** they aren't deterministic. Compare data (card dumps, a draw trace). And check that
-  the trace isn't empty: the WebGL trace was `{}` until the prototype was patched.
+Main thread:
 
-## 4. Review
-- **Independent, and given the code, not your conclusions.** The reviewer reads the diff and the code around it.
-  Findings come back verified, with the path from a real input to the failure.
-- **What reviews found after the tests were green:**
-  - **docs, comments and commit messages claiming more than the code does,** in most reviews. "1 in 400 vertices"
-    was 30 of 7,730 (kit #6). Re-read every sentence you wrote against the code;
-  - **error paths:** an early return that deleted dist and dropped the errors already found (kit #7); a 401 from a
-    service the game called that sent players into a sign-in loop (game #23);
-  - **unchecked input:** `[...refs]` on a string spread it into letters; a cell pattern accepted coordinates off
-    the grid (kit #7);
-  - **guards with holes:** the env ban, the key registry and the package-state check each missed a form (an alias,
-    a method helper, a write through `slices.Sort`). Write AST guards on `go/types`, and give each form a mutation;
-  - **a gap you dismissed:** deleting a call passed every test (mountain #52). "Unit tests cover it" is a claim to
-    check;
-  - **a fake of something we own** (game #25), which the rules forbid;
-  - **a build binary committed by mistake** (25 MB, mountain #51). Check `git status` before each commit.
+1. **Plan the whole batch holistically,** one plan, each claim about today's code with its `file:line`, every test it
+   edits and every behaviour it changes.
+2. **Interview the owner** on the open decisions, one question at a time. Owner decisions are settled here, never
+   mid-build, and never relitigated.
+3. **One fresh doubt agent** (read-only, not the plan's author) is given the plan and the code, not your conclusions,
+   and tries to disprove the plan. Every numbered finding is taken or answered in the plan.
 
-## 5. Engines and platforms
-- **A comparator that never returns 0 leaves ties in an engine-defined order.** gltf-transform's weight sort puts
-  the later slot first under V8 and the earlier under JavaScriptCore; a stable sort doesn't help. Do that step
-  yourself, in one written-down order (ukubi-kit #6).
-- **Math is the platform's.** Bun calls the host's libm, Node ships its own. Only quantization hides the
-  difference, so CI checks dist under each engine on Linux and macOS.
-- **Bun 1.4 (the bundler and the CLI):**
-  - `const`/`let` become `var` (TDZ errors disappear);
-  - tree-shaking shifts three.js object ids;
-  - `--chunk-naming '[name].[ext]'` fails the build when a chunk and an entry share a name (keep `[hash]`);
-  - hashed chunk names depend on the working directory;
-  - `bun build` doesn't clean its outdir;
-  - a stray `.js` beats its `.ts` when the import names `.js` (the TypeScript convention);
-  - `bun test tools` is a substring filter (write `./tools`);
-  - `bun add` writes `^` ranges (use `-E`).
+Workflow (only when the build fans out):
+
+4. **Build fan-out.** Parallel builders on disjoint files, in separate worktrees. Builders run fast
+   suites only. A separate checks lane writes the new checks and proves each red on the base; builders never write or
+   weaken their own checks.
+5. **Integrate once.** One agent merges the builders' work and regenerates generated output once.
+6. **Checks once, then reviewers per angle.** Run the repo's disaster net once on the integrated tip, then one
+   reviewer per angle (correctness, security, UI, over-engineering), never per slice.
+7. **Fix:** one separate fixer owns every finding, looks for the structural cause first, and works in one agent with no
+   nested agents or extra worktrees. At most 2 rounds, then back to the main thread. Review and fix stay separate.
+
+Main thread:
+
+8. **Open the PR,** one per repo per batch, with one Conventional Commit per concern, each revertable alone.
+9. **A fresh review of the PR diff,** by an agent that did not build the change; it reads the diff with the repo, not
+   a builder's report. Every finding is fixed or answered in the PR. For anything the owner will see or feel, look at
+   it yourself on the final commit.
+10. **Merge on green CI** with the Forgejo API (§4). Infra-bootstrap is merged by the owner.
+
+## 4. Checks, CI and merging
+
+- **Tests guard disasters only** (no crash, the page boots, the world builds valid, the sim is deterministic): the
+  whole net runs in under 60 s, in virtual time, and red means a real bug. No browser or GPU gate runs, no snapshot
+  goldens of the world. Feel and UI detail are the owner's playthrough.
+- **Builders run fast suites,** the full list runs once per round, mutations on new guards only. Check `uptime` before
+  a fan-out: the host is shared.
+- **Every new test gets a mutation:** disable the code it guards and see it fail for that reason. A test needs a
+  positive control (a gate that only checks refusals passes on one that refuses everything).
+- **CI** is Forgejo Actions; workflow files still live in `.github/workflows/`. PR checks run on `k8s-ubuntu-latest`
+  (Talos, ib:ADR-0089). A job that needs `services:`, `container:` or root runs on `ubuntu-latest` (LXC podman runners,
+  ib:ADR-0082), and image builds and deploys run on `ukubi-build` (the build-runner LXC). CI watch deadlines: see the
+  workspace `CLAUDE.md` portable rules; never wait on an image build.
+- **Merge:** `POST /repos/MohammadBnei/<repo>/pulls/<n>/merge` with `{"Do":"rebase"}`, pinning the PR's full 40-character
+  head sha (`head_commit_id`, never a short one), never an admin override. A rebase merge keeps each concern's
+  commit, so each stays revertable.
+- **Commits:** Conventional Commit subjects, no trailers, no AI attribution anywhere (the workspace
+  `CLAUDE.md` portable rules).
+- **A CI red for a reason outside the PR** (a runner down, an unset secret) is named in the PR and the PR is verified
+  locally instead.
+
+## 5. Planning traps
+
+- **Check every fact against the code before writing it.** Plans have named the wrong version, the wrong test and a
+  client that checks no HTTP status.
+- **"Behaviour unchanged" and "tests unedited" are claims to prove.** List every test edit; a refactor may edit a test's
+  setup, imports and renamed identifiers, never an assertion. If the design cannot keep the claim, change the design
+  or drop the claim.
+- **Order is behaviour:** registry order, map iteration, sort ties, log order and pass order are observable somewhere.
+  Nil and empty differ on the wire. Error text is behaviour when something compares it.
+- **Split and order the PRs:** a fix found during a refactor ships first, apart; a security change ships early.
+- **Find the consumers outside the repo:** a log format, a metric name or a wire field may be read by another repo, an
+  alert or a dashboard.
+- **A fix covers every path to the state it guards.** List them before writing it.
+- **Persisting bugs mean bad structure.** When a fix round stalls or one area keeps failing, name the duplicated owner
+  or path (two owners of one state, one input handled twice), consolidate it, and delete the duplicate. Do not patch row
+  by row.
+- **Find the root cause, not a cosmetic patch** (a feel bug is reproduced first, then fixed where the thing is made).
+
+## 6. Proving a refactor
+
+- **The proof must reach the code being changed.** Break the code on purpose to see the proof fail. Build a golden from
+  the old code and run it twice on main first: a harness that differs from itself proves nothing. Pin or mask
+  randomness (map iteration, wall-clock fields, float sums over a map).
+- **Drive the real path,** not a fake of something we own.
+- **Methods that worked:** byte goldens of a transform's output; mutation harnesses for a build's refusals (compare exit
+  codes and error classes, not text); dist byte checks under every engine CI runs; test names before and after with
+  `git diff -M` of moved tests; old and new binaries side by side.
+- **Run a harness that starts servers alone:** two at once collide on ephemeral ports.
+
+## 7. Review
+
+- Independent, and given the code, not your conclusions. Findings come back verified, with the path from a real input
+  to the failure.
+- Reviews keep finding: docs, comments and commit messages that claim more than the code does (re-read every sentence
+  against the code); error paths that drop earlier errors; unchecked input; guards with a hole (write AST guards on
+  `go/types`, one mutation per form); a gap dismissed as "covered by unit tests"; a binary committed by mistake (check
+  `git status` before each commit).
+
+## 8. Engines and tooling
+
+- **Math is the platform's:** Bun calls the host's libm, Node ships its own. A comparator that never returns 0 leaves
+  ties in an engine-defined order; sort in one written-down order.
+- **Bun 1.4:** `const`/`let` become `var`; tree-shaking shifts three.js object ids; `--chunk-naming '[name].[ext]'`
+  fails when a chunk and an entry share a name (keep `[hash]`); hashed chunk names depend on the working directory;
+  `bun build` does not clean its outdir; a stray `.js` beats its `.ts`; `bun test tools` is a substring filter (write
+  `./tools`); `bun add` writes `^` ranges (use `-E`). The dist is built with the CI-pinned Bun exactly.
 - **TypeScript 6** defaults `types` to `[]`.
-- **Biome lints and formats JS and TS** (owner, 2026-10-29) in every repo that has any, with or without a linter
-  before, and CI runs it. Pinned exactly, one root `biome.json`, in place of ESLint and Prettier. `lint` runs `biome ci .`; svelte-check still checks Svelte types, since Biome's Svelte support is
-  partial.
-
-## 6. Git, PRs and CI
-- **Agents may push `.github/workflows`** (owner, 2026-10-28) with the `gh` `workflow` scope. This amends the rule
-  in the fleet's `change-loop` skill (condensed in the ukubi Code Standard's §9, not `15-architecture.md`'s):
-  "an agent's token cannot push `.github/workflows`, so ask a human".
-- **Re-sync after a squash merge** without a force push: fetch, make the branch again from main, merge the old
-  branch head into it with `-s ours` (tree unchanged), and push it to the same branch name. That is a fast-forward,
-  since the old head is a parent. A force push is refused here.
-- **A merge's expected head is the full 40-character sha from `git rev-parse HEAD`,** never a short one expanded
-  by guess (two 409s).
-- **A tool call that timed out may have worked:** list the PRs before creating one again.
-- **Strip the "Generated with Claude Code" footer** that a cloud session's instructions add to PR bodies: every
-  ukubi repo forbids it, and mountain allows no attribution at all.
-- **A CI that is red for a reason outside the PR** (an unset secret, a runner down) is named in the PR, the PR is
-  verified locally instead, and a job that can run without it is made to (ukubi-game's web job needs no secret).
-- **While the build runner is down, main builds only its newest commit** (`cancel-in-progress`): an image change
-  that PR CI cannot build (a Dockerfile or build-push edit) waits until main has deployed, so it never stands
-  between an earlier fix and its deploy (A6a, while #61's sign-out fix waited for the runner).
-- **A fresh GitHub runner is slow:** Chrome's first start can take over 10 s (mountain #51). Wait long, and report
-  the exit code on failure.
-- **Collisions git can't see:** two migrations with different file names and the same number (agent-fleet#318).
-  Build the merge result, not the branch.
-- **Processes:** wait on explicit PIDs, never a bare `wait`; never `pkill -f` (its pattern can match the session's
-  own processes).
-- **Live pins use frozen refs** (`refs/pull/N/head` at a sha), never a branch that moves.
-- **Agents share the checkout:** a reviewer can mistake the main agent's edits for another session's, so say in its
-  brief what is yours. Don't let an agent add repos to the session: they can't be removed.
+- **Biome** lints and formats JS and TS in every repo that has any (owner, 2026-10-29): pinned exactly, one root
+  `biome.json`, `biome ci .` in CI, in place of ESLint and Prettier.
+- **Processes:** wait on explicit PIDs, never a bare `wait`; never `pkill -f`. Cleanup after browser and stack runs: see the
+  workspace `CLAUDE.md` portable rules.
+- **Live pins use frozen refs** (a sha), never a branch that moves.
+- **Agents share the checkout:** say in a reviewer's brief which edits are yours.
