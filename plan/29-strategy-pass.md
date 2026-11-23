@@ -182,3 +182,10 @@ Decisions so far, in the order the owner took them:
      discussion as the owner, each line marked with its speaker.
    - The party is the humans plus the agents. ops-lead is an ally, and every worker it spawns appears as an ally too:
      it arrives when its run starts and leaves when the run ends.
+6. **Only the owner approves a write** (2026-11-23).
+   - The approve button on a write card is the owner's alone, as agent-fleet's audience rule (`platform-admins`) has it.
+   - A friend's line steers and never decides. ops-lead reads it as input, may run any read a friend asks for, and
+     turns any write a friend suggests into a card for the owner.
+   - When the owner and a friend disagree, ops-lead follows the owner and says so in the thread.
+   - A friend sees the cards and their results, redacted. Raw tool output only when it is cleared for guests.
+   - With the owner away, friends and agents scout and talk; every write card waits, and the siege goes on.
