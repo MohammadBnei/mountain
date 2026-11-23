@@ -1,0 +1,142 @@
+# 29 · Strategy pass: fixes, upgrades, and where fun meets work
+
+Status: draft, 2026-11-23. Not approved. Open questions are in § 5.
+
+Sources:
+- a hands-on walk of the strategy view on `game.bnei.dev` (desktop, 1400 × 657, with a narrow window tried too) with the
+  owner, 2026-11-23, at ukubi-game main `28388035`;
+- the owner's own findings during the walk: logs that say "unreadable", the ugly selected row in the left zone, and a
+  chip clicked in the world that does not select its row;
+- plan/25 ui-core (the strategy zones, hud-build H3, round-4-hud H-5 to H-14), the `game-fleet-integration-intent`
+  decisions (P2-4 to P2-9), and plan/19 (the storyboard: "work can be played").
+
+Paths are under `ukubi-game/cmd/game/websrc` unless stated.
+
+## 1. What works today
+
+- Picking a row in the left zone sets the subject, opens its default face, flies the map there and highlights the row.
+  A village's buildings open under it.
+- Metrics for apps and repos: requests, 5xx, p95 latency and pods, over 15 min, 1 h and 24 h, as a chart or a
+  sparkline.
+- Logs, with a level filter, a search, Tail and "Open in Grafana". Spans are listed.
+- ops-lead's Thread renders Markdown well. Its actions are Talk, Ask about, Inspect run, Start and Stop.
+
+## 2. Fixes
+
+### Selection and the left zone
+
+| # | What | Seen | Where to look |
+|---|---|---|---|
+| F1 | A chip clicked in the world does not select or reveal its row. The right zone follows, but the left zone stays on the last village, with nothing highlighted. Picking from the list works, so only world → list is missing. | vos-monolith, picked from the map | `ui-strategy.tsx` `slotActs.current`; the scene's pick → store `subject` path |
+| F2 | The selected row is drawn as a smaller outlined box inside the row's own outline: a double border. Villages have no expand chevron; their buildings are only indented. | every row | `hud-data.css`, `cockpit.css` |
+| F3 | A building label clicked on the map once dropped the view from strategy to explore. It was seen once and is not yet reproduced. | Postgres label | the label's pointer handler against the mode toggle |
+| F4 | Search: Enter does not pick a single match. Results do not name their village. A repo and an app with the same name look like duplicates (`ukubi-game`, `dream-analyst`). | `ukubi-game`, `agent-fleet-core` | `ui-strategy.tsx` find |
+| F5 | The whole left zone scrolls, so the header and the search scroll away. Pin them and scroll only the list. | Default village open | `hud-data.css` |
+
+### Camera and map
+
+| # | What | Seen |
+|---|---|---|
+| F6 | Underside does not turn off: with the lens button released, the camera stays under the disc. | Underside → watch |
+| F7 | The next pick after Underside put the camera inside the terrain. | Code → agent-fleet |
+| F8 | Picking a character (ops-lead) does not move the map. | Council → ops-lead |
+| F9 | Labels collide. District names sit under the zones ("Operations"). Chips cover a resident's speech bubble. The lens legend covers chips (Library). "Platform" is clipped at the top edge. | Capital, Apps |
+
+### Faces: data shown wrong
+
+| # | What | Where to look |
+|---|---|---|
+| F10 | "unreadable" hides the cause. `failed()` maps every Connect code except Unauthenticated and InvalidArgument to one word. Show the code and the message, and log them. The building where the owner saw it is still to be named. | `ui-telemetry.ts:111-118` |
+| F11 | An empty window says "No line matches." even with no search typed. Say "no lines in the last 15 min" (the window), and keep "No line matches" for a search. | Logs face |
+| F12 | Logs show raw JSON lines. Parse a JSON line: show `msg`, colour the level, and fold the rest of the fields behind a toggle. | Logs face |
+| F13 | Spans are mostly the game's own polling (`/api/state`, `/api/town/live`, `/api/town/card`, `GET /`). The telemetry Watch stream shows as a 15,014 ms span. Hide our own polling by default and mark streams as streams. | Spans face |
+| F14 | ops-lead's Thread shows about 20 empty "SYSTEM / system" rows, "TOOL / result" rows and raw tool-call JSON. Drop empty system rows, and fold tool calls into one line each ("Grep `spawns` in definitions") that opens to show the call. | `ui-thread.tsx` |
+| F15 | Threads are named by their first message cut off mid-word ("…and delete the co"). Give a thread a short title. | thread switcher |
+| F16 | mountain shows "–" for requests, 5xx and p95 while it has 1 pod. Say why (no ingress, so no request metrics), not a dash. | Metrics face |
+
+### Noise and stale data
+
+| # | What |
+|---|---|
+| F17 | "Playing solo: you joined the world from another tab" sits under the zone chips. |
+| F18 | The voice-chat mic prompt opened in the middle of the walk, on an unrelated click. Ask once, at a calm moment, not over strategy. |
+| F19 | A narrow desktop window overlaps the zones. The phone form only comes with touch. Below a width, use the phone's one-zone layout. |
+| F20 | `platform-thot` still has a building. thot is retired. |
+| F21 | The village "Default" holds the Capital's buildings. Name it. |
+
+## 3. Upgrades
+
+| # | What |
+|---|---|
+| U1 | **A village face.** Today every village says "no telemetry here". Show a roll-up: buildings, healthy, degraded, down, unknown, the worst building, open alerts, and the residents at work. The cluster face's four tiles are the model. |
+| U2 | **Coverage.** The cluster shows 7 healthy and 44 unknown. Make unknown visible on the map (fog), and list what each unknown building lacks: a probe, a rule, metrics. |
+| U3 | **Telemetry for data stores.** pg-proxmox says "no telemetry for a db". Cover Postgres, Redis and Garage (exporters exist upstream). |
+| U4 | **Parity with explore's Details.** Explore's building Details has "Attacks and risk", "Parts · N not measured" and Inspect per component. Strategy's right zone has none of it. Bring it in as a face, under the I1 parity rule. |
+| U5 | **Lenses.** Let lenses stack (supply over watch). Draw supply for the selected building only, with each line ending visibly at a building. Give walls and land a visible effect at strategy zoom. Make each legend a key of colours, with the prose on hover. |
+| U6 | **Needs you and the Council.** Both were empty on the walk (only ops-lead sits on the Council), so neither has been exercised. Seed a sim scenario that fills them and walk it. |
+
+## 4. Personas: where fun meets work
+
+Each persona is followed by what it wants, what stops it today, and the bridge between play and the real system.
+
+### P1. The owner, in the evening
+
+- **Wants:** to know in 30 seconds whether anything is wrong, then to play or to fix.
+- **Stopped by:** "nothing needs you" next to 44 unknown, which says neither calm nor alarm. The way in is a menu, not the
+  world.
+- **Bridge:**
+  - **The world shows health directly.** A sick building smokes and its banner droops. Mobs gather at a blind tower.
+    The owner sees it while playing.
+  - **The Capital's resident gives a three-line evening brief on arrival:** what moved, and what needs you.
+  - **A fix is a quest.** An errand ordered from a resident is a worker run, shown as builders walking to the building.
+    A merged PR repairs the building.
+
+### P2. The on-call owner, at 2 a.m.
+
+- **Wants:** the shortest road from an alert to its cause.
+- **Stopped by:** F12 to F14, and no link from an alert to its building.
+- **Bridge:**
+  - **An alert is a siege on its building**, and its card waits in Needs you.
+  - **Arriving opens the right face:** Logs filtered to errors, and ops-lead's diagnosis already in the Thread.
+  - **The siege lasts exactly as long as the incident.** No win in the game while production is still broken.
+
+### P3. A friend who is an engineer (a village guest)
+
+- **Wants:** to see what was built, and to help a little.
+- **Bridge:**
+  - **Read-only lenses in the public world:** the supply roads show the real architecture.
+  - **Adopt a building:** follow one repo's village; its resident tells you about the open issues; your merged PR counts
+    as a quest done.
+- **Guard:** no internal logs or metrics reach guests. The public pod keeps serving the snapshot only.
+
+### P4. A visitor (public, not technical)
+
+- **Wants:** a pretty world, and the feeling that it is real.
+- **Bridge:**
+  - **Real events, no details.** A deploy rings the bell and raises a crane. Traffic is walkers on the roads. A quiet
+    night looks quiet.
+  - **The builder-yard quest (plan/19)** says what each building does.
+
+### P5. The phone player
+
+- **Wants:** a two-minute check-in from the couch.
+- **Bridge:**
+  - **Strategy on the phone is one zone at a time**, so open on Needs you.
+  - **A decision is a card**, swiped to approve or reject, with the resident's face on it.
+  - **A daily "kept town":** 24 h with no unknown building. It rewards adding monitoring, not tapping.
+
+### Rules across all five
+
+1. **Rewards follow real outcomes only:** a resolved alert, a merged PR, a building that gains coverage. Never time spent
+   in the game. This is the director's rule (it bends pacing, never rewards), applied to the owner's world.
+2. **Unknown is not healthy.** Unknown is fog, so making the system observable is exploring.
+3. **One action, one path.** An order from explore and an errand from strategy reach the fleet through the same
+   command (P2-7, P2-8).
+
+## 5. Open questions for the owner
+
+1. **Order.** The proposal is one wide PR first: F1, F2, F10 to F14 and U1. The rest of the fixes follow in a second PR.
+   Then U2 to U6.
+2. **Personas.** Are P1 and P2 the only ones that matter now, or do P3 to P5 count yet?
+3. **Alerts as sieges.** Mobs you fight, or a calmer sign (smoke and a drooping banner only)?
+4. **F10.** Which building showed "unreadable"?
