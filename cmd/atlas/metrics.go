@@ -31,9 +31,10 @@ const (
 	labelSource = "source"
 	labelQuery  = "query"
 	labelKind   = "kind"
+	labelType   = "type"
 )
 
-// Metrics is atlas's seven series: five gauges, one counter and one histogram.
+// Metrics is atlas's eleven series: seven gauges, three counters and one histogram.
 type Metrics struct {
 	provider *sdkmetric.MeterProvider
 	handler  http.Handler
@@ -44,6 +45,10 @@ type Metrics struct {
 	projectionSeq     metric.Float64Gauge
 	drift             metric.Float64Gauge
 	readSeconds       metric.Float64Histogram
+
+	worldEnabled, worldOldest metric.Float64Gauge
+	worldPublished            metric.Float64Counter
+	worldRefused              metric.Float64Counter
 }
 
 // series is one metric: its name, HELP text and the one label key it may carry ("" = none). The views pin the label
@@ -56,12 +61,16 @@ type series struct{ name, help, label string }
 func newMetrics() (*Metrics, error) {
 	// No token-expiry gauge: mountain_github_token_days_left went with the GitHub poll (P4.5). A Forgejo access token
 	// has no expiry (Forgejo 15's AccessToken carries none), so a dead token shows only as forge's last success ageing.
-	sSourceLastSuccess := series{"mountain_source_last_success", "Unix time of the last success per source (prom, alerts, forge, projection, db, bridge-tags); seeded at start.", labelSource}
+	sSourceLastSuccess := series{"mountain_source_last_success", "Unix time of the last success per source (prom, alerts, forge, projection, db, bridge-tags, bridge-apps, world); seeded at start.", labelSource}
 	sWSConnections := series{"mountain_ws_connections", "Open /ws connections.", ""}
 	sQueryFailed := series{"mountain_query_failed_total", "Failed PromQL queries (the poll keeps its last answer and goes stale).", labelQuery}
 	sProjectionSeq := series{"mountain_projection_seq", "The latest projection's sequence number.", ""}
 	sDrift := series{"mountain_drift", "Drift in the latest projection, by kind (unassigned = a component realms.yaml does not place).", labelKind}
 	sReadSeconds := series{"mountain_telemetry_read_seconds", "Seconds one telemetry face read took, by source (prom, loki, tempo), failed and timed-out reads included.", labelSource}
+	sWorldEnabled := series{"mountain_world_enabled", "1 when world events are published (a database and the bridge are configured), else 0.", ""}
+	sWorldOldest := series{"mountain_world_outbox_oldest_seconds", "Age of the oldest world event still in the outbox, 0 when it is empty.", ""}
+	sWorldPublished := series{"mountain_world_events_published_total", "World events the bridge took (duplicates not counted), by type.", labelType}
+	sWorldRefused := series{"mountain_world_events_refused_total", "World events the bridge refused for good (InvalidArgument) and atlas parked.", ""}
 	reg := prometheus.NewRegistry()
 	exp, err := otelprom.New(
 		otelprom.WithRegisterer(reg),
@@ -72,7 +81,7 @@ func newMetrics() (*Metrics, error) {
 		return nil, err
 	}
 	var views []sdkmetric.View
-	for _, s := range []series{sSourceLastSuccess, sWSConnections, sQueryFailed, sProjectionSeq, sDrift} {
+	for _, s := range []series{sSourceLastSuccess, sWSConnections, sQueryFailed, sProjectionSeq, sDrift, sWorldEnabled, sWorldOldest, sWorldPublished, sWorldRefused} {
 		views = append(views, labelView(s))
 	}
 	// seconds, around the spike's 25-90 ms reads and the 1.5 s budget
@@ -87,6 +96,13 @@ func newMetrics() (*Metrics, error) {
 		return g
 	}
 	m.sourceLastSuccess, m.projectionSeq, m.drift = gauge(sSourceLastSuccess), gauge(sProjectionSeq), gauge(sDrift)
+	m.worldEnabled, m.worldOldest = gauge(sWorldEnabled), gauge(sWorldOldest)
+	counter := func(s series) metric.Float64Counter {
+		c, e := meter.Float64Counter(s.name, metric.WithDescription(s.help))
+		errs = append(errs, e)
+		return c
+	}
+	m.worldPublished, m.worldRefused = counter(sWorldPublished), counter(sWorldRefused)
 	var e1, e2, e3 error
 	m.wsConnections, e1 = meter.Float64UpDownCounter(sWSConnections.name, metric.WithDescription(sWSConnections.help))
 	m.queryFailed, e2 = meter.Float64Counter(sQueryFailed.name, metric.WithDescription(sQueryFailed.help))
@@ -165,5 +181,37 @@ func (m *Metrics) DriftCount(kind string, n float64) {
 func (m *Metrics) ReadDuration(source string, secs float64) {
 	if m != nil {
 		m.readSeconds.Record(context.Background(), secs, metric.WithAttributes(attribute.String(labelSource, source)))
+	}
+}
+
+// WorldEnabled records whether world events are published.
+func (m *Metrics) WorldEnabled(on bool) {
+	if m != nil {
+		v := 0.0
+		if on {
+			v = 1
+		}
+		m.worldEnabled.Record(context.Background(), v)
+	}
+}
+
+// WorldOutboxOldest records the age in seconds of the oldest event in the outbox.
+func (m *Metrics) WorldOutboxOldest(secs float64) {
+	if m != nil {
+		m.worldOldest.Record(context.Background(), secs)
+	}
+}
+
+// WorldPublished counts one world event of typ the bridge took.
+func (m *Metrics) WorldPublished(typ string) {
+	if m != nil {
+		m.worldPublished.Add(context.Background(), 1, metric.WithAttributes(attribute.String(labelType, typ)))
+	}
+}
+
+// WorldRefused counts one world event the bridge refused for good.
+func (m *Metrics) WorldRefused() {
+	if m != nil {
+		m.worldRefused.Add(context.Background(), 1)
 	}
 }

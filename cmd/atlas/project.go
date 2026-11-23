@@ -183,6 +183,10 @@ func (a *App) projectOnce(ctx context.Context, src heads, c *roundCache) error {
 		slog.Info(fmt.Sprintf("projector: projection %d: %d repos, %d nodes, %d edges, %d drift", seq, len(repos), len(res.Graph.Nodes), len(res.Graph.Edges), len(res.Graph.Drift)))
 		a.Hub.Broadcast(mustJSON(map[string]any{"t": "graph", "seq": seq}))
 		a.Live.event("graph", "", fmt.Sprintf("projection %d", seq))
+		select {
+		case a.worldKick <- struct{}{}:
+		default:
+		}
 	}
 	return nil
 }

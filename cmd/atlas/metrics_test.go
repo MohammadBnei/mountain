@@ -21,11 +21,17 @@ func scrape(t *testing.T, m *Metrics) (int, string, string) {
 	return w.Code, w.Header().Get("Content-Type"), string(b)
 }
 
+// the four world series, in the exposition's order (by name)
+const helpWorld = "# HELP mountain_world_enabled 1 when world events are published (a database and the bridge are configured), else 0.\n# TYPE mountain_world_enabled gauge\nmountain_world_enabled 1\n" +
+	"# HELP mountain_world_events_published_total World events the bridge took (duplicates not counted), by type.\n# TYPE mountain_world_events_published_total counter\nmountain_world_events_published_total{type=\"dev.bnei.world.entity.created\"} 2\n" +
+	"# HELP mountain_world_events_refused_total World events the bridge refused for good (InvalidArgument) and atlas parked.\n# TYPE mountain_world_events_refused_total counter\nmountain_world_events_refused_total 1\n" +
+	"# HELP mountain_world_outbox_oldest_seconds Age of the oldest world event still in the outbox, 0 when it is empty.\n# TYPE mountain_world_outbox_oldest_seconds gauge\nmountain_world_outbox_oldest_seconds 12.5\n"
+
 const (
 	helpDrift = "# HELP mountain_drift Drift in the latest projection, by kind (unassigned = a component realms.yaml does not place).\n# TYPE mountain_drift gauge\n"
 	helpSeq   = "# HELP mountain_projection_seq The latest projection's sequence number.\n# TYPE mountain_projection_seq gauge\n"
 	helpQuery = "# HELP mountain_query_failed_total Failed PromQL queries (the poll keeps its last answer and goes stale).\n# TYPE mountain_query_failed_total counter\n"
-	helpSrc   = "# HELP mountain_source_last_success Unix time of the last success per source (prom, alerts, forge, projection, db, bridge-tags); seeded at start.\n# TYPE mountain_source_last_success gauge\n"
+	helpSrc   = "# HELP mountain_source_last_success Unix time of the last success per source (prom, alerts, forge, projection, db, bridge-tags, bridge-apps, world); seeded at start.\n# TYPE mountain_source_last_success gauge\n"
 	helpWS    = "# HELP mountain_ws_connections Open /ws connections.\n# TYPE mountain_ws_connections gauge\n"
 )
 
@@ -56,12 +62,18 @@ func TestMetricsExposition(t *testing.T) {
 	m.QueryFailure("info")
 	m.QueryFailure("pods")
 	m.ProjectionSeq(7)
+	m.WorldEnabled(true)
+	m.WorldOutboxOldest(12.5)
+	m.WorldPublished("dev.bnei.world.entity.created")
+	m.WorldPublished("dev.bnei.world.entity.created")
+	m.WorldRefused()
 	m.DriftCount("unresolved", 106)
 	m.DriftCount("mirror", 0)
 	want := helpDrift + "mountain_drift{kind=\"mirror\"} 0\nmountain_drift{kind=\"unresolved\"} 106\n" +
 		helpSeq + "mountain_projection_seq 7\n" +
 		helpQuery + "mountain_query_failed_total{query=\"info\"} 2\nmountain_query_failed_total{query=\"pods\"} 1\n" +
 		helpSrc + "mountain_source_last_success{source=\"db\"} 1.761650001e+09\nmountain_source_last_success{source=\"prom\"} 1.76165e+09\n" +
+		helpWorld +
 		helpWS + "mountain_ws_connections 1\n"
 	if _, _, body := scrape(t, m); body != want {
 		t.Errorf("the exposition:\n got %q\nwant %q", body, want)
@@ -114,6 +126,10 @@ func TestMetricsNil(t *testing.T) {
 	m.QueryFailure("x")
 	m.ProjectionSeq(1)
 	m.DriftCount("mirror", 1)
+	m.WorldEnabled(true)
+	m.WorldOutboxOldest(1)
+	m.WorldPublished("t")
+	m.WorldRefused()
 	if err := m.Close(); err != nil {
 		t.Error(err)
 	}

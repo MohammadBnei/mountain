@@ -488,3 +488,23 @@ func TestStartTagsOffSeeds(t *testing.T) {
 		}
 	}
 }
+
+// TestHintsOfWorld: atlas's own world events say which app they are about through their subject; the source is the
+// bridge's, so the same subject from any other source says nothing, and a node that is not an app has no hint.
+func TestHintsOfWorld(t *testing.T) {
+	for _, c := range []struct {
+		ev   bridgeEvent
+		want realms.Hints
+	}{
+		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.world.entity.created", Subject: "world/app:hq"}, realms.Hints{App: "hq"}},
+		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.world.bond.added", Subject: "world/app:hq"}, realms.Hints{App: "hq"}},
+		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.world.entity.created", Subject: "world/node:k8s-worker-02"}, realms.Hints{}},
+		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.world.history.rebased", Subject: "world/"}, realms.Hints{}},
+		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.other", Subject: "world/app:hq"}, realms.Hints{}},
+		{bridgeEvent{Source: "client/bridge-core", Type: "dev.bnei.world.entity.created", Subject: "world/app:hq"}, realms.Hints{}},
+	} {
+		if got := hintsOf(c.ev); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%+v: %+v, want %+v", c.ev, got, c.want)
+		}
+	}
+}

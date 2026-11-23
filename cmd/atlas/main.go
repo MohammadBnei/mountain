@@ -53,7 +53,10 @@
 //
 // Read side only: atlas never writes a repo or a live store (CQRS, plan/10), but for the System tags it attaches to the
 // bridge's events (tags.go, conception-2026-11-21 §16 decision 6). Only an applied tag may route a wake, and the
-// bridge, not atlas, enforces it: atlas writes every tag with its resolution.
+// bridge, not atlas, enforces it: atlas writes every tag with its resolution. The other write is the world's events
+// (world.go): each projection's births, bonds and retirements go to the bridge's log (dev.bnei.world.*) through an
+// outbox in atlas's database, with the same bridge and sign-in as the tags; no database or no bridge = no events
+// (mountain_world_enabled 0).
 package main
 
 import (
@@ -82,6 +85,7 @@ import (
 
 	"github.com/MohammadBnei/mountain"
 	"github.com/MohammadBnei/mountain/api/telemetry/v1/telemetryv1connect"
+	"github.com/MohammadBnei/mountain/internal/bridgev1"
 	"github.com/MohammadBnei/mountain/internal/extract"
 	"github.com/MohammadBnei/mountain/realms"
 	"github.com/MohammadBnei/ukubi-go/telemetry"
@@ -140,12 +144,13 @@ type App struct {
 	reads     *readCache        // rendered documents (read.go)
 	trees     *readCache        // /api/tree answers (tree.go)
 	readSlots chan struct{}     // at most two renders at once (read.go)
+	worldKick chan struct{}     // a projection wrote world events: drain now (world.go)
 }
 
 // newApp builds what the App owns, for serve and the tests alike; the caller starts the projector and the polls.
 func newApp(o Opts, rl *realms.Realms, www fs.FS, g *gate, gr *Graphs, met *Metrics) *App {
 	a := &App{Opts: o, Realms: rl, Build: buildID(www), Graph: gr, Files: &repoSet{}, gate: g, unread: map[string]string{},
-		reads: newReadCache(64), trees: newReadCache(8), readSlots: make(chan struct{}, 2), Met: met}
+		reads: newReadCache(64), trees: newReadCache(8), readSlots: make(chan struct{}, 2), worldKick: make(chan struct{}, 1), Met: met}
 	a.Hub = NewHub(o.Dev, a.hello, met)
 	a.Live = newLive(rl, a.Hub, met)
 	a.Live.idx = func() *GraphIndex { return a.Graph.index() }
@@ -219,6 +224,12 @@ func run(ctx context.Context, c Config) error {
 	}
 
 	startTags(ctx, c.Tags, rl, a.Met)
+	a.Met.SourceOK(worldSource, float64(time.Now().Unix())) // seeded, as the tags': a flow that is off or never answered ages into MountainSourceStale
+	var publish func(context.Context, *bridgev1.CloudEvent) (bool, error)
+	if tc, on := tagsFrom(c.Tags); on { // the same bridge and sign-in as the tag loop, built on its own: neither waits for the other
+		publish = newBridgeClient(tc).publish
+	}
+	go runWorld(ctx, a.Graph.db, publish, a.Met, a.worldKick)
 
 	pub := &http.Server{Addr: o.Listen, Handler: routes(a, www), ReadHeaderTimeout: 10 * time.Second, ErrorLog: serverLog()}
 	mx := http.NewServeMux()

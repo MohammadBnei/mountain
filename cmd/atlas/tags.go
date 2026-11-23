@@ -48,6 +48,7 @@ import (
 // from a signed webhook or the relist loop's own reads.
 const (
 	kwatchSource  = "client/bridge-kwatch" // ukubi-bridge cmd/kwatch: deploy.* (refs.app) and k8s.warning (refs.kind, …)
+	atlasSource   = "client/bridge-atlas"  // atlas's own world events (world.go): the subject says what they are about
 	forgejoSource = "git.bnei.dev/"        // ukubi-bridge internal/forgejo: dev.bnei.forge.*
 )
 
@@ -55,7 +56,8 @@ const (
 //   - kwatch's deploy.*: refs.app, the Application (its name, or <namespace>/<name> outside argocd);
 //   - kwatch's k8s.warning: refs' object, a chain of one. Anyone who may create an Event in a namespace can name any
 //     object in it, and kwatch sends no tracking id, so a warning never reaches applied: placement at most;
-//   - Forgejo's forge.*: the repo, which is the event's source itself.
+//   - Forgejo's forge.*: the repo, which is the event's source itself;
+//   - atlas's world.*: an app:<name> subject (world/app:<name>) is that app; any other node says nothing.
 func hintsOf(ev bridgeEvent) realms.Hints {
 	var d struct {
 		Refs struct {
@@ -83,6 +85,11 @@ func hintsOf(ev bridgeEvent) realms.Hints {
 			g = ""
 		}
 		return realms.Hints{OwnerChain: []realms.Ref{{Group: g, Kind: d.Refs.Kind, Namespace: d.Refs.Namespace, Name: d.Refs.Name}}}
+	case ev.Source == atlasSource && strings.HasPrefix(ev.Type, "dev.bnei.world."):
+		// the bridge sets the source, so nobody else can send as atlas
+		if name, ok := strings.CutPrefix(ev.Subject, "world/app:"); ok && name != "" {
+			return realms.Hints{App: name}
+		}
 	case strings.HasPrefix(ev.Source, forgejoSource) && strings.HasPrefix(ev.Type, "dev.bnei.forge."):
 		return realms.Hints{Repo: ev.Source}
 	}
@@ -92,10 +99,10 @@ func hintsOf(ev bridgeEvent) realms.Hints {
 // bridgeEvent is what the tag loop reads of a bridge.v1.SubscribeResponse: an event's log position, source, type and
 // JSON data, or a gap's version (GapVersion != 0, no event).
 type bridgeEvent struct {
-	Seq          int64
-	Source, Type string
-	Data         []byte
-	GapVersion   int64
+	Seq                   int64
+	Source, Type, Subject string
+	Data                  []byte
+	GapVersion            int64
 }
 
 // eventTag is a bridge.v1.EventTag: one System an event resolved to.
@@ -476,7 +483,7 @@ func (s *bridgeStream) Next(context.Context) (bridgeEvent, error) {
 	}
 	m := s.s.Msg()
 	if e := m.GetEvent(); e != nil {
-		return bridgeEvent{Seq: e.GetSeq(), Source: e.GetSource(), Type: e.GetType(), Data: e.GetData()}, nil
+		return bridgeEvent{Seq: e.GetSeq(), Source: e.GetSource(), Type: e.GetType(), Subject: e.GetSubject(), Data: e.GetData()}, nil
 	}
 	if v := m.GetGap().GetVersion(); v != 0 {
 		return bridgeEvent{GapVersion: v}, nil
@@ -510,6 +517,21 @@ func (s *bridgeStream) Tag(ctx context.Context, tags []eventTag) error {
 		m.Tags = append(m.Tags, &bridgev1.EventTag{Seq: t.Seq, System: t.System, Resolution: t.Resolution, RegistryVersion: t.RegistryVersion})
 	}
 	return call(ctx, s.b, s.b.api.Tag, m)
+}
+
+// publish sends ev (its source is the bridge's to set) and says whether the bridge already had it.
+func (b *bridgeClient) publish(ctx context.Context, ev *bridgev1.CloudEvent) (bool, error) {
+	r, err := bearer(b, &bridgev1.PublishRequest{Event: ev})
+	if err != nil {
+		return false, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	resp, err := b.api.Publish(ctx, r)
+	if err != nil {
+		return false, b.seen(err)
+	}
+	return resp.Msg.GetDuplicate(), nil
 }
 
 func (s *bridgeStream) Close() error { return s.s.Close() }

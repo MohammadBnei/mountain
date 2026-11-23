@@ -100,7 +100,7 @@ func TestDBMigrate(t *testing.T) {
 	if c := rows(t, pool, "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('events', 'marks', 'schema_migrations')"); c != 0 {
 		t.Errorf("%d town tables left", c)
 	}
-	if c := rows(t, pool, "SELECT count(*) FROM atlas_migrations"); c != 1 {
+	if c := rows(t, pool, "SELECT count(*) FROM atlas_migrations"); c != 2 {
 		t.Errorf("atlas_migrations: %d", c)
 	}
 	if c := rows(t, pool, "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'atlas_projection' AND column_name = 'tracked'"); c != 1 {

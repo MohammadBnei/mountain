@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"path"
@@ -127,6 +128,7 @@ func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, r
 		var last int64
 		var lastDrift, lastVersions []byte
 		lastVector := map[string]string{}
+		cause := "fresh" // why the world events are a rebase and not a diff (world.go); "" = a diff
 		if err := tx.QueryRow(ctx, "SELECT p.seq, p.extractors, d.body FROM atlas_projection p JOIN atlas_drift d USING (seq) ORDER BY p.seq DESC LIMIT 1").Scan(&last, &lastVersions, &lastDrift); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
@@ -148,10 +150,19 @@ func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, r
 				seq = last
 				return nil
 			}
+			switch {
+			case !jsonEqual(lastVersions, mustJSON(res.Versions)):
+				cause = "extractor"
+			case !maps.EqualFunc(lastVector, vector, func(string, string) bool { return true }):
+				cause = "sources" // a repo added or dropped: the keys differ, a moved sha does not count
+			default:
+				cause = ""
+			}
 		}
 		changed = true
-		if err := tx.QueryRow(ctx, "INSERT INTO atlas_projection (extractors, tracked, skipped) VALUES ($1, $2, $3) RETURNING seq",
-			mustJSON(res.Versions), mustJSON(res.Tracked), mustJSON(nonNil(res.Skipped))).Scan(&seq); err != nil {
+		var at time.Time
+		if err := tx.QueryRow(ctx, "INSERT INTO atlas_projection (extractors, tracked, skipped) VALUES ($1, $2, $3) RETURNING seq, at",
+			mustJSON(res.Versions), mustJSON(res.Tracked), mustJSON(nonNil(res.Skipped))).Scan(&seq, &at); err != nil {
 			return err
 		}
 		for name, r := range repos {
@@ -175,7 +186,10 @@ func projectGraph(ctx context.Context, pool *pgxpool.Pool, res extract.Result, r
 		if err := closeGone(ctx, tx, "atlas_node_ver", "id", curNodes, newNodes, seq); err != nil {
 			return err
 		}
-		return closeGone(ctx, tx, "atlas_edge_ver", "key", curEdges, newEdges, seq)
+		if err := closeGone(ctx, tx, "atlas_edge_ver", "key", curEdges, newEdges, seq); err != nil {
+			return err
+		}
+		return writeOutbox(ctx, tx, seq, at, cause, vector, res, curNodes, curEdges)
 	})
 	return seq, changed, err
 }
