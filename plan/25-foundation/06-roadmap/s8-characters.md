@@ -1,6 +1,6 @@
 # C1-C2: fleet characters in the game (plan/25 part 2, step S8)
 
-The game side of agent-fleet ADR-0084 §7 (long-lived characters) and ADR-0086 (cards). There is no plan/28: the
+The game side of agent-fleet ADR-0084 §7 (long-lived characters) and ADR-0082 (cards). There is no plan/28: the
 fleet contract is those two ADRs plus the amendment the fleet session is writing (below). S8 runs before S7 (owner,
 2026-11-17): the strategy lenses need the data S8 brings. Its slices are C1 and C2 (ui-core-build.md already uses
 S7/S8 for other steps).
