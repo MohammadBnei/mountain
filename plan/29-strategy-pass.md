@@ -225,5 +225,12 @@ Decisions so far, in the order the owner took them:
      the crane) all become world events the same way.
    - It must be very fast: one call per transcript message, a short context (the fight's state and the new lines), its
      output constrained to the event registry's schema.
-   - Planned guard (to confirm in Q9): write cards never pass through the narrator. They come from agent-fleet's own
+   - Guard: write cards never pass through the narrator. They come from agent-fleet's own
      permission requests, deterministically. A missed or wrong event costs only a picture, never a write.
+10. **The narrator is a fast small model behind llm-gateway** (2026-11-23).
+   - Configured in llm-gateway, so the model is a setting. The owner's pick: a fast model (DeepSeek's flash tier or
+     similar).
+   - Its output is held to the event schema; its prompt (the registry) is cached; each call carries only the fight's
+     state and the new lines.
+   - p95 latency and the rate of wrong events are measured in the sim's drills before the first real fight.
+   - The page answers at once with a generic reaction (a flinch) and lands the exact one when the event comes.
