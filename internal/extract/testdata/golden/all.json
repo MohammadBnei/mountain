@@ -415,7 +415,7 @@
     "group": "nodes",
     "function": "houses",
     "attrs": {
-     "ip": "192.168.1.202",
+     "ip": "192.168.1.208",
      "k8s": "control-plane,etcd"
     },
     "source": {
@@ -431,7 +431,7 @@
     "group": "nodes",
     "function": "houses",
     "attrs": {
-     "ip": "192.168.1.203",
+     "ip": "192.168.1.209",
      "k8s": "control-plane,etcd"
     },
     "source": {
@@ -476,7 +476,7 @@
     "group": "nodes",
     "function": "houses",
     "attrs": {
-     "ip": "192.168.1.201",
+     "ip": "192.168.1.210",
      "k8s": "control-plane,etcd"
     },
     "source": {

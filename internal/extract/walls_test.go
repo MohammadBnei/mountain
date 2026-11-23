@@ -17,7 +17,7 @@ func TestWalls(t *testing.T) {
 	dir := t.TempDir()
 	inv := filepath.Join(dir, "infra-bootstrap", meshInventory)
 	_ = os.MkdirAll(filepath.Dir(inv), 0o755)
-	_ = os.WriteFile(inv, []byte("all:\n  children:\n    k8s:\n      hosts:\n        talos-cp-3:\n          ansible_host: 192.168.1.201\n          ansible_ssh_private_key_file: ~/.ssh/id\n    lxc:\n      hosts:\n        k9s-dashboard: {ansible_host: 192.168.1.110}\n        pihole: {}\n    pve:\n      hosts:\n        bnei: {}\n"), 0o644)
+	_ = os.WriteFile(inv, []byte("all:\n  children:\n    k8s:\n      hosts:\n        talos-cp-3:\n          ansible_host: 192.168.1.210\n          ansible_ssh_private_key_file: ~/.ssh/id\n    lxc:\n      hosts:\n        k9s-dashboard: {ansible_host: 192.168.1.110}\n        pihole: {}\n    pve:\n      hosts:\n        bnei: {}\n"), 0o644)
 	x := &Ctx{Repos: Repos{"infra-bootstrap": {Dir: filepath.Join(dir, "infra-bootstrap")}}}
 	src := func(p string) graph.Source { return graph.Source{Repo: "infra-bootstrap", Path: p} }
 	files := []sourceFile{

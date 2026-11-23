@@ -326,7 +326,7 @@ func TestMachines(t *testing.T) {
 	if _, ok := edge(g, "ct:build-runner", "host:server1", graph.EdgeRunsOn); !ok {
 		t.Error("build-runner is not on server1")
 	}
-	if n := node(t, g, "vm:talos-cp-3"); n.Attrs["k8s"] != "control-plane,etcd" || n.Attrs["ip"] != "192.168.1.201" {
+	if n := node(t, g, "vm:talos-cp-3"); n.Attrs["k8s"] != "control-plane,etcd" || n.Attrs["ip"] != "192.168.1.210" {
 		t.Errorf("talos-cp-3 = %+v", n)
 	}
 	if _, ok := edge(g, "vm:talos-cp-3", "host:server1", graph.EdgeRunsOn); !ok {

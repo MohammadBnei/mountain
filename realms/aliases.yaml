@@ -92,14 +92,17 @@ things:
   vm:esprimo-1:
     aliases:
       - {source: k8s-api, field: node, name: esprimo-1, status: declared, key: name, at: 2026-11-23}
+      - {source: prom-cluster, field: node, name: esprimo-1, status: declared, key: name, at: 2026-11-23}
 
   vm:esprimo-2:
     aliases:
       - {source: k8s-api, field: node, name: esprimo-2, status: declared, key: name, at: 2026-11-23}
+      - {source: prom-cluster, field: node, name: esprimo-2, status: declared, key: name, at: 2026-11-23}
 
   vm:talos-cp-3:
     aliases:
       - {source: k8s-api, field: node, name: talos-cp-3, status: declared, key: name, at: 2026-11-23}
+      - {source: prom-cluster, field: node, name: talos-cp-3, status: declared, key: name, at: 2026-11-23}
 
   # ---------------------------------------------------------------- what `proxmox` can mean
   host:bnei:

@@ -307,6 +307,18 @@ func TestStateVM(t *testing.T) {
 	}
 }
 
+// TestStateTalosNodes: each Talos node's recipe asks kube-state-metrics' Ready condition by its node name.
+func TestStateTalosNodes(t *testing.T) {
+	d := testDoor(t)
+	for _, n := range []string{"esprimo-1", "esprimo-2", "talos-cp-3"} {
+		want := `kube_node_status_condition{node="` + n + `",condition="Ready",status="true"}`
+		asks, _ := d.recipes("vm:" + n)
+		if !slices.ContainsFunc(asks, func(a metricAsk) bool { return a.what == "ready" && a.selector == want }) {
+			t.Errorf("%s: no ready recipe in %+v", n, asks)
+		}
+	}
+}
+
 // TestStateFailing: a source that errors or outlives its budget is failing and the answer partial; the whole
 // answer keeps to its budget.
 func TestStateFailing(t *testing.T) {
