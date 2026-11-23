@@ -159,3 +159,14 @@ Decisions so far, in the order the owner took them:
    - A move that writes pauses on its card with a countdown (60 s to start). When the countdown ends, nothing writes.
      ops-lead takes the safest read-only fallback, and the mob gains ground on screen only, never in production.
    - This is agent-fleet's own behaviour: reads run, writes wait for the owner.
+3. **No health bar: the mob wears down, as in Monster Hunter** (2026-11-23).
+   - The mob's state is the real signal past its threshold (an SLO burn, a 5xx rate), shown only through its body:
+     it limps, slows, breaks parts, flees. No number and no bar. A grouped alert is a pack, one mob per firing alert.
+   - ops-lead's reads are scouting: they reveal the weak spot (the likely cause) and do no damage. Damage is the real
+     signal recovering after a change the owner approved.
+   - **Victory:** Alertmanager resolves the alert, and it stays quiet for a hold window (10 min to start). The building
+     is repaired.
+   - **Retreat:** the owner stops. The mob camps at the building; it stays under siege on the map and in Needs you.
+   - **Lasting fix:** the PR that removes the cause is merged. It is the real loot and is counted apart from victory,
+     since a restart can win a fight and fix nothing.
+   - **Loot:** ops-lead's incident note in its memory, and the transcript as the postmortem draft.
