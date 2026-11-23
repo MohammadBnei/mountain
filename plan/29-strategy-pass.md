@@ -141,3 +141,21 @@ Each persona is followed by what it wants, what stops it today, and the bridge b
 3. **Alerts are mobs you fight, turn by turn.** The LLM does the real work. Each turn the owner answers it, and the
    exchange is the fight's transcript. This needs a deeper design talk of its own: § 6, to come.
 4. **F10:** the building that showed "unreadable" is still to be named.
+
+## 6. The fight: an alert as a turn-based mob (design talk, in progress)
+
+Decisions so far, in the order the owner took them:
+
+1. **A turn is one move ops-lead proposes, answered by the owner** (2026-11-23).
+   - The mob acts when the real alert changes: it fires, gets worse, or a new signal arrives.
+   - ops-lead proposes one move at a time, with its risk: a read, a query, a draft PR.
+   - The owner approves, redirects, asks why, or retreats (stops the agent).
+   - The real tool's result lands in the transcript as the turn's outcome. The transcript is the fight's log.
+2. **Semi-real time, on an active time battle clock** (the pattern of Final Fantasy VI to IX and Grandia; 2026-11-23).
+   - Urgency comes only from the real signal. The mob acts on a change in the signal (error rate, restarts, SLO burn),
+     never on a made-up timer. A quiet incident is a quiet fight.
+   - ops-lead keeps working between the owner's turns. It runs its read-only moves itself (logs, metrics, describe)
+     and narrates them as its attacks.
+   - A move that writes pauses on its card with a countdown (60 s to start). When the countdown ends, nothing writes.
+     ops-lead takes the safest read-only fallback, and the mob gains ground on screen only, never in production.
+   - This is agent-fleet's own behaviour: reads run, writes wait for the owner.
