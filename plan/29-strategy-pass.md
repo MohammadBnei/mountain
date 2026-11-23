@@ -141,7 +141,7 @@ Each persona is followed by what it wants, what stops it today, and the bridge b
 2. **Personas: P1 (the owner) and P3 (the engineer friend) are essential.** P2, P4 and P5 wait.
 3. **Alerts are mobs you fight, turn by turn.** The LLM does the real work. Each turn the owner answers it, and the
    exchange is the fight's transcript. This needs a deeper design talk of its own: § 6, to come.
-4. **F10:** the building that showed "unreadable" is still to be named.
+4. **F10:** the owner does not remember the building; the shipped fix shows the real code and message, checked live instead.
 
 ## 6. The fight: an alert as a turn-based mob (design talk, in progress)
 
@@ -311,7 +311,7 @@ ADR-0082:110, ADR-0086 §4. Each finding is taken, or waits on the owner.
 3. **"Friends" are admins.** The friends who join a fight are members of `platform-admins`, not public-pod guests. They
    are trusted like the owner: they write into the agent's thread, see what it reads, and `Admin()` lets them answer
    cards (ADR-0082). The Rule-of-Two finding does not apply to them. P3 (the engineer friend) is an admin; a public
-   guest never reaches a fight. Open: whether a write needs the owner himself, or any admin.
+   guest never reaches a fight. Any admin may answer a write card (owner, 2026-11-23), as `Admin()` already allows.
 4. **The narrator has the same trust as the fleet's sessions.** It reads what ops-lead and the Claude sessions already
    read, and goes through the same fleet gateway route (so a fast Venice-hosted model such as DeepSeek's flash tier is
    reachable under the fleet's own key, not the game's). It runs beside core as a fleet component, once per fight, and
