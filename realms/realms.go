@@ -32,6 +32,7 @@ type Realms struct {
 	Hosts        map[string]string    `yaml:"hosts"` // Proxmox host -> island label
 	PVENodeName  string               `yaml:"pveNodeName"`
 	K8sPlacement map[string]string    `yaml:"k8sPlacement"` // k8s VM -> Proxmox host
+	BareMetal    []string             `yaml:"bareMetal"`    // k8s nodes on no Proxmox host (physical machines)
 	ADRHome      map[string]string    `yaml:"adrHome"`      // repo without ADRs -> repo its bare citations mean
 	ShortADR     map[string]string    `yaml:"shortADR"`     // repo -> repo its bare "adr/NNNN" means (else its ADR home)
 	Skip         map[string][]string  `yaml:"skip"`         // repo -> repo-relative dirs whose files are not the repo's words
@@ -201,6 +202,7 @@ func checks() []check {
 		{"walls", checkWalls},
 		{"addons", checkAddons},
 		{"k8sPlacement", checkK8sPlacement},
+		{"bareMetal", checkBareMetal},
 		{"sources", checkSources},
 		{"probes", checkProbes},
 		{"namespaces", checkNamespaces},
@@ -392,6 +394,16 @@ func checkK8sPlacement(r *Realms) error {
 	for vm, h := range r.K8sPlacement {
 		if _, ok := r.Hosts[h]; !ok {
 			return fmt.Errorf("realms.yaml: k8s node %s is on %q, not a listed host", vm, h)
+		}
+	}
+	return nil
+}
+
+// checkBareMetal: a bare metal node is not also placed on a host.
+func checkBareMetal(r *Realms) error {
+	for _, vm := range r.BareMetal {
+		if h, ok := r.K8sPlacement[vm]; ok {
+			return fmt.Errorf("realms.yaml: %s is bareMetal, yet k8sPlacement puts it on %q", vm, h)
 		}
 	}
 	return nil

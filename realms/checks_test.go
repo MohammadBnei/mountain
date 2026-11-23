@@ -14,7 +14,7 @@ import (
 func TestChecks(t *testing.T) {
 	want := []check{{"code", checkCode}, {"functions", checkFunctions}, {"components", checkComponents}, {"watch", checkWatch},
 		{"needs", checkNeeds}, {"shapes", checkShapes}, {"walls", checkWalls}, {"addons", checkAddons},
-		{"k8sPlacement", checkK8sPlacement}, {"sources", checkSources}, {"probes", checkProbes},
+		{"k8sPlacement", checkK8sPlacement}, {"bareMetal", checkBareMetal}, {"sources", checkSources}, {"probes", checkProbes},
 		{"namespaces", checkNamespaces}, {"pveNodeName", checkPveNodeName}}
 	fn := func(f func(*Realms) error) string { return runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name() }
 	got := checks()

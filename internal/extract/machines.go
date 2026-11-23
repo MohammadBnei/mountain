@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"slices"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -15,7 +16,7 @@ import (
 
 // machinesExtractor reads the Terraform topology: the Proxmox hosts, the VMs and containers terraform declares, and
 // the Talos nodes terraform/talos declares.
-var machinesExtractor = Extractor{Name: "machines", Version: 1, Needs: []string{"infra-bootstrap"}, Run: machines}
+var machinesExtractor = Extractor{Name: "machines", Version: 2, Needs: []string{"infra-bootstrap"}, Run: machines}
 
 const (
 	nodesPath = "terraform/talos/variables.tf"
@@ -212,6 +213,9 @@ func inventory(x *Ctx) error {
 		// ponytail: every node is labelled control-plane,etcd (true for the 3 Talos nodes today); a worker
 		// (talos-gpu-1) needs a role per node in var.nodes or a second variable.
 		x.Node(graph.Node{ID: id, Kind: graph.KindVM, Source: src, Attrs: withIP(map[string]string{"k8s": "control-plane,etcd"}, nodes[name])})
+		if slices.Contains(x.Realms.BareMetal, name) {
+			continue
+		}
 		host, ok := x.Realms.K8sPlacement[name]
 		if !ok {
 			x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: id, Detail: "k8s node with no host in realms.yaml k8sPlacement", Source: src})

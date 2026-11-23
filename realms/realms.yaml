@@ -81,7 +81,10 @@ pveNodeName: bnei
 
 # Talos VM -> Proxmox host (terraform/talos var.nodes names the nodes, not their host).
 k8sPlacement:
-  talos-cp-3: server1 # VM 210 on server1 (infra-bootstrap ARCHITECTURE.md); esprimo-1/2 are bare metal, on no PVE host
+  talos-cp-3: server1 # VM 210 on server1 (infra-bootstrap ARCHITECTURE.md)
+
+# Talos nodes that are physical machines, on no Proxmox host: they are not placement drift.
+bareMetal: [esprimo-1, esprimo-2]
 
 # Where a repo with no docs/adr of its own sends a bare "ADR-NNNN".
 adrHome:

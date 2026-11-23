@@ -1001,16 +1001,6 @@
    },
    {
     "kind": "unresolved",
-    "subject": "vm:esprimo-1",
-    "detail": "k8s node with no host in realms.yaml k8sPlacement",
-    "source": {
-     "repo": "infra-bootstrap",
-     "path": "terraform/talos/variables.tf",
-     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
-    }
-   },
-   {
-    "kind": "unresolved",
     "subject": "vm:esprimo-2",
     "detail": "k8s node with no host in realms.yaml k8sPlacement",
     "source": {
@@ -1053,7 +1043,7 @@
   "adr": 1,
   "gitops": 1,
   "imports": 1,
-  "machines": 1,
+  "machines": 2,
   "pass:branchDrift": 1,
   "pass:declare": 1,
   "pass:image": 1,
@@ -1063,7 +1053,7 @@
   "pass:resolve": 1,
   "pass:watch": 3,
   "pigsty": 1,
-  "realms": 4032025996
+  "realms": 3227235713
  },
  "Skipped": null
 }

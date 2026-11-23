@@ -33,6 +33,7 @@ hosts: { bnei: h1, server1: h2, ex-laptop: h3 }
 pveNodeName: bnei
 sources: [infra-bootstrap, agent-fleet, mountain, pi-lab]
 k8sPlacement: { talos-cp-3: server1 }
+bareMetal: [esprimo-1]
 adrHome: { mountain: infra-bootstrap }
 shortADR: { infra-bootstrap: agent-fleet, agent-fleet: agent-fleet }
 skip: { infra-bootstrap: [kubespray] }
@@ -331,8 +332,11 @@ func TestMachines(t *testing.T) {
 	if _, ok := edge(g, "vm:talos-cp-3", "host:server1", graph.EdgeRunsOn); !ok {
 		t.Error("talos-cp-3 not placed")
 	}
-	if !hasDrift(g, graph.DriftUnresolved, "vm:esprimo-1", "k8sPlacement") {
+	if !hasDrift(g, graph.DriftUnresolved, "vm:esprimo-2", "k8sPlacement") {
 		t.Error("an unplaced k8s node is not drift")
+	}
+	if hasDrift(g, graph.DriftUnresolved, "vm:esprimo-1", "") {
+		t.Error("a bareMetal node is drift")
 	}
 	if !hasDrift(g, graph.DriftUnresolved, "vm:mystery", "node_name") {
 		t.Error("node_name = local.x is not drift")
