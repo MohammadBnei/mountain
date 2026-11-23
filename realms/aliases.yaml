@@ -1,6 +1,6 @@
 # The alias table (design-2026-11/door-hybrid-F.md stage 1): each thing's canonical id (internal/graph's kind:name),
 # then the names each source calls it, so `atlas resolve` and `atlas state` turn any of them into the id. First slice:
-# the Postgres plane and the 5 k8s VMs, plus what the name `proxmox` can mean. From
+# the Postgres plane and the Talos nodes (the kubespray k8s VMs are gone), plus what the name `proxmox` can mean. From
 # design-2026-11/alias-table.draft.yaml, re-checked live 2026-11-14 through k9s.
 #
 # An alias: {source, field, name, status, key, at, note}

@@ -61,7 +61,7 @@ var Signals = map[string]Signal{
 	"critday": {`count by (alertname) (max_over_time(ALERTS{alertstate="firing",severity="critical"}[1d])) or on () (0 * max(max_over_time(ALERTS{alertname="Watchdog"}[1d])))`, 300},
 	// the last 24 h per Application: 1 if it was Degraded at any time, else 0
 	"degradedday": {`max by (name) (max_over_time(argocd_app_info{health_status="Degraded"}[1d])) or 0 * max by (name) (argocd_app_info)`, 300},
-	// the add-ons' workloads (kubespray's, in kube-system and metallb-system): the share of each one's pods that are
+	// the add-ons' workloads (named as kubespray did; dormant, no addon node has a producer since that extractor was retired; in kube-system and metallb-system): the share of each one's pods that are
 	// ready; an add-on's health is its least ready workload. An add-on installed into another namespace (a changed
 	// metallb_namespace) is not asked for, so it reads unknown: widen these selectors with it.
 	"dsready":     {`min by (namespace, daemonset) (kube_daemonset_status_number_ready{namespace=~"kube-system|metallb-system"} / kube_daemonset_status_desired_number_scheduled{namespace=~"kube-system|metallb-system"})`, 15},

@@ -610,7 +610,7 @@ type GraphIndex struct {
 	Realm  map[string]string   // node id -> realm ("" = not placed: hostnames, ADRs)
 	NSApps map[string][]string // namespace -> app ids deploying into it, sorted
 	Has    map[string]bool     // node ids
-	Into   map[string]string   // addon node id -> the namespace kubespray installs it into
+	Into   map[string]string   // addon node id -> its namespace (dormant: no addon node has a producer since the kubespray extractor was retired)
 	Watch  map[string][]string // Prometheus alert name -> the nodes whose watch names it, sorted
 	Kind   map[string]string   // node id -> kind (contract.Classify)
 	RunsOn map[string][]string // runs-on edges, from -> to (contract.Classify)

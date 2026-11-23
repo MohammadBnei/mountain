@@ -121,8 +121,8 @@ probes:
   guest-forge: ct:build-runner
   guest-mill: ct:hermesagent
 
-# Namespaces no ArgoCD Application deploys into, but whose pods belong to a realm (the land lens): kubespray installs
-# Cilium, CoreDNS and the like straight into kube-system. A namespace in neither list counts as "unattributed".
+# Namespaces no ArgoCD Application deploys into, but whose pods belong to a realm (the land lens): the cluster's own
+# Cilium, CoreDNS and the like sit straight in kube-system. A namespace in neither list counts as "unattributed".
 namespaces:
   kube-system: platform
   metallb-system: platform
@@ -319,7 +319,8 @@ walls:
   dns:events.bnei.dev: [own] # one path, /webhook/github, signature-checked (ukubi-bridge's values)
   dns:has-journal.bnei.dev: [forwardauth] # authentik-forwardauth, named in has-journal's own values
 
-# The add-ons' workloads (kubespray's names, in the namespace each add-on's node says it is installed into): an
+# The add-ons' workloads (named as kubespray did, in the namespace each add-on's node says it is installed into). No
+# extractor makes addon nodes since the kubespray one was retired, so this health path is dormant. An
 # add-on's health is its least ready workload. static: a static pod (no DaemonSet or Deployment): always unknown.
 addons:
   addon:cilium: [daemonset/cilium, deployment/cilium-operator, deployment/hubble-relay] # hubble is on (k8s-net-cilium.yml)

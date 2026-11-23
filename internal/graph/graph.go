@@ -17,12 +17,12 @@ import (
 // Kinds of node. An id is "<kind>:<qualified-name>", stable across shas (plan/10 "Nodes and edges").
 const (
 	KindHost  = "host"  // a Proxmox host (host:bnei)
-	KindVM    = "vm"    // a VM, k8s nodes included (vm:k8s-cp-01)
+	KindVM    = "vm"    // a VM, Talos nodes included (vm:esprimo-1)
 	KindCT    = "ct"    // an LXC container (ct:build-runner)
 	KindApp   = "app"   // an ArgoCD Application (app:wird)
 	KindSvc   = "svc"   // a component inside a repo (svc:agent-fleet/core)
 	KindRepo  = "repo"  // a git repository (repo:infra-bootstrap)
-	KindAddon = "addon" // cluster software kubespray installs, no Application (addon:cilium)
+	KindAddon = "addon" // cluster software no Application deploys (addon:cilium); no producer since the kubespray extractor was retired
 	KindDB    = "db"    // a data service outside the cluster, by its cluster name (db:pg-proxmox)
 	KindDNS   = "dns"   // a public hostname (dns:wird.bnei.dev)
 	KindADR   = "adr"   // a decision record (adr:infra-bootstrap/0064)
@@ -38,12 +38,12 @@ const (
 // maps a kind to something else (plan/25's rooms) reads instead of a switch.
 var Kinds = map[string]string{
 	KindHost:     "a Proxmox host",
-	KindVM:       "a VM, k8s nodes included",
+	KindVM:       "a VM, Talos nodes included",
 	KindCT:       "an LXC container",
 	KindApp:      "an ArgoCD Application",
 	KindSvc:      "a component inside a repo",
 	KindRepo:     "a git repository",
-	KindAddon:    "cluster software kubespray installs, no Application",
+	KindAddon:    "cluster software no Application deploys; no producer since the kubespray extractor was retired",
 	KindDB:       "a data service outside the cluster, by its cluster name",
 	KindDNS:      "a public hostname",
 	KindADR:      "a decision record",
