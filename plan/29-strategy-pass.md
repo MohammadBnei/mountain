@@ -63,7 +63,7 @@ Paths are under `ukubi-game/cmd/game/websrc` unless stated.
 | F19 | A narrow desktop window overlaps the zones. The phone form only comes with touch. Below a width, use the phone's one-zone layout. |
 | F20 | `platform-thot` still has a building. thot is retired. |
 | F21 | The village "Default" holds the Capital's buildings. Name it. |
-| F22 | Shared movement (owner, 2026-11-23): remote movers (wolves, other players) slide along but their walk replays only its first frames in a loop: the clip restarts instead of playing through. Both kinds show it, so the cause is likely shared. It matters to § 6: the fight is shared. |
+| F22 | Shared movement (owner, 2026-11-23): remote movers (wolves, other players) slide along but their walk replays only its first frames in a loop: the clip restarts instead of playing through. Both kinds show it, so the cause is likely shared. It matters to § 6: the fight is shared. Likely cause, read in the code, not yet measured: `world-realm.ts:614` (riders) and `:638` (mobs) take speed from one frame's step of the interpolated pose. A frame where the pose holds gives 0, the next a jump, so the gait flips Idle↔Walk; each flip `reset()`s the clip (`world-creature.ts:108`, `world-avatar.ts:498`). Fix once in the shared speed: smooth it over a window with hysteresis on the gait, and never restart a clip that is already the target. |
 
 ## 3. Upgrades
 
