@@ -74,6 +74,7 @@ envFrom:
 env:
   # The System tag loop (tags.go): the bridge's in-cluster Service (the Connect API shares :8080 with the webhooks;
   # :9090 is only /metrics) and the projected token (extraVolumes bridge-token, below). ukubi-bridge row bridge-atlas needs "sa": "mountain:atlas" first.
+  # The same URL and token also publish the world's events (world.go; the row's publish_types dev.bnei.world.).
   - name: ATLAS_BRIDGE_URL
     value: http://ukubi-bridge.ukubi-bridge.svc.cluster.local:8080
   - name: ATLAS_BRIDGE_TOKEN_FILE
@@ -265,10 +266,36 @@ extraManifests:
                   has not answered it for minutes (token refused, bridge down or wedged).
                   bridge-apps: the Applications list the tags resolve against fails (atlas's read grant on ArgoCD's
                   Applications, infra-bootstrap gitops/platform/mountain, is missing, or the apiserver errors).
+                  world: the bridge has not answered a Publish for minutes (no DATABASE_URL or bridge config, token
+                  refused, bridge down or wedged).
                   forge/projection:
                   the map keeps its last projection; the log says whether Forgejo refused the token, the token is
                   unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history
                   is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.
+            # World events are not published: no database (memory-only) or no bridge config.
+            - alert: MountainWorldOff
+              expr: max(mountain_world_enabled{namespace="{{ .Release.Namespace }}"}) == 0
+              for: 10m
+              labels:
+                severity: notice
+              annotations:
+                summary: "mountain: atlas is not publishing world events"
+                description: >-
+                  mountain_world_enabled is 0: atlas has no database (DATABASE_URL unset or unreachable) or no bridge
+                  (ATLAS_BRIDGE_URL and its token file). Events stay in the outbox when only the bridge is missing.
+            # Events wait in the outbox: the bridge refuses the publisher (no grant for bridge-atlas on dev.bnei.world.:
+            # PermissionDenied is retried, never dropped) or is down.
+            - alert: MountainWorldOutboxStuck
+              expr: max(mountain_world_outbox_oldest_seconds{namespace="{{ .Release.Namespace }}"}) > 900
+              for: 5m
+              labels:
+                severity: notice
+              annotations:
+                summary: "mountain: a world event has waited 15 min in the outbox"
+                description: >-
+                  The oldest world event in atlas's outbox is older than 15 min: the bridge refuses bridge-atlas
+                  (check its row's publish_types and publish_subjects), is down, or the token is refused. The log
+                  line "world:" says which. Nothing is lost: the outbox is drained in order when it answers.
             # A component the repos now have that realms.yaml does not place: it shows as drift, not on an island.
             - alert: MountainUnassigned
               expr: max(mountain_drift{namespace="{{ .Release.Namespace }}", kind="unassigned"}) > 0
