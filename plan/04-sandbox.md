@@ -1,5 +1,7 @@
 # 04-sandbox — Dev loop and gate
 
+> **History (2026-11-23):** this describes the retired town's dev loop (the relay is deleted); the live commands are in the root `README.md`. Its CI section is the 2026-10 GitHub-era setup, kept as written; the live CI is `.github/workflows/` (checks.yml, app.yml).
+
 **Dev loop:**
 - `go run ./relay --dev --source=fixture:www/dev/fixtures/relay-town.json` serves the page on `http://127.0.0.1:8080`
   with a scripted Prometheus/Alertmanager/GitHub timeline.

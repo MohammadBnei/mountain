@@ -168,8 +168,7 @@ First, the portrait explore board (map corner, tracker line, pad) for the owner 
 2. infra-bootstrap: the monitoring network policy lets mountain reach Loki (:3100) and Tempo (:3200). Draft PR; the
    owner applies it.
 3. ukubi-game: re-pin mountain; `buf.gen.yaml` (`include_imports`) generating outside websrc's guarded tree (or
-   excluded from the I3/I8/CSP guards and `biome ci`), committed, and a CI check that the output matches its pin
-   (with `MOUNTAIN_READ_TOKEN`); the forward handler in `internal/play/telemetry.go` behind the owner gate; the
+   excluded from the I3/I8/CSP guards and `biome ci`), committed, and a CI check that the output matches its pin; the forward handler in `internal/play/telemetry.go` behind the owner gate; the
    generated client and adapters in the owner chunk; `Watch`'s resume through `follow`, with its I8 allow-list entry
    (ui-invariants:520-540).
 - I13's test.

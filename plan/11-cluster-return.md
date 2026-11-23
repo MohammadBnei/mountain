@@ -1,5 +1,7 @@
 # 11 · When the cluster is back (owner checklist, written 2026-10-24)
 
+> **History (2026-11-23):** the 2026-10-24 outage checklist. The k9s host, kubespray and GitHub settings it names are gone (Talos, Forgejo); kept as a record, do not run its commands.
+
 The cluster has been offline since 2026-10-23 (internet outage at home, back around 2026-10-26). Code merged while it was
 down has never run. This file is the whole list of what to do when it returns, in order, with what each step should
 show. Steps marked **you** are yours (the cluster, Infisical, pigsty, authentik); the rest are mine (I write the PRs and

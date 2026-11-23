@@ -40,13 +40,14 @@ doesn't.
 - **Sources we don't own** get **one contract suite per seam**, run against three implementations:
   1. **The real client, replaying golden responses recorded from the live cluster.** They are recorded with the
      dev-pod skill and refreshed by a nightly live job whenever the self-hosted runner is up. A public service
-     needs no cluster: GitHub's leg is recorded from api.github.com, and its nightly live check runs on a
-     GitHub-hosted runner (ukubi-game `live.yml`).
+     needs no cluster: GitHub's leg is recorded from api.github.com, and its nightly live check runs on
+     `ubuntu-latest` (the LXC podman runners, ib:ADR-0082; ukubi-game `live.yml`).
   2. **The sim's mirror,** so the sim can never drift from what the real client expects.
   3. **A map fake,** for fast unit tests.
 - **Kubernetes:**
   - It uses **client-go** behind the narrow interfaces, never raw REST of our own.
-  - It is tested with envtest or kind on GitHub-hosted runners.
+  - It is tested with envtest on `k8s-ubuntu-latest`. kind needs a container engine, so it runs on `ubuntu-latest` (LXC
+    podman) or locally (fleet `/kind-local`); the Talos host executor has none (ib:ADR-0089).
   - The sim's mirror serves only the verbs the providers use (discovery included). They are listed in a contract
     package, so client-go talks to the mirror unchanged.
 
@@ -413,7 +414,7 @@ These already follow the standard:
 ## Verification, for every step
 - **Unchanged behaviour:** the existing suites pass with no assertion edited (Go tests, integration tests, the kit's
   check, the town gate, mountain's gate and promtool rules; a test's setup, package clauses, imports and renames
-  may change, each listed in the PR, `16-dev-rules.md` §2), `go vet` is clean, and a diff review confirms no
+  may change, each listed in the PR, `16-dev-rules.md` §5), `go vet` is clean, and a diff review confirms no
   behaviour change. The error-body PR is labelled as a behaviour change.
 - **Determinism:** where a step touches it, a golden comparison before and after. atlas's projection of the fixture
   graph and the sim's frames for a seed must be identical, except for the new version entries.

@@ -41,7 +41,7 @@ So: deterministic across two builds and across 1.4.2 vs 1.4.4. (app.js and boot.
 - gzip -9: 509,655 -> 520,014 B = **+10,359 B (+10.1 KB)**. That is preact 11 + signals + hooks + the dock component (~1.2 KB of that, the TSX). The ADR's 5-10 KB estimate is at its upper edge; budget 10-11 KB.
 
 ## 2. CSP (real Chromium, game's exact CSP string from gate.go)
-Script: dev/ui-spike-csp.mjs (copies hud-fixture's server + CSP approach; needs `NODE_PATH=<dir holding playwright>`; I used /Users/moha/Code/ukubi/wedding-2026/node_modules).
+Script: dev/ui-spike-csp.mjs (copies hud-fixture's server + CSP approach; needs `NODE_PATH=<dir holding playwright>`; use any directory with playwright installed).
 Rendered the dock from signals, drove it into the fight face (HP 40, slots, ult 50%).
 - Result: **no console error, no pageerror, no securitypolicyviolation event.**
 - `style={{ width: '40%' }}` -> element.style (CSSOM). Applied: inline `style` attr shows `width: 40%;`, computed width non-auto. Allowed.
@@ -103,4 +103,4 @@ Bet 1 holds, so no need for the no-JSX or Lit fallback. Bet 2: widen the table's
 
 ## Files in the worktree (all untracked or modified, none committed)
 package.json, bun.lock, tsconfig.json (jsx), cmd/game/websrc/world.ts (+1 import, size measure only), ui-dock.tsx, ui-spike.ts, ui-spike-page.tsx, ui-chart.ts, ui-chart.test.ts, ui-bench.tsx, dev/ui-spike-csp.mjs, dev/ui-spike-bench.mjs. Build dirs next to the worktree: ../dist-a ../dist-b ../dist-c ../base-dist, ../build.sh, ../bun142.
-Run: `NODE_PATH=/Users/moha/Code/ukubi/wedding-2026/node_modules node dev/ui-spike-csp.mjs` (and ui-spike-bench.mjs); `bun test cmd/game/websrc/ui-chart.test.ts`.
+Run: `NODE_PATH=<dir holding playwright> node dev/ui-spike-csp.mjs` (and ui-spike-bench.mjs); `bun test cmd/game/websrc/ui-chart.test.ts`.

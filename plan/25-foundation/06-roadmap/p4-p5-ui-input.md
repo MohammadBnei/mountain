@@ -47,4 +47,4 @@ This is a follow-up lane on `feat/ui-core`, after the integration:
 - port the reference UI as Preact surfaces: the mic in the pad, the ptt key, the Settings voice tab, the Party tab
   and the radial entries.
 
-GitHub Actions was billing-blocked again on 2026-11-14, so nothing has deployed since `914d878`.
+GitHub Actions was billing-blocked again on 2026-11-14 (CI has since moved to Forgejo Actions), so nothing has deployed since `914d878`.

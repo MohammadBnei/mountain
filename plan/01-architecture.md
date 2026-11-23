@@ -1,5 +1,7 @@
 # 01-architecture — Architecture
 
+> **History (2026-11-23):** this file describes the retired town and relay (deleted in A2); see `README.md`. Its CI rows are the 2026-10 GitHub-era setup, kept as written; the live CI is `.github/workflows/` (checks.yml, app.yml).
+
 ## Repo
 ```
 mountain/

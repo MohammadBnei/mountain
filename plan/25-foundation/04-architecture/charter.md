@@ -44,7 +44,7 @@ The shared story is the workshop loop, in `../03-interview/scenarios.md`. It is 
 
 ## The owner's standing design rules (decided; don't reopen)
 
-**The HUD** (plan/24, `hud-design-intent`):
+**The HUD** (plan/24):
 - At rest, the screen shows only a small map corner and one Menu.
 - One bottom dock shows context: the focus (a name, the primary action, hold for more), the fight (attack, skills,
   ultimate), and incoming lines that slide in.
@@ -52,7 +52,7 @@ The shared story is the workshop loop, in `../03-interview/scenarios.md`. It is 
   radial, the slide-in updates and the Needs you tracker take its content; the fight face stays.
 - Social lives in panels.
 
-**Calm and coherence** (`hud-coherence`):
+**Calm and coherence:**
 - Use fewer pieces, merged and grouped.
 - Use one component family: one glass style, one radius scale, one button size per tier.
 - Judge every change against the whole screen, never one element alone.

@@ -4,7 +4,7 @@ Status: approved, 2026-11-11 (rev 4, after doubt cycles 1–3 and the owner's an
 changes 8, 10 and 12 folded into the one PR by the owner's word).
 
 Sources:
-- the owner interview (memory `interaction-system-intent`);
+- the owner interview (the owner's interaction-system decisions);
 - the owner's answers (a)–(f).
 
 What it changes in other plans:

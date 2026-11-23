@@ -60,8 +60,7 @@ Services we own, called through generated Connect clients.
   - A consumer runs `buf generate` against the owner's git repo at a pinned commit (a main SHA only) and commits the
     output: the game's generated TypeScript is checked like `web/dist`; Go consumers import the owner's generated
     package as a module, as ukubi-game already imports agent-fleet's (`go.mod:6-7`).
-  - mountain is private: the game's CI reads it with the token it already uses for the mountain module (`ci.yml:42-50`,
-    `MOUNTAIN_READ_TOKEN`). `buf`, `protoc-gen-es` and connect-es are pinned to exact versions; the game's
+  - mountain is public: `buf` reads it over plain git and Go consumers through proxy.golang.org, with no secret. `buf`, `protoc-gen-es` and connect-es are pinned to exact versions; the game's
     `buf.gen.yaml` sets `include_imports`.
   - No Buf Schema Registry. `buf breaking` runs in each owner's CI against its main.
 - **The game uses generated clients only**, fleet's included. `fleet-client.ts` keeps `follow` (its reconnect and
