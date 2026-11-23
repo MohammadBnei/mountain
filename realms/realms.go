@@ -399,9 +399,12 @@ func checkK8sPlacement(r *Realms) error {
 	return nil
 }
 
-// checkBareMetal: a bare metal node is not also placed on a host.
+// checkBareMetal: a bare metal node is a listed vm: component, and not also placed on a host.
 func checkBareMetal(r *Realms) error {
 	for _, vm := range r.BareMetal {
+		if _, ok := r.Components["vm:"+vm]; !ok {
+			return fmt.Errorf("realms.yaml: bareMetal %s is not a listed vm: component", vm)
+		}
 		if h, ok := r.K8sPlacement[vm]; ok {
 			return fmt.Errorf("realms.yaml: %s is bareMetal, yet k8sPlacement puts it on %q", vm, h)
 		}
