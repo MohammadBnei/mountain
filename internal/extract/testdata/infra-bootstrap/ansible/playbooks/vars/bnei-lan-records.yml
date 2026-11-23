@@ -4,6 +4,6 @@ bnei_lan_hosts:
   ex-laptop: 192.168.1.161
   pg02: 192.168.1.207
   build-runner: 192.168.1.111
-  k8s-cp-01: 192.168.1.201
+  talos-cp-3: 192.168.1.201
 bnei_lan_service_records:
   - "192.168.1.232 postgres.bnei.lan"

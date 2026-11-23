@@ -413,13 +413,13 @@
     }
    },
    {
-    "id": "vm:k8s-cp-01",
+    "id": "vm:esprimo-1",
     "kind": "vm",
     "realm": "platform",
     "group": "nodes",
     "function": "houses",
     "attrs": {
-     "ip": "192.168.1.201",
+     "ip": "192.168.1.202",
      "k8s": "control-plane,etcd"
     },
     "source": {
@@ -429,13 +429,13 @@
     }
    },
    {
-    "id": "vm:k8s-worker-01",
+    "id": "vm:esprimo-2",
     "kind": "vm",
     "realm": "platform",
     "group": "nodes",
     "function": "houses",
     "attrs": {
-     "ip": "192.168.1.202",
+     "ip": "192.168.1.203",
      "k8s": "control-plane,etcd"
     },
     "source": {
@@ -470,6 +470,22 @@
     "source": {
      "repo": "infra-bootstrap",
      "path": "terraform/guests.tf",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "id": "vm:talos-cp-3",
+    "kind": "vm",
+    "realm": "platform",
+    "group": "nodes",
+    "function": "houses",
+    "attrs": {
+     "ip": "192.168.1.201",
+     "k8s": "control-plane,etcd"
+    },
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "terraform/talos/variables.tf",
      "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
     }
    }
@@ -908,17 +924,6 @@
     }
    },
    {
-    "from": "vm:k8s-cp-01",
-    "to": "host:bnei",
-    "kind": "runs-on",
-    "origin": "declared",
-    "source": {
-     "repo": "infra-bootstrap",
-     "path": "terraform/talos/variables.tf",
-     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
-    }
-   },
-   {
     "from": "vm:pg02",
     "to": "host:bnei",
     "kind": "runs-on",
@@ -926,6 +931,17 @@
     "source": {
      "repo": "infra-bootstrap",
      "path": "terraform/guests.tf",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "from": "vm:talos-cp-3",
+    "to": "host:server1",
+    "kind": "runs-on",
+    "origin": "declared",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "terraform/talos/variables.tf",
      "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
     }
    }
@@ -1098,7 +1114,17 @@
    },
    {
     "kind": "unresolved",
-    "subject": "vm:k8s-worker-01",
+    "subject": "vm:esprimo-1",
+    "detail": "k8s node with no host in realms.yaml k8sPlacement",
+    "source": {
+     "repo": "infra-bootstrap",
+     "path": "terraform/talos/variables.tf",
+     "sha": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+    }
+   },
+   {
+    "kind": "unresolved",
+    "subject": "vm:esprimo-2",
     "detail": "k8s node with no host in realms.yaml k8sPlacement",
     "source": {
      "repo": "infra-bootstrap",
@@ -1150,7 +1176,7 @@
   "pass:resolve": 1,
   "pass:watch": 3,
   "pigsty": 1,
-  "realms": 3439027816
+  "realms": 2203761228
  },
  "Skipped": null
 }

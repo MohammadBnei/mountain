@@ -55,8 +55,7 @@ func TestResolve(t *testing.T) {
 		{"192.168.1.232", []string{"endpoint:pg-proxmox/vip"}, "pigsty-vmetrics", Proven, "the VIP is an endpoint"},
 		{"postgres.bnei.lan", []string{"endpoint:pg-proxmox/vip"}, "pihole", Declared, ""},
 		{"postgres-1", []string{"vm:pg01"}, "repo-declared", Historical, ""},
-		{"k8s-worker-02", []string{"vm:k8s-worker-02"}, "k8s-api", Proven, ""},
-		{"192.168.1.204:9100", []string{"vm:k8s-cp-02"}, "prom-cluster", Proven, "cp-02 is .204"},
+		{"esprimo-2", []string{"vm:esprimo-2"}, "k8s-api", Declared, ""},
 		{"pve-bnei", []string{"host:bnei"}, "prom-cluster", Proven, "pve-<host> from realms.yaml"},
 		{"proxmox", []string{"endpoint:proxmox/proxmox", "host:bnei"}, "", "", "ambiguous: the old host name and the Service to server1"},
 		{"ins=pg01", nil, "", "", "pg01 is a nodename, not an ins"},
@@ -71,8 +70,8 @@ func TestResolve(t *testing.T) {
 			t.Errorf("%s: first match %+v, want source %s status %s", c.name, got[0], c.source, c.status)
 		}
 	}
-	if r := a.RunsOn("vm:k8s-cp-02"); r != "host:server1" {
-		t.Errorf("k8s-cp-02 runs on %q (k8sPlacement)", r)
+	if r := a.RunsOn("vm:talos-cp-3"); r != "host:server1" {
+		t.Errorf("talos-cp-3 runs on %q (k8sPlacement)", r)
 	}
 	if r := a.RunsOn("pg:pg-proxmox-2"); r != "vm:pg02" {
 		t.Errorf("pg-proxmox-2 runs on %q", r)

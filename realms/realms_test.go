@@ -38,7 +38,7 @@ func TestFunction(t *testing.T) {
 		"app:platform-prometheus":        FnTrade,
 		"app:mountain":                   FnTownCentre,
 		"host:bnei":                      FnLand,
-		"vm:k8s-worker-01":               FnHouses,
+		"vm:esprimo-1":                   FnHouses,
 		"app:nope":                       "",
 	} {
 		if got := r.Function(id); got != want {

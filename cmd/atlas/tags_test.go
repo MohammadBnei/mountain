@@ -98,7 +98,7 @@ func testSystems(t *testing.T) *realms.Systems {
 // warning; internal/forgejo sets the source, the data is Forgejo's own webhook body).
 const (
 	kwatchSynced  = `{"sync":"Synced","previous":"OutOfSync","refs":{"app":"hq","revisions":["0123abc"]},"hints":{"system":"app:hq"}}`
-	kwatchWarning = `{"refs":{"namespace":"","kind":"Node","name":"k8s-worker-02","uid":"u1","api_version":"v1","field_path":"","reason":"NodeNotReady"},"message_hash":"00","count":3,"component":"kubelet"}`
+	kwatchWarning = `{"refs":{"namespace":"","kind":"Node","name":"esprimo-2","uid":"u1","api_version":"v1","field_path":"","reason":"NodeNotReady"},"message_hash":"00","count":3,"component":"kubelet"}`
 	forged        = `{"app":"hq","refs":{"app":"hq"},"owner_chain":[{"group":"apps","kind":"Deployment","namespace":"hq","name":"hq","tracking_id":"hq:apps/Deployment:hq/hq"}]}`
 )
 
@@ -127,7 +127,7 @@ func TestTagLoop(t *testing.T) {
 			// kwatch's own source, but the fields it does not set
 			{Seq: 8, Source: kwatchSource, Type: "dev.bnei.k8s.warning", Data: []byte(forged)},
 			{Seq: 9, Source: kwatchSource, Type: "dev.bnei.deploy.health", Data: []byte(`not json`)},
-			{Seq: 10, Source: kwatchSource, Type: "dev.bnei.k8s.warning", Data: []byte(`{"refs":{"kind":"Node","name":"k8s-worker-02","api_version":""}}`)},
+			{Seq: 10, Source: kwatchSource, Type: "dev.bnei.k8s.warning", Data: []byte(`{"refs":{"kind":"Node","name":"esprimo-2","api_version":""}}`)},
 			{Seq: 11, Source: "git.bnei.dev/MohammadBnei/hq", Type: "dev.bnei.github.push", Data: []byte(`{}`)},
 			{Seq: 20, Source: kwatchSource, Type: "dev.bnei.deploy.synced", Data: []byte(kwatchSynced)},
 			{Seq: 21, Source: "alertmanager", Type: "dev.bnei.alert.firing", Data: []byte(`{}`)},
@@ -147,7 +147,7 @@ func TestTagLoop(t *testing.T) {
 	v := sys.Version
 	want := []eventTag{
 		{1, "app:hq", realms.Applied, v},
-		{2, "vm:k8s-worker-02", realms.Placement, v},
+		{2, "vm:esprimo-2", realms.Placement, v},
 		{3, "app:hq", realms.Applied, v},
 		{4, "app:a", realms.Ambiguous, v}, {4, "app:b", realms.Ambiguous, v}, {4, "app:hq", realms.Ambiguous, v},
 		{5, "", realms.Unresolved, v}, {6, "", realms.Unresolved, v}, {7, "", realms.Unresolved, v},
@@ -498,7 +498,7 @@ func TestHintsOfWorld(t *testing.T) {
 	}{
 		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.world.entity.created", Subject: "world/app:hq"}, realms.Hints{App: "hq"}},
 		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.world.bond.added", Subject: "world/app:hq"}, realms.Hints{App: "hq"}},
-		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.world.entity.created", Subject: "world/node:k8s-worker-02"}, realms.Hints{}},
+		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.world.entity.created", Subject: "world/node:esprimo-2"}, realms.Hints{}},
 		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.world.history.rebased", Subject: "world/"}, realms.Hints{}},
 		{bridgeEvent{Source: atlasSource, Type: "dev.bnei.other", Subject: "world/app:hq"}, realms.Hints{}},
 		{bridgeEvent{Source: "client/bridge-core", Type: "dev.bnei.world.entity.created", Subject: "world/app:hq"}, realms.Hints{}},

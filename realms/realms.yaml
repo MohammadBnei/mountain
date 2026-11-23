@@ -79,14 +79,8 @@ hosts:
 # terraform var.pve_node_name: its value lives in the uncommitted tfvars (terraform/variables.tf, "likely bnei").
 pveNodeName: bnei
 
-# k8s VM -> Proxmox host. terraform's real k8s_nodes map is in the uncommitted tfvars, and the committed
-# inventory/ukubi/hosts.yaml names the nodes but not their host. (The town's relay/config.yaml carried the same buckets.)
+# Talos VM -> Proxmox host (terraform/talos var.nodes names the nodes, not their host).
 k8sPlacement:
-  k8s-cp-01: bnei
-  k8s-worker-01: bnei
-  k8s-cp-02: server1
-  k8s-worker-02: server1
-  k8s-cp-03: ex-laptop
   talos-cp-3: server1 # VM 210 on server1 (infra-bootstrap ARCHITECTURE.md); esprimo-1/2 are bare metal, on no PVE host
 
 # Where a repo with no docs/adr of its own sends a bare "ADR-NNNN".
@@ -137,11 +131,6 @@ components:
   host:bnei: { realm: platform, group: hosts }
   host:server1: { realm: platform, group: hosts }
   host:ex-laptop: { realm: platform, group: hosts }
-  vm:k8s-cp-01: { realm: platform, group: nodes }
-  vm:k8s-cp-02: { realm: platform, group: nodes }
-  vm:k8s-cp-03: { realm: platform, group: nodes }
-  vm:k8s-worker-01: { realm: platform, group: nodes }
-  vm:k8s-worker-02: { realm: platform, group: nodes }
   vm:esprimo-1: { realm: platform, group: nodes }
   vm:esprimo-2: { realm: platform, group: nodes }
   vm:talos-cp-3: { realm: platform, group: nodes }

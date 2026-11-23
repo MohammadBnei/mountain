@@ -32,7 +32,7 @@ functions:
 hosts: { bnei: h1, server1: h2, ex-laptop: h3 }
 pveNodeName: bnei
 sources: [infra-bootstrap, agent-fleet, mountain, pi-lab]
-k8sPlacement: { k8s-cp-01: bnei }
+k8sPlacement: { talos-cp-3: server1 }
 adrHome: { mountain: infra-bootstrap }
 shortADR: { infra-bootstrap: agent-fleet, agent-fleet: agent-fleet }
 skip: { infra-bootstrap: [kubespray] }
@@ -40,8 +40,9 @@ components:
   host:bnei: { realm: platform, group: hosts }
   host:server1: { realm: platform, group: hosts }
   host:ex-laptop: { realm: platform, group: hosts }
-  vm:k8s-cp-01: { realm: platform, group: nodes }
-  vm:k8s-worker-01: { realm: platform, group: nodes }
+  vm:talos-cp-3: { realm: platform, group: nodes }
+  vm:esprimo-1: { realm: platform, group: nodes }
+  vm:esprimo-2: { realm: platform, group: nodes }
   vm:pg02: { realm: data, group: postgres, parent: db:pg-proxmox }
   db:pg-proxmox: { realm: data, group: postgres }
   db:redis-main: { realm: data, group: redis }
@@ -307,7 +308,7 @@ func TestMachinesWithoutNodesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a missing nodes file failed the Run: %v", err)
 	}
-	noNode(t, res.Graph, "vm:k8s-cp-01")
+	noNode(t, res.Graph, "vm:talos-cp-3")
 	if !hasDrift(res.Graph, graph.DriftUnresolved, "repo:infra-bootstrap", nodesPath) {
 		t.Error("a missing nodes file raised no drift: the town would lose every k8s node silently")
 	}
@@ -324,13 +325,13 @@ func TestMachines(t *testing.T) {
 	if _, ok := edge(g, "ct:build-runner", "host:server1", graph.EdgeRunsOn); !ok {
 		t.Error("build-runner is not on server1")
 	}
-	if n := node(t, g, "vm:k8s-cp-01"); n.Attrs["k8s"] != "control-plane,etcd" || n.Attrs["ip"] != "192.168.1.201" {
-		t.Errorf("k8s-cp-01 = %+v", n)
+	if n := node(t, g, "vm:talos-cp-3"); n.Attrs["k8s"] != "control-plane,etcd" || n.Attrs["ip"] != "192.168.1.201" {
+		t.Errorf("talos-cp-3 = %+v", n)
 	}
-	if _, ok := edge(g, "vm:k8s-cp-01", "host:bnei", graph.EdgeRunsOn); !ok {
-		t.Error("k8s-cp-01 not placed")
+	if _, ok := edge(g, "vm:talos-cp-3", "host:server1", graph.EdgeRunsOn); !ok {
+		t.Error("talos-cp-3 not placed")
 	}
-	if !hasDrift(g, graph.DriftUnresolved, "vm:k8s-worker-01", "k8sPlacement") {
+	if !hasDrift(g, graph.DriftUnresolved, "vm:esprimo-1", "k8sPlacement") {
 		t.Error("an unplaced k8s node is not drift")
 	}
 	if !hasDrift(g, graph.DriftUnresolved, "vm:mystery", "node_name") {

@@ -17,7 +17,7 @@ func TestWalls(t *testing.T) {
 	dir := t.TempDir()
 	inv := filepath.Join(dir, "infra-bootstrap", meshInventory)
 	_ = os.MkdirAll(filepath.Dir(inv), 0o755)
-	_ = os.WriteFile(inv, []byte("all:\n  children:\n    k8s:\n      hosts:\n        k8s-cp-01:\n          ansible_host: 192.168.1.201\n          ansible_ssh_private_key_file: ~/.ssh/id\n    lxc:\n      hosts:\n        k9s-dashboard: {ansible_host: 192.168.1.110}\n        pihole: {}\n    pve:\n      hosts:\n        bnei: {}\n"), 0o644)
+	_ = os.WriteFile(inv, []byte("all:\n  children:\n    k8s:\n      hosts:\n        talos-cp-3:\n          ansible_host: 192.168.1.201\n          ansible_ssh_private_key_file: ~/.ssh/id\n    lxc:\n      hosts:\n        k9s-dashboard: {ansible_host: 192.168.1.110}\n        pihole: {}\n    pve:\n      hosts:\n        bnei: {}\n"), 0o644)
 	x := &Ctx{Repos: Repos{"infra-bootstrap": {Dir: filepath.Join(dir, "infra-bootstrap")}}}
 	src := func(p string) graph.Source { return graph.Source{Repo: "infra-bootstrap", Path: p} }
 	files := []sourceFile{
@@ -38,7 +38,7 @@ func TestWalls(t *testing.T) {
 		g.Nodes = append(g.Nodes, graph.Node{ID: "dns:" + host, Kind: "dns"})
 		g.Edges = append(g.Edges, graph.Edge{From: "dns:" + host, To: app, Kind: graph.EdgeRoute})
 	}
-	for _, id := range []string{"app:a", "app:r", "app:single", "app:o", "app:pub", "vm:k8s-cp-01", "host:bnei"} {
+	for _, id := range []string{"app:a", "app:r", "app:single", "app:o", "app:pub", "vm:talos-cp-3", "host:bnei"} {
 		g.Nodes = append(g.Nodes, graph.Node{ID: id, Kind: strings.Split(id, ":")[0]})
 	}
 	route("a.example", "app:a")
@@ -82,7 +82,7 @@ func TestWalls(t *testing.T) {
 		{"app:r", "wall", ""},            // one of three
 		{"app:r", "open", "true"},        // s.example is open
 		{"app:pub", "open", ""},
-		{"vm:k8s-cp-01", "mesh", "peer"},
+		{"vm:talos-cp-3", "mesh", "peer"},
 		{"host:bnei", "mesh", "peer"},
 	} {
 		if got := attr(c.id, c.k); got != c.want {

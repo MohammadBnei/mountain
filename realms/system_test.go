@@ -80,17 +80,14 @@ func TestSystem(t *testing.T) {
 			Tag{Resolution: Ambiguous, Candidates: []string{"app:hq", "app:other"}}},
 		{"two Applications list one object", Hints{OwnerChain: []Ref{{Kind: "ConfigMap", Namespace: "x", Name: "shared", TrackingID: "a:/ConfigMap:x/shared"}}},
 			Tag{Resolution: Ambiguous, Candidates: []string{"app:a", "app:b"}}},
-		// NOT live data: k8s-worker-02 is a kubespray VM, not a node of the Talos cluster (aliases.yaml lists no Talos node yet)
-		{"a static pod on a Node the alias table knows", Hints{OwnerChain: []Ref{{Kind: "Pod", Namespace: "kube-system", Name: "kube-apiserver-k8s-worker-02"}, {Kind: "Node", Name: "k8s-worker-02"}}},
-			Tag{System: "vm:k8s-worker-02", Resolution: Placement}},
-		{"a static pod on a Talos node aliases.yaml does not list yet", Hints{OwnerChain: []Ref{{Kind: "Pod", Namespace: "kube-system", Name: "kube-apiserver-esprimo-1"}, {Kind: "Node", Name: "esprimo-1"}}},
-			Tag{Resolution: Unresolved}},
+		{"a static pod on a Node the alias table knows", Hints{OwnerChain: []Ref{{Kind: "Pod", Namespace: "kube-system", Name: "kube-apiserver-esprimo-1"}, {Kind: "Node", Name: "esprimo-1"}}},
+			Tag{System: "vm:esprimo-1", Resolution: Placement}},
 		// owners.json: the InstanceManager's owner is longhorn.io/v1beta2 Node esprimo-2, a namespaced Longhorn CR, not the
 		// core Node; the dump has not that CR, so its managedFields here are the longhorn-manager that writes them
 		{"longhorn's per-node InstanceManager, owned by longhorn.io's Node CR", Hints{OwnerChain: []Ref{{Group: "longhorn.io", Kind: "InstanceManager", Namespace: "longhorn-system", Name: "instance-manager-0add9d9906a8a4f3ab194dcce64d0ae0"},
-			{Group: "longhorn.io", Kind: "Node", Namespace: "longhorn-system", Name: "k8s-worker-02"}}, ManagedFields: mf("longhorn-manager/Update", "longhorn-manager/Update/status")},
+			{Group: "longhorn.io", Kind: "Node", Namespace: "longhorn-system", Name: "esprimo-2"}}, ManagedFields: mf("longhorn-manager/Update", "longhorn-manager/Update/status")},
 			Tag{System: "app:longhorn", Resolution: Manager}},
-		{"a CR named Node, on a name the alias table places", Hints{OwnerChain: []Ref{{Group: "example.io", Kind: "Node", Name: "k8s-worker-02"}}},
+		{"a CR named Node, on a name the alias table places", Hints{OwnerChain: []Ref{{Group: "example.io", Kind: "Node", Name: "esprimo-2"}}},
 			Tag{Resolution: Unresolved}},
 		{"label tracking ArgoCD backs", Hints{OwnerChain: []Ref{{Group: "apps", Kind: "Deployment", Namespace: "hq", Name: "hq", Instance: "hq"}}},
 			Tag{System: "app:hq", Resolution: Applied}},

@@ -1734,7 +1734,8 @@
     ]
    },
    "want": {
-    "resolution": "unresolved"
+    "system": "vm:esprimo-1",
+    "resolution": "placement"
    }
   },
   {

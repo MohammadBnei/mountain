@@ -87,52 +87,19 @@ things:
       - {source: terraform-state, field: vmid, name: "303", status: declared, key: mac, at: 2026-10-17}
       - {source: pihole, field: A, name: pg-etcd-witness.bnei.lan, status: declared, key: ip, at: 2026-11-14}
 
-  # ---------------------------------------------------------------- the k8s node VMs (hosts: realms.yaml k8sPlacement)
-  # The name order is not the IP order: cp-02 is .204, cp-03 .206, the workers .202/.203.
-  vm:k8s-cp-01:
+  # ---------------------------------------------------------------- the Talos nodes (hosts: realms.yaml k8sPlacement)
+  # Names only: the node name is the join key until their addresses are proven here.
+  vm:esprimo-1:
     aliases:
-      - {source: k8s-api, field: node, name: k8s-cp-01, status: proven, key: ip, at: 2026-11-14}
-      - {source: prom-cluster, field: node, name: k8s-cp-01, status: proven, key: name, at: 2026-11-14}
-      - {source: prom-cluster, field: instance, name: "192.168.1.201:9100", status: proven, key: mac, at: 2026-11-14}
-      - {source: prom-cluster, field: internal_ip, name: 192.168.1.201, status: proven, key: ip, at: 2026-11-14}
-      - {source: terraform-state, field: vmid, name: "201", status: declared, key: mac, at: 2026-10-17}
-      - {source: pihole, field: A, name: k8s-cp-01.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+      - {source: k8s-api, field: node, name: esprimo-1, status: declared, key: name, at: 2026-11-23}
 
-  vm:k8s-cp-02:
+  vm:esprimo-2:
     aliases:
-      - {source: k8s-api, field: node, name: k8s-cp-02, status: proven, key: ip, at: 2026-11-14}
-      - {source: prom-cluster, field: node, name: k8s-cp-02, status: proven, key: name, at: 2026-11-14}
-      - {source: prom-cluster, field: instance, name: "192.168.1.204:9100", status: proven, key: mac, at: 2026-11-14}
-      - {source: prom-cluster, field: internal_ip, name: 192.168.1.204, status: proven, key: ip, at: 2026-11-14}
-      - {source: terraform-state, field: vmid, name: "204", status: declared, key: mac, at: 2026-10-17}
-      - {source: pihole, field: A, name: k8s-cp-02.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+      - {source: k8s-api, field: node, name: esprimo-2, status: declared, key: name, at: 2026-11-23}
 
-  vm:k8s-cp-03:
+  vm:talos-cp-3:
     aliases:
-      - {source: k8s-api, field: node, name: k8s-cp-03, status: proven, key: ip, at: 2026-11-14}
-      - {source: prom-cluster, field: node, name: k8s-cp-03, status: proven, key: name, at: 2026-11-14}
-      - {source: prom-cluster, field: instance, name: "192.168.1.206:9100", status: proven, key: mac, at: 2026-11-14}
-      - {source: prom-cluster, field: internal_ip, name: 192.168.1.206, status: proven, key: ip, at: 2026-11-14}
-      - {source: terraform-state, field: vmid, name: "206", status: declared, key: mac, at: 2026-10-17}
-      - {source: pihole, field: A, name: k8s-cp-03.bnei.lan, status: declared, key: ip, at: 2026-11-14}
-
-  vm:k8s-worker-01:
-    aliases:
-      - {source: k8s-api, field: node, name: k8s-worker-01, status: proven, key: ip, at: 2026-11-14}
-      - {source: prom-cluster, field: node, name: k8s-worker-01, status: proven, key: name, at: 2026-11-14}
-      - {source: prom-cluster, field: instance, name: "192.168.1.202:9100", status: proven, key: mac, at: 2026-11-14}
-      - {source: prom-cluster, field: internal_ip, name: 192.168.1.202, status: proven, key: ip, at: 2026-11-14}
-      - {source: terraform-state, field: vmid, name: "202", status: declared, key: mac, at: 2026-10-17}
-      - {source: pihole, field: A, name: k8s-worker-01.bnei.lan, status: declared, key: ip, at: 2026-11-14}
-
-  vm:k8s-worker-02:
-    aliases:
-      - {source: k8s-api, field: node, name: k8s-worker-02, status: proven, key: ip, at: 2026-11-14}
-      - {source: prom-cluster, field: node, name: k8s-worker-02, status: proven, key: name, at: 2026-11-14}
-      - {source: prom-cluster, field: instance, name: "192.168.1.203:9100", status: proven, key: mac, at: 2026-11-14}
-      - {source: prom-cluster, field: internal_ip, name: 192.168.1.203, status: proven, key: ip, at: 2026-11-14}
-      - {source: terraform-state, field: vmid, name: "203", status: declared, key: mac, at: 2026-10-17}
-      - {source: pihole, field: A, name: k8s-worker-02.bnei.lan, status: declared, key: ip, at: 2026-11-14}
+      - {source: k8s-api, field: node, name: talos-cp-3, status: declared, key: name, at: 2026-11-23}
 
   # ---------------------------------------------------------------- what `proxmox` can mean
   host:bnei:

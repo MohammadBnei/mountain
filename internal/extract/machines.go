@@ -44,7 +44,7 @@ func machines(x *Ctx) error {
 	if err := terraform(x, ips); err != nil {
 		return err
 	}
-	return inventory(x, ips)
+	return inventory(x)
 }
 
 func withIP(m map[string]string, ip string) map[string]string {
@@ -167,7 +167,7 @@ func literal(a *hclsyntax.Attribute) (string, bool) {
 // inventory adds the k8s nodes: the Talos control planes terraform/talos declares (var.nodes: name => IP), their host
 // from realms.yaml. The kubespray inventory is gone (infra-bootstrap #491); a missing file is a warning, never a failed
 // Run.
-func inventory(x *Ctx, ips map[string]string) error {
+func inventory(x *Ctx) error {
 	b, src, err := x.Read("infra-bootstrap", nodesPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
