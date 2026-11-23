@@ -66,7 +66,8 @@ type BridgeServiceClient interface {
 	ConfirmGap(context.Context, *connect.Request[v1.ConfirmGapRequest]) (*connect.Response[v1.ConfirmGapResponse], error)
 	// Tag attaches System tags to logged events. The bridge stores tags and
 	// never computes one: atlas resolves them as a client (conception §5, §16
-	// decision 6). Only a client allowed to tag may call it.
+	// decision 6). Only a client allowed to tag may call it; at most 1000 tags
+	// per call, system and registry_version at most 256 bytes each.
 	Tag(context.Context, *connect.Request[v1.TagRequest]) (*connect.Response[v1.TagResponse], error)
 }
 
@@ -188,7 +189,8 @@ type BridgeServiceHandler interface {
 	ConfirmGap(context.Context, *connect.Request[v1.ConfirmGapRequest]) (*connect.Response[v1.ConfirmGapResponse], error)
 	// Tag attaches System tags to logged events. The bridge stores tags and
 	// never computes one: atlas resolves them as a client (conception §5, §16
-	// decision 6). Only a client allowed to tag may call it.
+	// decision 6). Only a client allowed to tag may call it; at most 1000 tags
+	// per call, system and registry_version at most 256 bytes each.
 	Tag(context.Context, *connect.Request[v1.TagRequest]) (*connect.Response[v1.TagResponse], error)
 }
 

@@ -54,7 +54,16 @@ type CloudEvent struct {
 	// ours. A fork PR is never owned, but the head repo is only in
 	// pull_request and pull_request_review payloads: a comment on a fork PR
 	// can read owned. GitHub events only; Publish always clears it.
-	ThreadOwned   bool `protobuf:"varint,16,opt,name=thread_owned,json=threadOwned,proto3" json:"thread_owned,omitempty"`
+	ThreadOwned bool `protobuf:"varint,16,opt,name=thread_owned,json=threadOwned,proto3" json:"thread_owned,omitempty"`
+	// Set by the bridge on delivery, never on Publish. "uncontracted": the
+	// event's type is not in the bridge's event contract (only flagged once a
+	// contract has loaded). Consumers must ack and skip an event carrying any flag.
+	Flags []string `protobuf:"bytes,17,rep,name=flags,proto3" json:"flags,omitempty"`
+	// Set by the bridge on delivery, never on Publish: the raw JSON producer
+	// stored with the event, {"kind":"client"|"route","name":...} (a service
+	// account client adds "ns", "sa" and "pod"). Empty for an event stored
+	// before the column existed.
+	Producer      []byte `protobuf:"bytes,18,opt,name=producer,proto3" json:"producer,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -194,6 +203,20 @@ func (x *CloudEvent) GetThreadOwned() bool {
 	return false
 }
 
+func (x *CloudEvent) GetFlags() []string {
+	if x != nil {
+		return x.Flags
+	}
+	return nil
+}
+
+func (x *CloudEvent) GetProducer() []byte {
+	if x != nil {
+		return x.Producer
+	}
+	return nil
+}
+
 type PublishRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Event         *CloudEvent            `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
@@ -293,12 +316,21 @@ type SubscribeRequest struct {
 	// Empty matches every subject.
 	Subjects []string `protobuf:"bytes,3,rep,name=subjects,proto3" json:"subjects,omitempty"`
 	// Systems, as tagged by Tag. Empty: no system filter. Otherwise only events
-	// with a tag naming one of them, at any resolution but ambiguous or
-	// unresolved, among the tags of the registry version that tagged the event
-	// last (an older version's tags no longer count). An event is seen once it is tagged, still in log order: a tag
-	// that lands after the stream has moved past its event is not delivered
-	// (Replay sees it).
-	Systems       []string `protobuf:"bytes,4,rep,name=systems,proto3" json:"systems,omitempty"`
+	// with a tag naming one of them at resolution applied (or one opted into
+	// with resolutions), among the tags of the event's current registry version
+	// (the one whose first tag arrived last; an older version's tags no longer
+	// count). Delivery stays in log order and waits for the tag: when the next
+	// event is not tagged yet, the stream holds it (head of line) for the
+	// bridge's grace window (BRIDGE_TAG_GRACE, default 60s), then moves past it
+	// and every untagged event after it whose window has passed too, records
+	// them as a gap and ends Aborted (key stream.gapped): reconnect, and the gap
+	// comes first, as for retention. An event tagged after the stream moved past
+	// it is not delivered (Replay sees it).
+	Systems []string `protobuf:"bytes,4,rep,name=systems,proto3" json:"systems,omitempty"`
+	// Resolutions accepted besides applied, which alone may route a wake by
+	// default: any of tracked, placement, manager. ambiguous and unresolved
+	// never match. Only with systems.
+	Resolutions   []string `protobuf:"bytes,5,rep,name=resolutions,proto3" json:"resolutions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -361,14 +393,26 @@ func (x *SubscribeRequest) GetSystems() []string {
 	return nil
 }
 
+func (x *SubscribeRequest) GetResolutions() []string {
+	if x != nil {
+		return x.Resolutions
+	}
+	return nil
+}
+
 type SubscribeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unset on the message that carries a gap.
 	Event *CloudEvent `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	// Sent first when retention deleted matching events this subscription
-	// never acked: resync from your own source of truth, then ConfirmGap with
-	// its version. Sent again on every reconnect until confirmed.
-	Gap           *Gap `protobuf:"bytes,2,opt,name=gap,proto3" json:"gap,omitempty"`
+	// never acked, or a System filter moved past untagged events: resync from
+	// your own source of truth, then ConfirmGap with its version. Sent again on
+	// every reconnect until confirmed.
+	Gap *Gap `protobuf:"bytes,2,opt,name=gap,proto3" json:"gap,omitempty"`
+	// The event's current tag set (the rows of its current registry version),
+	// on every subscription, filtered or not; empty when it is untagged. Check
+	// the resolution before acting on it.
+	Tags          []*EventTag `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -413,6 +457,13 @@ func (x *SubscribeResponse) GetEvent() *CloudEvent {
 func (x *SubscribeResponse) GetGap() *Gap {
 	if x != nil {
 		return x.Gap
+	}
+	return nil
+}
+
+func (x *SubscribeResponse) GetTags() []*EventTag {
+	if x != nil {
+		return x.Tags
 	}
 	return nil
 }
@@ -814,7 +865,10 @@ type ReplayResponse struct {
 	// Sent first when from_seq is at or below the retention watermark: events
 	// in it may have been deleted; what follows is what is kept (parked events
 	// included).
-	Gap           *Gap `protobuf:"bytes,2,opt,name=gap,proto3" json:"gap,omitempty"`
+	Gap *Gap `protobuf:"bytes,2,opt,name=gap,proto3" json:"gap,omitempty"`
+	// The event's current tag set, as on SubscribeResponse. Replay never sends
+	// an untagged event to a System-filtered subscription.
+	Tags          []*EventTag `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -859,6 +913,13 @@ func (x *ReplayResponse) GetEvent() *CloudEvent {
 func (x *ReplayResponse) GetGap() *Gap {
 	if x != nil {
 		return x.Gap
+	}
+	return nil
+}
+
+func (x *ReplayResponse) GetTags() []*EventTag {
+	if x != nil {
+		return x.Tags
 	}
 	return nil
 }
@@ -920,8 +981,10 @@ type EventTag struct {
 	// or ambiguous, or unresolved. There is no namespace rung.
 	Resolution string `protobuf:"bytes,3,opt,name=resolution,proto3" json:"resolution,omitempty"`
 	// The registry version the resolver used (the infra-bootstrap sha and the
-	// ArgoCD resource-list snapshot id): a later version may tag the event again,
-	// and then only the version tagged last counts for a System filter.
+	// ArgoCD resource-list snapshot id): a new version may tag the event again,
+	// and then only the version whose first tag arrived last counts for a
+	// System filter; re-sending an older version's tags does not make it
+	// current again.
 	RegistryVersion string `protobuf:"bytes,4,opt,name=registry_version,json=registryVersion,proto3" json:"registry_version,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -1086,7 +1149,7 @@ var File_bridge_v1_bridge_proto protoreflect.FileDescriptor
 
 const file_bridge_v1_bridge_proto_rawDesc = "" +
 	"\n" +
-	"\x16bridge/v1/bridge.proto\x12\tbridge.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xaf\x03\n" +
+	"\x16bridge/v1/bridge.proto\x12\tbridge.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe1\x03\n" +
 	"\n" +
 	"CloudEvent\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x03R\x03seq\x12\x0e\n" +
@@ -1104,20 +1167,24 @@ const file_bridge_v1_bridge_proto_rawDesc = "" +
 	"\fcausation_id\x18\r \x01(\tR\vcausationId\x12\x1a\n" +
 	"\breplayed\x18\x0e \x01(\bR\breplayed\x12#\n" +
 	"\ractor_trusted\x18\x0f \x01(\bR\factorTrusted\x12!\n" +
-	"\fthread_owned\x18\x10 \x01(\bR\vthreadOwnedJ\x04\b\n" +
+	"\fthread_owned\x18\x10 \x01(\bR\vthreadOwned\x12\x14\n" +
+	"\x05flags\x18\x11 \x03(\tR\x05flags\x12\x1a\n" +
+	"\bproducer\x18\x12 \x01(\fR\bproducerJ\x04\b\n" +
 	"\x10\vR\atrusted\"=\n" +
 	"\x0ePublishRequest\x12+\n" +
 	"\x05event\x18\x01 \x01(\v2\x15.bridge.v1.CloudEventR\x05event\"/\n" +
 	"\x0fPublishResponse\x12\x1c\n" +
-	"\tduplicate\x18\x01 \x01(\bR\tduplicate\"r\n" +
+	"\tduplicate\x18\x01 \x01(\bR\tduplicate\"\x94\x01\n" +
 	"\x10SubscribeRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05types\x18\x02 \x03(\tR\x05types\x12\x1a\n" +
 	"\bsubjects\x18\x03 \x03(\tR\bsubjects\x12\x18\n" +
-	"\asystems\x18\x04 \x03(\tR\asystems\"b\n" +
+	"\asystems\x18\x04 \x03(\tR\asystems\x12 \n" +
+	"\vresolutions\x18\x05 \x03(\tR\vresolutions\"\x8b\x01\n" +
 	"\x11SubscribeResponse\x12+\n" +
 	"\x05event\x18\x01 \x01(\v2\x15.bridge.v1.CloudEventR\x05event\x12 \n" +
-	"\x03gap\x18\x02 \x01(\v2\x0e.bridge.v1.GapR\x03gap\"Q\n" +
+	"\x03gap\x18\x02 \x01(\v2\x0e.bridge.v1.GapR\x03gap\x12'\n" +
+	"\x04tags\x18\x03 \x03(\v2\x13.bridge.v1.EventTagR\x04tags\"Q\n" +
 	"\x03Gap\x12\x19\n" +
 	"\bfrom_seq\x18\x01 \x01(\x03R\afromSeq\x12\x15\n" +
 	"\x06to_seq\x18\x02 \x01(\x03R\x05toSeq\x12\x18\n" +
@@ -1138,10 +1205,11 @@ const file_bridge_v1_bridge_proto_rawDesc = "" +
 	"\fNackResponse\"N\n" +
 	"\rReplayRequest\x12\"\n" +
 	"\fsubscription\x18\x01 \x01(\tR\fsubscription\x12\x19\n" +
-	"\bfrom_seq\x18\x02 \x01(\x03R\afromSeq\"_\n" +
+	"\bfrom_seq\x18\x02 \x01(\x03R\afromSeq\"\x88\x01\n" +
 	"\x0eReplayResponse\x12+\n" +
 	"\x05event\x18\x01 \x01(\v2\x15.bridge.v1.CloudEventR\x05event\x12 \n" +
-	"\x03gap\x18\x02 \x01(\v2\x0e.bridge.v1.GapR\x03gap\"5\n" +
+	"\x03gap\x18\x02 \x01(\v2\x0e.bridge.v1.GapR\x03gap\x12'\n" +
+	"\x04tags\x18\x03 \x03(\v2\x13.bridge.v1.EventTagR\x04tags\"5\n" +
 	"\n" +
 	"TagRequest\x12'\n" +
 	"\x04tags\x18\x01 \x03(\v2\x13.bridge.v1.EventTagR\x04tags\"\x7f\n" +
@@ -1205,28 +1273,30 @@ var file_bridge_v1_bridge_proto_depIdxs = []int32{
 	0,  // 1: bridge.v1.PublishRequest.event:type_name -> bridge.v1.CloudEvent
 	0,  // 2: bridge.v1.SubscribeResponse.event:type_name -> bridge.v1.CloudEvent
 	5,  // 3: bridge.v1.SubscribeResponse.gap:type_name -> bridge.v1.Gap
-	0,  // 4: bridge.v1.ReplayResponse.event:type_name -> bridge.v1.CloudEvent
-	5,  // 5: bridge.v1.ReplayResponse.gap:type_name -> bridge.v1.Gap
-	15, // 6: bridge.v1.TagRequest.tags:type_name -> bridge.v1.EventTag
-	1,  // 7: bridge.v1.BridgeService.Publish:input_type -> bridge.v1.PublishRequest
-	3,  // 8: bridge.v1.BridgeService.Subscribe:input_type -> bridge.v1.SubscribeRequest
-	6,  // 9: bridge.v1.BridgeService.Ack:input_type -> bridge.v1.AckRequest
-	10, // 10: bridge.v1.BridgeService.Nack:input_type -> bridge.v1.NackRequest
-	12, // 11: bridge.v1.BridgeService.Replay:input_type -> bridge.v1.ReplayRequest
-	8,  // 12: bridge.v1.BridgeService.ConfirmGap:input_type -> bridge.v1.ConfirmGapRequest
-	14, // 13: bridge.v1.BridgeService.Tag:input_type -> bridge.v1.TagRequest
-	2,  // 14: bridge.v1.BridgeService.Publish:output_type -> bridge.v1.PublishResponse
-	4,  // 15: bridge.v1.BridgeService.Subscribe:output_type -> bridge.v1.SubscribeResponse
-	7,  // 16: bridge.v1.BridgeService.Ack:output_type -> bridge.v1.AckResponse
-	11, // 17: bridge.v1.BridgeService.Nack:output_type -> bridge.v1.NackResponse
-	13, // 18: bridge.v1.BridgeService.Replay:output_type -> bridge.v1.ReplayResponse
-	9,  // 19: bridge.v1.BridgeService.ConfirmGap:output_type -> bridge.v1.ConfirmGapResponse
-	16, // 20: bridge.v1.BridgeService.Tag:output_type -> bridge.v1.TagResponse
-	14, // [14:21] is the sub-list for method output_type
-	7,  // [7:14] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	15, // 4: bridge.v1.SubscribeResponse.tags:type_name -> bridge.v1.EventTag
+	0,  // 5: bridge.v1.ReplayResponse.event:type_name -> bridge.v1.CloudEvent
+	5,  // 6: bridge.v1.ReplayResponse.gap:type_name -> bridge.v1.Gap
+	15, // 7: bridge.v1.ReplayResponse.tags:type_name -> bridge.v1.EventTag
+	15, // 8: bridge.v1.TagRequest.tags:type_name -> bridge.v1.EventTag
+	1,  // 9: bridge.v1.BridgeService.Publish:input_type -> bridge.v1.PublishRequest
+	3,  // 10: bridge.v1.BridgeService.Subscribe:input_type -> bridge.v1.SubscribeRequest
+	6,  // 11: bridge.v1.BridgeService.Ack:input_type -> bridge.v1.AckRequest
+	10, // 12: bridge.v1.BridgeService.Nack:input_type -> bridge.v1.NackRequest
+	12, // 13: bridge.v1.BridgeService.Replay:input_type -> bridge.v1.ReplayRequest
+	8,  // 14: bridge.v1.BridgeService.ConfirmGap:input_type -> bridge.v1.ConfirmGapRequest
+	14, // 15: bridge.v1.BridgeService.Tag:input_type -> bridge.v1.TagRequest
+	2,  // 16: bridge.v1.BridgeService.Publish:output_type -> bridge.v1.PublishResponse
+	4,  // 17: bridge.v1.BridgeService.Subscribe:output_type -> bridge.v1.SubscribeResponse
+	7,  // 18: bridge.v1.BridgeService.Ack:output_type -> bridge.v1.AckResponse
+	11, // 19: bridge.v1.BridgeService.Nack:output_type -> bridge.v1.NackResponse
+	13, // 20: bridge.v1.BridgeService.Replay:output_type -> bridge.v1.ReplayResponse
+	9,  // 21: bridge.v1.BridgeService.ConfirmGap:output_type -> bridge.v1.ConfirmGapResponse
+	16, // 22: bridge.v1.BridgeService.Tag:output_type -> bridge.v1.TagResponse
+	16, // [16:23] is the sub-list for method output_type
+	9,  // [9:16] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_bridge_v1_bridge_proto_init() }
