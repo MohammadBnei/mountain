@@ -1,6 +1,6 @@
 # 25 · Foundation: the UI, the sim and the world model
 
-Status: research, 2026-11-14. Nothing here is decided beyond the owner answers below.
+Status: decided and in build, 2026-11-23 (opened as research on 2026-11-14). The owner answers below stand; the architecture ADRs are in `04-architecture/`, the build in `06-roadmap/`. Built in part; see each `06-roadmap/` file for what shipped.
 
 ## Why
 

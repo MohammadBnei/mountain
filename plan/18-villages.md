@@ -1,5 +1,7 @@
 # 18 · Villages: one world for the owner, friends and engineers
 
+> **Superseded in part (2026-11-23) by `25-foundation/00-brief.md`,** row "The old district layout": "**Retire the town page** and its grid (`town.Layout`, `town.Place`, `placement.json`, `cmd/townpin`, and the `Whole` gate on founding). This supersedes plan/18's \"until it retires at parity\"". The rest of this plan stands.
+
 Status: draft 3, 2026-10-31, after two doubt rounds (product and code), the owner's answers and the control room.
 
 This plan supersedes two things in plan/17:

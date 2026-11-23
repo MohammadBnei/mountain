@@ -1,11 +1,12 @@
 # 24 · One HUD: the dock, the Menu and the panels
 
+> **Superseded in part (2026-11-23) by `25-foundation/00-brief.md`,** row "The four views": "**Rethink the strategy view.** This supersedes plan/24 rows 8-9 (the overview as a side panel, shipped in ukubi-game #252)." Rows 8 ("The overview is a side panel: search, Needs you, a Cockpit link (owner only), \"Cluster and districts ›\"") and 9 ("The desktop deck lives only in the overview. Explore on the desktop uses the dock as the phone does") give way; the rest stands.
+
 Status: approved, 2026-11-12 (rev 4). The owner approved rev 3 with one change: build mode is hidden from the HUD.
 
 Sources:
-- the owner interview and the mockup review of 2026-11-12 (memory `hud-design-intent`, `hud-coherence`);
-- the approved mockups: `.wt/hud-mock/DESIGN.md` and `out/*.png` (P1–P6 phone, D1–D4 desktop);
-- the inventory of every current HUD element: `.wt/hud-shots/INVENTORY.md`;
+- the owner interview and the mockup review of 2026-11-12 (the owner's HUD design and coherence decisions);
+- the approved mockups (P1–P6 phone, D1–D4 desktop) and the inventory of every HUD element, kept outside this repo and not carried over;
 - the owner's answers to Q1–Q18 (rev 2), one doubt cycle (rev 3), and the owner's approval with build hidden (rev 4).
 
 What it changes in other plans:
