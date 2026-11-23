@@ -177,3 +177,8 @@ Decisions so far, in the order the owner took them:
    - The building shows the real harm (smoke, cracks, residents fleeing) and mends as the monster wears down.
    - Strategy and explore see the same fight: strategy from above, with the cards and the transcript in the right zone;
      explore on foot.
+5. **Friends join the fight itself: the LLM conversation. The agents are the allies** (2026-11-23).
+   - The fight's transcript is a shared thread, as in a shared agent workspace. A friend who joins writes into the same
+     discussion as the owner, each line marked with its speaker.
+   - The party is the humans plus the agents. ops-lead is an ally, and every worker it spawns appears as an ally too:
+     it arrives when its run starts and leaves when the run ends.
