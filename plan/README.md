@@ -1,177 +1,59 @@
-# mountain.bnei.dev: ukubi as a live town
+# mountain: the master plans
 
-> This is the master plan. Each section lives in its own file in this folder, and this file is the index.
-> **Revision 7, 2026-10-22.** The Aretē mountain is retired: its metaphor did not carry over to 3D. The mountain's last
-> state is the local tag `mountain-final` (`f1a53b2`), which holds its plan files (03-model-*, 05-story, 09-style,
-> style/) and code.
-> **Revision 8, 2026-10-22.** The town grows up: islands sized by their hosts, a building typology, then the machines
-> and the annexes (00 R8 rows).
-> **Revision 10, 2026-10-24.** atlas: admins only, the town rebuilt as realm islands, the relay absorbed into a
-> CQRS projector (00 R10 rows, `10-understanding.md`). A1 and A2 (`cmd/atlas`, L0/L1, the town deleted) merged; A3
-> (L2 cities, L3 cards, the L4 reader) built.
-> **Revision 11, 2026-10-25.** `ukubi-game`: an offline world mirroring the contracts, and the game on top
-> (`12-world-and-game.md`). mountain exports what atlas reads as `contract/`, and `realms/` goes public.
-> **Revision 12, 2026-10-25 (draft).** The game's town: everything but the hardware is a building, civs are the
-> realms reshaped, one held age paid by goals, research, users, latency and stability, AoE-style supply lines and
-> defence, kits repainted into palettes (`13-game-town.md`).
-> **Revision 13, 2026-10-27 (draft).** The console: complete control of the cluster from the game, one Go `Provider`
-> interface, direct writes bounded at the API server and audited, the sim mirroring every source (`14-console.md`); and
-> the ukubi architecture standard for every app (`15-architecture.md`).
-> From A2 on, the town sections below (Context, R7–R9, `01`–`08`) are history: the code they describe is gone, and
-> `10-understanding.md` is the live design.
+Status: current, 2026-11-23. Revision 14: the index is rebuilt as one status row per file. The R7-R9 town sections,
+their verification and rollback commands are gone: the town code (relay, `relay/rollback/`, `www/dev/schema/`,
+`www/dev/townshots.mjs`) was deleted in A2 and exists only in git history.
 
-## Context
-mountain.bnei.dev draws the ukubi cluster live. Since R7 it is a **town** built from pi-lab's clay kit
-(`pi-lab/compose/www`: KayKit hex tiles and buildings). It is driven by the same Go relay: PromQL, Alertmanager and
-GitHub feed sanitised `/ws` frames, with Postgres history, scrub, OIDC detail mode and visitor marks.
+mountain holds atlas (the cluster understanding surface, `cmd/atlas`) and these plans. Each plan is a file in this
+folder; this file is the index. How a change is made is `16-dev-rules.md`.
 
-- **Three islands = the Proxmox hosts h1..h3**, joined by bridges.
-- **Every allowlisted app and platform service is a building** on the island of the host its pods really run on. Go
-  places the plots and persists them.
-- Signals are shown as town life:
-  - syncs drop a building in;
-  - restarts make it hop;
-  - traffic is walkers at the door;
-  - alerts light beacon fires.
-- The sky follows the real Paris sun. Signed-in visitors plant a tree by day, a flag at dawn or dusk, and a lantern at
-  night.
-- The look follows the **Ukubi design system**: Office tokens by day, Underground·Glow at night, and a wire colour per
-  system.
+**Status words.** *approved*: the owner signed it off. *agreed*: decided in an interview. *draft*: not yet signed off.
+*history*: describes code that is gone or work that is done. *superseded*: replaced, with a banner in the file.
 
-The binding rule is unchanged: **every image is true and tied to something real.**
+## Index
 
-## Status (2026-10-22)
-- **R7 is live:**
-  - Phase 1 (relay, additive) shipped in PR #20.
-  - Phases 2–5 shipped in PR #21 (image `2573bce34991`).
-  - The owner approved the styleboard and the mapping.
-  - The town replaced `www/`. The mountain code, STT and `/api/topology` are deleted.
-  - Migration 004 archived the mountain history.
-- **R7.1** is a hardening wave from a post-deploy doubt cycle: three read-only reviews of the merged code.
-  - **Plants:** they wilt after 7 days, and a full island's oldest plant gives way.
-  - **Data:** the storage class says `replicated`, not the product. An empty Ready or quorum answer changes nothing.
-    A host is unknown, not down, until its first answer.
-  - **Plots:** a freed ruin waits for ArgoCD before it is rebuilt. A pending move restarts after a gap in the answers.
-  - **Ops:**
-    - a first boot still seeds the rate limits;
-    - the `MountainTownEmpty` alarm;
-    - the rollback can run twice;
-    - quorum rides the hello.
-  - **Front end:**
-    - moved buildings stay tappable, and so do ruins;
-    - a failed model no longer freezes the town;
-    - no instance overflow during a storm of alerts;
-    - a pinch is never a tap;
-    - a "can't reach" message;
-    - the session is re-read when the page returns, and the quota is known before Plant enables;
-    - the kill switch hides the plants;
-    - label widths are right after the fonts load.
-- **Live checks are not done from the agent container.** Its proxy denies `mountain.bnei.dev`, so the owner runs them
-  until the host is added to the environment's allowed domains.
-- **Human-gated:**
-  - Land `adr-0056-amendment.md` in infra-bootstrap.
-  - Remove `STT_TOKEN_MOUNTAIN` from Infisical.
-  - The W4 items in 07/08 still apply: enrollment, the binding gate and Grafana strict.
-
-## R8 (2026-10-22)
-The live check of R7.1 found h3 empty (no app runs most of its pods on `k8s-cp-03`) and Garage with traffic but no
-building (it is an LXC). The owner's answers, one question at a time, are the R8 rows of 00.
-
-| Step | Content | State |
+| File | Content | Status |
 |---|---|---|
-| Phase 1 | infra-bootstrap PR #366: ADR-0064 (amends ADR-0056 Decisions 2–3) and seven `guest-<role>` blackbox probes | Merged (`2ded417`), probes live |
-| Deploy A | Islands 7/5/4, families and ring order, eleven more KayKit models, ground caps, streets, bridge-head walls, fitted camera, island chips, label shapes, build guard, migration 005 + rollback | **Live** (PR #23, `aa59d30`, 2026-10-22) |
-| Deploy B | The machines: keeps, halls, guests from `guest-*` probes, debounced state, admin names via `/auth/me` | Live 2026-10-22 (`e4ca1b1`): 12 machines, the 7 guests published up after their 10-min hold |
-| Deploy C0 | The gate, in infra-bootstrap (ADR-0065): `mountain-gate` forwardAuth, invitation-only enrollment | PR open; the owner merges, then reviews `mountain-visitors` |
-| Deploy C1 | The gate ref, automatic relay sign-in, the expiry reload, private assets, coarse replicas + migration 006 | Merged (PR #25, `9d82f82`, 2026-10-23), image `9d82f8224ecc` deployed. The gate holds only after the authentik worker restart; live checks are the owner's |
-| Deploy C2 | Annexes: a copy of the app's building + banner, zoom levels | Merged (PR #26, `bea87d4`, 2026-10-23) during a power outage; deploys when the cluster and its runner are back |
-| Civ (R9) | The herald, technologies, golden age bunting, turns, a guide (00 Civ row); levels taken out until goals exist (09-play) | Styleboard **signed off by the owner** (2026-10-23); PR open after C2 merged |
-| Engine | Measure (shadow shapes, walker shadows, simplification test, gate breakdown), then BatchedMesh | After Civ (its worst case fits as is) |
-| Play (research) | Make the town playable with fleet agents: owner interview, architecture, doubt cycle (`09-play.md`) | **Parked** 2026-10-24 (admins only, R10) |
-| Atlas (R10) | The system understanding surface: realm islands, a 5-step ladder, a CQRS projector over the repos and live data, admins only (`10-understanding.md`). Joint with agent-kit | A0 + A1 merged (#28, `8d0e3ad`). A2 merged (#29, `7c8623a`): `cmd/atlas` replaces the relay, L0 map + land lens and L1 trade routes, the repo poll, the town deleted; not live until the cluster is back (`11-cluster-return.md`). A3 built: L2 cities, L3 CSS3D cards, the L4 reader with redaction; merge on the owner's word |
-| World and game (R11) | `ukubi-game` (private): an offline sim mirroring Prometheus, Alertmanager, GitHub and authentik on the wire, so atlas iterates with no cluster; a goals-per-building game on top, with agent-fleet definition sessions doing the work (`12-world-and-game.md`) | Approved 2026-10-25. mountain's slice 1a merged (#31). In `ukubi-game`: slices 1, 2, 4a, 5a and 3 merged (sim, forge, goals and Merge, the director, fleet agents on steps); the full agent loop waits on the owner's `/kind-local` run |
-| Game town (R12) | The game's look and AoE mechanics: buildings and civs from atlas's realms (reshaped), supply lines, defence, research, capacity, one held age, units as live sessions, the kit system (`13-game-town.md`) | **Draft** 2026-10-25 (four owner rounds, three doubt cycles; eight open questions). A7a built (realms reshaped into civs, functions, repos in Code); A7b built (kubespray add-ons, Pigsty's Postgres and Redis); slice 3 built (ukubi-kit: one kit per civ, the procgen library; the diorama in ukubi-game); A7c next |
-| Console (R13) | Complete control of the cluster from the game: providers per source, actions per app type, bounded writes, confirmations, audit, mirrors (`14-console.md`) | **Draft** 2026-10-27: wireframe agreed, one doubt cycle and the owner's answers folded in. Its infra-bootstrap ADR (four parts) opens once #377 has merged |
-| Architecture (R13) | The ukubi code standard: seams, stages and state machines, layout, errors, config, event log, OpenTelemetry, front end, Bun (`15-architecture.md`) | **Agreed** 2026-10-27 (architect interview, one doubt cycle). Moving the existing code is listed at its end, one PR per step |
-| Dev rules (R13) | How a change is made: the loop (plan, doubt cycle, the proof first, build, checks, review, PR, merge), planning, proving a refactor, review, and the traps met (`16-dev-rules.md`) | **Written** 2026-10-27 at the owner's request, from the standard's rollout; condensed in ukubi-game's and ukubi-kit's CLAUDE.md and the fleet's `change-loop` skill |
-| World disc (R16) | The world redrawn as a disc: logic on top, hosts and VMs underneath, rings by layer with a breathing layout, moons for what is off the disc; three altitudes (starship, bicycle, on foot), a cockpit, live characters, a calm half (`17-world-disc.md`) | **Draft** 2026-10-29 (three owner rounds, two doubt cycles). Replaces 13's islands and civ grouping; D1 (the orbit disc) first; it does not wait on D0 |
-| Villages (R16) | The disc laid out as villages by civ round a capital (option C): friend-facing apps' bazaar first from the spawn, infra cities round it, hamlets as frontier outposts; one world for the owner, friends and engineers; quick menu and portal to public apps, guests and sign-in, a visitor funnel (`18-villages.md`) | **Draft** 2026-10-31 (owner interview, two doubt rounds). Supersedes 17's ring layout; V1 (server layout v3) first |
-| Storyboard (R16) | The world's story and its one core quest: a self-portrait and the thesis "work can be played"; on foot to a stall, the builder's yard (a small guided LLM, the owner's real stack), a fork to sign in, a crowd challenge, joining the disc, the keeper's question; the keeper lives in the world, letters both ways, visitor data written by the owner pod (`19-storyboard.md`) | **Draft** 2026-11-01 (owner ideation, interview, one doubt cycle). Replaces 18's "plan 19" row; ships when the cluster is back |
-| Shared world (R17) | One job per part: a Go physics core (server, and the client as WASM), the land in Go, a realm service for what is shared and dynamic (bodies, mobs, bosses, combat, items, nodes, pieces, inventory); MMO-lite farming, opt-in PvP, building in reserved zones (`21-the-shared-world.md`) | **Approved** 2026-11-02 (owner interview, two architecture interviews, two doubt cycles). Amends 19 (mobs, PvP) and 13 (WASM under the CSP) |
-| Voice and chat (R18) | The realm as the social hub: proximity voice on self-hosted LiveKit enforced by publisher permissions, World and Party chat, ad-hoc parties, one realm mail replacing the visitor letters, mute/block/report with a 3-report timeout, the owner's ban reaching voice (`22-voice-and-chat.md`) | **Approved** 2026-11-11 (handoff interview, architecture interview, three doubt cycles). Amends 19 (voice chat) and 21 (realm social state) |
-| Interaction system (R19) | One input system: one router with a context stack (no listener races), focus from tap/hover/part/carried with a bottom box and a hold radial, a few globals plus a Menu radial, registries for interactable actions and global commands (`23-interaction-system.md`) | **Approved** 2026-11-11 (owner interview, three doubt cycles, owner answers a–f). Pauses plan/22 P3–P5, which plug in as registry entries |
-| One HUD (R20) | One HUD: at rest only the map corner and one Menu button; one contextual bottom dock (focus, fight, a chat, mail or hint line); a 4-entry Menu (Map, People, Overview, Settings); People and Settings panels; an overview side panel holding the deck and the Cockpit link; assignable skill slots and a self radial; one component family on the tokens; full speed by default, auto-jump and a swipe-up jump (`24-hud.md`) | **Approved** 2026-11-12, rev 4 (owner interview, mockups, owner answers to Q1–Q18, one doubt cycle; build mode hidden). Builds on 23 (the box becomes the dock, `GLOBALS` 8 → 4); re-homes 22's chat log and P3–P5 UI |
-| Strategy pass (R21) | A hands-on walk of the strategy view: 21 fixes (selection sync, the selected row, "unreadable", logs, spans, threads, camera, labels), 6 upgrades (village face, coverage, data-store telemetry, Details parity, lenses, Needs you), and five personas on where fun meets work (`29-strategy-pass.md`) | **Draft** 2026-11-23; four open questions for the owner. Builds on 25 ui-core and the fleet-integration decisions |
-| Later | **The sea** (owner, 2026-10-23): water between the islands, with waves | After Deploy C; its own plan |
+| `00-decisions.md` | Decisions and review log (the attribution table is superseded) (the R rows) | current, appended per revision |
+| `01-architecture.md` | The retired town's repo layout, world/bus, kit, budgets, CI | history (town deleted in A2); CI rows updated |
+| `02-data.md` | The retired town's sources, PromQL, placement, persistence | history |
+| `03-objects.md` | The retired town's objects: what each signal looks like | history |
+| `04-sandbox.md` | The retired town's dev loop, gate, fixtures | history |
+| `06-relay.md` | The retired Go relay: endpoints, protocol, security | history (absorbed by atlas) |
+| `07-infra.md` | infra-bootstrap PRs and ADRs of the town, each with its owner | history |
+| `08-auth.md` | The town's detail mode and visitor hardening | history |
+| `09-play.md` | Playing the town with fleet agents (research) | research, parked 2026-10-24 (R10) |
+| `10-understanding.md` | atlas: the system understanding surface (R10 design) | A0, A1, A2 merged, A3 built |
+| `11-cluster-return.md` | The owner's checklist for when the cluster came back (2026-10-24 outage) | history |
+| `12-world-and-game.md` | ukubi-game: an offline world mirroring the contracts, and the game on top (R11) | approved 2026-10-25 |
+| `13-game-town.md` | The game's town: buildings, civs, ages, kits (R12) | superseded by `17-world-disc.md` |
+| `14-console.md` | Control of the cluster from the game: providers, bounded writes, audit (R13) | draft 2026-10-27 |
+| `15-architecture.md` | The ukubi code standard: seams, errors, config, front end, Bun (R13) | agreed 2026-10-27 |
+| `16-dev-rules.md` | How a change is made: the loop, checks, merge | current, 2026-11-23 |
+| `17-world-disc.md` | The world as a disc, from orbit to a building's rooms (R16) | draft 2026-10-29; layout superseded in part by 18 |
+| `18-villages.md` | Villages by civ round a capital: one world for owner, friends, engineers (R16) | draft 3, 2026-10-31; superseded in part by `25-foundation/00-brief.md` |
+| `19-storyboard.md` | The world's story and its one core quest: "work can be played" (R16) | draft 2, 2026-11-01 |
+| `20-deep-disc.md` | Stub: the deep disc plan lives on branch `origin/plan/20-deep-disc` | stub |
+| `21-the-shared-world.md` | Go physics core, realm service, MMO-lite world (R17) | approved 2026-11-02 |
+| `22-voice-and-chat.md` | Proximity voice, World and Party chat, realm mail (R18) | approved 2026-11-11 |
+| `23-interaction-system.md` | One input system: router, focus, hold radial (R19) | approved 2026-11-11, rev 4 |
+| `24-hud.md` | One HUD: the dock, the Menu, the panels (R20) | approved 2026-11-12, rev 4; superseded in part by `25-foundation/00-brief.md` |
+| `25-foundation/` | New cores for the UI, the sim and the world model: baseline, interviews, architecture ADRs, doubt rounds, roadmap (see below) | decided, built in part; see `06-roadmap/` |
+| `26-meetings.md` | Stub: meetings live in infra-bootstrap ADR-0087 | stub |
+| `27-play-review.md` | Stub: the play review lives on branch `origin/plan/27-play-review` | stub |
+| `28-fleet-integration.md` | Stub: there is no plan/28 file | stub |
+| `29-strategy-pass.md` | A hands-on walk of the strategy view: fixes, upgrades, personas (R21) | draft 2026-11-23; open questions for the owner |
+| `adr-0056-amendment.md` | The R7 draft for infra-bootstrap, landed as ib:ADR-0064 | history |
 
-**Known limit of deploy A:** a tab opened before it runs R7.1 code, which predates `hello.build`. On reconnect it reads
-the bigger islands with its old code and draws buildings off its old tiles until it is reloaded. Cosmetic, no data;
-every later deploy reloads such tabs by itself.
+## plan/25-foundation
 
-## Section index
-| File | Content |
-|---|---|
-| `00-decisions.md` | Decisions, attribution rules, review log |
-| `01-architecture.md` | Repo layout, world/bus, object contract, kit, budgets, CI |
-| `02-data.md` | Sources, PromQL, placement, static maps, event enum, metrics frame, allowlist, persistence |
-| `03-objects.md` | The town objects: what each signal looks like, and where it is drawn |
-| `04-sandbox.md` | Dev loop, gate, fixtures, CSP |
-| `06-relay.md` | Go relay: endpoints, town geometry, WS protocol, security, self-observability |
-| `07-infra.md` | infra-bootstrap PRs and ADRs, each with its owner |
-| `08-auth.md` | Detail mode, visitor enrollment hardening, moderation |
-| `09-play.md` | Playing the town (research, parked in R10) |
-| `10-understanding.md` | atlas: the system understanding surface (R10 design) |
-| `11-cluster-return.md` | The owner's checklist for when the cluster is back (2026-10-24 outage) |
-| `adr-0056-amendment.md` | The R7 draft for infra-bootstrap, landed as ADR-0064 (R8) |
-
-## R7 phases
-| Phase | Content | Exit |
+| Folder | Content | Status |
 |---|---|---|
-| 1 ✅ | Relay, additive: town geometry, pods placement, services, `world:plot`, alert host/app, sun, plant toy, fixtures | Merged and deployed (PR #20). The mountain page still rendered |
-| 2 ✅ | Town skeleton in `www/next/` plus the styleboard (`www/dev/townshots.mjs`) | **Owner approved the look and the mapping** |
-| 3 ✅ | Live v1: reactions, walkers, night windows, beacons, stale, cards, plant toolbar and sign-in, admin eraser | Gate on both tiers within budget |
-| 4 ✅ | Swap `www/next` → `www`. Delete the mountain Go and www and STT. Schemas v2, migration 004, `FROZEN.sha256`, CI | All checks green |
-| 5 | These docs. Deploy 2 (PR → CI green → merge) | Live verification below |
-
-**Later waves (not v1):**
-- replica annexes and the relocation flight (v1 drops out and drops in);
-- packets on bridges (`river`), a storage yard (pools), rx clouds, a cpu/mem chimney;
-- gitops carts and ADR notices;
-- the scrub UI (the relay and `world.scrub` already work).
-
-## Verification
-**Local, every change:**
-- `go vet ./... && go test ./...`, with `MOUNTAIN_TEST_DSN` against a Postgres and `promtool` on `PATH` for the DB and
-  rule tests.
-- `node www/dev/schema/check.mjs` and `node www/dev/core.test.mjs`.
-- `CHROME=… node www/dev/gate.mjs page` and `selftest`. These run against the real relay binary and check the CSP,
-  the `/v/<build>/` prefix, the console, the budget on desktop and on phone-low, and resync.
-
-**Deploy 2 (live, after the merge):**
-- The page loads with a clean console, the hello arrives, and the overview, fly-in and phone views render.
-- Every allowlisted app and service has a plot on a plausible host, and h3 gets something.
-- A real ArgoCD sync drops a building.
-- No product name, pod or node name appears in any frame.
-- `/metrics` is still unreachable publicly.
-- The relay log shows migration 004 and the epoch start.
-
-- `MountainTownEmpty` is inactive and `mountain_query_failed_total{query="pods"}` stays flat (R7.1).
-
-**Rollback of R8 deploy B** (to the deploy A image): revert the merge; no migration. The deploy A relay drops the
-machine plots at restore (they are not in its config), except granary, which it keeps as a service building. Replays
-of deploy B days still show the machines.
-
-**Rollback of R8 deploy A** (to the R7.1 image): the same steps as below, but step 3 runs
-`relay/rollback/005_r8_down.sql` and step 4 reverts the R8 merge. To go back to the mountain, run 005's script first,
-then 004's.
-
-**Rollback** (the order matters: a mountain image that starts before step 3 writes a fresh mountain snapshot over
-the history):
-1. Turn ArgoCD auto-sync and self-heal off for the `mountain` app, so it does not undo step 2 or roll an image early.
-2. Scale the relay to 0. For example, run `kubectl -n mountain scale deploy/mountain --replicas=0`, after checking the names
-   with `kubectl -n mountain get deploy`.
-3. Run `relay/rollback/004_town_down.sql` (`psql -1 -f …`). It moves the mountain rows back and keeps the town's in
-   `town_archive_*`. It can run twice, so going forward and back again works.
-4. Revert the R7 merges on main. CI builds a new image of the reverted code and pins it in `helm/values.yaml`. That
-   is a new tag, not the old one.
-5. Turn auto-sync back on. ArgoCD rolls the reverted image at 1 replica.
+| `00-brief.md` | Why, the owner's answers, how each goal is measured, the steps | decided, built in part; see `06-roadmap/` |
+| `01-baseline/` | Measurements: audit, load profile, `Step` benchmark, HUD fixture, UI spike | record, 2026-11-14 |
+| `02-quick-fixes/` | Fixes that ship first, apart | see its README |
+| `03-interview/` | Owner interview rounds 1-4 and scenarios | record |
+| `04-architecture/` | One ADR each: `ui-core.md` (approved 2026-11-14), `sim-world.md`, `placement.md`, `tests.md`, `ui-data.md`, `charter.md` | see each file's Status line |
+| `05-doubt/` | One fresh doubt round per architecture file | record |
+| `06-roadmap/` | The build phases and their decision records (`ui-core-build.md`, `sim-world-build.md`, `hud-build.md`, `s8-characters.md`, `decisions.md`) | per-file; merged work noted in each |
+| `07-spikes/` | Spikes (placement, navigation, visual, test safety) | record |
