@@ -217,3 +217,13 @@ Decisions so far, in the order the owner took them:
      and lines up the next part: the next thing to check.
    - The dock holds the write card and its countdown: approve (a heavy strike lands the change), redirect (a short
      text), ask why, retreat. Typing slows the clock. On the phone the card is a full-width sheet.
+9. **A small, fast model narrates: transcript in, world events out** (2026-11-23).
+   - ops-lead gets no game tools. A separate small model (the narrator) reads the transcript as it streams and emits
+     typed world events: a suspect named, a part ruled out or confirmed, the true form, rage, an ally arriving or
+     leaving.
+   - The narrator is reusable beyond fights: a resident's talk, a worker run (builders walking), a deploy (the bell and
+     the crane) all become world events the same way.
+   - It must be very fast: one call per transcript message, a short context (the fight's state and the new lines), its
+     output constrained to the event registry's schema.
+   - Planned guard (to confirm in Q9): write cards never pass through the narrator. They come from agent-fleet's own
+     permission requests, deterministically. A missed or wrong event costs only a picture, never a write.
