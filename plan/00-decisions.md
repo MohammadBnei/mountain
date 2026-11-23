@@ -46,8 +46,8 @@
 | Tiers **(R14, A1)** | The owner chose (2026-10-28) three tiers. A **cluster baseline** binds all apps and is written language-neutral. The **service tier** holds the Go rules, with Rust and Dart translations. The **static tier** covers static sites. Each repo's CLAUDE.md declares its tier |
 | Shared Go **(R14, A2)** | The owner chose (2026-10-28) one public module, `github.com/MohammadBnei/ukubi-go`: `errs`, `errs/connectkeys`, `telemetry` (with the ukubi Code Standard's §7 error handler), the `ukubicheck` analyzer and the `ukubi.errors.v1.ErrorKey` proto. mountain, game, bridge, fleet, wird and hq import it. It supersedes `mountain/pkg` and the bridge and fleet "own repos, don't import mountain" rule (under which they copied the shape). Migration order: ukubi-go v0.1.0, then the game, then mountain, then a mountain PR deletes `pkg/` (done, X4) |
 | Auth trust **(R14, A3)** | The owner chose (2026-10-28): a user-facing app verifies a signed token (native OIDC, or `X-authentik-jwt`). A raw `X-authentik-*` header is trusted only with `networkPolicy.ingressFrom: [traefik]`, and the chart refuses an explicit `auth.trustsHeaders: true` without it. Machines use per-client bearer tokens |
-| Change-loop tiers **(R14, A4)** | The owner chose (2026-10-28): the **full loop** (`16-dev-rules.md` §1) for security, auth, wire-format, data and schema changes, and any "behaviour unchanged" claim. The **light loop** (plan, local checks, review) for CI, docs, pins, static content and an isolated single-module fix |
-| Change-work shape **(R15)** | The owner confirmed (2026-10-29) the shape of a change built by many agents (`16-dev-rules.md` §1): one holistic plan, an architecture interview and one doubt agent in the main session; then parallel builders on disjoint files plus a checks lane, one integration, gates then per-angle reviewers, at most 2 fix rounds, mutations once and a final gate; then the PR, a fresh code review, and the merge on green CI. "The workflow is mostly about parallel implementation." |
+| Change-loop tiers **(R14, A4)** | The owner chose (2026-10-28): the **full loop** (`16-dev-rules.md` §3) for security, auth, wire-format, data and schema changes, and any "behaviour unchanged" claim. The **light loop** (plan, local checks, review) for CI, docs, pins, static content and an isolated single-module fix |
+| Change-work shape **(R15)** | The owner confirmed (2026-10-29) the shape of a change built by many agents (`16-dev-rules.md` §3): one holistic plan, an architecture interview and one doubt agent in the main session; then parallel builders on disjoint files plus a checks lane, one integration, gates then per-angle reviewers, at most 2 fix rounds, mutations once and a final gate; then the PR, a fresh code review, and the merge on green CI. "The workflow is mostly about parallel implementation." |
 | ukubi-ci **(R14, B1)** | The owner chose (2026-10-28) a public `ukubi-ci` repo of reusable `workflow_call` workflows and composite actions, called pinned by sha |
 | Chart features **(R14, B2)** | The owner chose (2026-10-28): common-app-chart gains `networkPolicy.ingressFrom`, `ingress.extraRoutes` (the ADR-0038 baseline prepended), `metrics.serviceMonitor` and the data-lifecycle values, guarded by a golden render of every app whose diff must be empty unless the app opts in |
 | Releases **(R14, B3)** | The owner chose (2026-10-28): git-cliff semver and a CHANGELOG in every repo, through one `ukubi-ci` release workflow. Images keep SHA tags; the version goes in as a build-arg and an OCI label, and the app shows it. Libraries tag `vX.Y.Z` |
@@ -59,15 +59,7 @@
 | Re-placement **(R8)** | No new epoch: local hexes keep their meaning, so history and scrub stay. Migration 005 marks R8's start, and the first boot re-places every plot by family once. `hello.build` makes a page from another build reload once |
 | Open **(R7)** | Host rename (`mountain` is still the hostname, CSP, OIDC redirect, `mountain_*` metrics). Drop the `mountain_archive_*` tables once the town has held for a while |
 
-**Attribution, per repo** (agents must follow it):
-
-| Repo | Rule |
-|---|---|
-| `mountain` | No AI trailer, no session link, no co-author (user's global rule) |
-| `infra-bootstrap` | `Co-Authored-By: ukubi-claude-macbook <noreply@bnei.dev>` only, per its CLAUDE.md |
-| `hq` | Per its CLAUDE.md: `Co-Authored-By: <agent> <noreply@bnei.dev>` plus `Agent-Session` where one exists, no model names, no URLs |
-| `drop`, `ukubi-stt`, `pi-lab`, `editable-blog`, `has-journal` | `Co-Authored-By: ukubi-claude-<host> <noreply@bnei.dev>` (`<host>` is `cloud` in a cloud session) plus `Agent-Session`, no URLs (2026-10-28) |
-| `wird` | None: no AI attribution anywhere (2026-10-28) |
+**Attribution, per repo** (superseded 2026-11-23): no trailers and no AI attribution in any repo; see the workspace `CLAUDE.md` portable rules. The per-repo table that stood here (co-author trailers for infra-bootstrap, hq, drop and others) is withdrawn.
 
 **Review log.** R2–R6 (the mountain) is kept at the `mountain-final` tag.
 
