@@ -317,3 +317,13 @@ ADR-0082:110, ADR-0086 §4. Each finding is taken, or waits on the owner.
    reachable under the fleet's own key, not the game's). It runs beside core as a fleet component, once per fight, and
    its events are stored so every viewer sees the same world. With decision 1, the parts' states come from typed
    findings; the narrator draws the rest.
+
+### The ADR-0086 amendment (agent-fleet #471), owner answers (2026-11-23)
+
+- **A write card stays open until the owner answers it.** No short per-card deadline. It closes only when answered,
+  at core's existing card lifetime, or when its reason is gone (core withdraws a card tied to an alert when the alert
+  resolves). The fight's countdown is feel only: when it ends, ops-lead falls back to reads and the monster gains
+  ground on screen; the card stays open. This replaces decision 2 of the previous list.
+- **Approve happens on core's own card page, framed in the dock.** The game's script cannot read, change or click it.
+  The strike animation plays after core confirms. A passkey-signed strike drawn by the game may come later.
+- **The frame needs a sign-in under 30 min old**; the game asks for one when a fight starts.
