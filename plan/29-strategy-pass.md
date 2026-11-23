@@ -63,6 +63,7 @@ Paths are under `ukubi-game/cmd/game/websrc` unless stated.
 | F19 | A narrow desktop window overlaps the zones. The phone form only comes with touch. Below a width, use the phone's one-zone layout. |
 | F20 | `platform-thot` still has a building. thot is retired. |
 | F21 | The village "Default" holds the Capital's buildings. Name it. |
+| F22 | Shared movement (owner, 2026-11-23): remote movers (wolves, other players) slide along but their walk replays only its first frames in a loop: the clip restarts instead of playing through. Both kinds show it, so the cause is likely shared. It matters to § 6: the fight is shared. |
 
 ## 3. Upgrades
 
@@ -234,3 +235,8 @@ Decisions so far, in the order the owner took them:
      state and the new lines.
    - p95 latency and the rate of wrong events are measured in the sim's drills before the first real fight.
    - The page answers at once with a generic reaction (a flinch) and lands the exact one when the event comes.
+11. **Build order agreed** (2026-11-23). Each slice is playable alone and rehearsed as a sim drill before a real
+    alert: (1) the narrator and the world-event registry, on today's talks and worker runs; (2) sieges: alerts spawn
+    monsters, the building shows the harm, Needs you holds the card, ops-lead scouts; (3) the fight core: wearing down,
+    the three endings, the transcript as log; (4) parts and hits; (5) write cards in the dock; (6) friends in the fight.
+    The wide fix PR (F1, F2, F10 to F14, U1) runs alongside; F22 joins it, since slices 2 to 6 need shared movement.
