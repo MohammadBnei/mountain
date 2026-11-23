@@ -56,7 +56,7 @@ type series struct{ name, help, label string }
 func newMetrics() (*Metrics, error) {
 	// No token-expiry gauge: mountain_github_token_days_left went with the GitHub poll (P4.5). A Forgejo access token
 	// has no expiry (Forgejo 15's AccessToken carries none), so a dead token shows only as forge's last success ageing.
-	sSourceLastSuccess := series{"mountain_source_last_success", "Unix time of the last success per source (prom, alerts, forge, projection, db); seeded at start.", labelSource}
+	sSourceLastSuccess := series{"mountain_source_last_success", "Unix time of the last success per source (prom, alerts, forge, projection, db, bridge-tags); seeded at start.", labelSource}
 	sWSConnections := series{"mountain_ws_connections", "Open /ws connections.", ""}
 	sQueryFailed := series{"mountain_query_failed_total", "Failed PromQL queries (the poll keeps its last answer and goes stale).", labelQuery}
 	sProjectionSeq := series{"mountain_projection_seq", "The latest projection's sequence number.", ""}

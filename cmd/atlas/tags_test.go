@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -53,6 +54,9 @@ func (f *fakeBridge) ConfirmGap(_ context.Context, v int64) error {
 }
 
 func (f *fakeBridge) Tag(_ context.Context, tags []eventTag) error {
+	if len(tags) == 0 {
+		return connect.NewError(connect.CodeInvalidArgument, errors.New("0 tags")) // the health probe, as the bridge answers it
+	}
 	if err := f.refuse[tags[0].Seq]; err != nil {
 		return err
 	}
@@ -170,7 +174,7 @@ func TestTagLoopNoSystems(t *testing.T) {
 func TestRunTags(t *testing.T) {
 	sys := testSystems(t)
 	ev := bridgeEvent{Seq: 1, Source: kwatchSource, Type: "dev.bnei.deploy.synced", Data: []byte(kwatchSynced)}
-	var opens int
+	var opens, oks int
 	var slept []time.Duration
 	open := func(context.Context) (bridgeTags, error) {
 		opens++
@@ -185,9 +189,12 @@ func TestRunTags(t *testing.T) {
 	runTags(context.Background(), open, func() *realms.Systems { return sys }, func(_ context.Context, d time.Duration) bool {
 		slept = append(slept, d)
 		return true
-	})
+	}, func() { oks++ }, time.Hour)
 	if want := []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, time.Second, 2 * time.Second}; opens != 6 || !slices.Equal(slept, want) {
 		t.Errorf("%d opens, slept %v, want 6 and %v", opens, slept, want)
+	}
+	if oks != 1 { // only the stream that acked (open 4) marks the health series; open 6 acked nothing
+		t.Errorf("health marked %d times, want 1", oks)
 	}
 
 	// no Applications yet: the same backoff, never a hot loop; capped at a minute
@@ -197,9 +204,79 @@ func TestRunTags(t *testing.T) {
 	}, func() *realms.Systems { return nil }, func(_ context.Context, d time.Duration) bool {
 		slept = append(slept, d)
 		return len(slept) < 8
-	})
+	}, func() {}, time.Hour)
 	if want := []time.Duration{1, 2, 4, 8, 16, 32, 60, 60}; len(slept) != len(want) || slept[0] != time.Second || slept[7] != time.Minute {
 		t.Errorf("slept %v, want %v seconds", slept, want)
+	}
+}
+
+// idleBridge is a stream that delivers nothing and ends after life with err; Tag(nil) is the health probe, answered
+// with probe.
+type idleBridge struct {
+	life       time.Duration
+	err, probe error
+	probes     atomic.Int32
+}
+
+func (i *idleBridge) Next(ctx context.Context) (bridgeEvent, error) {
+	select {
+	case <-ctx.Done():
+		return bridgeEvent{}, ctx.Err()
+	case <-time.After(i.life):
+		return bridgeEvent{}, i.err
+	}
+}
+func (i *idleBridge) Ack(context.Context, int64) error        { return nil }
+func (i *idleBridge) ConfirmGap(context.Context, int64) error { return nil }
+func (i *idleBridge) Tag(context.Context, []eventTag) error   { i.probes.Add(1); return i.probe }
+func (i *idleBridge) Close() error                            { return nil }
+
+// TestRunTagsHealth: an idle stream renews the health series only when the bridge answers the probe, never while no
+// Applications are listed; an idle stream that ends at its token's exp reconnects at once, however many quiet hours
+// of backoff came before.
+func TestRunTagsHealth(t *testing.T) {
+	sys := testSystems(t)
+	run := func(b *idleBridge, systems func() *realms.Systems) (oks int, slept []time.Duration) {
+		opens := 0
+		runTags(context.Background(), func(context.Context) (bridgeTags, error) {
+			opens++
+			if opens > 2 {
+				return nil, connect.NewError(connect.CodePermissionDenied, errors.New("stop"))
+			}
+			return b, nil
+		}, systems, func(_ context.Context, d time.Duration) bool { slept = append(slept, d); return true }, func() { oks++ }, 10*time.Millisecond)
+		return
+	}
+	expired := connect.NewError(connect.CodeUnauthenticated, errors.New("token expired"))
+	have := func() *realms.Systems { return sys }
+
+	b := &idleBridge{life: 55 * time.Millisecond, err: expired, probe: connect.NewError(connect.CodeInvalidArgument, errors.New("0 tags"))}
+	if oks, slept := run(b, have); oks < 4 || slept[0] != time.Second {
+		t.Errorf("answered probes: %d oks, slept %v; want renewals and a 1 s reconnect", oks, slept)
+	}
+	b = &idleBridge{life: 55 * time.Millisecond, err: expired, probe: connect.NewError(connect.CodeUnavailable, errors.New("store down"))}
+	if oks, _ := run(b, have); oks != 0 {
+		t.Errorf("refused probes renewed the series %d times", oks)
+	}
+	b = &idleBridge{life: 55 * time.Millisecond, err: expired, probe: connect.NewError(connect.CodeInvalidArgument, nil)}
+	if oks, _ := run(b, func() *realms.Systems { return nil }); oks != 0 || b.probes.Load() != 0 {
+		t.Errorf("no Applications: %d oks, %d probes, want none", oks, b.probes.Load())
+	}
+	// after a long backoff, a stream that lived past `every` starts over at 1 s
+	var slept []time.Duration
+	opens := 0
+	runTags(context.Background(), func(context.Context) (bridgeTags, error) {
+		opens++
+		switch opens {
+		case 1, 2, 3:
+			return nil, connect.NewError(connect.CodeUnavailable, errors.New("down"))
+		case 4:
+			return &idleBridge{life: 30 * time.Millisecond, err: expired}, nil
+		}
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("stop"))
+	}, have, func(_ context.Context, d time.Duration) bool { slept = append(slept, d); return true }, func() {}, 10*time.Millisecond)
+	if want := []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, time.Second}; !slices.Equal(slept, want) {
+		t.Errorf("slept %v, want %v", slept, want)
 	}
 }
 
@@ -216,6 +293,7 @@ func TestPollSystems(t *testing.T) {
 	hq.Metadata.Name = "hq"
 	lists := []error{nil, errors.New("apiserver down")}
 	var versions []string
+	var oks int
 	pollSystems(context.Background(), func(context.Context) ([]realms.Application, error) {
 		err := lists[0]
 		lists = lists[1:]
@@ -223,9 +301,12 @@ func TestPollSystems(t *testing.T) {
 	}, al, &cur, func(context.Context, time.Duration) bool {
 		versions = append(versions, cur.Load().Version)
 		return len(lists) > 0
-	})
+	}, func() { oks++ })
 	if len(versions) != 2 || versions[0] == "" || versions[0] != versions[1] {
 		t.Errorf("versions %v: want the first list's, kept after the failure", versions)
+	}
+	if oks != 1 { // only the list that worked renews the series
+		t.Errorf("bridge-apps renewed %d times, want 1", oks)
 	}
 	if got := cur.Load().System(realms.Hints{App: "hq"}); got.Resolution != realms.Applied {
 		t.Errorf("hq: %+v", got)
@@ -355,9 +436,55 @@ func TestTagsFrom(t *testing.T) {
 		{BridgeURL: "bridge:8080", PasswordFile: "/p"}:                               false,
 		{BridgeURL: "http://bridge:8080", PasswordFile: "/p", TokenURL: "authentik"}: false,
 		{BridgeURL: "http://bridge:8080", PasswordFile: "/p"}:                        true,
+		{BridgeURL: "http://bridge:8080", TokenFile: "/t"}:                           true,
+		{TokenFile: "/t"}: false,
 	} {
 		if got, on := tagsFrom(c); on != want || (c.TokenURL == "" && got.TokenURL != tok) {
 			t.Errorf("%+v: %+v %v, want %v", c, got, on, want)
+		}
+	}
+}
+
+// TestFileToken: the projected token is read at every call, so the kubelet's renewal is seen at once; a missing or
+// empty file is an error (the loop backs off).
+func TestFileToken(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "token")
+	ts := fileToken(f)
+	if _, err := ts.Token(); err == nil {
+		t.Fatal("a missing file gave a token")
+	}
+	for _, want := range []string{"jwt-1", "jwt-2"} {
+		if err := os.WriteFile(f, []byte(want+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if tok, err := ts.Token(); err != nil || tok.AccessToken != want {
+			t.Fatalf("%q: %+v, %v", want, tok, err)
+		}
+	}
+	if err := os.WriteFile(f, []byte("\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Token(); err == nil {
+		t.Fatal("an empty file gave a token")
+	}
+	// newBridgeClient picks the token file over the password file, and sends no password grant
+	if _, ok := newBridgeClient(tagsEnv{BridgeURL: "http://b", TokenFile: f, PasswordFile: "/p"}).src.(fileToken); !ok {
+		t.Error("TokenFile set: the client does not use it")
+	}
+}
+
+// TestStartTagsOffSeeds: a loop that is off (no config) still seeds its series, so it ages into MountainSourceStale.
+func TestStartTagsOffSeeds(t *testing.T) {
+	m, err := newMetrics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = m.Close() }()
+	startTags(context.Background(), tagsEnv{}, nil, m)
+	_, _, b := scrape(t, m)
+	for _, src := range []string{"bridge-tags", "bridge-apps"} {
+		if !strings.Contains(b, `mountain_source_last_success{source="`+src+`"}`) {
+			t.Errorf("%s not seeded:\n%s", src, b)
 		}
 	}
 }

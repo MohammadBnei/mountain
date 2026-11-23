@@ -72,6 +72,12 @@ envFrom:
   # All or none: some set and atlas refuses to start.
 
 env:
+  # The System tag loop (tags.go): the bridge's in-cluster Service (the Connect API shares :8080 with the webhooks;
+  # :9090 is only /metrics) and the projected token (extraVolumes bridge-token, below). ukubi-bridge row bridge-atlas needs "sa": "mountain:atlas" first.
+  - name: ATLAS_BRIDGE_URL
+    value: http://ukubi-bridge.ukubi-bridge.svc.cluster.local:8080
+  - name: ATLAS_BRIDGE_TOKEN_FILE
+    value: /var/run/secrets/ukubi-bridge/token
   - name: MOUNTAIN_MACHINE_ISSUER
     value: https://authentik.bnei.dev/application/o/atlas-api/
   - name: MOUNTAIN_MACHINE_CLIENT_ID
@@ -146,13 +152,32 @@ infisical:
 
 # The repo trees atlas reads (fetch.go): a cache, never state, so an emptyDir with a
 # size limit (plan/10 Security, Runtime). The root filesystem stays read-only.
+#
+# bridge-token: atlas's own ServiceAccount token for the event bridge's System tags (tags.go), projected for
+# audience ukubi-bridge, 1h (the bridge refuses more), re-read by atlas at every call. The bridge row bridge-atlas
+# names the account ("sa": "mountain:atlas", ukubi-bridge helm/values.yaml).
 extraVolumes:
   - name: cache
     emptyDir:
       sizeLimit: 6Gi # fetch.go's cacheBudget (4 GiB) plus headroom
+  - name: bridge-token
+    projected:
+      sources:
+        - serviceAccountToken:
+            audience: ukubi-bridge
+            expirationSeconds: 3600
+            path: token
 extraVolumeMounts:
   - name: cache
     mountPath: /var/cache/atlas
+  - name: bridge-token
+    mountPath: /var/run/secrets/ukubi-bridge
+    readOnly: true
+
+# atlas's own account (infra-bootstrap gitops/platform/mountain: the ServiceAccount and its read-only grant on
+# ArgoCD's Applications). MERGE ORDER: that account must exist before this lands, or the Recreate pod is refused
+# (FailedCreate, serviceaccount "atlas" not found) and atlas is down. The old image ignores the new env below.
+serviceAccountName: atlas
 
 # Explicit, because the chart's LimitRange default (512Mi) is below what a round
 # may need: the extractors hold every source's YAML at once (plan/10 Security,
@@ -225,7 +250,8 @@ extraManifests:
         - name: mountain
           rules:
             # A source that never succeeds ages from start (atlas seeds the gauge): prom, alerts, forge (also
-            # when MOUNTAIN_FORGE_TOKEN is unset), projection (only while the repo poll runs) and db.
+            # when MOUNTAIN_FORGE_TOKEN is unset), projection (only while the repo poll runs), db, bridge-tags and bridge-apps
+            # (also when the loop is off for missing config).
             - alert: MountainSourceStale
               expr: time() - max by (source) (mountain_source_last_success{namespace="{{ .Release.Namespace }}"}) > 180
               for: 2m
@@ -234,7 +260,12 @@ extraManifests:
               annotations:
                 summary: "mountain: an atlas source has not succeeded for 5 min"
                 description: >-
-                  prom/alerts: the map says the source is not answering and keeps its last answer. forge/projection:
+                  prom/alerts: the map says the source is not answering and keeps its last answer.
+                  bridge-tags: the System tag loop is off (the log says which ATLAS_BRIDGE_* is missing) or the bridge
+                  has not answered it for minutes (token refused, bridge down or wedged).
+                  bridge-apps: the Applications list the tags resolve against fails (atlas's read grant on ArgoCD's
+                  Applications, infra-bootstrap gitops/platform/mountain, is missing, or the apiserver errors).
+                  forge/projection:
                   the map keeps its last projection; the log says whether Forgejo refused the token, the token is
                   unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history
                   is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.

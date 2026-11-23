@@ -25,7 +25,7 @@ const (
 	helpDrift = "# HELP mountain_drift Drift in the latest projection, by kind (unassigned = a component realms.yaml does not place).\n# TYPE mountain_drift gauge\n"
 	helpSeq   = "# HELP mountain_projection_seq The latest projection's sequence number.\n# TYPE mountain_projection_seq gauge\n"
 	helpQuery = "# HELP mountain_query_failed_total Failed PromQL queries (the poll keeps its last answer and goes stale).\n# TYPE mountain_query_failed_total counter\n"
-	helpSrc   = "# HELP mountain_source_last_success Unix time of the last success per source (prom, alerts, forge, projection, db); seeded at start.\n# TYPE mountain_source_last_success gauge\n"
+	helpSrc   = "# HELP mountain_source_last_success Unix time of the last success per source (prom, alerts, forge, projection, db, bridge-tags); seeded at start.\n# TYPE mountain_source_last_success gauge\n"
 	helpWS    = "# HELP mountain_ws_connections Open /ws connections.\n# TYPE mountain_ws_connections gauge\n"
 )
 

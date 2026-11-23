@@ -10,6 +10,11 @@ tests:
         values: '0+15x40'
       - series: 'mountain_source_last_success{namespace="mountain", source="alerts"}'
         values: '0+0x40'
+      # the tag loop never gets proof from the bridge, and its Applications list never succeeds: seeded, never renewed
+      - series: 'mountain_source_last_success{namespace="mountain", source="bridge-tags"}'
+        values: '0+0x40'
+      - series: 'mountain_source_last_success{namespace="mountain", source="bridge-apps"}'
+        values: '0+0x40'
       # memory-only (DATABASE_URL unset): seeded at start, never refreshed
       - series: 'mountain_source_last_success{namespace="mountain", source="db"}'
         values: '0+0x40'
@@ -30,11 +35,19 @@ tests:
           - exp_labels: { severity: notice, source: alerts }
             exp_annotations:
               summary: "mountain: an atlas source has not succeeded for 5 min"
-              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. forge/projection: the map keeps its last projection; the log says whether Forgejo refused the token, the token is unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
+              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. bridge-tags: the System tag loop is off (the log says which ATLAS_BRIDGE_* is missing) or the bridge has not answered it for minutes (token refused, bridge down or wedged). bridge-apps: the Applications list the tags resolve against fails (atlas''s read grant on ArgoCD''s Applications, infra-bootstrap gitops/platform/mountain, is missing, or the apiserver errors). forge/projection: the map keeps its last projection; the log says whether Forgejo refused the token, the token is unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
+          - exp_labels: { severity: notice, source: bridge-apps }
+            exp_annotations:
+              summary: "mountain: an atlas source has not succeeded for 5 min"
+              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. bridge-tags: the System tag loop is off (the log says which ATLAS_BRIDGE_* is missing) or the bridge has not answered it for minutes (token refused, bridge down or wedged). bridge-apps: the Applications list the tags resolve against fails (atlas''s read grant on ArgoCD''s Applications, infra-bootstrap gitops/platform/mountain, is missing, or the apiserver errors). forge/projection: the map keeps its last projection; the log says whether Forgejo refused the token, the token is unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
+          - exp_labels: { severity: notice, source: bridge-tags }
+            exp_annotations:
+              summary: "mountain: an atlas source has not succeeded for 5 min"
+              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. bridge-tags: the System tag loop is off (the log says which ATLAS_BRIDGE_* is missing) or the bridge has not answered it for minutes (token refused, bridge down or wedged). bridge-apps: the Applications list the tags resolve against fails (atlas''s read grant on ArgoCD''s Applications, infra-bootstrap gitops/platform/mountain, is missing, or the apiserver errors). forge/projection: the map keeps its last projection; the log says whether Forgejo refused the token, the token is unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
           - exp_labels: { severity: notice, source: db }
             exp_annotations:
               summary: "mountain: an atlas source has not succeeded for 5 min"
-              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. forge/projection: the map keeps its last projection; the log says whether Forgejo refused the token, the token is unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
+              description: 'prom/alerts: the map says the source is not answering and keeps its last answer. bridge-tags: the System tag loop is off (the log says which ATLAS_BRIDGE_* is missing) or the bridge has not answered it for minutes (token refused, bridge down or wedged). bridge-apps: the Applications list the tags resolve against fails (atlas''s read grant on ArgoCD''s Applications, infra-bootstrap gitops/platform/mountain, is missing, or the apiserver errors). forge/projection: the map keeps its last projection; the log says whether Forgejo refused the token, the token is unset (MOUNTAIN_FORGE_TOKEN) or a round was refused for a repo it could not read. db: no history is stored; unset DATABASE_URL (memory-only) looks the same. Check the atlas log for the source label.'
       - eval_time: 65m
         alertname: MountainUnassigned
         exp_alerts: []

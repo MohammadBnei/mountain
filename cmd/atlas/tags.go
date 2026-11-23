@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -36,8 +37,11 @@ import (
 // does not enforce it, it writes the resolution with the tag, and the bridge delivers applied tags only to a System
 // filter by default and carries the tag on SubscribeResponse (ukubi-bridge README "Tag").
 //
-// Off unless ATLAS_BRIDGE_URL and ATLAS_BRIDGE_PASSWORD_FILE are set, and atlas runs in the cluster (the Applications
-// are read with its own service account: helm/atlas-rbac.yaml).
+// Off unless ATLAS_BRIDGE_URL and one way to sign in are set (ATLAS_BRIDGE_TOKEN_FILE: atlas's own projected
+// ServiceAccount token, audience ukubi-bridge, the bridge row's "sa"; or ATLAS_BRIDGE_PASSWORD_FILE: the bridge-atlas
+// authentik app password), and atlas runs in the cluster (the Applications are read with its own service account,
+// infra-bootstrap gitops/platform/mountain). Off is never silent: mountain_source_last_success{source="bridge-tags"}
+// is seeded at start whatever the config and renewed only by server proof (see runTags), and so is source="bridge-apps" for the Applications list, so MountainSourceStale fires for either.
 
 // The adapters atlas takes hints from. The bridge sets every event's source: a client's Publish is always
 // "client/<its name>", so no other client can send as kwatch, and the Forgejo route's is git.bnei.dev/<owner>/<repo>,
@@ -163,18 +167,43 @@ func tagLoop(ctx context.Context, b bridgeTags, systems func() *realms.Systems) 
 }
 
 // runTags opens a stream and runs tagLoop on it until ctx ends, reconnecting after each end: at once after a stream
-// that acked something, else backing off from 1 s to a minute (no Applications listed yet, the bridge down, a token
-// refused). PermissionDenied stops it for good, logged once: the bridge's client table does not let bridge-atlas
-// read every type or tag, and no retry changes that.
+// that acked something or lived at least every (the bridge ends one at its token's exp, so an idle stream ends too),
+// else backing off from 1 s to a minute (no Applications listed yet, the bridge down, a token refused).
+// PermissionDenied stops it for good, logged once: the bridge's client table does not let bridge-atlas read every type
+// or tag, and no retry changes that.
+//
+// ok is the health mark, renewed only on proof from the server: after a stream that acked, and every `every` while one
+// lives by a probe (an empty Tag: the bridge authenticates and checks the tag right, then refuses it InvalidArgument
+// before it touches its store), so a wedged handler, a half-open connection or an open stream the server never
+// answers on does not count. No probe while no Applications are listed (systems nil): the loop cannot tag then.
 func runTags(ctx context.Context, open func(context.Context) (bridgeTags, error), systems func() *realms.Systems,
-	sleep func(context.Context, time.Duration) bool) {
+	sleep func(context.Context, time.Duration) bool, ok func(), every time.Duration) {
 	delay := time.Second
 	for {
 		var n int
+		start := time.Now()
 		b, err := open(ctx)
 		if err == nil {
-			n, err = tagLoop(ctx, b, systems)
+			sctx, stop := context.WithCancel(ctx)
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				for sleepCtx(sctx, every) {
+					if systems() == nil {
+						continue
+					}
+					if err := b.Tag(sctx, nil); err == nil || connect.CodeOf(err) == connect.CodeInvalidArgument {
+						ok()
+					}
+				}
+			}()
+			n, err = tagLoop(sctx, b, systems)
+			stop()
+			<-done
 			_ = b.Close()
+			if n > 0 {
+				ok()
+			}
 		}
 		if ctx.Err() != nil {
 			return
@@ -183,7 +212,7 @@ func runTags(ctx context.Context, open func(context.Context) (bridgeTags, error)
 			slog.Error(fmt.Sprintf("tags: the bridge refuses bridge-atlas, the tag loop stops: %v", err))
 			return
 		}
-		if n > 0 {
+		if n > 0 || time.Since(start) >= every {
 			delay = time.Second
 		}
 		slog.Warn(fmt.Sprintf("tags: stream ended, again in %s: %v", delay, err))
@@ -193,6 +222,9 @@ func runTags(ctx context.Context, open func(context.Context) (bridgeTags, error)
 		delay = min(2*delay, time.Minute)
 	}
 }
+
+// okEvery is how often a living stream is probed (MountainSourceStale fires past 180 s).
+const okEvery = 30 * time.Second
 
 func sleepCtx(ctx context.Context, d time.Duration) bool {
 	select {
@@ -205,21 +237,22 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 
 // tagsEnv is the tag loop's configuration (config.go), as given.
 type tagsEnv struct {
-	BridgeURL, TokenURL, AuthHost, PasswordFile string
+	BridgeURL, TokenURL, AuthHost, PasswordFile, TokenFile string
 }
 
 // tagsFrom is c with its defaults (the token URL: authentik's public one), and whether it turns the loop on: the
-// bridge's URL and the password file, both set. Optional (plan/15 §5), so one set without the other, or a URL that
-// is not http(s), is one WARN line and the loop off.
+// bridge's URL and a token file or a password file (the token file wins when both are set). Optional (plan/15 §5), so
+// a URL without a way to sign in, or the reverse, or a URL that is not http(s), is one WARN line and the loop off.
 func tagsFrom(c tagsEnv) (tagsEnv, bool) {
 	if c.TokenURL == "" {
 		c.TokenURL = "https://authentik.bnei.dev/application/o/token/"
 	}
 	switch {
-	case c.BridgeURL == "" && c.PasswordFile == "":
+	case c.BridgeURL == "" && c.PasswordFile == "" && c.TokenFile == "":
+		slog.Warn("atlas: ATLAS_BRIDGE_URL is unset; System tags are off")
 		return c, false
-	case c.BridgeURL == "" || c.PasswordFile == "":
-		slog.Warn("atlas: ATLAS_BRIDGE_URL and ATLAS_BRIDGE_PASSWORD_FILE go together; System tags are off")
+	case c.BridgeURL == "" || (c.PasswordFile == "" && c.TokenFile == ""):
+		slog.Warn("atlas: ATLAS_BRIDGE_URL and ATLAS_BRIDGE_TOKEN_FILE (or ATLAS_BRIDGE_PASSWORD_FILE) go together; System tags are off")
 		return c, false
 	}
 	for _, s := range []string{c.BridgeURL, c.TokenURL} {
@@ -231,8 +264,19 @@ func tagsFrom(c tagsEnv) (tagsEnv, bool) {
 	return c, true
 }
 
-// startTags starts the tag loop and the Applications poll it resolves against, when c turns them on.
-func startTags(ctx context.Context, c tagsEnv, rl *realms.Realms) {
+// tagsSource is the source label of the loop's health series.
+const (
+	tagsSource = "bridge-tags"
+	appsSource = "bridge-apps" // the Applications list the tags resolve against
+)
+
+// startTags starts the tag loop and the Applications poll it resolves against, when c turns them on. The series is
+// seeded here either way: a loop that is off, or that never works, ages into MountainSourceStale.
+func startTags(ctx context.Context, c tagsEnv, rl *realms.Realms, met *Metrics) {
+	met.SourceOK(tagsSource, float64(time.Now().Unix()))
+	ok := func() { met.SourceOK(tagsSource, float64(time.Now().Unix())) }
+	met.SourceOK(appsSource, float64(time.Now().Unix()))
+	okApps := func() { met.SourceOK(appsSource, float64(time.Now().Unix())) }
 	c, on := tagsFrom(c)
 	if !on {
 		return
@@ -258,8 +302,8 @@ func startTags(ctx context.Context, c tagsEnv, rl *realms.Realms) {
 		return
 	}
 	var cur atomic.Pointer[realms.Systems]
-	go pollSystems(ctx, func(ctx context.Context) ([]realms.Application, error) { return listApps(ctx, dc) }, al, &cur, sleepCtx)
-	go runTags(ctx, newBridgeClient(c).open, cur.Load, sleepCtx)
+	go pollSystems(ctx, func(ctx context.Context) ([]realms.Application, error) { return listApps(ctx, dc) }, al, &cur, sleepCtx, okApps)
+	go runTags(ctx, newBridgeClient(c).open, cur.Load, sleepCtx, ok, okEvery)
 }
 
 var appsGVR = schema.GroupVersionResource{Group: "argoproj.io", Version: "v1alpha1", Resource: "applications"}
@@ -281,14 +325,16 @@ func listApps(ctx context.Context, dc dynamic.Interface) ([]realms.Application, 
 }
 
 // pollSystems keeps cur at the Systems of the latest Applications list, listed every minute; a failed list keeps the
-// one before (its version too), and logs.
+// one before (its version too), logs, and leaves ok (source "bridge-apps") unrenewed, so a missing RBAC grant or a
+// failing apiserver ages into MountainSourceStale.
 func pollSystems(ctx context.Context, list func(context.Context) ([]realms.Application, error), al *realms.Aliases,
-	cur *atomic.Pointer[realms.Systems], sleep func(context.Context, time.Duration) bool) {
+	cur *atomic.Pointer[realms.Systems], sleep func(context.Context, time.Duration) bool, ok func()) {
 	for {
 		if apps, err := list(ctx); err != nil {
 			slog.Warn(fmt.Sprintf("tags: Applications: %v", err))
 		} else {
 			cur.Store(realms.NewSystems(apps, al))
+			ok()
 		}
 		if !sleep(ctx, time.Minute) {
 			return
@@ -304,11 +350,13 @@ const (
 	bridgeClientID = "ukubi-bridge-api"
 )
 
-// bridgeClient signs in as bridge-atlas with a client_credentials grant (infra-bootstrap ADR-0066), as kwatch and
+// bridgeClient signs in as bridge-atlas with its projected ServiceAccount token (fileToken) or, when only the password
+// file is set, with a client_credentials grant (infra-bootstrap ADR-0066), as kwatch and
 // agent-fleet core do: the service account's app password read from its file at each sign-in, so a rotation needs no
 // restart. A call refused Unauthenticated (a token revoked or past its end) drops the token, and the next signs in.
 type bridgeClient struct {
 	api    bridgev1connect.BridgeServiceClient
+	mu     sync.Mutex // src is swapped by seen, from the probe's goroutine as well as the loop's
 	src    oauth2.TokenSource
 	signIn func() oauth2.TokenSource
 }
@@ -316,10 +364,30 @@ type bridgeClient struct {
 func newBridgeClient(c tagsEnv) *bridgeClient {
 	hc := &http.Client{Timeout: 15 * time.Second, Transport: hostRewrite{c.AuthHost, http.DefaultTransport}}
 	signIn := func() oauth2.TokenSource {
+		if c.TokenFile != "" {
+			return fileToken(c.TokenFile)
+		}
 		return oauth2.ReuseTokenSource(nil, passwordGrant{c, hc})
 	}
 	// no client timeout: a Subscribe stream lives until its token ends; each unary call has its own (call)
 	return &bridgeClient{api: bridgev1connect.NewBridgeServiceClient(&http.Client{}, c.BridgeURL), src: signIn(), signIn: signIn}
+}
+
+// fileToken is atlas's projected ServiceAccount token (audience ukubi-bridge, expirationSeconds 3600), read from its
+// file at every call: the kubelet renews the file at 80% of its life, so no token is cached here and none is stale.
+// The bridge ends a stream at its token's exp, so runTags's next stream reads the renewed file.
+type fileToken string
+
+func (f fileToken) Token() (*oauth2.Token, error) {
+	b, err := os.ReadFile(string(f))
+	if err != nil {
+		return nil, err
+	}
+	t := strings.TrimSpace(string(b))
+	if t == "" {
+		return nil, errors.New("token file is empty")
+	}
+	return &oauth2.Token{AccessToken: t, TokenType: "Bearer"}, nil
 }
 
 // passwordGrant is one sign-in, the password read from its file then.
@@ -358,7 +426,10 @@ func (h hostRewrite) RoundTrip(r *http.Request) (*http.Response, error) {
 
 // bearer is m as a request with the current token; a failed sign-in is Unavailable (the next stream retries it).
 func bearer[T any](b *bridgeClient, m *T) (*connect.Request[T], error) {
-	tok, err := b.src.Token()
+	b.mu.Lock()
+	src := b.src
+	b.mu.Unlock()
+	tok, err := src.Token()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("sign-in: %w", err))
 	}
@@ -370,7 +441,9 @@ func bearer[T any](b *bridgeClient, m *T) (*connect.Request[T], error) {
 // seen drops the token on Unauthenticated, then returns err.
 func (b *bridgeClient) seen(err error) error {
 	if connect.CodeOf(err) == connect.CodeUnauthenticated {
+		b.mu.Lock()
 		b.src = b.signIn()
+		b.mu.Unlock()
 	}
 	return err
 }
