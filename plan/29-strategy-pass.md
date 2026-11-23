@@ -240,3 +240,63 @@ Decisions so far, in the order the owner took them:
     monsters, the building shows the harm, Needs you holds the card, ops-lead scouts; (3) the fight core: wearing down,
     the three endings, the transcript as log; (4) parts and hits; (5) write cards in the dock; (6) friends in the fight.
     The wide fix PR (F1, F2, F10 to F14, U1) runs alongside; F22 joins it, since slices 2 to 6 need shared movement.
+
+## 7. Independent review (2026-11-23) and what it changes
+
+A fresh read-only review checked the plan against ukubi-game origin/main `8fdca26e` (34 commits past `28388035`; the
+cited lines still hold) and against agent-fleet's definitions and ADRs. Spot-checked here: `ops-lead.yaml:1-4`,
+ADR-0082:110, ADR-0086 §4. Each finding is taken, or waits on the owner.
+
+### Taken (the plan text above is read through these)
+
+- **F1's path.** A map pick goes `clickAt` → `selection.select(id)` (`world.ts:2944-2950`); nothing sends a `subject`
+  from a scene pick. The fix bridges selection → subject once, in strategy.
+- **F10's place.** The Watch path keeps the code and message (`ui-telemetry.ts:143-144`); a dropped stream falls back
+  to `readFace` → `failed()`. Fix `failed()` only.
+- **F17.** The text is "Playing solo: you joined the shared world from another tab. Reload to play here"
+  (`ui-notices.tsx:10`), a true state. plan/24 Q12 already moves it to a dock line and the Menu's status dot.
+- **F19.** The form lives in one module (ui-core I3), and the phone form also forces touch input (`ui-chart.ts:89`).
+  The fix is a narrow-desktop strategy layout in that module, mouse input kept.
+- **F20.** `platform-thot` comes from the land data (`world-land.dense.json:1699`); fix it at atlas or the catalogue.
+- **F22.** The mechanism is confirmed (`world-realm.ts:613-614`, `:637-638`; `poseAt` holds the newest past sample).
+  "Never restart the target" already holds (`world-avatar.ts:493`, `world-creature.ts:135`); the restart is the flip
+  back, `reset()` on the faded clip. Fix: stable speed, gait hysteresis, resume the faded action on a flip back.
+- **U1 and U4 are not new faces.** round-4-hud H-7 fixes four faces and H-9 has "a summary strip, then the four
+  faces". The village roll-up and the Details parity go in the summary strip or inside Metrics.
+- **The horn (6.7)** reuses H-4's ◆ mark and edge arrow: no new HUD element.
+- **6.6's approver** is any platform-admin (`Admin()`, ADR-0082), not the owner alone.
+- **Rewards (§ 4 rule 1)** must not be farmable. A PR counts only when it carries the card's or the issue's id. A
+  lasting fix counts only when the alert stays quiet for N days. Coverage counts only when the rule and the probe both
+  evaluate. A removed building never counts toward a kept town.
+- **Self-healing (6.3).** ADR-0086 lets catalogue actions run unattended. A fight shows such an action as the
+  responder's, not the owner's. The hold window is checked against ADR-0086's `group_interval 5m`.
+- **Budgets (6.8).** ops-lead: `concurrency: 1`, `maxTurns: 60`, `turnsPerDay: 200`, `spawns.concurrent: 1`. "Scouts
+  them all" and "every worker it spawns" become "one at a time". A fight holds ops-lead's only slot.
+
+### Waiting on the owner: § 6 against agent-fleet's ADRs
+
+1. **The scout is alert-responder, not ops-lead.** `ops-lead.yaml:3-4`: "alerts never reach it". ADR-0086's
+   single-shot alert-responder scouts, and its output is typed (`objects`, `findings`, a card `kind`). Proposal: the
+   monster's parts come from those typed findings, with no LLM in between; ops-lead joins when the owner engages.
+2. **Writes and approvals.** Sessions run in `auto` (ADR-0076; ADR-0082:110), so there are no permission requests to
+   turn into cards, and ops-lead cannot write to production or push. Write cards are core's (`catalogue`, `open_pr`,
+   `open_session`). ADR-0086 §4: "a surface never answers one in place … it goes through the confirm page". An answer
+   after `DECISION_WAIT` (45 s) still runs, so a countdown cannot mean "nothing writes". Choice: approve opens the
+   confirm page and the countdown is cosmetic, or amend ADR-0086 for in-game answers.
+3. **Friends in the fight.** ADR-0084 and ADR-0086: "guests never reach the fleet"; ops-lead's set is B·C. A friend's
+   line in its session makes A·B·C, and its reads would be shown to the friend. Friends also live on the public pod.
+   Proposal: friends talk in a separate party chat and see core's typed card fields only; the owner forwards what
+   matters. Anything more needs an ADR-0084/0086 amendment (owner-gated) and a public-pod data path.
+4. **The narrator.** The transcript carries B data (`view_logs`). The shared llm-gateway logs full bodies, and the
+   fleet gateway's fence keeps other apps off Venice models. The game server holds no connection to a character.
+   Proposal: the narrator is flavour only. Part states, the true form and the fix cards come from typed results, never
+   from it. It runs once per fight beside core (or in core), through `llm-gateway-private` or a self-hosted model,
+   and emits enum and id fields only. Its events are stored, so every viewer sees the same world. Relation to
+   ADR-0084's `Speak` and the "game MCP both ways" decision to be settled.
+5. **Missing reads.** ops-lead has no `query_metrics`, no describe tool, logs in five namespaces only, and the
+   agent-fleet workspace only. Either these become prerequisites, or a part's reads go through alert-responder.
+6. **Who owns the monster.** A realm mob, so friends and explore share it (and F22 matters), or an owner-page object.
+   Named together with item 4's path.
+7. **Build order prerequisites.** Slice 2 needs alert-responder live (its yaml: not launchable until infra-bootstrap is
+   onboarded and `GH_ALERT_RESPONDER` exists). Slice 5 needs ADR-0082's "later ukubi-game PR" and the confirm page.
+   Slice 6 needs item 3's amendment and friend sign-in on world.bnei.dev (plan/21 phase 0b).
