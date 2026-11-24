@@ -54,12 +54,16 @@ func less(a, b Event) int { return cmp.Or(a.Time.Compare(b.Time), cmp.Compare(a.
 const maxBadSeen = 4096
 
 // handled: the types Parse reads; a failure to parse one of them is a bad event, any other type is not the feed's.
-func handled(typ string) bool {
-	switch strings.TrimPrefix(typ, "dev.bnei.") {
-	case "alert.firing", "alert.resolved", "deploy.synced", "deploy.health", "deploy.flapping":
+func handled(r Raw) bool {
+	switch typ := strings.TrimPrefix(r.Type, "dev.bnei."); {
+	case typ == "alert.firing", typ == "alert.resolved", typ == "deploy.synced", typ == "deploy.health", typ == "deploy.flapping",
+		typ == "fleet.session.opened", typ == "fleet.session.turn_ended", typ == "fleet.session.ended", strings.HasPrefix(typ, "fleet.card."):
 		return true
+	case typ == "forge.issue_comment.created": // a comment on an issue has no thread here
+		return strings.Contains(r.Subject, "/pr/")
+	default:
+		return forgeTypes[typ]
 	}
-	return false
 }
 
 // failed counts r as bad once, however often it comes (a Replay brings it again), and logs the first failure of its
@@ -96,7 +100,7 @@ func (f *Feed) Ingest(r Raw) (stored bool) {
 	}()
 	e, ok := f.parse(r)
 	if !ok {
-		if handled(r.Type) {
+		if handled(r) {
 			f.failed(r, "does not parse")
 		}
 		return false

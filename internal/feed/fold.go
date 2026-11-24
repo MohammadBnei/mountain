@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -57,6 +58,7 @@ type Thread struct {
 	Entries        []Entry   `json:"entries"`
 	Links          []Link    `json:"links"`
 
+	cards  []*card // session and card threads: the cards they hold
 	app    *appState
 	anchor time.Time // deploy: the last synced or unhealthy event in it
 	closed time.Time // deploy: a Healthy edge closed it then; zero while not
@@ -143,12 +145,29 @@ func Fold(evs []Event, now time.Time) []Thread {
 	alerts := map[string]*Thread{}
 	lastAlert := map[string]*Thread{} // source|fingerprint -> its newest thread
 	apps := map[string]*appState{}
+	pr, fl := newPRs(), newFleet(s)
+	type synced struct {
+		t   *Thread
+		rev string
+	}
+	var rolled []synced
 	var out []*Thread
 	for _, e := range s {
 		if k := (id{e.Source, e.ID}); seen[k] {
 			continue
 		} else {
 			seen[k] = true
+		}
+		switch {
+		case strings.HasPrefix(e.Type, "forge."):
+			pr.apply(e, &out)
+			continue
+		case strings.HasPrefix(e.Type, "fleet.card."):
+			fl.applyCard(e, &out)
+			continue
+		case strings.HasPrefix(e.Type, "fleet.session."):
+			fl.applySession(e, &out)
+			continue
 		}
 		if e.Type == "alert.firing" || e.Type == "alert.resolved" {
 			key := fmt.Sprintf("%s|%s|%s|%d", e.Source, e.Key, e.StartsAt, e.Episode)
@@ -220,6 +239,7 @@ func Fold(evs []Event, now time.Time) []Thread {
 			a.cur.anchor = e.Time
 			for _, r := range e.Revisions {
 				a.cur.link("revision", r, false)
+				rolled = append(rolled, synced{a.cur, r})
 			}
 		case e.Type == "deploy.flapping":
 			trouble(fmt.Sprintf("flapping: %d transitions", e.Flaps))
@@ -247,8 +267,16 @@ func Fold(evs []Event, now time.Time) []Thread {
 			a.unhealthy, a.flapAt = false, time.Time{}
 		}
 	}
+	// A PR whose merge commit a rollout synced is linked both ways. Both ends are system facts, so neither is quoted.
+	for _, r := range rolled {
+		for _, p := range pr.byMerge[r.rev] {
+			p.link("deploy", r.t.ID, false)
+			r.t.link("pull_request", p.ID, false)
+		}
+	}
 	res := make([]Thread, len(out))
 	for i, t := range out {
+		finishCards(t, now)
 		if t.app != nil {
 			t.State, t.NeedsOwner = StateClosed, false
 			if t.app.cur == t && t.app.openAt(now) {
