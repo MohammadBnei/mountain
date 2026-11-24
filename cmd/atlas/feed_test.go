@@ -460,7 +460,8 @@ func TestFeedTypesCoverWhatTheFeedReads(t *testing.T) {
 			t.Errorf("%s is not in the filter %v", typ, feedTypes)
 		}
 	}
-	if len(feedTypes) != 5 {
-		t.Errorf("the filter reads more than the feed uses: %v", feedTypes)
+	// exactly these: a wider prefix (all of fleet., say) would deliver events the feed has no thread for
+	if !slices.Equal(feedTypes, []string{"dev.bnei.alert.", "dev.bnei.deploy.", "dev.bnei.forge.", "dev.bnei.fleet.session.", "dev.bnei.fleet.card."}) {
+		t.Errorf("the filter is %v", feedTypes)
 	}
 }

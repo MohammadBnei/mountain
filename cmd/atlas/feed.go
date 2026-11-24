@@ -34,8 +34,8 @@ import (
 
 const (
 	feedSub       = bridgeUser + "/feed" // "<client>/<suffix>": the client's own name may be extended
-	feedMaxEvents = 20000
-	feedMaxBytes  = 8 << 20
+	feedMaxEvents = 50000
+	feedMaxBytes  = 32 << 20
 	feedPageMax   = 200
 )
 
@@ -254,9 +254,11 @@ func (w *feedWire) Close() error { return w.s.Close() }
 // outside (a PR's title, branch, comment or review, an agent's session title, a card's subject, an alert's words),
 // and the page shows it as a quote. Links are {kind, ref, quoted}: "previous" and "generator" (alerts), "revision"
 // (deploys), "run" (a PR's CI run, a URL), "deploy" (a PR to the rollout of its merge commit, ref a thread id) and
-// "pull_request" (that rollout back to the PR). A session thread has no link to its PR: no event carries one.
+// "pull_request" (that rollout back to the PR; only a revision new in the sync counts). A session thread has no link
+// to its PR: no event carries one. A PR's state follows the state in any payload; a successful CI run is not kept.
 // needs_owner: an alert that fires, an unhealthy deploy, a session or card thread holding an open card that has not
-// expired; never a PR.
+// expired (14 days after it opened when it has no expiry), and then the thread shows open even if its session ended;
+// never a PR.
 func (a *App) serveFeed(w http.ResponseWriter, r *http.Request) {
 	if a.Feed == nil {
 		http.NotFound(w, r)
