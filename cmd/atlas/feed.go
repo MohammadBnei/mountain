@@ -278,7 +278,12 @@ func (a *App) serveFeed(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
-	page, next, err := a.Feed.ListCtx(r.Context(), limit, r.URL.Query().Get("cursor"))
+	q := r.URL.Query()
+	if n := q.Get("needs"); n != "" && n != "0" && n != "1" {
+		http.Error(w, "needs is 0 or 1", http.StatusBadRequest)
+		return
+	}
+	page, next, err := feedList(r.Context(), a.Feed, limit, q.Get("cursor"), q.Get("kind"), q.Get("needs"))
 	if err != nil {
 		feedErr(w, r, err)
 		return
@@ -286,7 +291,7 @@ func (a *App) serveFeed(w http.ResponseWriter, r *http.Request) {
 	if page == nil {
 		page = []feed.Thread{}
 	}
-	feedJSON(w, map[string]any{"threads": page, "next_cursor": next, "dropped": a.Feed.Stats().Dropped})
+	feedJSON(w, map[string]any{"threads": page, "next_cursor": next, "dropped": a.Feed.Stats().Dropped, "age": ageOf(r.Context(), a.Feed)})
 }
 
 func (a *App) serveFeedThread(w http.ResponseWriter, r *http.Request) {
@@ -303,7 +308,10 @@ func (a *App) serveFeedThread(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	feedJSON(w, t)
+	feedJSON(w, struct {
+		feed.Thread
+		Age feedAge `json:"age"`
+	}{t, ageOf(r.Context(), a.Feed)})
 }
 
 // feedErr answers a failed read: a bad cursor is the caller's, a fold that failed or a request that ended is not.
