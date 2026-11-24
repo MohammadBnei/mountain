@@ -42,10 +42,11 @@ func machines(x *Ctx) error {
 		x.Node(graph.Node{ID: graph.ID(graph.KindHost, h), Kind: graph.KindHost, Source: lanSrc,
 			Attrs: withIP(map[string]string{"island": x.Realms.Hosts[h]}, ips[h])})
 	}
-	if err := terraform(x, ips); err != nil {
+	k8s, err := inventory(x)
+	if err != nil {
 		return err
 	}
-	return inventory(x)
+	return terraform(x, ips, k8s)
 }
 
 func withIP(m map[string]string, ip string) map[string]string {
@@ -61,7 +62,11 @@ var guestTypes = map[string]string{
 	"proxmox_virtual_environment_container": graph.KindCT,
 }
 
-func terraform(x *Ctx, ips map[string]string) error {
+// terraform reads the Proxmox guests. A guest that is also a k8s node (talos-cp-3 and
+// talos-gpu-1 are Proxmox VMs in terraform/talos-vms.tf and nodes in var.nodes) is
+// skipped: inventory already made its node and placement, and reading it twice with
+// different attributes fails the whole projection.
+func terraform(x *Ctx, ips map[string]string, k8s map[string]bool) error {
 	for _, p := range x.Glob("infra-bootstrap", "terraform/*.tf") {
 		b, src, err := x.Read("infra-bootstrap", p)
 		if err != nil {
@@ -100,7 +105,7 @@ func terraform(x *Ctx, ips map[string]string) error {
 				x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: subject, Detail: "no literal name or hostname", Source: src})
 				continue
 			}
-			if name == hiddenMachine {
+			if name == hiddenMachine || k8s[name] {
 				continue
 			}
 			id := graph.ID(kind, name)
@@ -168,20 +173,21 @@ func literal(a *hclsyntax.Attribute) (string, bool) {
 // inventory adds the k8s nodes: the Talos control planes terraform/talos declares (var.nodes: name => IP), their host
 // from realms.yaml. The kubespray inventory is gone (infra-bootstrap #491); a missing file is a warning, never a failed
 // Run.
-func inventory(x *Ctx) error {
+// It returns the node names, so terraform does not read the same VMs again.
+func inventory(x *Ctx) (map[string]bool, error) {
 	b, src, err := x.Read("infra-bootstrap", nodesPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			// A drift, not only a log line: the town would silently lose every k8s node (R2).
 			slog.Warn("extract machines: " + nodesPath + " not found: no k8s nodes")
 			x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: nodesPath + " not found: no k8s nodes"})
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 	f, diags := hclsyntax.ParseConfig(b, nodesPath, hcl.InitialPos)
 	if diags.HasErrors() {
-		return fmt.Errorf("%s: %s", nodesPath, diags.Error())
+		return nil, fmt.Errorf("%s: %s", nodesPath, diags.Error())
 	}
 	var nodes map[string]string
 	for _, blk := range f.Body.(*hclsyntax.Body).Blocks {
@@ -195,7 +201,7 @@ func inventory(x *Ctx) error {
 		v, d := a.Expr.Value(nil)
 		if d.HasErrors() || !v.Type().IsObjectType() && !v.Type().IsMapType() {
 			x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: nodesPath + ": var.nodes default is not a literal map", Source: src})
-			return nil
+			return nil, nil
 		}
 		nodes = map[string]string{}
 		for k, e := range v.AsValueMap() {
@@ -206,9 +212,11 @@ func inventory(x *Ctx) error {
 	}
 	if len(nodes) == 0 {
 		x.Drift(graph.Drift{Kind: graph.DriftUnresolved, Subject: graph.ID(graph.KindRepo, "infra-bootstrap"), Detail: nodesPath + ": no var.nodes default: no k8s nodes", Source: src})
-		return nil
+		return nil, nil
 	}
+	names := map[string]bool{}
 	for _, name := range sortedKeys(nodes) {
+		names[name] = true
 		id := graph.ID(graph.KindVM, name)
 		// ponytail: every node is labelled control-plane,etcd (true for the 3 Talos nodes today); a worker
 		// (talos-gpu-1) needs a role per node in var.nodes or a second variable.
@@ -223,5 +231,5 @@ func inventory(x *Ctx) error {
 		}
 		runsOn(x, id, host, src)
 	}
-	return nil
+	return names, nil
 }
