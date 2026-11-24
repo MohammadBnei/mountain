@@ -1,6 +1,7 @@
 package main
 
-// The owner's feed (plan 2026-11-24, slice 2): threads of alert episodes and deploy rollouts, rebuilt from the bridge
+// The owner's feed (plan 2026-11-24, slices 2 and 3): threads of alert episodes, deploy rollouts, PRs, agent sessions
+// and cards, rebuilt from the bridge
 // at start and kept live. The logic is internal/feed; this file is the wiring: FEED_ENABLED, the bridge stream, two
 // owner-only reads, the metrics.
 //
@@ -38,7 +39,11 @@ const (
 	feedPageMax   = 200
 )
 
-var feedTypes = []string{"dev.bnei.alert.", "dev.bnei.deploy."}
+// feedTypes is the subscription's filter: type prefixes bridge-atlas's client row already covers ("dev.bnei."). Not
+// all of fleet.* (session.waiting and resumed carry no thread), and the feed ignores the forge types it has no thread
+// for (labels, issues). A changed filter on the existing name is an upsert on the bridge: the cursor stays, Replay
+// reads with the stored filter, so the first Replay after the change covers the new types from the start.
+var feedTypes = []string{"dev.bnei.alert.", "dev.bnei.deploy.", "dev.bnei.forge.", "dev.bnei.fleet.session.", "dev.bnei.fleet.card."}
 
 // feedStream is the bridge as the feed uses it; Next returns a gap's version (and no event) when the bridge says so.
 type feedStream interface {
@@ -243,6 +248,15 @@ func (w *feedWire) Close() error { return w.s.Close() }
 
 // The reads. Owner only: routeTable registers them closed, so the gate every other closed route has answers first.
 
+// GET /api/feed and GET /api/feed/{id}. A thread is {id, kind, title, title_quoted, state, opened_at, last_activity_at,
+// needs_owner, entries, links}; the list carries only the last entry and no links. Kinds: alert, deploy, pr, session,
+// card. State is open or closed. Entries are {time, actor, text, quoted}: a quoted entry or title holds text from
+// outside (a PR's title, branch, comment or review, an agent's session title, a card's subject, an alert's words),
+// and the page shows it as a quote. Links are {kind, ref, quoted}: "previous" and "generator" (alerts), "revision"
+// (deploys), "run" (a PR's CI run, a URL), "deploy" (a PR to the rollout of its merge commit, ref a thread id) and
+// "pull_request" (that rollout back to the PR). A session thread has no link to its PR: no event carries one.
+// needs_owner: an alert that fires, an unhealthy deploy, a session or card thread holding an open card that has not
+// expired; never a PR.
 func (a *App) serveFeed(w http.ResponseWriter, r *http.Request) {
 	if a.Feed == nil {
 		http.NotFound(w, r)

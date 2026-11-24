@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -444,4 +445,22 @@ func TestStartFeed(t *testing.T) {
 	}
 	until(t, "the replayed event", func() bool { return a3.Feed.Stats().Events == 1 })
 	waitScrape(t, func() string { return scrapeBody(t, m) }, "mountain_feed_enabled 1\n")
+}
+
+// The filter names the types the feed reads, as literals: a type outside it never arrives.
+func TestFeedTypesCoverWhatTheFeedReads(t *testing.T) {
+	want := []string{"dev.bnei.alert.firing", "dev.bnei.alert.resolved", "dev.bnei.deploy.synced", "dev.bnei.deploy.health", "dev.bnei.deploy.flapping",
+		"dev.bnei.forge.pull_request.opened", "dev.bnei.forge.pull_request.closed", "dev.bnei.forge.pull_request.reopened", "dev.bnei.forge.pull_request.synchronized",
+		"dev.bnei.forge.pull_request_review.approved", "dev.bnei.forge.pull_request_review.rejected", "dev.bnei.forge.pull_request_review.comment",
+		"dev.bnei.forge.issue_comment.created", "dev.bnei.forge.action_run.success", "dev.bnei.forge.action_run.failure", "dev.bnei.forge.action_run.recover",
+		"dev.bnei.fleet.session.opened", "dev.bnei.fleet.session.turn_ended", "dev.bnei.fleet.session.ended",
+		"dev.bnei.fleet.card.opened", "dev.bnei.fleet.card.answered", "dev.bnei.fleet.card.expired", "dev.bnei.fleet.card.stale", "dev.bnei.fleet.card.withdrawn"}
+	for _, typ := range want {
+		if !slices.ContainsFunc(feedTypes, func(p string) bool { return strings.HasPrefix(typ, p) }) {
+			t.Errorf("%s is not in the filter %v", typ, feedTypes)
+		}
+	}
+	if len(feedTypes) != 5 {
+		t.Errorf("the filter reads more than the feed uses: %v", feedTypes)
+	}
 }
