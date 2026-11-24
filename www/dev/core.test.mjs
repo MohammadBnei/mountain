@@ -2,6 +2,18 @@
 // Unit tests for the page's pure modules (model.js, router.js, geometry.js, reader.js's highlighter) over the real
 // fixture graph. Node >= 22, no deps.
 import { readFileSync } from 'node:fs';
+import {
+  clean,
+  fresh,
+  isLong,
+  lastEvent,
+  linkOf,
+  rel,
+  route,
+  sig,
+  speaker,
+  titleOf
+} from '../js/feed.js';
 import { cardSlots, heightOf, layout, MAX_CARDS } from '../js/geometry.js';
 import {
   adrOfDoc,
@@ -623,6 +635,117 @@ ok(
   "reader: anything else says the status (the gate's plain 403, a proxy's page)"
 );
 ok(readError(404, null) === held, "reader: a 404 without the model's body still says not held");
+
+// ---- the feed's page (feed.js): every word and link from an event is hostile until shown otherwise
+ok(
+  clean('a\u202Eb\u2066c\u200Bd\u0000e\u2028f\n\tg') === 'abcdef\n\tg' && clean(null) === '',
+  'feed: bidi, zero-width and control characters are dropped, line breaks stay'
+);
+{
+  const bad = [
+    'javascript:alert(1)',
+    'JaVaScRiPt:alert(1)',
+    'java\nscript:alert(1)',
+    'data:text/html,x',
+    'http://evil.example/',
+    '//evil.example',
+    'https:evil.example',
+    'https://u:p#evil.example/'.replace('#', String.fromCharCode(64)),
+    'https://git.bnei.dev#evil.example/'.replace('#', String.fromCharCode(64)),
+    'https://',
+    '/auth/logout',
+    '../x',
+    'blob:https://x/y'
+  ];
+  let n = 0;
+  for (const kind of ['run', 'generator', 'deploy', 'previous', 'revision', '__proto__', 'x'])
+    for (const ref of bad)
+      for (const quoted of [true, false]) if (linkOf({ kind, ref, quoted }).href) n++;
+  ok(n === 0, 'feed: no hostile ref becomes a link, whatever its kind');
+  const run = linkOf({ kind: 'run', ref: 'https://forge.example.org/a/b?c#d', quoted: true });
+  ok(
+    run.href === 'https://forge.example.org/a/b?c#d' && run.host === 'forge.example.org' && run.out,
+    'feed: an https link keeps its host in sight'
+  );
+  ok(
+    linkOf({ kind: 'run', ref: 'https://b\u0430nk.example/', quoted: true }).host.startsWith(
+      'xn--'
+    ),
+    'feed: a lookalike host shows as punycode'
+  );
+  ok(
+    linkOf({ kind: 'deploy', ref: 'deploy-0011223344556677', quoted: false }).href ===
+      '/feed/deploy-0011223344556677' &&
+      !linkOf({ kind: 'deploy', ref: 'deploy-0011223344556677', quoted: true }).href &&
+      !linkOf({ kind: 'deploy', ref: 'deploy-0011223344556677/../../auth', quoted: false }).href,
+    "feed: a thread link is the system's and nothing but an id"
+  );
+}
+ok(
+  speaker({ actor: 'system', quoted: false }).who === 'system' &&
+    speaker({ actor: 'system', quoted: true }).who === 'outside' &&
+    speaker({ actor: 'owner' }).who === 'owner' &&
+    speaker({ actor: 'ops-lead', quoted: true }).who === 'agent' &&
+    speaker({ actor: '\u202E', quoted: true }).who === 'outside' &&
+    speaker({}).who === 'system',
+  'feed: who speaks'
+);
+ok(
+  titleOf({ kind: 'alert', title: 'Alert: Alert: x' }) === 'Alert: x' &&
+    titleOf({ kind: 'pr', title: 'PR a/b#1: t' }) === 'a/b#1: t' &&
+    titleOf({ kind: 'toString', title: 'x' }) === 'x',
+  "feed: a title drops its kind's prefix once"
+);
+ok(
+  route('/feed').kind === '' &&
+    route('/feed', '?kind=pr').kind === 'pr' &&
+    route('/feed', '?kind=constructor').kind === '' &&
+    route('/feed/pr-0011223344556677').id === 'pr-0011223344556677' &&
+    !route('/feed/pr-0011223344556677/x').id,
+  'feed: the route'
+);
+{
+  const n = Date.parse('2026-11-24T12:00:00Z'),
+    at = m => new Date(n - m * 60e3).toISOString();
+  ok(
+    rel(n - 30e3, n) === 'now' &&
+      rel(n - 5 * 60e3, n) === '5m' &&
+      rel(n - 119 * 60e3, n) === '1h' &&
+      rel(n - 49 * 3600e3, n) === '2d' &&
+      rel(n + 5e3, n) === 'now' &&
+      rel(Number.NaN, n) === '?',
+    'feed: relative times'
+  );
+  const th = (id, m, more) => ({
+    id,
+    last_activity_at: at(m),
+    needs_owner: false,
+    state: 'open',
+    ...more
+  });
+  const rows = [th('a', 1), th('b', 5)],
+    shown = new Map(rows.map(t => [t.id, sig(t)]));
+  ok(
+    fresh(shown, rows, at(5)) === 0 &&
+      fresh(shown, [th('c', 0), ...rows], at(5)) === 1 &&
+      fresh(shown, [th('a', 0), th('b', 5)], at(5)) === 1 &&
+      fresh(shown, [th('a', 1, { needs_owner: true })], at(5)) === 1 &&
+      fresh(shown, [th('old', 9)], at(5)) === 0 &&
+      fresh(shown, [th('old', 9)]) === 1,
+    'feed: what counts as new (a thread that only slid up into the page does not)'
+  );
+  ok(
+    lastEvent({ last_event_age: null }, n) === null &&
+      lastEvent(undefined, n) === null &&
+      lastEvent({ last_event_age: 10, newest_activity_at: at(300) }, n) === n - 300 * 60e3 &&
+      lastEvent({ last_event_age: 600, newest_activity_at: at(-60) }, n) === n - 600e3,
+    'feed: the last event is the older of the two ages'
+  );
+}
+ok(
+  isLong('x'.repeat(10000)) && isLong('a\n'.repeat(9)) && !isLong('short'),
+  'feed: what is folded'
+);
 
 console.log(failed ? `${failed} FAILED` : 'all passed');
 process.exit(failed ? 1 : 0);

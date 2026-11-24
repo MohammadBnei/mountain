@@ -35,8 +35,9 @@
 // atlas's service account), ATLAS_BRIDGE_TOKEN_URL (authentik's token endpoint; default
 // https://authentik.bnei.dev/application/o/token/) and ATLAS_BRIDGE_AUTH_HOST (the Host the token request carries, for
 // a token URL that is authentik's in-cluster Service; unset = the URL's own), and FEED_ENABLED (true turns on the
-// owner's feed, feed.go: alert and deploy threads rebuilt from the bridge, served on /api/feed; off by default, then
-// those routes answer 404 and nothing runs; --dev --feed-fixture turns it on over a file instead). All of it is read once, in config.go;
+// owner's feed, feed.go: alert and deploy threads rebuilt from the bridge, served on /api/feed and shown on /feed,
+// feed_page.go; off by default, then those routes answer 404 and nothing runs; --dev --feed-fixture turns it on over a
+// file instead). All of it is read once, in config.go;
 // the libraries' own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*, client-go's KUBERNETES_SERVICE_HOST
 // and _PORT) are theirs, and so are OpenTelemetry's: the metrics
 // SDK always reads OTEL_RESOURCE_ATTRIBUTES, OTEL_SERVICE_NAME, OTEL_METRICS_EXEMPLAR_FILTER and OTEL_GO_X_* (a
@@ -293,7 +294,7 @@ type route struct {
 func routeTable(a *App, www fs.FS) []route {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	_, tel := telemetryv1connect.NewTelemetryServiceHandler(a.Telemetry, connect.WithReadMaxBytes(4096))
-	return []route{
+	table := []route{
 		{"GET /healthz", true, true, ok},
 		{"GET /auth/login", true, false, a.gate.onAuth((*Auth).login)},
 		{"GET /auth/callback", true, false, a.gate.onAuth((*Auth).callback)},
@@ -308,8 +309,13 @@ func routeTable(a *App, www fs.FS) []route {
 		{"POST " + telemetryv1connect.TelemetryServiceWatchProcedure, false, false, tel},
 		{"GET /api/feed", false, false, http.HandlerFunc(a.serveFeed)},
 		{"GET /api/feed/{id}", false, false, http.HandlerFunc(a.serveFeedThread)},
-		{"GET /", false, false, static(www, a.Opts.Dev)},
+		{"GET /", false, false, static(www, a.Opts.Dev, a.Feed != nil)},
 	}
+	if a.Feed != nil {
+		page := feedPage(www, a.Opts.Dev)
+		table = append(table, route{feedRoute, false, false, page}, route{feedThreadRoute, false, false, page})
+	}
+	return table
 }
 
 func routes(a *App, www fs.FS) http.Handler {
@@ -347,10 +353,11 @@ func (g *gate) adminOnly(h http.Handler) http.Handler {
 		// Only an admin ever holds a session (a non-admin's callback ends on a refusal page, not here), so the
 		// sign-in cannot loop; a town-era cookie, one without an id or a signed-out one is not a session and signs in
 		// again.
-		if r.Method == http.MethodGet && r.URL.Path == "/" && g.auth != nil {
-			ret := "/"
-			if q := "/?" + r.URL.RawQuery; r.URL.RawQuery != "" && returnRE.MatchString(q) {
-				ret = q // the page's own query (?q=low) survives the sign-in
+		page := r.URL.Path == "/" || ((r.Pattern == feedRoute || r.Pattern == feedThreadRoute) && returnRE.MatchString(r.URL.Path))
+		if r.Method == http.MethodGet && page && g.auth != nil {
+			ret := r.URL.Path
+			if q := ret + "?" + r.URL.RawQuery; r.URL.RawQuery != "" && returnRE.MatchString(q) {
+				ret = q // the page's own query (?q=low, ?kind=pr) survives the sign-in
 			}
 			http.Redirect(w, r, "/auth/login?return="+url.QueryEscape(ret), http.StatusFound)
 			return
@@ -361,14 +368,15 @@ func (g *gate) adminOnly(h http.Handler) http.Handler {
 
 var inlineScript = regexp.MustCompile(`(?s)<script(?: type="importmap")?>(.*?)</script>`)
 
-// csp hashes every inline <script> of the page (the importmap), so a stale hash fails in the browser.
-func csp(html []byte, dev bool) string {
+// csp hashes every inline <script> of the page (the importmap), so a stale hash fails in the browser. connectTo are
+// the origins this page may connect to besides its own.
+func csp(html []byte, dev bool, connectTo ...string) string {
 	src := "'self'"
 	for _, m := range inlineScript.FindAllSubmatch(html, -1) {
 		h := sha256.Sum256(m[1])
 		src += " 'sha256-" + base64.StdEncoding.EncodeToString(h[:]) + "'"
 	}
-	connect := "'self' wss://mountain.bnei.dev"
+	connect := strings.Join(append([]string{"'self' wss://mountain.bnei.dev"}, connectTo...), " ")
 	if dev {
 		connect += " ws://127.0.0.1:*"
 	}
@@ -395,7 +403,8 @@ func buildID(www fs.FS) string {
 // URL), so a returning browser never mixes module versions across a deploy; / itself is no-cache. /v/ is private:
 // the site sits behind a sign-in, and a shared cache would hand an admin's copy to anyone holding the URL. Another
 // build's /v/<id>/ is a no-store 404, which main.js answers with one reload onto the current index.
-func static(www fs.FS, dev bool) http.Handler {
+// feedOn keeps the map's entry to the feed (feed_page.go); the feed's own document is never served as a file.
+func static(www fs.FS, dev, feedOn bool) http.Handler {
 	files := http.FileServerFS(www)
 	etags := map[string]string{}
 	_ = fs.WalkDir(www, ".", func(p string, d fs.DirEntry, err error) error {
@@ -408,12 +417,12 @@ func static(www fs.FS, dev bool) http.Handler {
 		return nil
 	})
 	prefix := "/v/" + buildID(www) + "/"
-	// every `"./` in index.html is an asset URL (src, href, importmap); keep it that way.
-	index, _ := fs.ReadFile(www, "index.html")
-	index = bytes.ReplaceAll(index, []byte(`"./`), []byte(`"`+prefix))
+	index, indexTag := document(www, "index.html")
+	if !feedOn {
+		index = bytes.Replace(index, []byte(feedEntry), nil, 1)
+		indexTag = htmlTag(index)
+	}
 	indexCSP := csp(index, dev)
-	s := sha256.Sum256(index)
-	indexTag := `"` + base64.RawURLEncoding.EncodeToString(s[:12]) + `"`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
@@ -438,6 +447,10 @@ func static(www fs.FS, dev bool) http.Handler {
 			h.Set("ETag", indexTag)
 			h.Set("Content-Security-Policy", indexCSP)
 			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(index))
+			return
+		}
+		if p == "/feed.html" { // a page, not a file: /feed, while the feed is on
+			http.NotFound(w, r)
 			return
 		}
 		if strings.HasSuffix(p, "/") { // no directory listings: the page names every file it needs

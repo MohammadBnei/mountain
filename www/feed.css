@@ -1,0 +1,129 @@
+/* The feed (feed.html, js/feed.js), on style.css's tokens: Underground · Glow by night; by day the reader's Office
+   palette (style.css #reader), which is the repo's one light page. A timeline and a thread view, as X, Bluesky and
+   Mastodon draw them: one column, a tile per speaker, the thread's line down the tiles. */
+html.feed, html.feed body { height: auto; overflow: visible; }
+html.feed { scroll-padding: 76px 0 24px; }
+html.feed body { min-height: 100vh; }
+@media (prefers-color-scheme: light) {
+  html.feed {
+    --surface: #f5eee2; --raised: #fbf7ef; --sunken: #ebe1d0; --line: #dccdb6; --line-strong: #8f7c63;
+    --ink: #2c2219; --muted: #64533f; --subtle: #6b5944; --accent: #84561c; --accent-bg: #efe0c4; --ochre: #84561c; --on-ochre: #fbf7ef;
+    --danger: #a3341c; --warning: #8f4a00; --ok: #2f6b6b; --focus: #1f5f9e;
+    color-scheme: light;
+  }
+}
+.feed #top { position: sticky; inset: 0 auto auto auto; }
+.feed .cols { display: grid; grid-template-columns: 180px minmax(0, 640px) 220px; gap: 32px; justify-content: center; padding: 16px 24px 64px; }
+.feed main { position: static; inset: auto; min-width: 0; }
+.feed main:focus { outline: none; }
+.skip { position: absolute; left: -999px; z-index: 9; padding: 8px 16px; background: var(--raised); }
+.skip:focus { left: 8px; top: 8px; }
+
+/* kinds: a rail on desktop, a strip of tabs on the phone */
+#kinds ul { position: sticky; top: 88px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+#kinds a { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border-radius: 3px; border: 1px solid transparent; color: var(--ink); text-decoration: none; font-weight: 500; white-space: nowrap; }
+#kinds a:hover { border-color: var(--line-strong); }
+#kinds a[aria-current] { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.side > * { position: sticky; top: 88px; }
+.side .keys { top: 152px; }
+kbd { padding: 0 5px; border: 1px solid var(--line-strong); border-radius: 2px; font: 12px/18px var(--mono); }
+
+/* kind marks: a small square and always a word */
+.k { width: 10px; height: 10px; border-radius: 2px; background: var(--line-strong); flex: none; box-shadow: 0 0 0 1px var(--line-strong); }
+.k[data-kind="alert"] { background: var(--danger); } .k[data-kind="deploy"] { background: var(--ok); }
+.k[data-kind="pr"] { background: var(--code); } .k[data-kind="session"] { background: var(--fleet); } .k[data-kind="card"] { background: var(--ochre); }
+
+.feed h1 { margin: 0; font-size: 20px; line-height: 28px; }
+.feed h2 { margin: 24px 0 8px; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.feed h1 + h2 { margin-top: 0; }
+.state { margin: 48px 16px; text-align: center; color: var(--muted); }
+.state b { display: block; color: var(--ink); font-size: 17px; line-height: 28px; }
+.state button, .state a { margin-top: 12px; }
+#banner > p { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--line); border-left: 3px solid var(--warning); background: var(--raised); }
+#banner button { margin-left: 8px; }
+.pillbar { position: sticky; top: 72px; z-index: 2; height: 0; display: flex; justify-content: center; }
+#pill { align-self: flex-start; min-height: 36px; padding: 0 18px; border: 0; border-radius: 18px; background: var(--ochre); color: var(--on-ochre); font-weight: 600; box-shadow: 0 2px 10px rgba(0, 0, 0, .35); }
+
+/* a card: the whole of it opens its thread, through the title's link */
+.cards { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 4px; background: var(--raised); }
+.card { position: relative; padding: 12px 16px; border-top: 1px solid var(--line); }
+.cards > :first-child { border-top: 0; }
+.card:hover { background: var(--accent-bg); }
+.card:focus-within { outline: 2px solid var(--focus); outline-offset: -2px; }
+.card h3 { margin: 2px 0 0; font-size: 15px; line-height: 22px; font-weight: 600; }
+.card h3 a { color: var(--ink); text-decoration: none; outline: none; }
+.card h3 a::after { content: ""; position: absolute; inset: 0; }
+.needs.cards { border-color: var(--warning); }
+.line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; color: var(--muted); font-size: 13px; line-height: 20px; }
+.line > .right, .line > .when { margin-left: auto; }
+.badge { padding: 0 6px; border: 1px solid var(--line-strong); border-radius: 2px; font-size: 12px; line-height: 18px; color: var(--muted); }
+.badge.hot { border-color: var(--warning); color: var(--warning); font-weight: 600; }
+.card .last b { float: left; margin-right: 6px; font-weight: 600; color: var(--ink); }
+.card .last { margin: 4px 0 0; font-size: 14px; line-height: 20px; color: var(--muted); }
+
+/* text from events: always text, never wider than its column; from outside, always a quote */
+.text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; unicode-bidi: isolate; }
+.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
+.entry .clamp { -webkit-line-clamp: 8; line-clamp: 8; }
+.feed blockquote { margin: 4px 0 0; padding: 4px 12px; border-left: 3px solid var(--line-strong); background: var(--sunken); color: var(--ink); }
+.feed .qt { padding-left: 10px; border-left: 3px solid var(--line-strong); }
+.more { min-height: 32px; margin-top: 4px; }
+
+/* relative times: the absolute one on hover and focus */
+.when { position: relative; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.card .when { z-index: 1; }
+.when:hover::after, .when:focus::after, .card:focus-within .when::after { content: attr(data-abs); position: absolute; right: 0; top: 100%; z-index: 3; padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--raised); color: var(--ink); font-size: 12px; line-height: 16px; }
+
+/* the thread */
+.thead { padding: 16px; border: 1px solid var(--line); border-radius: 4px; background: var(--raised); }
+.thead h1 { margin-top: 6px; }
+.back { display: inline-flex; align-items: center; min-height: 36px; margin-bottom: 8px; color: var(--muted); text-decoration: none; }
+.linked { margin: 12px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.linked li { max-width: 100%; display: flex; }
+.linked a, .linked span.ref { display: flex; gap: 6px; max-width: 100%; min-height: 32px; align-items: center; padding: 4px 10px; border: 1px solid var(--line-strong); border-radius: 3px; font-size: 13px; text-decoration: none; overflow: hidden; }
+.linked .out { border-style: dashed; }
+.linked b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.linked .out b, .linked .ref b { flex: none; max-width: 60%; }
+.linked .out b { max-width: 45%; }
+/* the whole host always shows (its end is the part that says whose it is); the path may be cut */
+.linked .host { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
+.linked .mono.faint { flex: 1 1 0; min-width: 0; max-width: max-content; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.entries { margin: 16px 0 0; padding: 0; list-style: none; }
+.entry { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 0 12px; padding: 0 0 16px; }
+.entry::before { content: ""; position: absolute; left: 17px; top: 36px; bottom: 0; border-left: 2px solid var(--line); }
+.entry:last-child::before { display: none; }
+.tile { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--sunken); color: var(--muted); font: 600 14px/1 var(--mono); }
+.entry .line b { color: var(--ink); overflow: hidden; text-overflow: ellipsis; max-width: 60%; white-space: nowrap; }
+.entry[data-who="agent"] .tile { border-color: var(--fleet); background: var(--fleet); color: #1c1814; }
+.entry[data-who="owner"] .tile { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.entry[data-who="owner"] .body { padding: 8px 12px; border: 1px solid var(--accent); border-radius: 3px; background: var(--accent-bg); }
+.entry[data-who="outside"] .tile { border-style: dashed; background: transparent; }
+.entry:focus { outline: 2px solid var(--focus); outline-offset: 4px; }
+.entry.fresh .tile { box-shadow: 0 0 0 2px var(--ochre); }
+#reply { margin-top: 8px; padding: 14px 16px; border: 1px dashed var(--line-strong); border-radius: 4px; color: var(--muted); font-size: 14px; }
+.end { margin: 16px 0; text-align: center; color: var(--muted); font-size: 13px; }
+.feed .wide { display: block; width: 100%; margin-top: 12px; min-height: 44px; }
+
+@media (max-width: 1080px) {
+  .feed .cols { grid-template-columns: 160px minmax(0, 640px); }
+  .side { grid-column: 2; order: 3; }
+  .side > * { position: static; }
+}
+@media (max-width: 720px) {
+  .feed .cols { display: block; padding: 0 0 48px; }
+  .feed #signout { display: none; }
+  .feed #top { position: static; }
+  #kinds { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--line); }
+  #kinds ul { position: static; flex-direction: row; gap: 4px; overflow-x: auto; padding: 6px 12px; }
+  #kinds a { min-height: 44px; padding: 0 12px; }
+  .feed main { padding: 12px 12px 0; }
+  .pillbar { top: 68px; }
+  html.feed { scroll-padding-top: 68px; }
+  .inthread #kinds { display: none; } /* a post's page has a way back, no tabs */
+  .inthread .pillbar { top: 8px; }
+  .side { padding: 0 16px; }
+  .keys { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card, #kinds a { transition: background .12s, border-color .12s; }
+}

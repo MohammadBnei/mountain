@@ -20,7 +20,7 @@ import (
 // TestStaticRevalidates: without validators + no-cache, Cloudflare's default 4 h browser TTL
 // mixed module versions across a deploy (live: old kit.js + new post.js => setComposed undefined).
 func TestStaticRevalidates(t *testing.T) {
-	h := static(fstest.MapFS{"js/kit.js": {Data: []byte("export const v = 1")}}, false)
+	h := static(fstest.MapFS{"js/kit.js": {Data: []byte("export const v = 1")}}, false, false)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/js/kit.js", nil))
 	etag := rec.Header().Get("ETag")
@@ -43,7 +43,7 @@ func TestStaticVersioned(t *testing.T) {
 	h := static(fstest.MapFS{
 		"index.html": {Data: idx},
 		"js/main.js": {Data: []byte("export {}")},
-	}, false)
+	}, false, false)
 	get := func(p string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", p, nil))

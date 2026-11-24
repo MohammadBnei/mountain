@@ -54,9 +54,9 @@ const (
 	flowTTL       = 10 * time.Minute
 )
 
-// returnRE: the return view is the page itself plus a query or fragment (an atlas route), else "/": no other path,
-// so no "//host", backslash or scheme trick can make it an open redirect.
-var returnRE = regexp.MustCompile(`^/(?:[?#][A-Za-z0-9=&?_.:/@-]{0,160})?$`)
+// returnRE: the return view is the page itself or the feed's (/feed, /feed/<thread id>), plus a query or fragment (an
+// atlas route), else "/": no other path, so no "//host", backslash or scheme trick can make it an open redirect.
+var returnRE = regexp.MustCompile(`^/(?:feed(?:/[a-z]{1,16}-[0-9a-f]{16})?)?(?:[?#][A-Za-z0-9=&?_.:/@-]{0,160})?$`)
 
 // Auth is the OIDC client; nil = sign-in off.
 type Auth struct {

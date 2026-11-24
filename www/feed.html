@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" class="feed">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feed · ukubi</title>
+<meta name="description" content="What happened, who did it, and what needs you.">
+<link rel="icon" type="image/svg+xml" sizes="any" href="./favicon.svg" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/svg+xml" sizes="any" href="./favicon-day.svg" media="(prefers-color-scheme: light)">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="./feed.css">
+<script type="module" src="./js/feed.js"></script>
+</head>
+<body>
+<a class="skip" href="#feed">Skip to the feed</a>
+<header id="top">
+<div id="where"><p class="kicker">Feed</p><nav id="crumbs" aria-label="Breadcrumb"></nav></div>
+<form id="signout" method="post" action="/auth/logout" hidden><span id="who"></span><button type="submit">Sign out</button></form>
+</header>
+<div class="cols">
+<nav id="kinds" aria-label="Kind of thread"></nav>
+<main id="feed" tabindex="-1">
+<div id="banner" role="status"></div>
+<div class="pillbar" aria-live="polite"><button id="pill" type="button" hidden></button></div>
+<div id="view"><p class="state">Reading the feed…</p></div>
+</main>
+<aside class="side"><p id="fresh" class="meta"></p>
+<p class="meta keys"><kbd>j</kbd> <kbd>k</kbd> next, previous · <kbd>Enter</kbd> open · <kbd>.</kbd> show new · <kbd>u</kbd> back</p></aside>
+</div>
+<noscript><p class="state">The feed needs JavaScript.</p></noscript>
+</body>
+</html>
