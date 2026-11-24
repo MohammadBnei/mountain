@@ -454,14 +454,14 @@ func TestFeedTypesCoverWhatTheFeedReads(t *testing.T) {
 		"dev.bnei.forge.pull_request_review.approved", "dev.bnei.forge.pull_request_review.rejected", "dev.bnei.forge.pull_request_review.comment",
 		"dev.bnei.forge.issue_comment.created", "dev.bnei.forge.action_run.success", "dev.bnei.forge.action_run.failure", "dev.bnei.forge.action_run.recover",
 		"dev.bnei.fleet.session.opened", "dev.bnei.fleet.session.turn_ended", "dev.bnei.fleet.session.ended",
-		"dev.bnei.fleet.card.opened", "dev.bnei.fleet.card.answered", "dev.bnei.fleet.card.expired", "dev.bnei.fleet.card.stale", "dev.bnei.fleet.card.withdrawn"}
+		"dev.bnei.fleet.card.opened", "dev.bnei.fleet.card.answered", "dev.bnei.fleet.card.expired", "dev.bnei.fleet.card.stale", "dev.bnei.fleet.card.withdrawn", "dev.bnei.laptop.post.created"}
 	for _, typ := range want {
 		if !slices.ContainsFunc(feedTypes, func(p string) bool { return strings.HasPrefix(typ, p) }) {
 			t.Errorf("%s is not in the filter %v", typ, feedTypes)
 		}
 	}
 	// exactly these: a wider prefix (all of fleet., say) would deliver events the feed has no thread for
-	if !slices.Equal(feedTypes, []string{"dev.bnei.alert.", "dev.bnei.deploy.", "dev.bnei.forge.", "dev.bnei.fleet.session.", "dev.bnei.fleet.card."}) {
+	if !slices.Equal(feedTypes, []string{"dev.bnei.alert.", "dev.bnei.deploy.", "dev.bnei.forge.", "dev.bnei.fleet.session.", "dev.bnei.fleet.card.", "dev.bnei.laptop.post."}) {
 		t.Errorf("the filter is %v", feedTypes)
 	}
 }

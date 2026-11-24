@@ -43,7 +43,7 @@ const (
 // all of fleet.* (session.waiting and resumed carry no thread), and the feed ignores the forge types it has no thread
 // for (labels, issues). A changed filter on the existing name is an upsert on the bridge: the cursor stays, Replay
 // reads with the stored filter, so the first Replay after the change covers the new types from the start.
-var feedTypes = []string{"dev.bnei.alert.", "dev.bnei.deploy.", "dev.bnei.forge.", "dev.bnei.fleet.session.", "dev.bnei.fleet.card."}
+var feedTypes = []string{"dev.bnei.alert.", "dev.bnei.deploy.", "dev.bnei.forge.", "dev.bnei.fleet.session.", "dev.bnei.fleet.card.", "dev.bnei.laptop.post."}
 
 // feedStream is the bridge as the feed uses it; Next returns a gap's version (and no event) when the bridge says so.
 type feedStream interface {
@@ -250,7 +250,12 @@ func (w *feedWire) Close() error { return w.s.Close() }
 
 // GET /api/feed and GET /api/feed/{id}. A thread is {id, kind, title, title_quoted, state, opened_at, last_activity_at,
 // needs_owner, entries, links}; the list carries only the last entry and no links. Kinds: alert, deploy, pr, session,
-// card. State is open or closed. Entries are {time, actor, text, quoted}: a quoted entry or title holds text from
+// card, laptop. A laptop thread is one session's posts, each an entry that is quoted and markdown with its post_id (a
+// correction has correction and corrects, the corrected post corrected_by; the post whose needs_you list stands has
+// asks_owner and needs_list), closed 24 h after the last. needs_by is "session" while that list stands, 7 days and
+// beyond the close. A PR thread also holds claim entries for posts about it (claim, thread); the list never shows one
+// as a thread's entry. In the list an entry's text is cut to 400 characters with has_more set; the thread has it whole.
+// State is open or closed. Entries are {time, actor, text, quoted}: a quoted entry or title holds text from
 // outside (a PR's title, branch, comment or review, an agent's session title, a card's subject, an alert's words),
 // and the page shows it as a quote. Links are {kind, ref, quoted}: "previous" and "generator" (alerts), "revision"
 // (deploys), "run" (a PR's CI run, a URL), "deploy" (a PR to the rollout of its merge commit, ref a thread id) and
