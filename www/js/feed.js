@@ -10,12 +10,12 @@ import { el } from './ui.js';
 
 // kind: its word, its tab, the prefix its titles carry, and the system's account that posts about it (name, handle, icon)
 export const KINDS = {
+  laptop: ['Laptop session', 'Laptop', 'Laptop: ', 'Laptop', 'laptop', 'person'],
   alert: ['Alert', 'Alerts', 'Alert: ', 'Alerts', 'alerts', 'bell'],
   deploy: ['Deploy', 'Deploys', 'Deploy: ', 'Deploys', 'deploys', 'sync'],
   pr: ['PR', 'PRs', 'PR ', 'Forge', 'forge', 'repo'],
   session: ['Session', 'Sessions', 'Session: ', 'Fleet', 'fleet', 'person'],
-  card: ['Card', 'Cards', 'Card: ', 'Fleet', 'fleet', 'inbox'],
-  laptop: ['Laptop session', 'Laptop', 'Laptop: ', 'Laptop', 'laptop', 'person']
+  card: ['Card', 'Cards', 'Card: ', 'Fleet', 'fleet', 'inbox']
 };
 // ukubi-game's line icons (cmd/game/websrc/icons.ts): one path each, on a 20 px grid
 const ICONS = {
