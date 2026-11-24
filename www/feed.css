@@ -120,7 +120,7 @@ html.feed {
   -webkit-text-size-adjust: 100%;
 }
 .feed *, .feed *::before, .feed *::after { box-sizing: border-box; }
-.feed body { margin: 0; min-height: 100vh; min-height: 100dvh; color: var(--text); font: var(--type-body); background: var(--surface) var(--starfield) fixed; background-size: var(--starfield-size); overflow-wrap: anywhere; -webkit-tap-highlight-color: transparent; }
+.feed body { margin: 0; min-height: 100vh; min-height: 100dvh; color: var(--text); font: var(--type-body); background-color: var(--surface); background-image: var(--starfield); background-size: var(--starfield-size); background-attachment: fixed; overflow-wrap: anywhere; -webkit-tap-highlight-color: transparent; }
 .feed [hidden] { display: none !important; }
 .feed :is(h1, h2, h3, p, ul, ol, blockquote) { margin: 0; padding: 0; }
 .feed :is(ul, ol)[role="list"] { list-style: none; }
@@ -230,14 +230,14 @@ q.by { unicode-bidi: isolate; color: var(--text-muted); overflow-wrap: anywhere;
 .md :is(strong, .mdh) { font-weight: 600; }
 .md :is(ul, ol) { padding-left: 20px; }
 .feed .md ul[role="list"] { list-style: disc; } .feed .md ol[role="list"] { list-style: decimal; } .feed .md ul ul[role="list"] { list-style: circle; }
-.md code { padding: 0 4px; font: var(--type-code); background: var(--surface-sunken); border-radius: var(--radius-xs); }
+.md code { padding: 0 4px; font: var(--type-code); font-variant-ligatures: none; background: var(--surface-sunken); border-radius: var(--radius-xs); }
 .md pre { margin: 0; padding: var(--space-2) var(--space-3); overflow-x: auto; background: var(--surface-sunken); border: 1px solid var(--edge); border-radius: var(--radius-sm); }
 .md pre code { padding: 0; background: none; white-space: pre; overflow-wrap: normal; }
 .md blockquote { padding: 0 var(--space-3); border-left: 3px solid var(--edge-strong); color: var(--text-muted); }
 .md hr { height: 0; margin: 0; border: 0; border-top: 1px solid var(--edge-strong); }
 .md a { position: relative; z-index: 1; }
 .host { font: var(--type-metric); color: var(--text-muted); overflow-wrap: anywhere; }
-.mdtable { position: relative; z-index: 1; max-width: 100%; overflow-x: auto; border: 1px solid var(--edge); border-radius: var(--radius-sm); }
+.mdtable { position: relative; z-index: 1; width: fit-content; max-width: 100%; overflow-x: auto; border: 1px solid var(--edge); border-radius: var(--radius-sm); }
 .md table { border-collapse: collapse; font: var(--type-body-sm); overflow-wrap: normal; }
 .md :is(th, td) { min-width: 64px; max-width: 280px; padding: 4px var(--space-3); text-align: start; vertical-align: top; border-bottom: 1px solid var(--edge); overflow-wrap: anywhere; }
 .md th { font-weight: 600; background: var(--surface-sunken); white-space: nowrap; }

@@ -337,7 +337,7 @@ const AUDIT = `(() => {
   return {
     wide: document.documentElement.scrollWidth - innerWidth, pwned: globalThis.__pwned || 0,
     made: document.querySelectorAll('#view img, #view script, #view iframe, #view [onerror], #view [style]').length,
-    links: [...document.querySelectorAll('#view a')].map(a => a.getAttribute('href')).filter(h => !/^(\\/feed(\\/[a-z]+-[0-9a-f]{16})?|https:\\/\\/(fleet\\.bnei\\.dev|(forge|prometheus|docs)\\.example\\.org)\\/.*)$/.test(h)),
+    links: [...document.querySelectorAll('#view a')].map(a => a.getAttribute('href')).filter(h => !/^(\\/feed(\\/[a-z]+-[0-9a-f]{16}(#[\\w-]{1,64})?)?|https:\\/\\/(fleet\\.bnei\\.dev|(forge|prometheus|docs)\\.example\\.org)\\/.*)$/.test(h)),
     rel: [...document.querySelectorAll('#view a[href^="https:"]')].filter(a => a.rel !== 'noopener noreferrer' || !a.target).length,
     bidi: /[\\u202A-\\u202E\\u2066-\\u2069]/.test(document.body.textContent + document.title),
     inputs: [...document.querySelectorAll('input, textarea, select')].filter(e => parseFloat(getComputedStyle(e).fontSize) < 16).length,
@@ -618,6 +618,18 @@ try {
       fail(
         `${where}: back did not find the timeline where it was (${await page.evalJSON('scrollY')} for ${y0})`
       );
+    // a correction's chip goes to the post it corrects, and back again
+    stub = served(all);
+    await page.s('Page.navigate', { url: `${origin}/feed/${asking.id}` });
+    await drawn();
+    for (const id of ['p2', 'p3']) {
+      await page.evalJSON(`(document.querySelector('a.tag[href$="#${id}"]').click(), true)`);
+      if (!(await waitFor(page, `document.activeElement.dataset.post === '${id}'`, 2000)))
+        fail(`${where}: the chip to ${id} did not go there`);
+    }
+    stub = u => served(ts)(u);
+    await page.s('Page.navigate', { url: `${origin}/feed` });
+    await drawn();
     // a failed read says so and keeps what is on screen
     stub = () => 502;
     await reread();
