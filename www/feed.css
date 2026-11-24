@@ -1,3 +1,91 @@
+/* ---- the theme, in one block: ukubi-game's Cockpit (cmd/game/web/tokens.css, [data-theme="cockpit"], light and dark by
+   prefers-color-scheme as the game does; the wires are its :root's). Another of the game's themes (Arcane) is this block
+   replaced. Copied, not shared: the owner's own values, and the feed's page alone loads this file. */
+html.feed {
+  color-scheme: light dark;
+  --surface: #f1f5fb;
+  --surface-raised: #ffffff;
+  --surface-sunken: #e4ebf6;
+  --edge: #cfdbec;
+  --edge-strong: #6a7fa6;
+  --edge-on: #1d4ed8;
+  --text: #0f1a33;
+  --text-muted: #3c4a68;
+  --text-subtle: #55638a;
+  --accent-soft: #e0ebff;
+  --accent: #1d5fd8;
+  --accent-strong: #1747b0;
+  --on-accent: #ffffff;
+  --accent-2-soft: #fff1d9;
+  --accent-2: #d98a00;
+  --accent-2-strong: #8a5200;
+  --glow: #3d8bff;
+  --danger: #b42335;
+  --warning: #8a5200;
+  --success: #0b6b45;
+  --focus: #1d4ed8;
+  --shadow-glow: 0 0 0 1px rgba(29, 95, 216, 0.6), 0 0 14px rgba(61, 139, 255, 0.35);
+  --surface-glass: rgba(251, 253, 255, 0.85);
+  --surface-glass-solid: #f7faff;
+  --edge-glow: rgba(29, 95, 216, 0.3);
+  --shadow-glass:
+  inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(20, 40, 80, 0.08), 0 10px 30px rgba(20, 40, 80, 0.14);
+  --shadow-glow-soft: 0 0 0 1px rgba(29, 95, 216, 0.45), 0 0 10px rgba(61, 139, 255, 0.22);
+  --starfield:
+  radial-gradient(1px 1px at 18% 24%, rgba(29, 95, 216, 0.22), transparent),
+  radial-gradient(1px 1px at 72% 58%, rgba(217, 138, 0, 0.2), transparent),
+  radial-gradient(1px 1px at 41% 83%, rgba(29, 95, 216, 0.22), transparent),
+  radial-gradient(1px 1px at 88% 12%, rgba(29, 95, 216, 0.22), transparent),
+  radial-gradient(1.5px 1.5px at 57% 37%, rgba(217, 138, 0, 0.2), transparent),
+  radial-gradient(1px 1px at 9% 66%, rgba(217, 138, 0, 0.2), transparent),
+  radial-gradient(120% 80% at 0% 0%, rgba(61, 139, 255, 0.06), transparent 60%);
+  --wire-agent: #a8643c;
+  --wire-storage: #7e5670;
+  --wire-compute: #6a7a3a;
+}
+@media (prefers-color-scheme: dark) {
+  html.feed {
+    --surface: #0a1122;
+    --surface-raised: #111b33;
+    --surface-sunken: #0b1428;
+    --edge: #23324f;
+    --edge-strong: #6378a8;
+    --edge-on: #8cbcff;
+    --text: #e8eefc;
+    --text-muted: #aebcd8;
+    --text-subtle: #8d9cc0;
+    --accent-soft: #102a52;
+    --accent: #2563eb;
+    --accent-strong: #8cbcff;
+    --on-accent: #ffffff;
+    --accent-2-soft: #3a2808;
+    --accent-2: #ffb03b;
+    --accent-2-strong: #ffcf7a;
+    --glow: #5aa2ff;
+    --danger: #ff8f8f;
+    --warning: #ffd479;
+    --success: #6ee7b7;
+    --focus: #93c5fd;
+    --shadow-glow: 0 0 0 1px rgba(90, 160, 255, 0.75), 0 0 14px rgba(61, 139, 255, 0.5);
+    --surface-glass: rgba(12, 20, 40, 0.85);
+    --surface-glass-solid: #0f1a31;
+    --edge-glow: rgba(90, 160, 255, 0.4);
+    --shadow-glass: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(2, 6, 16, 0.5);
+    --shadow-glow-soft: 0 0 0 1px rgba(90, 160, 255, 0.6), 0 0 10px rgba(61, 139, 255, 0.35);
+    --starfield:
+        radial-gradient(1px 1px at 18% 24%, rgba(255, 255, 255, 0.45), transparent),
+        radial-gradient(1px 1px at 72% 58%, rgba(255, 214, 150, 0.3), transparent),
+        radial-gradient(1px 1px at 41% 83%, rgba(255, 255, 255, 0.45), transparent),
+        radial-gradient(1px 1px at 88% 12%, rgba(255, 255, 255, 0.45), transparent),
+        radial-gradient(1.5px 1.5px at 57% 37%, rgba(255, 214, 150, 0.3), transparent),
+        radial-gradient(1px 1px at 9% 66%, rgba(255, 214, 150, 0.3), transparent),
+        radial-gradient(120% 80% at 0% 0%, rgba(61, 139, 255, 0.1), transparent 60%);
+    --wire-agent: #ff7a2e;
+    --wire-storage: #ff5cc8;
+    --wire-compute: #b4ff3c;
+  }
+}
+/* ---- end of the theme */
 /* The feed (feed.html, js/feed.js), on style.css's tokens: Underground · Glow by night; by day the reader's Office
    palette (style.css #reader), which is the repo's one light page. A timeline and a thread view, as X, Bluesky and
    Mastodon draw them: one column, a tile per speaker, the thread's line down the tiles. */
