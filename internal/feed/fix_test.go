@@ -317,3 +317,15 @@ func TestKindOf(t *testing.T) {
 		}
 	}
 }
+
+// A PR first seen through a comment whose payload says closed is a closed thread (its closed event is older than the
+// feed's memory).
+func TestPayloadStateAloneCloses(t *testing.T) {
+	c := forge(t, 1, "pull_request_comment_created", "issue_comment.created", prSubj, "c", 1, [2]string{`"state": "open"`, `"state": "closed"`})
+	if p := byKind(fold(t, 5, c), KindPR)[0]; p.State != StateClosed {
+		t.Errorf("%s", p.State)
+	}
+	if p := byKind(fold(t, 5, forge(t, 1, "pull_request_comment_created", "issue_comment.created", prSubj, "c", 1)), KindPR)[0]; p.State != StateOpen {
+		t.Errorf("%s", p.State)
+	}
+}
