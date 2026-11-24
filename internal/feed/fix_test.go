@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -279,7 +280,7 @@ func TestKindBookkeeping(t *testing.T) {
 	f := New(12, 1<<20)
 	check := func(when string) {
 		count, bytes := map[string]int{}, map[string]int{}
-		for _, e := range f.evs {
+		for _, e := range f.all() {
 			count[kindOf(e)]++
 			bytes[kindOf(e)] += e.size()
 		}
@@ -327,5 +328,99 @@ func TestPayloadStateAloneCloses(t *testing.T) {
 	}
 	if p := byKind(fold(t, 5, forge(t, 1, "pull_request_comment_created", "issue_comment.created", prSubj, "c", 1)), KindPR)[0]; p.State != StateOpen {
 		t.Errorf("%s", p.State)
+	}
+}
+
+// Readers that find the cache stale fold once between them, and List and Get answer from that one result.
+func TestSingleFlight(t *testing.T) {
+	f := New(1000, 1<<20)
+	for _, r := range prLife(t) {
+		f.Ingest(r)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 64; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, _ = f.List(10, "")
+		}()
+	}
+	wg.Wait()
+	if f.folds != 1 {
+		t.Errorf("%d folds for 64 reads", f.folds)
+	}
+	f.Ingest(forge(t, 20, "pull_request_comment_created", "issue_comment.created", prSubj, "c9", 30))
+	_, _, _ = f.List(10, "")
+	if f.folds != 2 {
+		t.Errorf("a changed store: %d folds", f.folds)
+	}
+	// a read that finds a fold in flight takes the last result while it is under staleOK old
+	f.mu.Lock()
+	f.folding = make(chan struct{})
+	f.gen++
+	f.mu.Unlock()
+	got := make(chan *folded)
+	go func() { got <- f.threads() }()
+	if c := <-got; c != f.cache {
+		t.Error("a read during a fold did not take the last result")
+	}
+}
+
+// A sync that names two sources (a chart and its values repo) links the one that is new, which needs the field name
+// previous_revisions to be read: with it unread the sync would look like a two-revision sync with no previous list.
+func TestMultiSourceSyncLinksTheNewRevision(t *testing.T) {
+	const chart = "abcdef1234567890abcdef1234567890abcdef12"
+	e, _ := Parse(rolled(1, "app", 1, []string{chart, mergeSHA}, []string{chart, "0000000000000000"}))
+	if len(e.PrevRevisions) != 2 || e.PrevRevisions[0] != chart {
+		t.Fatalf("previous revisions %v", e.PrevRevisions)
+	}
+	th := fold(t, 20, mergedPR(t, 1, 42, mergeSHA), rolled(2, "app", 3, []string{chart, mergeSHA}, []string{chart, "0000000000000000"}))
+	if !hasKind(byKind(th, KindPR)[0], "deploy") || !hasKind(byKind(th, KindDeploy)[0], "pull_request") {
+		t.Error("the new revision of a two-source sync did not link")
+	}
+}
+
+// What an event weighs counts its previous revisions, or the byte cap undercounts a sync.
+func TestSizeCountsPreviousRevisions(t *testing.T) {
+	a := Event{Type: "deploy.synced", Revisions: []string{"abc"}}
+	b := a
+	b.PrevRevisions = []string{strings.Repeat("a", 40), strings.Repeat("b", 40)}
+	if b.size() < a.size()+80+2*16 {
+		t.Errorf("size %d with previous revisions, %d without", b.size(), a.size())
+	}
+}
+
+// Eviction takes from the kind with the most events when the event cap is over, and from the kind with the most bytes
+// when the byte cap is over: they differ when one kind has many small events and another a few big ones.
+func TestEvictionPicksByTheCapThatIsOver(t *testing.T) {
+	big := func(i int) Raw {
+		return edit(t, forge(t, int64(100+i), "pull_request_comment_created", "issue_comment.created", prSubj, fmt.Sprintf("big%d", i), i), func(d map[string]any) {
+			d["comment"].(map[string]any)["body"] = strings.Repeat("é", 400)
+		})
+	}
+	fill := func() *Feed {
+		f := New(1000, 1<<30)
+		for i := 0; i < 6; i++ {
+			f.Ingest(alertRaw(int64(1+i), "firing", fmt.Sprintf("fp%d", i), sa, 0, i, ""))
+		}
+		for i := 0; i < 4; i++ {
+			f.Ingest(big(i))
+		}
+		if f.kbytes["forge"] <= f.kbytes["alert"] || f.count["alert"] <= f.count["forge"] {
+			t.Fatalf("setup: alert %d events %d bytes, forge %d events %d bytes", f.count["alert"], f.kbytes["alert"], f.count["forge"], f.kbytes["forge"])
+		}
+		return f
+	}
+	f := fill()
+	f.maxEvents = 10 // over by the next alert: the alerts hold the most events
+	f.Ingest(alertRaw(50, "firing", "fp9", sa, 0, 20, ""))
+	if f.count["alert"] != 6 || f.count["forge"] != 4 {
+		t.Errorf("event cap: alerts %d, forge %d", f.count["alert"], f.count["forge"])
+	}
+	f = fill()
+	f.maxBytes = f.bytes // over by the next alert: forge holds the most bytes
+	f.Ingest(alertRaw(50, "firing", "fp9", sa, 0, 20, ""))
+	if f.count["alert"] != 7 || f.count["forge"] != 3 {
+		t.Errorf("byte cap: alerts %d, forge %d", f.count["alert"], f.count["forge"])
 	}
 }

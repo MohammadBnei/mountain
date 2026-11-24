@@ -385,8 +385,8 @@ func TestFeedCapsAndBytes(t *testing.T) {
 	if s := f.Stats(); s.Events != 3 || s.Dropped != 2 || s.Threads != 3 || s.Last.IsZero() {
 		t.Errorf("%+v", s)
 	}
-	if len(f.seen) != len(f.evs) { // seen must shrink with the events, or it grows for ever
-		t.Errorf("seen %d, events %d", len(f.seen), len(f.evs))
+	if len(f.seen) != f.n { // seen must shrink with the events, or it grows for ever
+		t.Errorf("seen %d, events %d", len(f.seen), f.n)
 	}
 	// a late event older than all of them is the one dropped (its seq is new: the bridge may deliver a retry late)
 	f2 := New(2, 1<<20)
@@ -402,7 +402,7 @@ func TestFeedCapsAndBytes(t *testing.T) {
 	}
 	s := g.Stats()
 	sum := 0
-	for _, e := range g.evs {
+	for _, e := range g.all() {
 		sum += e.size()
 	}
 	if s.Bytes != sum || s.Bytes > 3000 || s.Events < 2 || s.Dropped != uint64(50-s.Events) {
@@ -609,8 +609,8 @@ func TestUnsortedInsert(t *testing.T) {
 	f.Ingest(fire(1, "c", 3))
 	f.Ingest(fire(2, "a", 1))
 	f.Ingest(fire(3, "b", 2))
-	if len(f.evs) != 2 || f.evs[0].Time != at(2) || f.evs[1].Time != at(3) || f.Stats().Dropped != 1 {
-		t.Errorf("%+v", f.evs)
+	if f.n != 2 || f.all()[0].Time != at(2) || f.all()[1].Time != at(3) || f.Stats().Dropped != 1 {
+		t.Errorf("%+v", f.all())
 	}
 }
 

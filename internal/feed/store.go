@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,7 +25,8 @@ type Feed struct {
 	parse               func(Raw) (Event, bool)
 
 	mu       sync.Mutex
-	evs      []Event // by (Time, Seq)
+	evs      map[string][]Event // per kind, by (Time, Seq): an eviction takes the front of one slice, so filling the store is not quadratic
+	n        int                // events held
 	seen     map[[2]string]bool
 	bytes    int
 	dropped  uint64
@@ -37,14 +39,25 @@ type Feed struct {
 	kbytes   map[string]int     // per kind: bytes held
 	last     time.Time          // wall time of the last stored event
 	gen      uint64             // changes with evs
-	cache    []Thread
+	cache    *folded            // immutable once built
 	cacheGen uint64
 	cacheAt  time.Time
+	folding  chan struct{} // closed when the fold in flight ends; nil when none
+	folds    int           // folds run, for tests
 }
+
+// folded is one fold's answer: shared by every reader, never changed after it is built.
+type folded struct {
+	threads []Thread
+	byID    map[string]int
+}
+
+// staleOK: a reader that finds a fold in flight takes the last result when it is younger than this.
+const staleOK = 30 * time.Second
 
 // New is a Feed that keeps at most maxEvents events and maxBytes bytes of them.
 func New(maxEvents, maxBytes int) *Feed {
-	return &Feed{maxEvents: maxEvents, maxBytes: maxBytes, seen: map[[2]string]bool{}, floor: map[string]int64{}, count: map[string]int{}, kbytes: map[string]int{}, badSeen: map[[2]string]bool{}, logged: map[string]bool{}, now: time.Now, parse: Parse}
+	return &Feed{maxEvents: maxEvents, maxBytes: maxBytes, seen: map[[2]string]bool{}, evs: map[string][]Event{}, floor: map[string]int64{}, count: map[string]int{}, kbytes: map[string]int{}, badSeen: map[[2]string]bool{}, logged: map[string]bool{}, now: time.Now, parse: Parse}
 }
 
 // SetParse replaces Parse, for tests that need a parser that fails.
@@ -119,18 +132,19 @@ func (f *Feed) Ingest(r Raw) (stored bool) {
 		return false
 	}
 	f.seen[k] = true
-	i, _ := slices.BinarySearchFunc(f.evs, e, less)
-	f.evs = slices.Insert(f.evs, i, e)
+	i, _ := slices.BinarySearchFunc(f.evs[kind], e, less)
+	f.evs[kind] = slices.Insert(f.evs[kind], i, e)
+	f.n++
 	f.bytes += e.size()
 	f.count[kind]++
 	f.kbytes[kind] += e.size()
 	f.gen++
 	f.last = time.Now()
-	for len(f.evs) > f.maxEvents || f.bytes > f.maxBytes {
+	for f.n > f.maxEvents || f.bytes > f.maxBytes {
 		// The kind holding the most (events when that cap is over, else bytes) loses its oldest event, so a busy
 		// kind (PR traffic, session turns) cannot push the quiet ones (alerts, rollouts) out.
 		by := f.count
-		if len(f.evs) <= f.maxEvents {
+		if f.n <= f.maxEvents {
 			by = f.kbytes
 		}
 		big := ""
@@ -139,9 +153,9 @@ func (f *Feed) Ingest(r Raw) (stored bool) {
 				big = k
 			}
 		}
-		i := slices.IndexFunc(f.evs, func(x Event) bool { return kindOf(x) == big })
-		old := f.evs[i]
-		f.evs = slices.Delete(f.evs, i, i+1)
+		old := f.evs[big][0]
+		f.evs[big] = f.evs[big][1:]
+		f.n--
 		f.bytes -= old.size()
 		f.count[big]--
 		f.kbytes[big] -= old.size()
@@ -161,27 +175,58 @@ func kindOf(e Event) string {
 	return p[0]
 }
 
-// folded is the threads now. Readers must not change what it returns.
-func (f *Feed) folded() []Thread {
+// all is every held event, by (Time, Seq). The caller holds f.mu.
+func (f *Feed) all() []Event {
+	out := make([]Event, 0, f.n)
+	for _, evs := range f.evs {
+		out = append(out, evs...)
+	}
+	slices.SortFunc(out, less)
+	return out
+}
+
+// threads is the folded answer now. One fold runs at a time: a reader that finds the cache stale starts it, one that
+// arrives meanwhile waits for it, or takes the last result at once when that is younger than staleOK. The result is
+// shared and immutable: readers must not change it.
+func (f *Feed) threads() *folded {
 	f.mu.Lock()
-	now := f.now()
-	if f.cache != nil && f.cacheGen == f.gen && now.Sub(f.cacheAt) < cacheTTL {
-		t := f.cache
-		f.mu.Unlock()
-		return t
+	for {
+		now := f.now()
+		if c := f.cache; c != nil && f.cacheGen == f.gen && now.Sub(f.cacheAt) < cacheTTL {
+			f.mu.Unlock()
+			return c
+		}
+		if w := f.folding; w != nil {
+			if c := f.cache; c != nil && now.Sub(f.cacheAt) < staleOK {
+				f.mu.Unlock()
+				return c
+			}
+			f.mu.Unlock()
+			<-w
+			f.mu.Lock()
+			if c := f.cache; c != nil {
+				f.mu.Unlock()
+				return c
+			}
+			continue
+		}
+		break
 	}
-	evs, gen := slices.Clone(f.evs), f.gen
+	done := make(chan struct{})
+	f.folding = done
+	evs, gen, now := f.all(), f.gen, f.now()
+	f.folds++
 	f.mu.Unlock()
-	t := Fold(evs, now)
-	if t == nil {
-		t = []Thread{}
+	th := Fold(evs, now)
+	c := &folded{threads: th, byID: make(map[string]int, len(th))}
+	for i, t := range th {
+		c.byID[t.ID] = i
 	}
 	f.mu.Lock()
-	if gen == f.gen {
-		f.cache, f.cacheGen, f.cacheAt = t, gen, now
-	}
+	f.cache, f.cacheGen, f.cacheAt, f.folding = c, gen, now, nil
 	f.mu.Unlock()
-	return t
+	close(done)
+	return c
 }
 
 // List is up to limit threads, newest activity first, after cursor ("" = from the top); next is "" at the end. A
@@ -196,10 +241,16 @@ func (f *Feed) List(limit int, cursor string) (page []Thread, next string, err e
 		}
 		id = i
 	}
-	for _, t := range f.folded() {
-		if cursor != "" && t.LastActivityAt.UnixNano() >= at && (t.LastActivityAt.UnixNano() != at || t.ID >= id) {
-			continue
-		}
+	all := f.threads().threads
+	start := 0
+	if cursor != "" { // newest first, ties by id descending: the first thread strictly after the cursor
+		start = sort.Search(len(all), func(i int) bool {
+			l := all[i].LastActivityAt.UnixNano()
+			return l < at || (l == at && all[i].ID < id)
+		})
+	}
+	for i := start; i < len(all); i++ {
+		t := all[i] // a copy of this one thread, not of the list
 		if len(page) == limit {
 			last := page[len(page)-1]
 			return page, fmt.Sprintf("%d.%s", last.LastActivityAt.UnixNano(), last.ID), nil
@@ -212,10 +263,9 @@ func (f *Feed) List(limit int, cursor string) (page []Thread, next string, err e
 
 // Get is the thread with id, whole.
 func (f *Feed) Get(id string) (Thread, bool) {
-	for _, t := range f.folded() {
-		if t.ID == id {
-			return t, true
-		}
+	c := f.threads()
+	if i, ok := c.byID[id]; ok {
+		return c.threads[i], true
 	}
 	return Thread{}, false
 }
@@ -229,8 +279,8 @@ type Stats struct {
 }
 
 func (f *Feed) Stats() Stats {
-	th := len(f.folded())
+	th := len(f.threads().threads)
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return Stats{len(f.evs), th, f.bytes, f.dropped, f.bad, f.refused, f.last}
+	return Stats{f.n, th, f.bytes, f.dropped, f.bad, f.refused, f.last}
 }
