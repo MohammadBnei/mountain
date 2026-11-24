@@ -239,8 +239,8 @@ q.by { unicode-bidi: isolate; color: var(--text-muted); overflow-wrap: anywhere;
 .host { font: var(--type-metric); color: var(--text-muted); overflow-wrap: anywhere; }
 .mdtable { position: relative; z-index: 1; width: fit-content; max-width: 100%; overflow-x: auto; border: 1px solid var(--edge); border-radius: var(--radius-sm); }
 .md table { border-collapse: collapse; font: var(--type-body-sm); overflow-wrap: normal; }
-.md :is(th, td) { min-width: 64px; max-width: 280px; padding: 4px var(--space-3); text-align: start; vertical-align: top; border-bottom: 1px solid var(--edge); overflow-wrap: anywhere; }
-.md th { font-weight: 600; background: var(--surface-sunken); white-space: nowrap; }
+.md :is(th, td) { min-width: 96px; max-width: 280px; padding: 4px var(--space-3); text-align: start; vertical-align: top; border-bottom: 1px solid var(--edge); overflow-wrap: anywhere; }
+.md th { font-weight: 600; background: var(--surface-sunken); }
 .md tr:last-child td { border-bottom: 0; }
 
 /* a thread: X's post page */

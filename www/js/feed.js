@@ -632,7 +632,8 @@ function drawThread(v, t) {
     );
   }
   const links = [...(t.links ?? [])].map(linkCard);
-  if (t.kind === 'session' || t.kind === 'card')
+  // a laptop session is not in the fleet's console
+  if ((t.kind === 'session' && !isSession) || t.kind === 'card')
     links.push(linkCard({ kind: 'Fleet console', ref: FLEET, quoted: false }));
   const opened = new Date(t.opened_at);
   v.el.replaceChildren(
