@@ -29,7 +29,8 @@ const (
 )
 
 // Entry is one line of a thread. Quoted is true for any text that came from an event's free text (alert
-// annotations): the page shows it as a quote and an agent must not act on it.
+// annotations): the page shows it as a quote and an agent must not act on it. By is who did or wrote it, a login from
+// the event: text from outside as well, whatever Quoted says of Text ("" when the event names nobody).
 type Entry struct {
 	Time   time.Time `json:"time"`
 	Actor  string    `json:"actor"` // "system", or "session" for a laptop session's own words
@@ -51,15 +52,19 @@ type Entry struct {
 	Thread      string   `json:"thread,omitempty"`
 	HasMore     bool     `json:"has_more,omitempty"` // the list answer cut Text; the thread has it whole
 
-	seq int64 // laptop: the event's seq, for ordering what the clock cannot
+	seq int64  // laptop: the event's seq, for ordering what the clock cannot
+	By  string `json:"by,omitempty"` // a login from the event: outside text, whatever Quoted says of Text
 }
 
 // Link is a reference out of a thread: Ref is a thread id (kind "previous"), a revision, or a URL taken from an
-// event (kind "generator"), which is Quoted like any text from outside.
+// event (kind "generator"), which is Quoted like any text from outside. Title is the thread's a Ref names, "" when the
+// feed does not hold it; TitleQuoted is that thread's.
 type Link struct {
-	Kind   string `json:"kind"`
-	Ref    string `json:"ref"`
-	Quoted bool   `json:"quoted"`
+	Kind        string `json:"kind"`
+	Ref         string `json:"ref"`
+	Quoted      bool   `json:"quoted"`
+	Title       string `json:"title,omitempty"`
+	TitleQuoted bool   `json:"title_quoted,omitempty"`
 }
 
 // Thread is what the page shows. TitleQuoted is true when the title came from an event's free text (an alert's name).
@@ -116,8 +121,10 @@ func threadID(kind, key string) string {
 	return kind + "-" + hex.EncodeToString(h[:8])
 }
 
-func (t *Thread) add(at time.Time, text string, quoted bool) {
-	t.Entries = append(t.Entries, Entry{Time: at, Actor: "system", Text: text, Quoted: quoted})
+func (t *Thread) add(at time.Time, text string, quoted bool) { t.addBy(at, text, quoted, "") }
+
+func (t *Thread) addBy(at time.Time, text string, quoted bool, by string) {
+	t.Entries = append(t.Entries, Entry{Time: at, Actor: "system", Text: text, Quoted: quoted, By: by})
 	t.LastActivityAt = at
 }
 
@@ -125,7 +132,7 @@ func (t *Thread) link(kind, ref string, quoted bool) {
 	if ref == "" || len(t.Links) >= maxLinks {
 		return
 	}
-	l := Link{kind, ref, quoted}
+	l := Link{Kind: kind, Ref: ref, Quoted: quoted}
 	if !slices.Contains(t.Links, l) {
 		t.Links = append(t.Links, l)
 	}
@@ -299,10 +306,19 @@ func Fold(evs []Event, now time.Time) []Thread {
 		}
 	}
 	lp.claims(pr)
+	byID := make(map[string]*Thread, len(out))
+	for _, t := range out {
+		byID[t.ID] = t
+	}
 	res := make([]Thread, len(out))
 	for i, t := range out {
 		finishCards(t, now)
 		lp.finish(t, now)
+		for j, l := range t.Links {
+			if to := byID[l.Ref]; to != nil && !l.Quoted { // an outside text that looks like an id links to nothing
+				t.Links[j].Title, t.Links[j].TitleQuoted = to.Title, to.TitleQuoted
+			}
+		}
 		if t.app != nil {
 			t.State, t.NeedsOwner = StateClosed, false
 			if t.app.cur == t && t.app.openAt(now) {

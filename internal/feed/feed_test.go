@@ -270,7 +270,7 @@ func TestDeployRollouts(t *testing.T) {
 		}
 	}
 	th := fold(t, 1, S(1, 0))[0]
-	if th.Title != "Deploy: web" || len(th.Links) != 1 || th.Links[0] != (Link{"revision", "abcdef1234567890", false}) {
+	if th.Title != "Deploy: web" || len(th.Links) != 1 || th.Links[0] != (Link{Kind: "revision", Ref: "abcdef1234567890"}) {
 		t.Errorf("%+v", th)
 	}
 }

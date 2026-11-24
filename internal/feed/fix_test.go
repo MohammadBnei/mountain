@@ -204,8 +204,12 @@ func TestSessionDefinitionAndTitleQuoted(t *testing.T) {
 			def = e.Quoted
 		}
 	}
-	if titles != 1 || !def {
-		t.Errorf("a repeated title shows %d times, the definition quoted %v: %v", titles, def, texts(s))
+	if titles != 0 || !def {
+		t.Errorf("the thread's title is in %d entries, the definition quoted %v: %v", titles, def, texts(s))
+	}
+	s = byKind(fold(t, 5, r, sess(2, "turn_ended", 1, `,"seq":1,"title":"renamed"`)), KindSession)[0]
+	if got := strings.Join(texts(s), "\n"); s.Title != "Session: renamed" || strings.Count(got, "true:renamed") != 1 {
+		t.Errorf("a rename is one quoted entry: %q\n%s", s.Title, got)
 	}
 }
 

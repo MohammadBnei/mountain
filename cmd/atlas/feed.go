@@ -249,21 +249,23 @@ func (w *feedWire) Close() error { return w.s.Close() }
 // The reads. Owner only: routeTable registers them closed, so the gate every other closed route has answers first.
 
 // GET /api/feed and GET /api/feed/{id}. A thread is {id, kind, title, title_quoted, state, opened_at, last_activity_at,
-// needs_owner, entries, links}; the list carries only the last entry and no links. Kinds: alert, deploy, pr, session,
+// needs_owner, entries, links}; the list carries only its preview (of the newest event's entries but claims, the system text, else the
+// first quoted text) and no links. Kinds: alert, deploy, pr, session,
 // card, laptop. A laptop thread is one session's posts, each an entry that is quoted and markdown with its post_id (a
 // correction has correction and corrects, the corrected post corrected_by; the post whose needs_you list stands has
 // asks_owner and needs_list), closed 24 h after the last. needs_by is "session" while that list stands, 7 days and
 // beyond the close. A PR thread also holds claim entries for posts about it (claim, thread); the list never shows one
 // as a thread's entry. In the list an entry's text is cut to 400 characters with has_more set; the thread has it whole.
-// State is open or closed. Entries are {time, actor, text, quoted}: a quoted entry or title holds text from
+// State is open or closed. Entries are {time, actor, text, quoted, by} (by: a login from the event, outside text too): a quoted entry or title holds text from
 // outside (a PR's title, branch, comment or review, an agent's session title, a card's subject, an alert's words),
-// and the page shows it as a quote. Links are {kind, ref, quoted}: "previous" and "generator" (alerts), "revision"
-// (deploys), "run" (a PR's CI run, a URL), "deploy" (a PR to the rollout of its merge commit, ref a thread id) and
-// "pull_request" (that rollout back to the PR; only a revision new in the sync counts). A session thread has no link
-// to its PR: no event carries one. A PR closes on any payload that says closed and opens again only on reopened; a successful CI run is not kept.
-// needs_owner: an alert that fires, an unhealthy deploy, a session or card thread holding an open card that has not
-// expired (14 days after it opened when it has no expiry), and then the thread shows open even if its session ended;
-// never a PR.
+// and the page shows it as a quote. by is a login from the event, outside text too. Links are {kind, ref, quoted, title,
+// title_quoted} (title: of the thread ref names, if held): "previous" and "generator" (alerts), "revision" (deploys),
+// "run" (a PR's CI run, a URL), "deploy" (a PR to the rollout of its merge commit, ref a thread id) and "pull_request"
+// (that rollout back to the PR; only a revision new in the sync counts). A session thread has no link to its PR: no
+// event carries one. A PR closes on any payload that says closed and opens again only on reopened; a successful CI run
+// is not kept. needs_owner: an alert that fires, an unhealthy deploy, a session or card thread holding an open card that
+// has not expired (14 days after it opened when it has no expiry), and then the thread shows open even if its session
+// ended; never a PR.
 func (a *App) serveFeed(w http.ResponseWriter, r *http.Request) {
 	if a.Feed == nil {
 		http.NotFound(w, r)

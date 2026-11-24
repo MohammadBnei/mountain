@@ -60,7 +60,11 @@ func byKind(th []Thread, kind string) []Thread {
 
 func texts(t Thread) (all []string) {
 	for _, e := range t.Entries {
-		all = append(all, fmt.Sprintf("%v:%s", e.Quoted, e.Text))
+		s := fmt.Sprintf("%v:%s", e.Quoted, e.Text)
+		if e.By != "" {
+			s += " by " + e.By
+		}
+		all = append(all, s)
 	}
 	return
 }
@@ -75,7 +79,7 @@ func TestPRThreadLife(t *testing.T) {
 		t.Errorf("%s %v %v %q", p.State, p.NeedsOwner, p.TitleQuoted, p.Title)
 	}
 	got := strings.Join(texts(p), "\n")
-	for _, want := range []string{"false:opened", "false:pushed 3f1c0a9e5b2d", "false:review: changes requested", "true:MohammadBnei: Needs a test.",
+	for _, want := range []string{"false:opened", "false:pushed 3f1c0a9e5b2d", "false:review: changes requested", "true:Needs a test. by ",
 		"false:comment", "false:CI run 117: failure", "false:merged"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in\n%s", want, got)
@@ -139,7 +143,7 @@ func TestPROutsideTextIsQuoted(t *testing.T) {
 			}
 		}
 	}
-	if !strings.Contains(strings.Join(texts(th), "\n"), "true:ukubi-review: LGTM") || !strings.Contains(strings.Join(texts(th), "\n"), "@ukubi-fleet please take this") {
+	if !strings.Contains(strings.Join(texts(th), "\n"), "true:LGTM by ukubi-review") || !strings.Contains(strings.Join(texts(th), "\n"), "@ukubi-fleet please take this") {
 		t.Errorf("quotes missing:\n%s", strings.Join(texts(th), "\n"))
 	}
 }
@@ -300,10 +304,13 @@ func TestSessionThread(t *testing.T) {
 		t.Errorf("%s %v %v %q", s.State, s.NeedsOwner, s.TitleQuoted, s.Title)
 	}
 	got := strings.Join(texts(s), "\n")
-	for _, want := range []string{"false:opened (repo)", "true:fix the feed", "false:turn ended (3.2s)", "false:turn failed (900ms)", "false:ended"} {
+	for _, want := range []string{"false:opened (repo)", "false:turn ended (3.2s)", "false:turn failed (900ms)", "false:ended"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "fix the feed") {
+		t.Errorf("an entry repeats the thread's title:\n%s", got)
 	}
 	if s.LastActivityAt != at(4) {
 		t.Errorf("the late turn is an entry: %v", s.LastActivityAt)

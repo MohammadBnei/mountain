@@ -45,13 +45,12 @@ func newPRs(evs []Event) *prs {
 	return p
 }
 
-// quote is the entry for what a person wrote: "login: text", both from outside.
-func quote(t *Thread, e Event, text string) {
-	switch {
-	case e.Login != "" && text != "":
-		t.add(e.Time, e.Login+": "+text, true)
-	case e.Login != "" || text != "":
-		t.add(e.Time, e.Login+text, true)
+// did adds what a forge event says: the act, a system text, and text, the words written with it, quoted. Both are
+// e.Login's.
+func did(t *Thread, e Event, act, text string) {
+	t.addBy(e.Time, act, false, e.Login)
+	if text != "" {
+		t.addBy(e.Time, text, true, e.Login)
 	}
 }
 
@@ -89,8 +88,7 @@ func (p *prs) apply(e Event, out *[]*Thread) {
 	}
 	switch e.Type {
 	case "forge.pull_request.opened":
-		t.add(e.Time, "opened", false)
-		quote(t, e, "")
+		did(t, e, "opened", "")
 	case "forge.pull_request.closed":
 		text := "closed"
 		if e.Merged {
@@ -99,32 +97,25 @@ func (p *prs) apply(e Event, out *[]*Thread) {
 				p.byMerge[e.Merge] = append(p.byMerge[e.Merge], t)
 			}
 		}
-		t.add(e.Time, text, false)
+		did(t, e, text, "")
 		t.State = StateClosed
-		quote(t, e, "")
 	case "forge.pull_request.reopened":
-		t.add(e.Time, "reopened", false)
+		did(t, e, "reopened", "")
 		t.State = StateOpen
-		quote(t, e, "")
 	case "forge.pull_request.synchronized":
 		text := "pushed"
 		if e.Head != "" {
 			text += " " + e.Head[:min(len(e.Head), 12)]
 		}
-		t.add(e.Time, text, false)
-		quote(t, e, "")
+		did(t, e, text, "")
 	case "forge.pull_request_review.approved":
-		t.add(e.Time, "review: approved", false)
-		quote(t, e, e.Text)
+		did(t, e, "review: approved", e.Text)
 	case "forge.pull_request_review.rejected":
-		t.add(e.Time, "review: changes requested", false)
-		quote(t, e, e.Text)
+		did(t, e, "review: changes requested", e.Text)
 	case "forge.pull_request_review.comment":
-		t.add(e.Time, "review: comment", false)
-		quote(t, e, e.Text)
+		did(t, e, "review: comment", e.Text)
 	case "forge.issue_comment.created":
-		t.add(e.Time, "comment", false)
-		quote(t, e, e.Text)
+		did(t, e, "comment", e.Text)
 	}
 	// A payload that says the PR is closed closes the thread: a late comment on a merged PR leaves it closed. A
 	// payload that says open opens nothing: only reopened does (a comment sent before the close, or a relisted
@@ -159,7 +150,7 @@ type fleet struct {
 	sessions map[string]*Thread
 	cards    map[string]*card
 	owned    map[string]*Thread // decision id -> its own thread, a card whose session is unknown
-	title    map[string]string  // session id -> the last title shown
+	title    map[string]string  // session id -> its last title
 }
 
 func newFleet(evs []Event) *fleet {
@@ -181,10 +172,10 @@ func (f *fleet) session(e Event, out *[]*Thread) *Thread {
 	}
 	if e.Title != "" {
 		t.Title, t.TitleQuoted = "Session: "+e.Title, true
-		if f.title[e.Key] != e.Title {
-			f.title[e.Key] = e.Title
+		if was := f.title[e.Key]; was != "" && was != e.Title { // a rename; the first title is the thread's own
 			t.add(e.Time, e.Title, true)
 		}
+		f.title[e.Key] = e.Title
 	}
 	return t
 }

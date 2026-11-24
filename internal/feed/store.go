@@ -295,7 +295,7 @@ func (f *Feed) fold(evs []Event, gen uint64, now time.Time, done chan struct{}) 
 }
 
 // List is up to limit threads, newest activity first, after cursor ("" = from the top); next is "" at the end. A
-// thread carries only its last entry and no links: Get has the rest.
+// thread carries only its preview (one entry) and no links: Get has the rest.
 func (f *Feed) List(limit int, cursor string) (page []Thread, next string, err error) {
 	return f.ListCtx(context.Background(), limit, cursor)
 }
@@ -382,6 +382,18 @@ func preview(es []Entry) []Entry {
 	i := len(es) - 1
 	for i > 0 && es[i].Claim {
 		i--
+	}
+	// of the entries of that event (those at its time), the last system text, else the first quoted text
+	at := es[i].Time
+	for k := i; k >= 0 && es[k].Time.Equal(at); k-- {
+		if es[k].Claim {
+			continue
+		}
+		if !es[k].Quoted {
+			i = k
+			break
+		}
+		i = k
 	}
 	p := es[i : i+1 : i+1]
 	r := []rune(p[0].Text)
