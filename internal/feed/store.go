@@ -30,7 +30,8 @@ type Feed struct {
 
 	mu       sync.Mutex
 	evs      map[string][]Event // per kind, by (Time, Seq): an eviction takes the front of one slice, so filling the store is not quadratic
-	n        int                // events held
+	n        int                // events held, posts not counted
+	posts    *posts             // laptop posts, with a cap of their own
 	dead     map[string]int     // per kind: slots before the live front of its slice, zeroed and not yet released
 	seen     map[[2]string]bool
 	bytes    int
@@ -62,7 +63,7 @@ const staleOK = 30 * time.Second
 
 // New is a Feed that keeps at most maxEvents events and maxBytes bytes of them.
 func New(maxEvents, maxBytes int) *Feed {
-	return &Feed{maxEvents: maxEvents, maxBytes: maxBytes, seen: map[[2]string]bool{}, evs: map[string][]Event{}, floor: map[string]int64{}, count: map[string]int{}, kbytes: map[string]int{}, badSeen: map[[2]string]bool{}, logged: map[string]bool{}, now: time.Now, parse: Parse, foldFn: Fold, dead: map[string]int{}}
+	return &Feed{maxEvents: maxEvents, maxBytes: maxBytes, seen: map[[2]string]bool{}, evs: map[string][]Event{}, posts: newPosts(), floor: map[string]int64{}, count: map[string]int{}, kbytes: map[string]int{}, badSeen: map[[2]string]bool{}, logged: map[string]bool{}, now: time.Now, parse: Parse, foldFn: Fold, dead: map[string]int{}}
 }
 
 // SetFold replaces Fold, for tests that need one that fails.
@@ -80,7 +81,7 @@ const maxBadSeen = 4096
 func handled(r Raw) bool {
 	switch typ := strings.TrimPrefix(r.Type, "dev.bnei."); {
 	case typ == "alert.firing", typ == "alert.resolved", typ == "deploy.synced", typ == "deploy.health", typ == "deploy.flapping",
-		typ == "fleet.session.opened", typ == "fleet.session.turn_ended", typ == "fleet.session.ended", strings.HasPrefix(typ, "fleet.card."):
+		typ == laptopType, typ == "fleet.session.opened", typ == "fleet.session.turn_ended", typ == "fleet.session.ended", strings.HasPrefix(typ, "fleet.card."):
 		return true
 	case typ == "forge.issue_comment.created": // a comment on an issue has no thread here
 		return strings.Contains(r.Subject, "/pr/")
@@ -140,6 +141,18 @@ func (f *Feed) Ingest(r Raw) (stored bool) {
 		return false
 	}
 	f.seen[k] = true
+	if kind == KindLaptop { // a cap of its own: posts never evict another kind, nor move another kind's floor
+		f.posts.add(e)
+		for f.posts.bytes > f.posts.cap {
+			old := f.posts.evict(f.now())
+			delete(f.seen, [2]string{old.Source, old.ID})
+			f.floor[kind] = max(f.floor[kind], old.Seq)
+			f.dropped++
+		}
+		f.gen++
+		f.last = time.Now()
+		return true
+	}
 	i, _ := slices.BinarySearchFunc(f.evs[kind], e, less)
 	f.evs[kind] = slices.Insert(f.evs[kind], i, e)
 	f.n++
@@ -189,9 +202,12 @@ func kindOf(e Event) string {
 
 // all is every held event, kind by kind (Fold sorts them). The caller holds f.mu.
 func (f *Feed) all() []Event {
-	out := make([]Event, 0, f.n)
+	out := make([]Event, 0, f.n+f.posts.n)
 	for _, evs := range f.evs {
 		out = append(out, evs...)
+	}
+	for _, s := range f.posts.by {
+		out = append(out, s.evs...)
 	}
 	return out
 }
@@ -313,8 +329,7 @@ func (f *Feed) ListCtx(ctx context.Context, limit int, cursor string) (page []Th
 			last := page[len(page)-1]
 			return page, fmt.Sprintf("%d.%s", last.LastActivityAt.UnixNano(), last.ID), nil
 		}
-		n := len(t.Entries)
-		t.Entries, t.Links = t.Entries[max(0, n-1):n:n], nil // capped, so an append by a caller cannot write into the fold's array
+		t.Entries, t.Links = preview(t.Entries), nil
 		page = append(page, t)
 	}
 	return page, "", nil
@@ -353,5 +368,38 @@ func (f *Feed) Stats() Stats {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return Stats{f.n, th, f.bytes, f.dropped, f.bad, f.refused, f.last}
+	return Stats{f.n + f.posts.n, th, f.bytes + f.posts.bytes, f.dropped, f.bad, f.refused, f.last}
+}
+
+// preview is the one entry the list shows: the newest that is not a claim (a thread's own words, not another's mention
+// of it), its text cut to listRunes with HasMore set when it was longer, its needs_list cut to listNeeds items of
+// listNeedRunes with NeedsCount saying how many there were. Capped, so an append by a caller cannot write
+// into the fold's array.
+func preview(es []Entry) []Entry {
+	if len(es) == 0 {
+		return es[:0:0]
+	}
+	i := len(es) - 1
+	for i > 0 && es[i].Claim {
+		i--
+	}
+	p := es[i : i+1 : i+1]
+	r := []rune(p[0].Text)
+	if len(r) <= listRunes && len(p[0].NeedsList) == 0 {
+		return p
+	}
+	p = []Entry{p[0]}
+	if len(r) > listRunes {
+		p[0].Text, p[0].HasMore = string(r[:listRunes]), true
+	}
+	if n := len(p[0].NeedsList); n > 0 { // the list shows the first few, short; the count says how many there are
+		p[0].NeedsCount = n
+		p[0].NeedsList = slices.Clone(p[0].NeedsList[:min(n, listNeeds)])
+		for i, it := range p[0].NeedsList {
+			if ir := []rune(it); len(ir) > listNeedRunes {
+				p[0].NeedsList[i] = string(ir[:listNeedRunes])
+			}
+		}
+	}
+	return p
 }

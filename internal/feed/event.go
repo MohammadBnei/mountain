@@ -56,19 +56,31 @@ type Event struct {
 	IsError     bool      // fleet.session.turn_ended
 	Expires     time.Time // fleet.card: expires_at, zero if unset
 	Option      string    // fleet.card.answered: "1".."3"
-	PRState     string    // forge: the PR's state in the payload, open or closed, "" when it has none
-	Relisted    bool      // forge: built by the bridge's relist loop, not a webhook
+	Branch      string    // laptop: the session's branch
+	PostID      string    // laptop: the post's id, and the post it corrects
+	Corrects    string
+	NeedsSet    bool // laptop: the post has a needs_you field; NeedsList is its items, none when it clears
+	NeedsList   []string
+	About       []Claim // laptop: the PRs the post is about
+	PRState     string  // forge: the PR's state in the payload, open or closed, "" when it has none
+	Relisted    bool    // forge: built by the bridge's relist loop, not a webhook
 }
 
 // size is an event's memory, roughly: what the byte cap counts.
 func (e Event) size() int {
 	n := int(unsafe.Sizeof(e)) + (cap(e.Revisions)+cap(e.PrevRevisions))*int(unsafe.Sizeof("")) + seenCost + len(e.Source) + len(e.ID)
 	for _, s := range []string{e.Type, e.Key, e.StartsAt, e.Name, e.Summary, e.Description, e.URL, e.Status, e.Previous,
-		e.Repo, e.Title, e.Login, e.Text, e.Head, e.Merge, e.Session, e.Kind, e.Definition, e.Option} {
+		e.Repo, e.Title, e.Login, e.Text, e.Head, e.Merge, e.Session, e.Kind, e.Definition, e.Option, e.Branch, e.PostID, e.Corrects} {
 		n += len(s)
 	}
 	for _, r := range append(slices.Clone(e.Revisions), e.PrevRevisions...) {
 		n += len(r)
+	}
+	for _, c := range e.About {
+		n += len(c.Repo) + int(unsafe.Sizeof(c))
+	}
+	for _, c := range e.NeedsList {
+		n += len(c) + int(unsafe.Sizeof(c))
 	}
 	return n
 }
@@ -100,6 +112,8 @@ func Parse(r Raw) (Event, bool) {
 		return parseSession(e, r)
 	case strings.HasPrefix(e.Type, "fleet.card."):
 		return parseCard(e, r)
+	case e.Type == laptopType:
+		return parseLaptop(e, r)
 	}
 	switch e.Type {
 	case "alert.firing", "alert.resolved":

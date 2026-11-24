@@ -32,9 +32,26 @@ const (
 // annotations): the page shows it as a quote and an agent must not act on it.
 type Entry struct {
 	Time   time.Time `json:"time"`
-	Actor  string    `json:"actor"` // "system": the only speaker in this slice
+	Actor  string    `json:"actor"` // "system", or "session" for a laptop session's own words
 	Text   string    `json:"text"`
 	Quoted bool      `json:"quoted"`
+	// Laptop posts (all omitted otherwise): Markdown says Text is Markdown; PostID names the post; Correction and
+	// Corrects/CorrectedBy join a correcting post and the one it corrects; AsksOwner marks the one post whose needs_you
+	// list stands, NeedsList being that list; Claim is a post about a PR, shown in that PR's thread, Thread the post's
+	// thread.
+	Markdown    bool     `json:"markdown,omitempty"`
+	PostID      string   `json:"post_id,omitempty"`
+	Correction  bool     `json:"correction,omitempty"`   // this post corrects Corrects
+	Corrects    string   `json:"corrects,omitempty"`     // the post_id of the corrected post, in the same thread
+	CorrectedBy string   `json:"corrected_by,omitempty"` // the post_id of the post that corrected this one
+	AsksOwner   bool     `json:"asks_owner,omitempty"`
+	NeedsList   []string `json:"needs_list,omitempty"`
+	NeedsCount  int      `json:"needs_count,omitempty"` // the list answer cut NeedsList: how many items there are
+	Claim       bool     `json:"claim,omitempty"`
+	Thread      string   `json:"thread,omitempty"`
+	HasMore     bool     `json:"has_more,omitempty"` // the list answer cut Text; the thread has it whole
+
+	seq int64 // laptop: the event's seq, for ordering what the clock cannot
 }
 
 // Link is a reference out of a thread: Ref is a thread id (kind "previous"), a revision, or a URL taken from an
@@ -55,10 +72,12 @@ type Thread struct {
 	OpenedAt       time.Time `json:"opened_at"`
 	LastActivityAt time.Time `json:"last_activity_at"`
 	NeedsOwner     bool      `json:"needs_owner"`
+	NeedsBy        string    `json:"needs_by,omitempty"` // "session": a laptop session asked, in its own words
 	Entries        []Entry   `json:"entries"`
 	Links          []Link    `json:"links"`
 
 	cards  []*card // session and card threads: the cards they hold
+	post   *post   // laptop: the latest post whose Needs you line stands
 	app    *appState
 	anchor time.Time // deploy: the last synced or unhealthy event in it
 	closed time.Time // deploy: a Healthy edge closed it then; zero while not
@@ -98,7 +117,7 @@ func threadID(kind, key string) string {
 }
 
 func (t *Thread) add(at time.Time, text string, quoted bool) {
-	t.Entries = append(t.Entries, Entry{at, "system", text, quoted})
+	t.Entries = append(t.Entries, Entry{Time: at, Actor: "system", Text: text, Quoted: quoted})
 	t.LastActivityAt = at
 }
 
@@ -145,7 +164,7 @@ func Fold(evs []Event, now time.Time) []Thread {
 	alerts := map[string]*Thread{}
 	lastAlert := map[string]*Thread{} // source|fingerprint -> its newest thread
 	apps := map[string]*appState{}
-	pr, fl := newPRs(s), newFleet(s)
+	pr, fl, lp := newPRs(s), newFleet(s), newLaptops()
 	type synced struct {
 		t   *Thread
 		rev string
@@ -167,6 +186,9 @@ func Fold(evs []Event, now time.Time) []Thread {
 			continue
 		case strings.HasPrefix(e.Type, "fleet.session."):
 			fl.applySession(e, &out)
+			continue
+		case e.Type == laptopType:
+			lp.apply(e, &out)
 			continue
 		}
 		if e.Type == "alert.firing" || e.Type == "alert.resolved" {
@@ -276,9 +298,11 @@ func Fold(evs []Event, now time.Time) []Thread {
 			r.t.link("pull_request", p.ID, false)
 		}
 	}
+	lp.claims(pr)
 	res := make([]Thread, len(out))
 	for i, t := range out {
 		finishCards(t, now)
+		lp.finish(t, now)
 		if t.app != nil {
 			t.State, t.NeedsOwner = StateClosed, false
 			if t.app.cur == t && t.app.openAt(now) {
