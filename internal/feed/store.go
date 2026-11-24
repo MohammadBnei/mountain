@@ -32,7 +32,9 @@ type Feed struct {
 	refused  uint64
 	badSeen  map[[2]string]bool // bad events already counted (bounded: past maxBadSeen a replay counts them again)
 	logged   map[string]bool    // event types whose first failure was logged
-	floor    int64              // the highest seq evicted, 0 until one is: an unseen event at or below it came back after its eviction
+	floor    map[string]int64   // per kind: the highest seq evicted, none until one is: an unseen event at or below it came back after its eviction
+	count    map[string]int     // per kind: events held
+	kbytes   map[string]int     // per kind: bytes held
 	last     time.Time          // wall time of the last stored event
 	gen      uint64             // changes with evs
 	cache    []Thread
@@ -42,7 +44,7 @@ type Feed struct {
 
 // New is a Feed that keeps at most maxEvents events and maxBytes bytes of them.
 func New(maxEvents, maxBytes int) *Feed {
-	return &Feed{maxEvents: maxEvents, maxBytes: maxBytes, seen: map[[2]string]bool{}, badSeen: map[[2]string]bool{}, logged: map[string]bool{}, now: time.Now, parse: Parse}
+	return &Feed{maxEvents: maxEvents, maxBytes: maxBytes, seen: map[[2]string]bool{}, floor: map[string]int64{}, count: map[string]int{}, kbytes: map[string]int{}, badSeen: map[[2]string]bool{}, logged: map[string]bool{}, now: time.Now, parse: Parse}
 }
 
 // SetParse replaces Parse, for tests that need a parser that fails.
@@ -111,7 +113,8 @@ func (f *Feed) Ingest(r Raw) (stored bool) {
 	if f.seen[k] {
 		return false
 	}
-	if e.Seq != 0 && e.Seq <= f.floor {
+	kind := kindOf(e)
+	if e.Seq != 0 && e.Seq <= f.floor[kind] {
 		f.refused++
 		return false
 	}
@@ -119,17 +122,43 @@ func (f *Feed) Ingest(r Raw) (stored bool) {
 	i, _ := slices.BinarySearchFunc(f.evs, e, less)
 	f.evs = slices.Insert(f.evs, i, e)
 	f.bytes += e.size()
+	f.count[kind]++
+	f.kbytes[kind] += e.size()
 	f.gen++
 	f.last = time.Now()
 	for len(f.evs) > f.maxEvents || f.bytes > f.maxBytes {
-		old := f.evs[0]
-		f.evs = slices.Delete(f.evs, 0, 1)
+		// The kind holding the most (events when that cap is over, else bytes) loses its oldest event, so a busy
+		// kind (PR traffic, session turns) cannot push the quiet ones (alerts, rollouts) out.
+		by := f.count
+		if len(f.evs) <= f.maxEvents {
+			by = f.kbytes
+		}
+		big := ""
+		for k, n := range by {
+			if n > 0 && (big == "" || n > by[big] || (n == by[big] && k < big)) {
+				big = k
+			}
+		}
+		i := slices.IndexFunc(f.evs, func(x Event) bool { return kindOf(x) == big })
+		old := f.evs[i]
+		f.evs = slices.Delete(f.evs, i, i+1)
 		f.bytes -= old.size()
+		f.count[big]--
+		f.kbytes[big] -= old.size()
 		delete(f.seen, [2]string{old.Source, old.ID})
-		f.floor = max(f.floor, old.Seq)
+		f.floor[big] = max(f.floor[big], old.Seq)
 		f.dropped++
 	}
 	return true
+}
+
+// kindOf is the kind an event is capped as: alert, deploy, forge, session or card.
+func kindOf(e Event) string {
+	p := strings.Split(e.Type, ".")
+	if p[0] == "fleet" && len(p) > 1 {
+		return p[1]
+	}
+	return p[0]
 }
 
 // folded is the threads now. Readers must not change what it returns.

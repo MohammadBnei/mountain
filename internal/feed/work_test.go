@@ -309,8 +309,8 @@ func TestSessionThread(t *testing.T) {
 		t.Errorf("no opened: %s %q %v", s.State, s.Title, s.TitleQuoted)
 	}
 	// the title is cut and cleaned again here
-	e, _ := Parse(sess(1, "opened", 0, `,"title":"`+strings.Repeat("é", 300)+`\n‮"`))
-	if n := len([]rune(e.Title)); n > 121 || strings.ContainsAny(e.Title, "\n‮") {
+	e, _ := Parse(sess(1, "opened", 0, `,"title":"`+strings.Repeat("é", 300)+`\n\u202e"`))
+	if n := len([]rune(e.Title)); n > 121 || strings.ContainsAny(e.Title, "\n\u202e") {
 		t.Errorf("title %d runes %q", n, e.Title)
 	}
 }
@@ -395,5 +395,42 @@ func TestWorkFoldOrderFree(t *testing.T) {
 		if got := Fold(parse(t, rs...), at(30)); !reflect.DeepEqual(got, want) {
 			t.Fatalf("order changed the answer")
 		}
+	}
+}
+
+// Busy PR traffic is evicted before the alerts and rollouts: the kind holding the most loses its oldest event.
+func TestCapsPerKind(t *testing.T) {
+	f := New(10, 1<<20)
+	f.Ingest(alertRaw(1, "firing", "fp1", sa, 0, 0, ""))
+	f.Ingest(synced(2, "gitops", 0))
+	for i := 0; i < 40; i++ {
+		f.Ingest(forge(t, int64(10+i), "pull_request_synchronized", "pull_request.synchronized", prSubj, fmt.Sprintf("d%d", i), 1+i))
+	}
+	th, _, _ := f.List(50, "")
+	k := map[string]int{}
+	for _, x := range th {
+		k[x.Kind]++
+	}
+	if k[KindAlert] != 1 || k[KindDeploy] != 1 || f.Stats().Events != 10 || f.Stats().Dropped != 32 {
+		t.Errorf("threads %v, %+v", k, f.Stats())
+	}
+	// the floor is per kind: an old PR event refused after its eviction does not refuse a new alert of a lower seq
+	if f.Ingest(forge(t, 11, "pull_request_synchronized", "pull_request.synchronized", prSubj, "late", 1)) {
+		t.Error("an evicted PR event came back")
+	}
+	if !f.Ingest(alertRaw(5, "firing", "fp2", sa, 0, 2, "")) {
+		t.Error("the PR floor refused an alert")
+	}
+	// bytes: the byte cap evicts from the kind holding the most bytes
+	g := New(1000, 6000)
+	g.Ingest(alertRaw(1, "firing", "fp1", sa, 0, 0, ""))
+	for i := 0; i < 60; i++ {
+		g.Ingest(forge(t, int64(10+i), "pull_request_comment_created", "issue_comment.created", prSubj, fmt.Sprintf("c%d", i), 1+i))
+	}
+	if g.Stats().Bytes > 6000 {
+		t.Errorf("bytes %d", g.Stats().Bytes)
+	}
+	if a, _, _ := g.List(5, ""); len(byKind(a, KindAlert)) != 1 {
+		t.Error("the alert was evicted by PR traffic")
 	}
 }
