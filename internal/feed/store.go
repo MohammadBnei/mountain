@@ -29,9 +29,12 @@ type Feed struct {
 	bytes    int
 	dropped  uint64
 	bad      uint64
-	maxSeq   int64     // the highest seq stored: an unseen event at or below it was evicted before (the bridge delivers in seq order)
-	last     time.Time // wall time of the last stored event
-	gen      uint64    // changes with evs
+	refused  uint64
+	badSeen  map[[2]string]bool // bad events already counted (bounded: past maxBadSeen a replay counts them again)
+	logged   map[string]bool    // event types whose first failure was logged
+	floor    int64              // the highest seq evicted, 0 until one is: an unseen event at or below it came back after its eviction
+	last     time.Time          // wall time of the last stored event
+	gen      uint64             // changes with evs
 	cache    []Thread
 	cacheGen uint64
 	cacheAt  time.Time
@@ -39,7 +42,7 @@ type Feed struct {
 
 // New is a Feed that keeps at most maxEvents events and maxBytes bytes of them.
 func New(maxEvents, maxBytes int) *Feed {
-	return &Feed{maxEvents: maxEvents, maxBytes: maxBytes, seen: map[[2]string]bool{}, now: time.Now, parse: Parse}
+	return &Feed{maxEvents: maxEvents, maxBytes: maxBytes, seen: map[[2]string]bool{}, badSeen: map[[2]string]bool{}, logged: map[string]bool{}, now: time.Now, parse: Parse}
 }
 
 // SetParse replaces Parse, for tests that need a parser that fails.
@@ -47,32 +50,68 @@ func (f *Feed) SetParse(p func(Raw) (Event, bool)) { f.parse = p }
 
 func less(a, b Event) int { return cmp.Or(a.Time.Compare(b.Time), cmp.Compare(a.Seq, b.Seq)) }
 
+// maxBadSeen bounds the memory of counted bad events.
+const maxBadSeen = 4096
+
+// handled: the types Parse reads; a failure to parse one of them is a bad event, any other type is not the feed's.
+func handled(typ string) bool {
+	switch strings.TrimPrefix(typ, "dev.bnei.") {
+	case "alert.firing", "alert.resolved", "deploy.synced", "deploy.health", "deploy.flapping":
+		return true
+	}
+	return false
+}
+
+// failed counts r as bad once, however often it comes (a Replay brings it again), and logs the first failure of its
+// type since the start, not each.
+func (f *Feed) failed(r Raw, why string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	k := [2]string{r.Source, r.ID}
+	if f.badSeen[k] {
+		return
+	}
+	if len(f.badSeen) < maxBadSeen {
+		f.badSeen[k] = true
+	}
+	f.bad++
+	if !f.logged[r.Type] {
+		f.logged[r.Type] = true
+		slog.Error(fmt.Sprintf("feed: %s event %d: %s (counted in mountain_feed_bad_events_total; this type is not logged again)", r.Type, r.Seq, why))
+	}
+}
+
 // Ingest stores r when it is an event the feed has a thread for and not one it already has (source, id); it says
-// whether it stored it. Over a cap the oldest events go, r itself if it is the oldest. An event that was dropped
-// before and comes again (a second Replay) is ignored, not counted again. A panic is logged and counted (Stats.Bad),
-// never raised: one bad event must not stop the stream.
+// whether it stored it. Over a cap the oldest events go, r itself if it is the oldest. An unseen event whose seq is at
+// or below the highest seq evicted is refused and counted (Stats.Refused): after an eviction it may be one that
+// came back in a second Replay, and the feed cannot tell it from a new one. Below that floor nothing is refused, so a
+// seq the bridge reuses after a restore, or a hole a Replay fills, is stored. An event of a type the feed reads that
+// does not parse, or a panic, is counted once (Stats.Bad), never raised: one bad event must not stop the stream.
 func (f *Feed) Ingest(r Raw) (stored bool) {
 	defer func() {
 		if p := recover(); p != nil {
-			slog.Error(fmt.Sprintf("feed: event %d: panic: %v", r.Seq, p))
-			f.mu.Lock()
-			f.bad++
-			f.mu.Unlock()
+			f.failed(r, fmt.Sprintf("panic: %v", p))
 			stored = false
 		}
 	}()
 	e, ok := f.parse(r)
 	if !ok {
+		if handled(r.Type) {
+			f.failed(r, "does not parse")
+		}
 		return false
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	k := [2]string{e.Source, e.ID}
-	if f.seen[k] || (e.Seq != 0 && e.Seq <= f.maxSeq) {
+	if f.seen[k] {
+		return false
+	}
+	if e.Seq != 0 && e.Seq <= f.floor {
+		f.refused++
 		return false
 	}
 	f.seen[k] = true
-	f.maxSeq = max(f.maxSeq, e.Seq)
 	i, _ := slices.BinarySearchFunc(f.evs, e, less)
 	f.evs = slices.Insert(f.evs, i, e)
 	f.bytes += e.size()
@@ -83,6 +122,7 @@ func (f *Feed) Ingest(r Raw) (stored bool) {
 		f.evs = slices.Delete(f.evs, 0, 1)
 		f.bytes -= old.size()
 		delete(f.seen, [2]string{old.Source, old.ID})
+		f.floor = max(f.floor, old.Seq)
 		f.dropped++
 	}
 	return true
@@ -149,15 +189,15 @@ func (f *Feed) Get(id string) (Thread, bool) {
 
 // Stats is what the metrics read.
 type Stats struct {
-	Events, Threads int
-	Bytes           int
-	Dropped, Bad    uint64
-	Last            time.Time // zero until an event is stored
+	Events, Threads       int
+	Bytes                 int
+	Dropped, Bad, Refused uint64
+	Last                  time.Time // zero until an event is stored
 }
 
 func (f *Feed) Stats() Stats {
 	th := len(f.folded())
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return Stats{len(f.evs), th, f.bytes, f.dropped, f.bad, f.last}
+	return Stats{len(f.evs), th, f.bytes, f.dropped, f.bad, f.refused, f.last}
 }

@@ -134,13 +134,16 @@ func TestFeedMetrics(t *testing.T) {
 	defer func() { _ = m.Close() }()
 	f := feed.New(1, 1<<20)
 	f.Ingest(fraw(1, "firing", "a", 0))
-	f.Ingest(fraw(2, "firing", "b", 1))
+	f.Ingest(fraw(2, "firing", "b", 1)) // evicts seq 1: the floor is 1
+	f.Ingest(fraw(1, "firing", "c", 2)) // refused: at the floor
+	f.Ingest(feed.Raw{Seq: 9, Source: "s", ID: "bad", Type: "dev.bnei.alert.firing", Time: ft0, Data: []byte("{")})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	m.FeedEnabled(true)
 	go feedMetrics(ctx, f, m, time.Now(), time.Hour)
 	waitScrape(t, func() string { _, _, b := scrape(t, m); return b },
-		"mountain_feed_enabled 1\n", "mountain_feed_events 1\n", "mountain_feed_threads 1\n", "mountain_feed_dropped_total 1\n", "mountain_feed_last_event_age_seconds ")
+		"mountain_feed_enabled 1\n", "mountain_feed_events 1\n", "mountain_feed_threads 1\n", "mountain_feed_dropped_total 1\n",
+		"mountain_feed_bad_events_total 1\n", "mountain_feed_refused_events_total 1\n", "mountain_feed_last_event_age_seconds ")
 }
 
 func TestFeedRoutes(t *testing.T) {

@@ -78,15 +78,15 @@ func guarded(what string, f func()) {
 
 // feedMetrics records the feed's state every `every` until ctx ends.
 func feedMetrics(ctx context.Context, f *feed.Feed, met *Metrics, started time.Time, every time.Duration) {
-	var sent, sentBad uint64
+	var sent, sentBad, sentRefused uint64
 	for {
 		s := f.Stats()
 		ref := s.Last
 		if ref.IsZero() {
 			ref = started
 		}
-		met.FeedState(s.Events, s.Threads, s.Dropped-sent, s.Bad-sentBad, time.Since(ref).Seconds())
-		sent, sentBad = s.Dropped, s.Bad
+		met.FeedState(s.Events, s.Threads, s.Dropped-sent, s.Bad-sentBad, s.Refused-sentRefused, time.Since(ref).Seconds())
+		sent, sentBad, sentRefused = s.Dropped, s.Bad, s.Refused
 		if !sleepCtx(ctx, every) {
 			return
 		}

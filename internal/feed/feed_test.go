@@ -241,7 +241,15 @@ func TestDeployRollouts(t *testing.T) {
 		{"a synced long after Degraded joins, never a second open thread", 180, []Raw{H(1, 0, "Healthy", "Degraded"), S(2, 90)}, 1, 1, true},
 		{"Degraded then Healthy", 180, []Raw{S(1, 0), H(2, 2, "Progressing", "Degraded"), H(3, 20, "Degraded", "Healthy")}, 1, 0, false},
 		{"Degraded then Progressing stops needing, then closes", 180, []Raw{H(1, 0, "Healthy", "Degraded"), H(2, 20, "Degraded", "Progressing")}, 1, 0, false},
-		{"Degraded then Progressing: still open inside the window", 25, []Raw{H(1, 0, "Healthy", "Degraded"), H(2, 20, "Degraded", "Progressing")}, 1, 0, false},
+		{"Degraded then Progressing: the window starts when the need ended", 25, []Raw{H(1, 0, "Healthy", "Degraded"), H(2, 20, "Degraded", "Progressing")}, 1, 1, false},
+		{"Degraded for an hour then Progressing does not close at once", 65, []Raw{H(1, 0, "Healthy", "Degraded"), H(2, 60, "Degraded", "Progressing")}, 1, 1, false},
+		{"...and closes ten minutes after", 71, []Raw{H(1, 0, "Healthy", "Degraded"), H(2, 60, "Degraded", "Progressing")}, 1, 0, false},
+		{"a Degraded/Progressing loop is one thread", 200, []Raw{H(1, 0, "Healthy", "Degraded"), H(2, 20, "Degraded", "Progressing"), H(3, 28, "Progressing", "Degraded"), H(4, 50, "Degraded", "Progressing"), H(5, 55, "Progressing", "Degraded")}, 1, 1, true},
+		{"Degraded then Unknown keeps needing the owner", 180, []Raw{H(1, 0, "Healthy", "Degraded"), H(2, 20, "Degraded", "Unknown")}, 1, 1, true},
+		{"Healthy ends a flap", 5, []Raw{flapping(1, "web", 0), H(2, 2, "Degraded", "Healthy")}, 1, 0, false},
+		{"a Healthy forgets the flap: the next rollout does not need the owner", 6, []Raw{flapping(1, "web", 0), H(2, 2, "Degraded", "Healthy"), S(3, 5)}, 2, 1, false},
+		{"Degraded then Progressing forgets an older flap", 5, []Raw{flapping(1, "web", 0), H(2, 1, "Healthy", "Degraded"), H(3, 2, "Degraded", "Progressing")}, 1, 1, false},
+		{"a flap-only thread closes ten minutes after the flap stopped counting", 39, []Raw{flapping(1, "web", 0)}, 1, 1, false},
 		{"unhealthy alone opens a thread", 5, []Raw{H(1, 0, "Healthy", "Degraded")}, 1, 1, true},
 		{"flapping needs the owner inside 30 minutes", 29, []Raw{flapping(1, "web", 0)}, 1, 1, true},
 		{"flapping expires after 30 minutes and the thread closes", 41, []Raw{flapping(1, "web", 0)}, 1, 0, false},
@@ -503,5 +511,122 @@ func TestListCursor(t *testing.T) {
 	}
 	if _, _, err := f.List(2, "junk"); err == nil {
 		t.Error("junk cursor accepted")
+	}
+}
+
+// TestHealthyAfterLongNeedShowsInThread: the Healthy that follows a long Degraded and a Progressing lands in the same
+// thread and closes it.
+func TestHealthyAfterLongNeedShowsInThread(t *testing.T) {
+	th := fold(t, 100, health(1, "web", 0, "Healthy", "Degraded"), health(2, "web", 60, "Degraded", "Progressing"), health(3, "web", 65, "Progressing", "Healthy"))
+	if len(th) != 1 || th[0].State != StateClosed || len(th[0].Entries) != 3 {
+		t.Errorf("%+v", th)
+	}
+}
+
+// TestAlertSourceIsPartOfTheKey and TestFoldDedupsPerSource: the same fingerprint or ce_id from two sources are two
+// things.
+func TestAlertSourceIsPartOfTheKey(t *testing.T) {
+	g := alertRaw(2, "firing", "a", sa, 0, 1, "")
+	g.Source = "grafana"
+	if th := fold(t, 5, alertRaw(1, "firing", "a", sa, 0, 0, ""), g); len(th) != 2 {
+		t.Errorf("%d threads", len(th))
+	}
+}
+
+func TestFoldDedupsPerSource(t *testing.T) {
+	g := alertRaw(2, "firing", "a", sa, 0, 1, "") // the same ce_id as the first, another source
+	g.Source = "grafana"
+	th := fold(t, 5, alertRaw(1, "firing", "a", sa, 0, 0, ""), g)
+	var entries int
+	for _, x := range th {
+		entries += len(x.Entries)
+	}
+	if entries != 2 {
+		t.Errorf("a ce_id seen from another source was dropped: %d entries", entries)
+	}
+}
+
+func TestRevisionsCap(t *testing.T) {
+	r := synced(1, "web", 0)
+	r.Data = []byte(`{"sync":"Synced","refs":{"app":"web","revisions":["1","2","3","4","5","6","7","8"]}}`)
+	if e, _ := Parse(r); len(e.Revisions) != 4 {
+		t.Errorf("%v", e.Revisions)
+	}
+}
+
+// TestFloorIsTheHighestEvicted: nothing is refused before an eviction (a seq the bridge reuses after a restore, a hole a
+// Replay fills); after one, an unseen seq at or below the highest evicted is refused and counted.
+func TestFloorIsTheHighestEvicted(t *testing.T) {
+	f := New(100, 1<<20)
+	f.Ingest(fire(10, "a", 1))
+	if !f.Ingest(fire(5, "b", 2)) { // a hole filled later
+		t.Error("a lower seq was refused with nothing evicted")
+	}
+	if !f.Ingest(fire(5, "c", 3)) { // the same seq, another event: the bridge's database was restored
+		t.Error("a reused seq was refused with nothing evicted")
+	}
+	if s := f.Stats(); s.Events != 3 || s.Refused != 0 {
+		t.Errorf("%+v", s)
+	}
+	g := New(2, 1<<20)
+	for i, seq := range []int64{4, 7, 9} { // the oldest by time, seq 4, is evicted: the floor is 4
+		g.Ingest(fire(seq, fmt.Sprintf("f%d", i), i+1))
+	}
+	if g.Ingest(fire(3, "late", 9)) || g.Ingest(fire(4, "same", 9)) {
+		t.Error("an unseen seq at or below the floor was stored")
+	}
+	if !g.Ingest(fire(5, "above", 9)) {
+		t.Error("a seq above the floor was refused")
+	}
+	if s := g.Stats(); s.Refused != 2 {
+		t.Errorf("%+v", s)
+	}
+}
+
+// TestBadEventsAreCountedOnce: a type the feed reads that does not parse is bad; a replay brings it again and it is
+// not counted again; other types are not bad.
+func TestBadEventsAreCountedOnce(t *testing.T) {
+	f := New(10, 1<<20)
+	bad := Raw{Seq: 1, Source: "alertmanager", ID: "x", Type: "dev.bnei.alert.firing", Time: t0, Data: []byte(`{`)}
+	for i := 0; i < 3; i++ {
+		f.Ingest(bad)
+	}
+	f.Ingest(Raw{Seq: 2, Source: "s", ID: "y", Type: "dev.bnei.forge.push", Time: t0})
+	other := bad
+	other.ID, other.Seq = "z", 3
+	f.Ingest(other)
+	if s := f.Stats(); s.Bad != 2 || s.Events != 0 {
+		t.Errorf("%+v", s)
+	}
+	if len(f.logged) != 1 {
+		t.Errorf("logged %v: once per type", f.logged)
+	}
+}
+
+// TestUnsortedInsert: events arrive out of time order; the eviction drops the oldest by time, not the first to come.
+func TestUnsortedInsert(t *testing.T) {
+	f := New(2, 1<<20)
+	f.Ingest(fire(1, "c", 3))
+	f.Ingest(fire(2, "a", 1))
+	f.Ingest(fire(3, "b", 2))
+	if len(f.evs) != 2 || f.evs[0].Time != at(2) || f.evs[1].Time != at(3) || f.Stats().Dropped != 1 {
+		t.Errorf("%+v", f.evs)
+	}
+}
+
+// TestCacheTTL: with nothing ingested, a read after the TTL folds again, so a rollout's window ending shows.
+func TestCacheTTL(t *testing.T) {
+	f := New(100, 1<<20)
+	now := t0
+	f.now = func() time.Time { return now }
+	r := synced(1, "web", 0)
+	r.Time = t0.Add(-RolloutWindow + 30*time.Second) // its window ends 30 s from now
+	f.Ingest(r)
+	if p, _, _ := f.List(1, ""); p[0].State != StateOpen {
+		t.Fatal("not open")
+	}
+	now = t0.Add(31 * time.Second)
+	if p, _, _ := f.List(1, ""); p[0].State != StateClosed {
+		t.Error("the cache outlived its TTL")
 	}
 }

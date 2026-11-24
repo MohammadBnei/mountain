@@ -74,10 +74,20 @@ func (a *appState) needs(t time.Time) bool {
 	return a.unhealthy || (!a.flapAt.IsZero() && t.Sub(a.flapAt) <= FlapWindow)
 }
 
+// anchorOf is when c's window starts: its last synced, unhealthy or need-ending event, or, for an app that only
+// flapped, when the flapping stopped counting.
+func (a *appState) anchorOf(c *Thread) time.Time {
+	t := c.anchor
+	if f := a.flapAt.Add(FlapWindow); !a.unhealthy && !a.flapAt.IsZero() && f.After(t) {
+		t = f
+	}
+	return t
+}
+
 // openAt: a.cur is open at t.
 func (a *appState) openAt(t time.Time) bool {
 	c := a.cur
-	return c != nil && c.closed.IsZero() && (a.needs(t) || t.Sub(c.anchor) <= RolloutWindow)
+	return c != nil && c.closed.IsZero() && (a.needs(t) || t.Sub(a.anchorOf(c)) <= RolloutWindow)
 }
 
 func threadID(kind, key string) string {
@@ -100,6 +110,16 @@ func (t *Thread) link(kind, ref string, quoted bool) {
 	}
 }
 
+// Known limits, not worked around:
+//   - kwatch restarting while an app is Degraded, or its Forget of a deleted app, emits no closing edge, so
+//     needs_owner can stay until the next edge.
+//   - An edge evicted before its synced changes a thread's id (the id comes from the first event the feed holds).
+//   - Prometheus's http generator links are dropped (https only).
+//   - A Healthy more than RolloutWindow after the synced (and no unhealthy event) is not shown: the thread closed
+//     itself before it came.
+//   - Health Progressing and Suspended end a Degraded or Missing need (ArgoCD moves to Progressing when it retries);
+//     kwatch's output says nothing more, since it only counts Degraded and Missing as unhealthy. Unknown does not.
+//
 // Fold builds the threads of evs as they stand at now, newest activity first. Order, duplicates and lateness of evs
 // do not matter; the cost is O(n log n).
 //
@@ -213,9 +233,16 @@ func Fold(evs []Event, now time.Time) []Thread {
 		case e.Status == "Degraded" || e.Status == "Missing":
 			trouble("health: " + e.Previous + " -> " + e.Status)
 			a.unhealthy, a.flapAt = true, time.Time{}
-		default:
+		case e.Status == "Unknown": // ArgoCD lost sight of it: what we knew stands
+			if a.openAt(e.Time) {
+				a.cur.add(e.Time, "health: "+e.Previous+" -> Unknown", false)
+			}
+		default: // Progressing, Suspended: the need ends here, and the window starts from here
 			if a.openAt(e.Time) {
 				a.cur.add(e.Time, "health: "+e.Previous+" -> "+e.Status, false)
+				if a.needs(e.Time) {
+					a.cur.anchor = e.Time
+				}
 			}
 			a.unhealthy, a.flapAt = false, time.Time{}
 		}
@@ -241,5 +268,5 @@ func (t *Thread) closeTime() time.Time {
 	if !t.closed.IsZero() {
 		return t.closed
 	}
-	return t.anchor.Add(RolloutWindow)
+	return t.app.anchorOf(t).Add(RolloutWindow)
 }
