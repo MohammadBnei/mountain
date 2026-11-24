@@ -158,8 +158,9 @@ jobs:
           CHROME="${CHROME:-$(command -v google-chrome chromium chromium-browser 2>/dev/null | head -n1 || true)}"
           if [ -n "$CHROME" ] && [ -f www/dev/gate.mjs ]; then
             CHROME="$CHROME" node www/dev/gate.mjs selftest
+            CHROME="$CHROME" node www/dev/feed-gate.mjs
           else
-            echo "::notice::no Chrome on this runner: run 'node www/dev/gate.mjs selftest' locally before merge (04)"
+            echo "::notice::no Chrome on this runner: run 'node www/dev/gate.mjs selftest' and 'node www/dev/feed-gate.mjs' locally before merge (04)"
           fi
 
   # Persistence tests need a real Postgres: TestDB* skip without MOUNTAIN_TEST_DSN (the test job above has none).

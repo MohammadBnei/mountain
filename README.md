@@ -26,6 +26,9 @@ It serves the page on `http://127.0.0.1:8080`. `--dev` admits everyone only when
 `--repos <dir>`, or polls the forge when `MOUNTAIN_FORGE_TOKEN` is set. The flags and environment are listed in the doc
 comment of `cmd/atlas/main.go`.
 
+The owner's feed (`/feed`) is off unless `FEED_ENABLED=true`. Locally, add `--feed-fixture www/dev/fixtures/feed.json` to
+see it without a bridge; `node www/dev/feed-gate.mjs` checks the page in Chrome and takes its screenshots.
+
 ## Checks
 
 ```sh
