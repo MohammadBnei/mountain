@@ -39,8 +39,8 @@ var (
 	s3Ref     = regexp.MustCompile(`garage-s3|s3\.bnei\.dev`)
 )
 
-// ruleSeverities are the severities a watched rule may carry (mountain's own rules use notice).
-var ruleSeverities = []string{"critical", "warning", "notice", "info", "none"}
+// ruleSeverities are the severities a watched rule may carry (mountain's own rules use notice; some real rules use error).
+var ruleSeverities = []string{"critical", "error", "warning", "notice", "info", "none"}
 
 type ruleMeta struct {
 	severity string

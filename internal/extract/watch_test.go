@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"slices"
@@ -142,5 +143,15 @@ func TestChartPin(t *testing.T) {
 	watchNeeds(x.Repos, rl, &g)
 	if len(g.Drift) != 2 || g.Drift[0].Kind != graph.DriftMirror || !strings.Contains(g.Drift[0].Detail, "1.2.3") || !strings.Contains(g.Drift[1].Detail, "defaultRules.keepFiringFor") {
 		t.Errorf("drift: %+v", g.Drift)
+	}
+}
+
+// A rule labelled severity: error (the longhorn rules are) is a known severity: it used to read as "no literal
+// severity", so it was left out of watch-rules.
+func TestRuleSeverityError(t *testing.T) {
+	b := []byte("        - alert: LonghornBackupFailed\n          for: 5m\n          labels:\n            severity: error\n")
+	m := ruleBlock(b, 0, bytes.IndexByte(b, '\n'))
+	if m.severity != "error" || m.forSec != 300 || !slices.Contains(ruleSeverities, m.severity) {
+		t.Errorf("severity %q for %ds, known: %v", m.severity, m.forSec, slices.Contains(ruleSeverities, m.severity))
 	}
 }
