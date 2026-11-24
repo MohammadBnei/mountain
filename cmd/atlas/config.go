@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -25,6 +26,7 @@ type Config struct {
 	Machine machineEnv // the machine principal, as given: machineFrom checks it where serve always has
 	Traces  string     // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, as given: tracesEndpoint checks it in serve; "" = no tracing
 	Tags    tagsEnv    // the System tag loop's bridge (tags.go), as given: tagsOn checks it in serve
+	Feed    bool       // FEED_ENABLED: the owner's feed (feed.go); off by default
 }
 
 // oidcEnv is sign-in's configuration: the client and the session cookie's HMAC key.
@@ -56,6 +58,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	c.Tags = tagsEnv{BridgeURL: getenv("ATLAS_BRIDGE_URL"), TokenURL: getenv("ATLAS_BRIDGE_TOKEN_URL"),
 		AuthHost: getenv("ATLAS_BRIDGE_AUTH_HOST"), PasswordFile: getenv("ATLAS_BRIDGE_PASSWORD_FILE"),
 		TokenFile: getenv("ATLAS_BRIDGE_TOKEN_FILE")}
+	c.Feed, _ = strconv.ParseBool(getenv("FEED_ENABLED")) // unset or malformed: off
 	c.Machine = machineEnv{Cert: getenv("MOUNTAIN_MACHINE_CERT"), Issuer: getenv("MOUNTAIN_MACHINE_ISSUER"),
 		ClientID: getenv("MOUNTAIN_MACHINE_CLIENT_ID"), Sub: getenv("MOUNTAIN_MACHINE_SUB")}
 	if err == nil && (o.GraphFixture != "" || o.LiveFixture != "") && !o.Dev {

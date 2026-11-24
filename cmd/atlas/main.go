@@ -34,7 +34,9 @@
 // password; the URL and one file or the loop is off, a lone one a WARN line; it also needs the cluster, read with
 // atlas's service account), ATLAS_BRIDGE_TOKEN_URL (authentik's token endpoint; default
 // https://authentik.bnei.dev/application/o/token/) and ATLAS_BRIDGE_AUTH_HOST (the Host the token request carries, for
-// a token URL that is authentik's in-cluster Service; unset = the URL's own). All of it is read once, in config.go;
+// a token URL that is authentik's in-cluster Service; unset = the URL's own), and FEED_ENABLED (true turns on the
+// owner's feed, feed.go: alert and deploy threads rebuilt from the bridge, served on /api/feed; off by default, then
+// those routes answer 404 and nothing runs). All of it is read once, in config.go;
 // the libraries' own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*, client-go's KUBERNETES_SERVICE_HOST
 // and _PORT) are theirs, and so are OpenTelemetry's: the metrics
 // SDK always reads OTEL_RESOURCE_ATTRIBUTES, OTEL_SERVICE_NAME, OTEL_METRICS_EXEMPLAR_FILTER and OTEL_GO_X_* (a
@@ -87,6 +89,7 @@ import (
 	"github.com/MohammadBnei/mountain/api/telemetry/v1/telemetryv1connect"
 	"github.com/MohammadBnei/mountain/internal/bridgev1"
 	"github.com/MohammadBnei/mountain/internal/extract"
+	"github.com/MohammadBnei/mountain/internal/feed"
 	"github.com/MohammadBnei/mountain/realms"
 	"github.com/MohammadBnei/ukubi-go/telemetry"
 )
@@ -138,6 +141,7 @@ type App struct {
 	Met       *Metrics           // the series on :9090 (nil = not recorded: the tests')
 	Tracing   *telemetry.Tracing // a server span per route; nil or empty = none (plan/15 §7)
 	Telemetry *Telemetry         // atlas.telemetry.v1 (telemetry.go)
+	Feed      *feed.Feed         // the owner's feed (feed.go); nil = off: its routes answer 404
 
 	gate      *gate
 	unread    map[string]string // each source's last read failure (the projector goroutine's, project.go)
@@ -230,6 +234,7 @@ func run(ctx context.Context, c Config) error {
 		publish = newBridgeClient(tc).publish
 	}
 	go runWorld(ctx, a.Graph.db, publish, a.Met, a.worldKick)
+	startFeed(ctx, a, c)
 
 	pub := &http.Server{Addr: o.Listen, Handler: routes(a, www), ReadHeaderTimeout: 10 * time.Second, ErrorLog: serverLog()}
 	mx := http.NewServeMux()
@@ -294,6 +299,8 @@ func routeTable(a *App, www fs.FS) []route {
 		// atlas.telemetry.v1 over Connect (telemetry.go): Read as a GET (no side effects), Watch as a POST stream
 		{"GET " + telemetryv1connect.TelemetryServiceReadProcedure, false, false, tel},
 		{"POST " + telemetryv1connect.TelemetryServiceWatchProcedure, false, false, tel},
+		{"GET /api/feed", false, false, http.HandlerFunc(a.serveFeed)},
+		{"GET /api/feed/{id}", false, false, http.HandlerFunc(a.serveFeedThread)},
 		{"GET /", false, false, static(www, a.Opts.Dev)},
 	}
 }
