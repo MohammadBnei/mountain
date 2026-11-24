@@ -7,9 +7,11 @@ package feed
 
 import (
 	"encoding/json"
+	"net/url"
 	"strings"
 	"time"
 	"unicode"
+	"unsafe"
 )
 
 // Raw is a bridge event as the transport hands it over.
@@ -27,6 +29,7 @@ type Event struct {
 	Source, ID, Type                string // Type without "dev.bnei.": alert.firing, alert.resolved, deploy.synced, deploy.health, deploy.flapping
 	Time                            time.Time
 	Key                             string // alert fingerprint, or ArgoCD Application
+	StartsAt                        string // alert: the notification startsAt; with Source, Key and Episode the alert identity (InsertAlert)
 	Episode                         int
 	Name, Summary, Description, URL string
 	Status                          string   // health or sync status (flapping: the current health)
@@ -37,12 +40,19 @@ type Event struct {
 
 // size is an event's memory, roughly: what the byte cap counts.
 func (e Event) size() int {
-	n := 96 + len(e.Source) + len(e.ID) + len(e.Type) + len(e.Key) + len(e.Name) + len(e.Summary) + len(e.Description) + len(e.URL) + len(e.Status) + len(e.Previous)
+	n := int(unsafe.Sizeof(e)) + cap(e.Revisions)*int(unsafe.Sizeof("")) + seenCost + len(e.Source) + len(e.ID)
+	for _, s := range []string{e.Type, e.Key, e.StartsAt, e.Name, e.Summary, e.Description, e.URL, e.Status, e.Previous} {
+		n += len(s)
+	}
 	for _, r := range e.Revisions {
-		n += 16 + len(r)
+		n += len(r)
 	}
 	return n
 }
+
+// seenCost is what an event's entry in Feed.seen holds besides its two strings, which the event shares: the key's two
+// headers and the map's own overhead, rounded up.
+const seenCost = 96
 
 var healths = map[string]bool{"Healthy": true, "Progressing": true, "Degraded": true, "Suspended": true, "Missing": true, "Unknown": true}
 
@@ -69,10 +79,11 @@ func Parse(r Raw) (Event, bool) {
 		if e.Key == "" || len(e.Key) > 128 || strings.ContainsAny(e.Key, "#\x00") {
 			return e, false
 		}
+		e.StartsAt = clean(d.StartsAt, 64)
 		e.Episode = episode(r.ID, e.Key, strings.TrimPrefix(e.Type, "alert."), d.StartsAt)
 		e.Name, e.Summary, e.Description = clean(d.Labels["alertname"], 80), clean(d.Annotations["summary"], 400), clean(d.Annotations["description"], 400)
-		if u := d.GeneratorURL; len(u) <= 512 && (strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://")) {
-			e.URL = u
+		if safeURL(d.GeneratorURL) {
+			e.URL = d.GeneratorURL
 		}
 	case "deploy.synced", "deploy.health", "deploy.flapping":
 		var d struct {
@@ -145,4 +156,17 @@ func clean(s string, n int) string {
 		return string(r[:n]) + "…"
 	}
 	return strings.TrimSpace(s)
+}
+
+// maxURL is the longest URL a thread keeps.
+const maxURL = 512
+
+// safeURL is true for an absolute https URL with a host, no user info, no space or control character, at most maxURL
+// bytes: the only URLs a page may be handed from an event's text.
+func safeURL(s string) bool {
+	if s == "" || len(s) > maxURL || strings.IndexFunc(s, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }) >= 0 {
+		return false
+	}
+	u, err := url.Parse(s)
+	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil
 }

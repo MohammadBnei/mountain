@@ -15,9 +15,16 @@ const (
 	StateOpen   = "open"
 	StateClosed = "closed"
 
-	// ReopenWithin: a deploy thread that closed healthy takes an unhealthy event back within this long; later it is a
-	// new thread.
+	// RolloutWindow: a deploy thread closes by itself this long after its last synced (or unhealthy event) unless the
+	// app still needs the owner; kwatch absorbs Healthy -> Progressing -> Healthy inside its settle, so most rollouts
+	// send nothing after deploy.synced.
+	RolloutWindow = 10 * time.Minute
+	// FlapWindow: a flapping event counts this long when no health edge follows it (kwatch sends no closing event).
+	FlapWindow = 30 * time.Minute
+	// ReopenWithin: an unhealthy event this soon after a thread closed takes that thread back; later it is a new one.
 	ReopenWithin = 15 * time.Minute
+
+	maxLinks = 20
 )
 
 // Entry is one line of a thread. Quoted is true for any text that came from an event's free text (alert
@@ -29,10 +36,12 @@ type Entry struct {
 	Quoted bool      `json:"quoted"`
 }
 
-// Link is a reference out of a thread: an alert's generator URL, a deployed revision.
+// Link is a reference out of a thread: Ref is a thread id (kind "previous"), a revision, or a URL taken from an
+// event (kind "generator"), which is Quoted like any text from outside.
 type Link struct {
-	Kind string `json:"kind"`
-	Ref  string `json:"ref"`
+	Kind   string `json:"kind"`
+	Ref    string `json:"ref"`
+	Quoted bool   `json:"quoted"`
 }
 
 // Thread is what the page shows. TitleQuoted is true when the title came from an event's free text (an alert's name).
@@ -48,7 +57,27 @@ type Thread struct {
 	Entries        []Entry   `json:"entries"`
 	Links          []Link    `json:"links"`
 
-	bad bool // deploy: degraded, missing or flapping now
+	app    *appState
+	anchor time.Time // deploy: the last synced or unhealthy event in it
+	closed time.Time // deploy: a Healthy edge closed it then; zero while not
+}
+
+// appState is one Application's health, kept across its threads.
+type appState struct {
+	cur       *Thread
+	unhealthy bool      // the last health edge was Degraded or Missing
+	flapAt    time.Time // the last flapping event, zero once a health edge follows it
+}
+
+// needs: the app wants the owner at t.
+func (a *appState) needs(t time.Time) bool {
+	return a.unhealthy || (!a.flapAt.IsZero() && t.Sub(a.flapAt) <= FlapWindow)
+}
+
+// openAt: a.cur is open at t.
+func (a *appState) openAt(t time.Time) bool {
+	c := a.cur
+	return c != nil && c.closed.IsZero() && (a.needs(t) || t.Sub(c.anchor) <= RolloutWindow)
 }
 
 func threadID(kind, key string) string {
@@ -61,40 +90,39 @@ func (t *Thread) add(at time.Time, text string, quoted bool) {
 	t.LastActivityAt = at
 }
 
-func (t *Thread) link(kind, ref string) {
-	l := Link{kind, ref}
-	if ref != "" && !slices.Contains(t.Links, l) {
+func (t *Thread) link(kind, ref string, quoted bool) {
+	if ref == "" || len(t.Links) >= maxLinks {
+		return
+	}
+	l := Link{kind, ref, quoted}
+	if !slices.Contains(t.Links, l) {
 		t.Links = append(t.Links, l)
 	}
 }
 
-func (t *Thread) set(state string) {
-	t.State = state
-	t.NeedsOwner = state == StateOpen && (t.Kind == KindAlert || t.bad)
-}
-
-// Fold builds the threads of evs, newest activity first. Order, duplicates and lateness of evs do not matter.
+// Fold builds the threads of evs as they stand at now, newest activity first. Order, duplicates and lateness of evs
+// do not matter; the cost is O(n log n).
 //
-// Alerts: one thread per fingerprint and episode (the ce_id's episode). A firing opens it, a resolved closes it, a
-// later firing of the same episode reopens it. An open alert needs the owner. A resolved with no firing before it
-// (evicted, or never seen) is a closed thread of its own.
+// Alerts: one thread per source, fingerprint, startsAt and episode, as the bridge's InsertAlert scopes an episode. A
+// firing opens it, a resolved closes only its own, a later firing of the same key reopens it. A new startsAt (a
+// re-fire) is a new thread linked "previous" to the one before it of the same source and fingerprint. An open alert
+// needs the owner. A resolved with no firing before it is a closed thread of its own.
 //
-// Deploys: one thread per Application and rollout. A rollout starts at a deploy.synced (kwatch sends one only when a
-// new revision was deployed) and ends at the next health Healthy; every synced, health and flapping event between
-// belongs to it. An unhealthy or flapping event with no rollout open starts a thread of its own, and one within
-// ReopenWithin of a close reopens that rollout. A Healthy with nothing open says nothing. An open rollout needs the
-// owner while its health is Degraded or Missing, or it is flapping.
-func Fold(evs []Event) []Thread {
+// Deploys: health belongs to the app, not to a rollout (appState). A rollout thread opens at a deploy.synced and stays
+// open while the app needs the owner (its last health edge is Degraded or Missing, or a flapping event came after
+// the last health edge within FlapWindow) or RolloutWindow has not passed since its last synced or unhealthy event;
+// a health Healthy closes it at once. A synced while one is open joins it, a later one starts a new thread. An
+// unhealthy or flapping event with nothing open reopens the thread that closed within ReopenWithin, else starts one,
+// so an app that needs the owner always has one open thread. A Healthy or a mere Progressing with nothing open says
+// nothing.
+func Fold(evs []Event, now time.Time) []Thread {
 	s := slices.Clone(evs)
 	slices.SortStableFunc(s, func(a, b Event) int { return cmp.Or(a.Time.Compare(b.Time), cmp.Compare(a.Seq, b.Seq)) })
 	type id struct{ src, id string }
 	seen := map[id]bool{}
 	alerts := map[string]*Thread{}
-	type app struct {
-		cur      *Thread
-		closedAt time.Time
-	}
-	apps := map[string]*app{}
+	lastAlert := map[string]*Thread{} // source|fingerprint -> its newest thread
+	apps := map[string]*appState{}
 	var out []*Thread
 	for _, e := range s {
 		if k := (id{e.Source, e.ID}); seen[k] {
@@ -102,22 +130,25 @@ func Fold(evs []Event) []Thread {
 		} else {
 			seen[k] = true
 		}
-		switch e.Type {
-		case "alert.firing", "alert.resolved":
-			key := fmt.Sprintf("%s#%d", e.Key, e.Episode)
+		if e.Type == "alert.firing" || e.Type == "alert.resolved" {
+			key := fmt.Sprintf("%s|%s|%s|%d", e.Source, e.Key, e.StartsAt, e.Episode)
 			t := alerts[key]
 			if t == nil {
 				t = &Thread{ID: threadID(KindAlert, key), Kind: KindAlert, OpenedAt: e.Time, Title: "Alert " + clean(e.Key, 8)}
-				alerts[key], out = t, append(out, t)
+				fp := e.Source + "|" + e.Key
+				if p := lastAlert[fp]; p != nil {
+					t.link("previous", p.ID, false)
+				}
+				alerts[key], lastAlert[fp], out = t, t, append(out, t)
 			}
 			if e.Name != "" {
 				t.Title, t.TitleQuoted = "Alert: "+e.Name, true
 			}
-			t.link("generator", e.URL)
+			t.link("generator", e.URL, true)
 			if e.Type == "alert.resolved" {
 				t.add(e.Time, "resolved", false)
-				t.set(StateClosed)
-				break
+				t.State, t.NeedsOwner = StateClosed, false
+				continue
 			}
 			text := "firing"
 			if t.State == StateClosed {
@@ -129,70 +160,86 @@ func Fold(evs []Event) []Thread {
 					t.add(e.Time, q, true)
 				}
 			}
-			t.set(StateOpen)
-		default: // deploy.*
-			a := apps[e.Key]
-			if a == nil {
-				a = &app{}
-				apps[e.Key] = a
-			}
-			start := func(text string) {
-				t := &Thread{ID: threadID(KindDeploy, e.Source+"|"+e.ID), Kind: KindDeploy, OpenedAt: e.Time, Title: "Deploy: " + e.Key}
-				a.cur, out = t, append(out, t)
-				t.add(e.Time, text, false)
-			}
-			// unhealthy: the open thread, else a reopened one, else a new one.
-			unhealthy := func(text string) {
-				switch {
-				case a.cur != nil && a.cur.State == StateOpen:
-					a.cur.add(e.Time, text, false)
-				case a.cur != nil && e.Time.Sub(a.closedAt) <= ReopenWithin:
-					a.cur.add(e.Time, "reopened: "+text, false)
-				default:
-					start(text)
-				}
-			}
-			open := a.cur != nil && a.cur.State == StateOpen
+			t.State, t.NeedsOwner = StateOpen, true
+			continue
+		}
+		a := apps[e.Key]
+		if a == nil {
+			a = &appState{}
+			apps[e.Key] = a
+		}
+		start := func(text string) {
+			t := &Thread{ID: threadID(KindDeploy, e.Source+"|"+e.ID), Kind: KindDeploy, OpenedAt: e.Time, Title: "Deploy: " + e.Key, app: a}
+			a.cur, out = t, append(out, t)
+			t.add(e.Time, text, false)
+		}
+		// trouble: an unhealthy or flapping event joins the open thread, else reopens the last, else starts one.
+		trouble := func(text string) {
 			switch {
-			case e.Type == "deploy.synced":
-				text := "synced"
-				if len(e.Revisions) > 0 {
-					text += " to " + clean(e.Revisions[0], 12)
-				}
-				if open {
-					a.cur.add(e.Time, text, false)
-				} else {
-					start(text)
-				}
-				for _, r := range e.Revisions {
-					a.cur.link("revision", r)
-				}
-				a.cur.bad = false
-			case e.Type == "deploy.flapping":
-				unhealthy(fmt.Sprintf("flapping: %d transitions", e.Flaps))
-				a.cur.bad = true
-			case e.Status == "Healthy":
-				if !open {
-					continue
-				}
-				a.cur.add(e.Time, "health: "+e.Previous+" -> Healthy", false)
-				a.cur.bad = false
-				a.cur.set(StateClosed)
-				a.closedAt = e.Time
-				continue
+			case a.openAt(e.Time):
+				a.cur.add(e.Time, text, false)
+			case a.cur != nil && e.Time.Sub(a.cur.closeTime()) <= ReopenWithin:
+				a.cur.closed = time.Time{}
+				a.cur.add(e.Time, "reopened: "+text, false)
 			default:
-				unhealthy("health: " + e.Previous + " -> " + e.Status)
-				a.cur.bad = e.Status == "Degraded" || e.Status == "Missing"
+				start(text)
 			}
-			a.cur.set(StateOpen)
+			a.cur.anchor = e.Time
+		}
+		switch {
+		case e.Type == "deploy.synced":
+			text := "synced"
+			if len(e.Revisions) > 0 {
+				text += " to " + clean(e.Revisions[0], 12)
+			}
+			if a.openAt(e.Time) {
+				a.cur.add(e.Time, text, false)
+			} else {
+				start(text)
+			}
+			a.cur.anchor = e.Time
+			for _, r := range e.Revisions {
+				a.cur.link("revision", r, false)
+			}
+		case e.Type == "deploy.flapping":
+			trouble(fmt.Sprintf("flapping: %d transitions", e.Flaps))
+			a.flapAt = e.Time
+		case e.Status == "Healthy":
+			if a.openAt(e.Time) {
+				a.cur.add(e.Time, "health: "+e.Previous+" -> Healthy", false)
+				a.cur.closed = e.Time
+			}
+			a.unhealthy, a.flapAt = false, time.Time{}
+		case e.Status == "Degraded" || e.Status == "Missing":
+			trouble("health: " + e.Previous + " -> " + e.Status)
+			a.unhealthy, a.flapAt = true, time.Time{}
+		default:
+			if a.openAt(e.Time) {
+				a.cur.add(e.Time, "health: "+e.Previous+" -> "+e.Status, false)
+			}
+			a.unhealthy, a.flapAt = false, time.Time{}
 		}
 	}
 	res := make([]Thread, len(out))
 	for i, t := range out {
+		if t.app != nil {
+			t.State, t.NeedsOwner = StateClosed, false
+			if t.app.cur == t && t.app.openAt(now) {
+				t.State, t.NeedsOwner = StateOpen, t.app.needs(now)
+			}
+		}
 		res[i] = *t
 	}
 	slices.SortFunc(res, func(a, b Thread) int {
 		return cmp.Or(b.LastActivityAt.Compare(a.LastActivityAt), cmp.Compare(b.ID, a.ID))
 	})
 	return res
+}
+
+// closeTime is when a deploy thread closed: its Healthy edge, else the end of its window.
+func (t *Thread) closeTime() time.Time {
+	if !t.closed.IsZero() {
+		return t.closed
+	}
+	return t.anchor.Add(RolloutWindow)
 }
