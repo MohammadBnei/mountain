@@ -255,7 +255,7 @@ func (w *feedWire) Close() error { return w.s.Close() }
 // and the page shows it as a quote. Links are {kind, ref, quoted}: "previous" and "generator" (alerts), "revision"
 // (deploys), "run" (a PR's CI run, a URL), "deploy" (a PR to the rollout of its merge commit, ref a thread id) and
 // "pull_request" (that rollout back to the PR; only a revision new in the sync counts). A session thread has no link
-// to its PR: no event carries one. A PR's state follows the state in any payload; a successful CI run is not kept.
+// to its PR: no event carries one. A PR closes on any payload that says closed and opens again only on reopened; a successful CI run is not kept.
 // needs_owner: an alert that fires, an unhealthy deploy, a session or card thread holding an open card that has not
 // expired (14 days after it opened when it has no expiry), and then the thread shows open even if its session ended;
 // never a PR.

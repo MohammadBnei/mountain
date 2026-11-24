@@ -99,11 +99,11 @@ func TestPRThreadLife(t *testing.T) {
 	if p := fold(t, 10, forge(t, 1, "pull_request_closed", "pull_request.closed", prSubj, "pr/42/closed/2", 0))[0]; p.State != StateClosed || p.Entries[0].Text != "closed" {
 		t.Errorf("closed: %s %q", p.State, p.Entries[0].Text)
 	}
-	// the payload's state rules, and the later event wins when payloads disagree: an opened the relist built from a
-	// PR that is closed now (its time is the creation, before the close) leaves it closed; one stamped later opens it
-	skew := []Raw{prLife(t)[5], forge(t, 9, "pull_request_opened", "pull_request.opened", prSubj, "pr/42/opened", 9)}
-	if p := byKind(fold(t, 30, skew...), KindPR)[0]; p.State != StateOpen {
-		t.Errorf("later payload says open: %s", p.State)
+	// only reopened opens a closed PR again: an opened or a comment whose payload says open does not
+	skew := []Raw{prLife(t)[5], forge(t, 9, "pull_request_opened", "pull_request.opened", prSubj, "pr/42/opened", 9),
+		forge(t, 10, "pull_request_comment_created", "issue_comment.created", prSubj, "comment/9", 10)}
+	if p := byKind(fold(t, 30, skew...), KindPR)[0]; p.State != StateClosed {
+		t.Errorf("a payload that says open reopened it: %s", p.State)
 	}
 	relist := forge(t, 9, "pull_request_opened", "pull_request.opened", prSubj, "pr/42/opened", -5, [2]string{`"state": "open"`, `"state": "closed"`})
 	if p := byKind(fold(t, 30, prLife(t)[5], relist), KindPR)[0]; p.State != StateClosed {

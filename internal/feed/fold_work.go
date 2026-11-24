@@ -126,12 +126,10 @@ func (p *prs) apply(e Event, out *[]*Thread) {
 		t.add(e.Time, "comment", false)
 		quote(t, e, e.Text)
 	}
-	// Any payload with the PR's state says where it stands: a late comment on a merged PR leaves it closed. Event
-	// order decides between payloads that disagree.
-	switch e.PRState {
-	case "open":
-		t.State = StateOpen
-	case "closed":
+	// A payload that says the PR is closed closes the thread: a late comment on a merged PR leaves it closed. A
+	// payload that says open opens nothing: only reopened does (a comment sent before the close, or a relisted
+	// payload of a PR now closed, says open too).
+	if e.PRState == "closed" {
 		t.State = StateClosed
 	}
 }
@@ -275,7 +273,7 @@ func finishCards(t *Thread, now time.Time) {
 	if t.Kind == KindCard {
 		t.State = StateClosed
 	}
-	if t.NeedsOwner && t.Kind != KindAlert && t.Kind != KindDeploy { // an ended session with an open card shows open
+	if t.NeedsOwner && len(t.cards) > 0 { // an ended session with an open card shows open
 		t.State = StateOpen
 	}
 }
