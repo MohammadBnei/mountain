@@ -51,7 +51,7 @@ type Metrics struct {
 	worldRefused              metric.Float64Counter
 
 	feedEnabled, feedEvents, feedThreads, feedAge metric.Float64Gauge
-	feedDropped                                   metric.Float64Counter
+	feedDropped, feedBad                          metric.Float64Counter
 }
 
 // series is one metric: its name, HELP text and the one label key it may carry ("" = none). The views pin the label
@@ -78,6 +78,7 @@ func newMetrics() (*Metrics, error) {
 	sFeedEvents := series{"mountain_feed_events", "Events the feed holds.", ""}
 	sFeedThreads := series{"mountain_feed_threads", "Threads the feed holds.", ""}
 	sFeedDropped := series{"mountain_feed_dropped_total", "Events the feed dropped for its size caps, oldest first.", ""}
+	sFeedBad := series{"mountain_feed_bad_events_total", "Events whose handling panicked in the feed; each was logged, acked and skipped.", ""}
 	sFeedAge := series{"mountain_feed_last_event_age_seconds", "Seconds since the feed last stored an event (since its start while it has none).", ""}
 	reg := prometheus.NewRegistry()
 	exp, err := otelprom.New(
@@ -89,7 +90,7 @@ func newMetrics() (*Metrics, error) {
 		return nil, err
 	}
 	var views []sdkmetric.View
-	for _, s := range []series{sSourceLastSuccess, sWSConnections, sQueryFailed, sProjectionSeq, sDrift, sWorldEnabled, sWorldOldest, sWorldPublished, sWorldRefused, sFeedEnabled, sFeedEvents, sFeedThreads, sFeedDropped, sFeedAge} {
+	for _, s := range []series{sSourceLastSuccess, sWSConnections, sQueryFailed, sProjectionSeq, sDrift, sWorldEnabled, sWorldOldest, sWorldPublished, sWorldRefused, sFeedEnabled, sFeedEvents, sFeedThreads, sFeedDropped, sFeedBad, sFeedAge} {
 		views = append(views, labelView(s))
 	}
 	// seconds, around the spike's 25-90 ms reads and the 1.5 s budget
@@ -112,7 +113,7 @@ func newMetrics() (*Metrics, error) {
 	}
 	m.worldPublished, m.worldRefused = counter(sWorldPublished), counter(sWorldRefused)
 	m.feedEnabled, m.feedEvents, m.feedThreads, m.feedAge = gauge(sFeedEnabled), gauge(sFeedEvents), gauge(sFeedThreads), gauge(sFeedAge)
-	m.feedDropped = counter(sFeedDropped)
+	m.feedDropped, m.feedBad = counter(sFeedDropped), counter(sFeedBad)
 	var e1, e2, e3 error
 	m.wsConnections, e1 = meter.Float64UpDownCounter(sWSConnections.name, metric.WithDescription(sWSConnections.help))
 	m.queryFailed, e2 = meter.Float64Counter(sQueryFailed.name, metric.WithDescription(sQueryFailed.help))
@@ -237,13 +238,14 @@ func (m *Metrics) FeedEnabled(on bool) {
 	}
 }
 
-// FeedState records what the feed holds, the events dropped since the last call, and the seconds since its last event.
-func (m *Metrics) FeedState(events, threads int, dropped uint64, ageSecs float64) {
+// FeedState records what the feed holds, the events dropped and the bad ones since the last call, and the seconds since its last event.
+func (m *Metrics) FeedState(events, threads int, dropped, bad uint64, ageSecs float64) {
 	if m != nil {
 		ctx := context.Background()
 		m.feedEvents.Record(ctx, float64(events))
 		m.feedThreads.Record(ctx, float64(threads))
 		m.feedAge.Record(ctx, ageSecs)
 		m.feedDropped.Add(ctx, float64(dropped))
+		m.feedBad.Add(ctx, float64(bad))
 	}
 }

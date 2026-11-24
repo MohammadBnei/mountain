@@ -5,8 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MohammadBnei/mountain/internal/bridgev1"
+	"github.com/MohammadBnei/mountain/internal/bridgev1/bridgev1connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -82,8 +91,8 @@ func TestFeedOnce(t *testing.T) {
 	if fmt.Sprint(s.acked) != "[2 3 4]" || fmt.Sprint(s.gaps) != "[1]" || s.nrep != 2 { // a gap replays again, once
 		t.Errorf("acked %v gaps %v replays %d", s.acked, s.gaps, s.nrep)
 	}
-	if replay {
-		t.Error("replay still due")
+	if !replay { // the stream ended with io.EOF: the next one replays
+		t.Error("replay not due after EOF")
 	}
 }
 
@@ -179,4 +188,257 @@ func TestFeedConfig(t *testing.T) {
 			t.Errorf("FEED_ENABLED=%q: %v", v, c.Feed)
 		}
 	}
+}
+
+// feedBridge is a bridge that records what the feed asks of it and plays a script.
+type feedBridge struct {
+	bridgev1connect.UnimplementedBridgeServiceHandler
+	mu        sync.Mutex
+	subs      []*bridgev1.SubscribeRequest
+	replays   []*bridgev1.ReplayRequest
+	acks      []*bridgev1.AckRequest
+	gaps      []*bridgev1.ConfirmGapRequest
+	auths     []string
+	replay    []*bridgev1.CloudEvent
+	live      []*bridgev1.SubscribeResponse
+	replayErr error
+}
+
+func (b *feedBridge) Subscribe(ctx context.Context, r *connect.Request[bridgev1.SubscribeRequest], st *connect.ServerStream[bridgev1.SubscribeResponse]) error {
+	b.mu.Lock()
+	b.subs, b.auths = append(b.subs, r.Msg), append(b.auths, r.Header().Get("Authorization"))
+	live := b.live
+	b.mu.Unlock()
+	_ = st.Send(nil) // headers: the client's call returns once registered
+	for _, m := range live {
+		if st.Send(m) != nil {
+			return nil
+		}
+	}
+	<-ctx.Done()
+	return nil
+}
+
+func (b *feedBridge) Replay(_ context.Context, r *connect.Request[bridgev1.ReplayRequest], st *connect.ServerStream[bridgev1.ReplayResponse]) error {
+	b.mu.Lock()
+	b.replays = append(b.replays, r.Msg)
+	err := b.replayErr
+	b.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	for _, e := range b.replay {
+		if err := st.Send(&bridgev1.ReplayResponse{Event: e}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *feedBridge) Ack(_ context.Context, r *connect.Request[bridgev1.AckRequest]) (*connect.Response[bridgev1.AckResponse], error) {
+	b.mu.Lock()
+	b.acks = append(b.acks, r.Msg)
+	b.mu.Unlock()
+	return connect.NewResponse(&bridgev1.AckResponse{}), nil
+}
+
+func (b *feedBridge) ConfirmGap(_ context.Context, r *connect.Request[bridgev1.ConfirmGapRequest]) (*connect.Response[bridgev1.ConfirmGapResponse], error) {
+	b.mu.Lock()
+	b.gaps = append(b.gaps, r.Msg)
+	b.mu.Unlock()
+	return connect.NewResponse(&bridgev1.ConfirmGapResponse{}), nil
+}
+
+// start serves b and returns the tag-loop-style env pointing at it, with a token file.
+func (b *feedBridge) start(t *testing.T) tagsEnv {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.Handle(bridgev1connect.NewBridgeServiceHandler(b))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	tok := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tok, []byte("tok\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return tagsEnv{BridgeURL: srv.URL, TokenFile: tok}
+}
+
+func cloud(seq int64, typ, fp string, m int, flags ...string) *bridgev1.CloudEvent {
+	r := fraw(seq, typ, fp, m)
+	return &bridgev1.CloudEvent{Seq: seq, Id: r.ID, Source: r.Source, Type: r.Type, Subject: r.Subject, Data: r.Data, Time: timestamppb.New(r.Time), Flags: flags}
+}
+
+func until(t *testing.T, what string, ok func() bool) {
+	t.Helper()
+	for end := time.Now().Add(10 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+		if ok() {
+			return
+		}
+	}
+	t.Fatalf("timed out: %s", what)
+}
+
+func (b *feedBridge) acked() (seqs []int64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, a := range b.acks {
+		seqs = append(seqs, a.Seq)
+	}
+	return
+}
+
+// TestFeedWire: the feed over a real Connect round trip: its own subscription name (never the tag loop's), the types
+// it asked for, Replay from the start under that name, every ack and gap confirmation under it, a flagged event acked
+// and not stored, the token sent.
+func TestFeedWire(t *testing.T) {
+	fb := &feedBridge{
+		replay: []*bridgev1.CloudEvent{cloud(1, "firing", "a", 0), cloud(2, "firing", "flagged", 1, "uncontracted")},
+		live: []*bridgev1.SubscribeResponse{{Event: cloud(3, "firing", "b", 2)}, {Gap: &bridgev1.Gap{FromSeq: 1, ToSeq: 1, Version: 7}},
+			{Event: cloud(4, "firing", "flagged2", 3, "uncontracted")}, {Event: cloud(5, "resolved", "a", 4)}},
+	}
+	env := fb.start(t)
+	f := feed.New(100, 1<<20)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go runFeed(ctx, newBridgeClient(env).openFeed, f, sleepCtx)
+	until(t, "5 acks", func() bool { return len(fb.acked()) >= 3 && f.Stats().Events == 3 })
+	cancel()
+
+	fb.mu.Lock()
+	defer fb.mu.Unlock()
+	if feedSub == bridgeUser || feedSub != "bridge-atlas/feed" {
+		t.Errorf("feedSub %q must be its own name under the client's, not the tag loop's %q", feedSub, bridgeUser)
+	}
+	if fb.subs[0].Name != feedSub || !reflect.DeepEqual(fb.subs[0].Types, feedTypes) || len(fb.subs[0].Systems) != 0 {
+		t.Errorf("subscribe %+v", fb.subs[0])
+	}
+	if fb.replays[0].Subscription != feedSub || fb.replays[0].FromSeq != 0 {
+		t.Errorf("replay %+v", fb.replays[0])
+	}
+	for _, a := range fb.acks {
+		if a.Subscription != feedSub {
+			t.Errorf("ack under %q", a.Subscription)
+		}
+	}
+	if len(fb.gaps) == 0 || fb.gaps[0].Subscription != feedSub || fb.gaps[0].Version != 7 {
+		t.Errorf("gaps %+v", fb.gaps)
+	}
+	if len(fb.replays) < 2 { // the gap made it replay again
+		t.Errorf("replays %d", len(fb.replays))
+	}
+	if fb.auths[0] != "Bearer tok" {
+		t.Errorf("auth %q", fb.auths[0])
+	}
+	var flagged bool
+	for _, a := range fb.acks {
+		flagged = flagged || a.Seq == 4
+	}
+	if !flagged {
+		t.Errorf("a flagged live event is acked: %v", fb.acks)
+	}
+	if st := f.Stats(); st.Events != 3 { // a, b and a's resolve; neither flagged event
+		t.Errorf("%+v", st)
+	}
+}
+
+// TestFeedCursorIsolation: the tag loop and the feed use different subscription names on one client, so the feed's
+// acks never move the tag loop's cursor.
+func TestFeedCursorIsolation(t *testing.T) {
+	fb := &feedBridge{}
+	env := fb.start(t)
+	b := newBridgeClient(env)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts, err := b.open(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ts.Close() }()
+	fs, err := b.openFeed(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = fs.Close() }()
+	if err := fs.Ack(ctx, 9); err != nil {
+		t.Fatal(err)
+	}
+	fb.mu.Lock()
+	defer fb.mu.Unlock()
+	if len(fb.subs) != 2 || fb.subs[0].Name != bridgeUser || fb.subs[1].Name != feedSub || fb.subs[0].Name == fb.subs[1].Name ||
+		!strings.HasPrefix(fb.subs[1].Name, bridgeUser+"/") || fb.acks[0].Subscription != feedSub {
+		t.Errorf("subs %v %v acks %+v", fb.subs[0].Name, fb.subs[1].Name, fb.acks)
+	}
+}
+
+// TestFeedReplayErrorIsNotSwallowed: a Replay that fails ends the stream with its error, reads nothing live, acks
+// nothing, and the replay stays due.
+func TestFeedReplayErrorIsNotSwallowed(t *testing.T) {
+	fb := &feedBridge{replayErr: connect.NewError(connect.CodeUnavailable, errors.New("down")), live: []*bridgev1.SubscribeResponse{{Event: cloud(3, "firing", "b", 2)}}}
+	env := fb.start(t)
+	f := feed.New(100, 1<<20)
+	replay := true
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // a swallowed error would block on the live stream
+	defer cancel()
+	n, err := feedOnce(ctx, newBridgeClient(env).openFeed, f, &replay)
+	if connect.CodeOf(err) != connect.CodeUnavailable || n != 0 || !replay || f.Stats().Events != 0 || len(fb.acked()) != 0 {
+		t.Errorf("n=%d err=%v replay=%v events=%d acks=%v", n, err, replay, f.Stats().Events, fb.acked())
+	}
+}
+
+// TestFeedBadEventDoesNotWedge: an event whose handling panics is counted, acked, and the next one is stored.
+func TestFeedBadEventDoesNotWedge(t *testing.T) {
+	f := feed.New(100, 1<<20)
+	f.SetParse(func(r feed.Raw) (feed.Event, bool) {
+		if r.Seq == 2 {
+			panic("boom")
+		}
+		return feed.Parse(r)
+	})
+	s := &fakeFeed{live: []any{fraw(1, "firing", "a", 0), fraw(2, "firing", "b", 1), fraw(3, "firing", "c", 2), io.EOF}}
+	replay := false
+	n, _ := feedOnce(context.Background(), func(context.Context) (feedStream, error) { return s, nil }, f, &replay)
+	if n != 3 || fmt.Sprint(s.acked) != "[1 2 3]" || f.Stats().Events != 2 || f.Stats().Bad != 1 {
+		t.Errorf("n=%d acked=%v %+v", n, s.acked, f.Stats())
+	}
+}
+
+func scrapeBody(t *testing.T, m *Metrics) string { _, _, b := scrape(t, m); return b }
+
+// TestStartFeed: off by default (nothing runs, nothing is asked of the bridge, the series says 0); on, it connects.
+func TestStartFeed(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m, err := newMetrics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = m.Close() }()
+
+	off := &feedBridge{}
+	a := &App{Met: m}
+	startFeed(ctx, a, Config{Tags: off.start(t)}) // the bridge is configured, FEED_ENABLED is not
+	time.Sleep(300 * time.Millisecond)
+	off.mu.Lock()
+	asked := len(off.subs) + len(off.replays)
+	off.mu.Unlock()
+	if a.Feed != nil || asked != 0 {
+		t.Errorf("feed off: Feed=%v, bridge asked %d times", a.Feed, asked)
+	}
+	waitScrape(t, func() string { return scrapeBody(t, m) }, "mountain_feed_enabled 0\n")
+
+	// on, but no bridge: a feed that stays empty, no goroutine on the bridge
+	a2 := &App{Met: m}
+	startFeed(ctx, a2, Config{Feed: true})
+	if a2.Feed == nil {
+		t.Error("FEED_ENABLED with no bridge: no Feed")
+	}
+
+	on := &feedBridge{replay: []*bridgev1.CloudEvent{cloud(1, "firing", "a", 0)}}
+	a3 := &App{Met: m}
+	startFeed(ctx, a3, Config{Feed: true, Tags: on.start(t)})
+	if a3.Feed == nil {
+		t.Fatal("FEED_ENABLED: no Feed")
+	}
+	until(t, "the replayed event", func() bool { return a3.Feed.Stats().Events == 1 })
+	waitScrape(t, func() string { return scrapeBody(t, m) }, "mountain_feed_enabled 1\n")
 }

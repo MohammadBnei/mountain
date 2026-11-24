@@ -78,15 +78,15 @@ func guarded(what string, f func()) {
 
 // feedMetrics records the feed's state every `every` until ctx ends.
 func feedMetrics(ctx context.Context, f *feed.Feed, met *Metrics, started time.Time, every time.Duration) {
-	var sent uint64
+	var sent, sentBad uint64
 	for {
 		s := f.Stats()
 		ref := s.Last
 		if ref.IsZero() {
 			ref = started
 		}
-		met.FeedState(s.Events, s.Threads, s.Dropped-sent, time.Since(ref).Seconds())
-		sent = s.Dropped
+		met.FeedState(s.Events, s.Threads, s.Dropped-sent, s.Bad-sentBad, time.Since(ref).Seconds())
+		sent, sentBad = s.Dropped, s.Bad
 		if !sleepCtx(ctx, every) {
 			return
 		}
@@ -142,6 +142,9 @@ func feedOnce(ctx context.Context, open func(context.Context) (feedStream, error
 		}
 		ev, gap, err := s.Next(ctx)
 		if err != nil {
+			if errors.Is(err, io.EOF) { // the bridge ended the stream: what it held back may be gone, so replay on the next
+				*replay = true
+			}
 			return n, err
 		}
 		if gap != 0 { // retention deleted events we had not acked: what is left is in Replay
@@ -151,7 +154,7 @@ func feedOnce(ctx context.Context, open func(context.Context) (feedStream, error
 			}
 			continue
 		}
-		f.Ingest(ev)
+		f.Ingest(ev) // never panics (it counts a bad event): this one is acked like any other
 		if err := s.Ack(ctx, ev.Seq); err != nil {
 			return n, err
 		}
