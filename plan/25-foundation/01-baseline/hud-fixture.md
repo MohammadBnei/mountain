@@ -1,5 +1,7 @@
 # The HUD fixture (ukubi-game #255)
 
+> Status: history (2026-11-24). Record of 2026-11-14 measurements.
+
 The HUD fixture checks the HUD in CI with no realm, no WebGL and no `world.ts`. It is the proof tool for every later
 UI step.
 

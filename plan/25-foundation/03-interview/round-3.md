@@ -1,5 +1,7 @@
 # Interview round 3 (2026-11-14, after the baseline numbers)
 
+> Status: history (2026-11-24). Interview record.
+
 - **Quick fixes.** Answer: all four now, "via workflows with appropriate model strength and a single gate at the end",
   using what we learned about workflow settings.
 - **Determinism.** Answer: **bit-exact**. Trig is ported to pure Go, a lint bans `math.Sin`, `math.Cos` and

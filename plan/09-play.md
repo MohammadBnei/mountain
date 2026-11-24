@@ -1,5 +1,7 @@
 # 09 · Playing the town (research, 2026-10-23)
 
+> Status: history (2026-11-24). Research parked 2026-10-24; plan/29 and the game-fleet intent replace its question.
+
 > Status: **research**. The owner interview (what, how) and the architect interview are done, followed by a doubt
 > cycle with three reviews. Nothing here is built. Each fleet or infra change below gets its own ADR, interview and
 > doubt cycle before any code.

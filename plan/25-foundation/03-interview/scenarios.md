@@ -1,5 +1,7 @@
 # Scenarios: the workshop loop
 
+> Status: history (2026-11-24). Interview record.
+
 Status: the owner's story, 2026-11-14. It came out of an ideation round (`idea-refine`) after interview round 3. It is
 the shared picture `../04-architecture/ui-core.md` and `world-model.md` must serve. It is not a test list yet.
 

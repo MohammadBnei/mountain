@@ -1,5 +1,7 @@
 # Doubt round: tests (2026-11-15, quick)
 
+> Status: history (2026-11-24). Doubt record.
+
 One fresh adversarial reviewer (read-only, code and ADR only) checked `04-architecture/tests.md`.
 
 | # | Severity | Finding | Resolution |

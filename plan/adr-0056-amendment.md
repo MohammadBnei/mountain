@@ -3,6 +3,8 @@
 
 # Draft: amendment to infra-bootstrap ADR-0056 (public telemetry)
 
+> Status: history (2026-11-24). Already history (landed as ib ADR-0064).
+
 For M BN to land in infra-bootstrap. It records a decision already made for the town (R7, 2026-10-22): platform
 services become public, under generic role names.
 

@@ -1,5 +1,7 @@
 # 08-auth — Auth
 
+> Status: history (2026-11-24). Already history.
+
 - **W3 detail mode:**
   - One authentik OIDC app `mountain` through `/authentik-oidc`.
   - Groups claim: `platform-admins` → detail frames, plant and the eraser (`mark.delete`); `mountain-visitors` → plant; anonymous → view.

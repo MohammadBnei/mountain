@@ -1,5 +1,7 @@
 # Interview round 4 (2026-11-18): the HUD direction, explore and strategy
 
+> Status: history (2026-11-24). Interview record.
+
 After S8 (fleet characters) ran on the owner's phone, the owner asked for careful UI work: "I have to press 3-4
 buttons to chat to ops"; the transcript and panels, finding characters, and the HUD overall all hurt. A first HUD v2
 draft (cards and sheets over the 3D world) was rejected: "the system of card in a 3D world is weird", too much panel,

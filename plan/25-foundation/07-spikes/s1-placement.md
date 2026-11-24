@@ -1,5 +1,7 @@
 # Spike S1: placement by rank
 
+> Status: history (2026-11-24). Spike record.
+
 Branch `spike/s1-placement` (ukubi-game `2b30da3`). Line refs are `origin/main` unless marked "spike".
 
 ## Question

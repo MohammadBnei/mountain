@@ -1,5 +1,7 @@
 # Doubt round: placement (2026-11-15)
 
+> Status: history (2026-11-24). Doubt record.
+
 One fresh adversarial reviewer (read-only, code and ADR only) checked `04-architecture/placement.md` against
 ukubi-game `19a3646`.
 

@@ -1,5 +1,7 @@
 # Audit: the UI, the sim and the world model
 
+> Status: history (2026-11-24). Record of 2026-11-14 measurements.
+
 Checked on ukubi-game main `67bd436`. Three read-only explorers did the first pass and one adversarial reviewer
 checked it; this file carries the reviewer's corrections. Paths: `websrc/` is `cmd/game/websrc/`; other paths are from
 the ukubi-game root.

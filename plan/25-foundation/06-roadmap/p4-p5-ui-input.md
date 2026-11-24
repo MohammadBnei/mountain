@@ -1,5 +1,7 @@
 # P4 voice and P5 party: what the ui-core bang wires (from ukubi-73, 2026-11-14)
 
+> Status: history (2026-11-24). Wiring notes for merged #256/#257.
+
 #256 (P4, `67bcefd`) and #257 (P5, `59bac64`) are merged. Both ship the server, the wire and the transport only. The UI
 for reference lives on the branches `realm/p4-voice-ui` and `realm/p5-party-ui`.
 

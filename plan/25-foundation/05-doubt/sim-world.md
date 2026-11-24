@@ -1,5 +1,7 @@
 # Doubt round: sim-world (2026-11-15)
 
+> Status: history (2026-11-24). Doubt record.
+
 One fresh adversarial reviewer (read-only, code and proposal only) attacked decision C, "chunked everything".
 
 | # | Severity | Finding | Resolution |

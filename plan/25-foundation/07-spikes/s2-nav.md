@@ -1,5 +1,7 @@
 # S2 nav: a layered graph for reachability
 
+> Status: history (2026-11-24). Spike record.
+
 Branch `spike/s2-nav` (ukubi-game, commit 759eab4, local only). Machine: Apple M1 Pro, go 1.27.4, `go test`, native (not WASM).
 
 ## Question

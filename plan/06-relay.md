@@ -1,5 +1,7 @@
 # 06-relay — Relay
 
+> Status: history (2026-11-24). Already history (absorbed by atlas).
+
 **Process:** 1 replica, `Recreate`. The Go binary embeds `www/` through the root package `mountain` (`embed.go`,
 `//go:embed www`), imported by relay. Go 1.27 toolchain.
 

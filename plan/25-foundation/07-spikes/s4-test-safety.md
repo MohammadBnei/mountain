@@ -1,5 +1,7 @@
 # S4 test safety (2026-11-15)
 
+> Status: history (2026-11-24). Spike record.
+
 ## Question
 
 How big is the test migration that makes moving the world safe, and does a stage `Find` API make tests origin-blind?

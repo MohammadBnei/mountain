@@ -1,5 +1,7 @@
 # 04-sandbox — Dev loop and gate
 
+> Status: history (2026-11-24). Already history.
+
 > **History (2026-11-23):** this describes the retired town's dev loop (the relay is deleted); the live commands are in the root `README.md`. Its CI section is the 2026-10 GitHub-era setup, kept as written; the live CI is `.github/workflows/` (checks.yml, app.yml).
 
 **Dev loop:**

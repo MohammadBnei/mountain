@@ -1,5 +1,7 @@
 # Shared movement core: server CPU, trig divergence, WASM size
 
+> Status: history (2026-11-24). Record of 2026-11-14 measurements.
+
 Repo ukubi-game @67bd436, Apple M1 Pro, Go 1.27.2, single thread, `-benchmem`. Throwaway worktree (removed); bench sources, the pure-trig package and call-site patch are in `step-bench-artifacts/` beside this file.
 
 ## 1. Server CPU

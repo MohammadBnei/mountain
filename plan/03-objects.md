@@ -1,5 +1,7 @@
 # 03-objects — The town
 
+> Status: history (2026-11-24). Already history.
+
 One meaning per channel, readable by day. Every object follows the contract in 01:
 - its steady look comes from `world.state`, so a reload, a resync and a replay agree;
 - transient acts come only from live frames.

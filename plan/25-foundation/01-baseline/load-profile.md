@@ -1,5 +1,7 @@
 # World load profile (ukubi-game main @67bd436, local stack)
 
+> Status: history (2026-11-24). Record of 2026-11-14 measurements.
+
 ## Method
 - Stack: `MOUNTAIN=../mountain REALM=<built cmd/realm> dev/stack-realm.sh <built cmd/game> <out>` (atlas --dev fixtures, 89-node founded world, realm, owner on :7962). Binaries built. Stopped afterwards; no tracked files touched, no worktree needed.
 - Browser: Playwright-core driving Google Chrome, `--use-angle=metal --enable-gpu --ignore-gpu-blocklist`, 1440x900, `/world.html?hour=12`. The measuring scripts lived in a session scratchpad and were not kept.

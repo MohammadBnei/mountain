@@ -1,5 +1,7 @@
 # 11 · When the cluster is back (owner checklist, written 2026-10-24)
 
+> Status: history (2026-11-24). Already history (2026-10-24 outage checklist).
+
 > **History (2026-11-23):** the 2026-10-24 outage checklist. The k9s host, kubespray and GitHub settings it names are gone (Talos, Forgejo); kept as a record, do not run its commands.
 
 The cluster has been offline since 2026-10-23 (internet outage at home, back around 2026-10-26). Code merged while it was

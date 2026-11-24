@@ -1,5 +1,7 @@
 # 07-infra — Infra (infra-bootstrap)
 
+> Status: history (2026-11-24). Already history.
+
 | Wave | Step | Owner | Status |
 |---|---|---|---|
 | W0 | **ADR-A**: public telemetry allowlist, PromQL only, no RBAC, unmeasured Garage/Pigsty, river = public traffic, CF-IP trust note | agent PR, M BN merges | ✅ ADR-0056, #298 merged |

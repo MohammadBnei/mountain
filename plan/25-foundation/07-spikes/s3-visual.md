@@ -1,5 +1,7 @@
 # S3 visual: is a style spec cheap and expressive enough?
 
+> Status: history (2026-11-24). Spike record.
+
 ## Question
 Can a Mapbox-style spec (rules, expressions, seeded weighted variants) drive the look of trees and rocks, at a cost
 the page does not notice, with the land and chunk data untouched?

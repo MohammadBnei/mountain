@@ -1,5 +1,7 @@
 # Interview rounds 1 and 2, and the doubt round (2026-11-14)
 
+> Status: history (2026-11-24). Interview record.
+
 Each question was asked with options. The research behind it is in `../01-baseline/audit.md`.
 
 ## Round 1

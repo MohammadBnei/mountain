@@ -1,5 +1,7 @@
 # Spike: the ui-core bet (Preact + signals, statechart + surface table)
 
+> Status: history (2026-11-24). Record of 2026-11-14 measurements.
+
 Worktree (kept, detached at origin/main, never pushed): (session scratchpad)
 Bun 1.4.4 (local) and 1.4.2 (CI's pin, via npm `bun@1.4.2`). Chromium via Playwright (headless shell 1234).
 

@@ -1,5 +1,7 @@
 # Doubt round on the ui-core ADR (2026-11-14)
 
+> Status: history (2026-11-24). Doubt record.
+
 One fresh adversarial reviewer (read-only, on ukubi-game `7b5f98e`) and one spike (`../01-baseline/spike-ui.md`).
 
 **The spike:**

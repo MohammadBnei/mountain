@@ -1,5 +1,7 @@
 # 02-data — Data
 
+> Status: history (2026-11-24). Already history.
+
 ## Endpoints (verified)
 - Prometheus: `platform-prometheus-kube-p-prometheus.monitoring:9090`. Retention 7d.
 - Alertmanager: `platform-prometheus-kube-p-alertmanager.monitoring:9093`.
