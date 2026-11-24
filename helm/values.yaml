@@ -27,8 +27,8 @@ service:
       port: 9090
 
 # Gated (infra-bootstrap ADR-0065): the whole site sits behind authentik
-# forwardAuth, Middleware/admin-forwardauth (namespace default, declared in
-# infra-bootstrap). It lists no authResponseHeaders, so any client-sent
+# forwardAuth, admin-forwardauth@file (Traefik's file provider, declared in
+# infra-bootstrap's Traefik values). It lists no authResponseHeaders, so any client-sent
 # X-authentik-* passes through to atlas unchanged; atlas reads none. The
 # outpost picks the provider from the request host, so the `mountain-gate`
 # provider (platform-admins only since R10) still applies, and the Middleware
@@ -38,13 +38,12 @@ service:
 # platform-admins only and every route but /healthz and /auth/* refuses anyone
 # else (cmd/atlas, deny by default). Reverting needs a Middleware that exists:
 # once infra-bootstrap deletes mountain-forwardauth (infra-D), name
-# admin-forwardauth or another live object, or the route errors (404). CSP is
+# admin-forwardauth@file or another live one, or the route errors (404). CSP is
 # set by atlas, where a test pins it. Traefik overwrites the backend's
 # Referrer-Policy, so it is set here to match.
 ingress:
   middlewares:
-    - name: admin-forwardauth
-      namespace: default
+    - name: admin-forwardauth@file
   baseline:
     headers:
       referrerPolicy: no-referrer
