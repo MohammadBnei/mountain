@@ -43,7 +43,7 @@ func prLife(t *testing.T) []Raw {
 		forge(t, 2, "pull_request_synchronized", "pull_request.synchronized", prSubj, "d-sync", 1),
 		forge(t, 3, "pull_request_review_rejected", "pull_request_review.rejected", prSubj, "pr/42/review/rejected/x", 2),
 		forge(t, 4, "pull_request_comment_created", "issue_comment.created", prSubj, "comment/7", 3),
-		forge(t, 5, "action_run_success", "action_run.success", "forge/MohammadBnei/editable-blog/run/117", "d-run", 4),
+		forge(t, 5, "action_run_failure", "action_run.failure", "forge/MohammadBnei/editable-blog/run/117", "d-run", 4),
 		forge(t, 6, "pull_request_closed", "pull_request.closed", prSubj, "pr/42/closed/1", 5, merged...),
 	}
 }
@@ -76,13 +76,13 @@ func TestPRThreadLife(t *testing.T) {
 	}
 	got := strings.Join(texts(p), "\n")
 	for _, want := range []string{"false:opened", "false:pushed 3f1c0a9e5b2d", "false:review: changes requested", "true:MohammadBnei: Needs a test.",
-		"false:comment", "false:CI run 117: success", "false:merged"} {
+		"false:comment", "false:CI run 117: failure", "false:merged"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in\n%s", want, got)
 		}
 	}
 	// the closed thread takes a late comment without opening again
-	late := append(prLife(t), forge(t, 7, "pull_request_comment_created", "issue_comment.created", prSubj, "comment/8", 20))
+	late := append(prLife(t), forge(t, 7, "pull_request_comment_created", "issue_comment.created", prSubj, "comment/8", 20, [2]string{`"state": "open"`, `"state": "closed"`}))
 	if p := byKind(fold(t, 30, late...), KindPR)[0]; p.State != StateClosed || p.LastActivityAt != at(20) {
 		t.Errorf("late comment: %s %v", p.State, p.LastActivityAt)
 	}
@@ -99,10 +99,15 @@ func TestPRThreadLife(t *testing.T) {
 	if p := fold(t, 10, forge(t, 1, "pull_request_closed", "pull_request.closed", prSubj, "pr/42/closed/2", 0))[0]; p.State != StateClosed || p.Entries[0].Text != "closed" {
 		t.Errorf("closed: %s %q", p.State, p.Entries[0].Text)
 	}
-	// an opened stamped after the closed (the relist uses its own times) does not reopen
+	// the payload's state rules, and the later event wins when payloads disagree: an opened the relist built from a
+	// PR that is closed now (its time is the creation, before the close) leaves it closed; one stamped later opens it
 	skew := []Raw{prLife(t)[5], forge(t, 9, "pull_request_opened", "pull_request.opened", prSubj, "pr/42/opened", 9)}
-	if p := byKind(fold(t, 30, skew...), KindPR)[0]; p.State != StateClosed {
-		t.Errorf("opened after closed: %s", p.State)
+	if p := byKind(fold(t, 30, skew...), KindPR)[0]; p.State != StateOpen {
+		t.Errorf("later payload says open: %s", p.State)
+	}
+	relist := forge(t, 9, "pull_request_opened", "pull_request.opened", prSubj, "pr/42/opened", -5, [2]string{`"state": "open"`, `"state": "closed"`})
+	if p := byKind(fold(t, 30, prLife(t)[5], relist), KindPR)[0]; p.State != StateClosed {
+		t.Errorf("relisted opened of a closed PR: %s", p.State)
 	}
 }
 
@@ -169,9 +174,9 @@ func TestParseForgeRefuses(t *testing.T) {
 		"no number":   forge(t, 1, "pull_request_opened", "pull_request.opened", "forge/MohammadBnei/editable-blog/pr/x", "a", 0),
 		"odd subject": forge(t, 1, "pull_request_opened", "pull_request.opened", "forge/MohammadBnei/editable-blog/pr/42/x", "a", 0),
 		"bad repo":    forge(t, 1, "pull_request_opened", "pull_request.opened", "forge/Mohammad#Bnei/editable-blog/pr/42", "a", 0),
-		"run on pr":   forge(t, 1, "action_run_success", "action_run.success", prSubj, "a", 0),
-		"run no sha":  forge(t, 1, "action_run_success", "action_run.success", "forge/MohammadBnei/editable-blog/run/117", "a", 0, [2]string{head, "XYZ"}),
-		"run number":  forge(t, 1, "action_run_success", "action_run.success", "forge/MohammadBnei/editable-blog/run/118", "a", 0),
+		"run on pr":   forge(t, 1, "action_run_failure", "action_run.failure", prSubj, "a", 0),
+		"run no sha":  forge(t, 1, "action_run_failure", "action_run.failure", "forge/MohammadBnei/editable-blog/run/117", "a", 0, [2]string{head, "XYZ"}),
+		"run number":  forge(t, 1, "action_run_failure", "action_run.failure", "forge/MohammadBnei/editable-blog/run/118", "a", 0),
 	} {
 		if _, ok := Parse(r); ok {
 			t.Errorf("%s: parsed", name)

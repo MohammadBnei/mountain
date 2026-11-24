@@ -8,6 +8,7 @@ package feed
 import (
 	"encoding/json"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,7 @@ type Event struct {
 	Status                          string   // health or sync status (flapping: the current health)
 	Previous                        string   // the status before
 	Revisions                       []string // deploy.synced
+	PrevRevisions                   []string // deploy.synced: the revisions before this sync
 	Flaps                           int      // deploy.flapping: transitions in the window
 
 	// forge.* (Key is unused): the PR a delivery belongs to, from its subject "forge/<owner>/<repo>/pr/<n>".
@@ -54,16 +56,18 @@ type Event struct {
 	IsError     bool      // fleet.session.turn_ended
 	Expires     time.Time // fleet.card: expires_at, zero if unset
 	Option      string    // fleet.card.answered: "1".."3"
+	PRState     string    // forge: the PR's state in the payload, open or closed, "" when it has none
+	Relisted    bool      // forge: built by the bridge's relist loop, not a webhook
 }
 
 // size is an event's memory, roughly: what the byte cap counts.
 func (e Event) size() int {
-	n := int(unsafe.Sizeof(e)) + cap(e.Revisions)*int(unsafe.Sizeof("")) + seenCost + len(e.Source) + len(e.ID)
+	n := int(unsafe.Sizeof(e)) + (cap(e.Revisions)+cap(e.PrevRevisions))*int(unsafe.Sizeof("")) + seenCost + len(e.Source) + len(e.ID)
 	for _, s := range []string{e.Type, e.Key, e.StartsAt, e.Name, e.Summary, e.Description, e.URL, e.Status, e.Previous,
 		e.Repo, e.Title, e.Login, e.Text, e.Head, e.Merge, e.Session, e.Kind, e.Definition, e.Option} {
 		n += len(s)
 	}
-	for _, r := range e.Revisions {
+	for _, r := range append(slices.Clone(e.Revisions), e.PrevRevisions...) {
 		n += len(r)
 	}
 	return n
@@ -78,7 +82,7 @@ const seenCost = 96
 var forgeTypes = map[string]bool{
 	"forge.pull_request.opened": true, "forge.pull_request.closed": true, "forge.pull_request.reopened": true, "forge.pull_request.synchronized": true,
 	"forge.pull_request_review.approved": true, "forge.pull_request_review.rejected": true, "forge.pull_request_review.comment": true,
-	"forge.issue_comment.created": true, "forge.action_run.success": true, "forge.action_run.failure": true, "forge.action_run.recover": true,
+	"forge.issue_comment.created": true, "forge.action_run.failure": true, "forge.action_run.recover": true,
 }
 
 var healths = map[string]bool{"Healthy": true, "Progressing": true, "Degraded": true, "Suspended": true, "Missing": true, "Unknown": true}
@@ -128,6 +132,7 @@ func Parse(r Raw) (Event, bool) {
 			}
 			Health, Sync, Previous, Current string
 			Transitions                     int
+			PreviousRevisions               []string `json:"previous_revisions"`
 		}
 		if json.Unmarshal(r.Data, &d) != nil {
 			return e, false
@@ -147,6 +152,9 @@ func Parse(r Raw) (Event, bool) {
 		default:
 			for _, rev := range d.Refs.Revisions[:min(len(d.Refs.Revisions), 4)] {
 				e.Revisions = append(e.Revisions, clean(rev, 64))
+			}
+			for _, rev := range d.PreviousRevisions[:min(len(d.PreviousRevisions), 4)] {
+				e.PrevRevisions = append(e.PrevRevisions, clean(rev, 64))
 			}
 		}
 	default:
@@ -176,8 +184,10 @@ func name(s string) bool {
 // run ("forge/<owner>/<repo>/run/<n>"); a comment on an issue is not the feed's.
 func parseForge(e Event, r Raw) (Event, bool) {
 	var d struct {
+		Relisted    bool
 		Sender      struct{ Login string }
 		PullRequest *struct {
+			State          string
 			Title          string
 			Merged         bool
 			MergeCommitSha string `json:"merge_commit_sha"`
@@ -221,9 +231,13 @@ func parseForge(e Event, r Raw) (Event, bool) {
 		return e, false
 	}
 	login := d.Sender.Login
+	e.Relisted = d.Relisted
 	if d.PullRequest != nil {
 		pr := d.PullRequest
 		e.Title, e.Head, e.Merged = line(pr.Title, 200), hexSHA(pr.Head.Sha), pr.Merged
+		if pr.State == "open" || pr.State == "closed" {
+			e.PRState = pr.State
+		}
 		if pr.Merged {
 			e.Merge = hexSHA(pr.MergeCommitSha)
 		}

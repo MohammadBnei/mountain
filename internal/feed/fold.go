@@ -145,7 +145,7 @@ func Fold(evs []Event, now time.Time) []Thread {
 	alerts := map[string]*Thread{}
 	lastAlert := map[string]*Thread{} // source|fingerprint -> its newest thread
 	apps := map[string]*appState{}
-	pr, fl := newPRs(), newFleet(s)
+	pr, fl := newPRs(s), newFleet(s)
 	type synced struct {
 		t   *Thread
 		rev string
@@ -239,6 +239,8 @@ func Fold(evs []Event, now time.Time) []Thread {
 			a.cur.anchor = e.Time
 			for _, r := range e.Revisions {
 				a.cur.link("revision", r, false)
+			}
+			for _, r := range newRevisions(e) {
 				rolled = append(rolled, synced{a.cur, r})
 			}
 		case e.Type == "deploy.flapping":
@@ -297,4 +299,23 @@ func (t *Thread) closeTime() time.Time {
 		return t.closed
 	}
 	return t.app.anchorOf(t).Add(RolloutWindow)
+}
+
+// newRevisions are the revisions a sync brought: those not in kwatch's previous_revisions. An app that watches a
+// repo's unchanged revision alongside others (a chart and its values repo) is not a rollout of that revision. A
+// synced with no previous list counts only when it names a single revision.
+func newRevisions(e Event) []string {
+	if len(e.PrevRevisions) == 0 {
+		if len(e.Revisions) == 1 {
+			return e.Revisions
+		}
+		return nil
+	}
+	var out []string
+	for _, r := range e.Revisions {
+		if !slices.Contains(e.PrevRevisions, r) {
+			out = append(out, r)
+		}
+	}
+	return out
 }

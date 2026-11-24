@@ -23,13 +23,26 @@ type headKey struct{ repo, sha string }
 
 // prs holds the PR threads of one fold. Threads are one per repo and number.
 type prs struct {
+	hooked  map[reviewKey]bool // webhook COMMENT reviews: a relisted copy of one is dropped
 	threads map[prKey]*Thread
 	byHead  map[headKey]*Thread // every head a PR had: a CI run names a commit, not a PR
 	byMerge map[string][]*Thread
 }
 
-func newPRs() *prs {
-	return &prs{threads: map[prKey]*Thread{}, byHead: map[headKey]*Thread{}, byMerge: map[string][]*Thread{}}
+type reviewKey struct {
+	repo        string
+	n           int
+	login, text string
+}
+
+func newPRs(evs []Event) *prs {
+	p := &prs{hooked: map[reviewKey]bool{}, threads: map[prKey]*Thread{}, byHead: map[headKey]*Thread{}, byMerge: map[string][]*Thread{}}
+	for _, e := range evs {
+		if e.Type == "forge.pull_request_review.comment" && !e.Relisted {
+			p.hooked[reviewKey{e.Repo, e.Num, e.Login, e.Text}] = true
+		}
+	}
+	return p
 }
 
 // quote is the entry for what a person wrote: "login: text", both from outside.
@@ -57,6 +70,9 @@ func (p *prs) apply(e Event, out *[]*Thread) {
 		t.link("run", e.URL, true)
 		return
 	}
+	if e.Type == "forge.pull_request_review.comment" && e.Relisted && p.hooked[reviewKey{e.Repo, e.Num, e.Login, e.Text}] {
+		return // the relist's copy of a review the webhook already delivered (their ce_ids differ)
+	}
 	k := prKey{e.Repo, e.Num}
 	t := p.threads[k]
 	if t == nil {
@@ -79,7 +95,7 @@ func (p *prs) apply(e Event, out *[]*Thread) {
 		text := "closed"
 		if e.Merged {
 			text = "merged"
-			if e.Merge != "" {
+			if e.Merge != "" && len(p.byMerge[e.Merge]) < maxLinks { // a rollout links at most maxLinks PRs anyway
 				p.byMerge[e.Merge] = append(p.byMerge[e.Merge], t)
 			}
 		}
@@ -110,17 +126,33 @@ func (p *prs) apply(e Event, out *[]*Thread) {
 		t.add(e.Time, "comment", false)
 		quote(t, e, e.Text)
 	}
+	// Any payload with the PR's state says where it stands: a late comment on a merged PR leaves it closed. Event
+	// order decides between payloads that disagree.
+	switch e.PRState {
+	case "open":
+		t.State = StateOpen
+	case "closed":
+		t.State = StateClosed
+	}
 }
 
 // card is one decision as its events left it.
 type card struct {
 	open, done bool // done: a closing state came, so a late opened cannot reopen it
 	expires    time.Time
+	since      time.Time // its first event
 }
+
+// cardLife is how long a card with no expires_at counts as open.
+const cardLife = 14 * 24 * time.Hour
 
 // needs: the card waits for the owner at now.
 func (c *card) needs(now time.Time) bool {
-	return c.open && (c.expires.IsZero() || now.Before(c.expires))
+	end := c.expires
+	if end.IsZero() {
+		end = c.since.Add(cardLife)
+	}
+	return c.open && now.Before(end)
 }
 
 // fleet holds the session and card threads of one fold.
@@ -212,7 +244,7 @@ func (f *fleet) applyCard(e Event, out *[]*Thread) {
 	}
 	c := f.cards[e.Key]
 	if c == nil {
-		c = &card{}
+		c = &card{since: e.Time}
 		f.cards[e.Key] = c
 		t.cards = append(t.cards, c)
 	}
@@ -242,8 +274,8 @@ func finishCards(t *Thread, now time.Time) {
 	}
 	if t.Kind == KindCard {
 		t.State = StateClosed
-		if t.NeedsOwner {
-			t.State = StateOpen
-		}
+	}
+	if t.NeedsOwner && t.Kind != KindAlert && t.Kind != KindDeploy { // an ended session with an open card shows open
+		t.State = StateOpen
 	}
 }
