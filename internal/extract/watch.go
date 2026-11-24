@@ -509,11 +509,39 @@ func grafanaRules(b []byte) []string {
 	return out
 }
 
-// forwardAuthNames is the names of the authentik forwardAuth middlewares infra-bootstrap declares.
+// forwardAuthNames is the references that name an authentik forwardAuth middleware: the Middlewares infra-bootstrap
+// declares, and the ones Traefik's file provider serves, referenced as <name>@file (its values file).
 func forwardAuthNames(files []sourceFile) []string {
 	var out []string
 	for _, f := range files {
-		if f.repo != "infra-bootstrap" || !strings.HasPrefix(f.path, "gitops/bootstrap/") || !strings.HasSuffix(f.path, "forwardauth-middleware.yaml") {
+		if f.repo != "infra-bootstrap" {
+			continue
+		}
+		if f.path == "gitops/platform/values/traefik/values.yaml" {
+			var v struct {
+				Providers struct {
+					File struct {
+						Enabled bool
+						Content struct {
+							HTTP struct {
+								Middlewares map[string]struct {
+									ForwardAuth map[string]any `yaml:"forwardAuth"`
+								}
+							}
+						}
+					}
+				}
+			}
+			if yaml.Unmarshal(f.b, &v) == nil && v.Providers.File.Enabled {
+				for name, m := range v.Providers.File.Content.HTTP.Middlewares {
+					if m.ForwardAuth != nil {
+						out = append(out, name+"@file")
+					}
+				}
+			}
+			continue
+		}
+		if !strings.HasPrefix(f.path, "gitops/bootstrap/") || !strings.HasSuffix(f.path, "forwardauth-middleware.yaml") {
 			continue
 		}
 		var m struct {
