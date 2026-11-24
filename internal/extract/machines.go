@@ -62,10 +62,10 @@ var guestTypes = map[string]string{
 	"proxmox_virtual_environment_container": graph.KindCT,
 }
 
-// terraform reads the Proxmox guests. A guest that is also a k8s node (talos-cp-3 and
-// talos-gpu-1 are Proxmox VMs in terraform/talos-vms.tf and nodes in var.nodes) is
-// skipped: inventory already made its node and placement, and reading it twice with
-// different attributes fails the whole projection.
+// terraform reads the Proxmox guests. A guest that is also a k8s node in var.nodes
+// (talos-cp-3 is a Proxmox VM in terraform/talos-vms.tf too) is skipped: inventory already
+// made its node and its placement, and reading it twice with different attributes fails
+// the whole projection. talos-gpu-1 is a worker, not in var.nodes, so it is read here.
 func terraform(x *Ctx, ips map[string]string, k8s map[string]bool) error {
 	for _, p := range x.Glob("infra-bootstrap", "terraform/*.tf") {
 		b, src, err := x.Read("infra-bootstrap", p)
