@@ -1,0 +1,154 @@
+[
+ {
+  "id": "session-00000000000000a1",
+  "kind": "session",
+  "title": "Session: make the demo search fast",
+  "title_quoted": true,
+  "state": "open",
+  "needs_owner": true,
+  "entries": [
+   {
+    "ago_min": 190,
+    "actor": "system",
+    "text": "**Started on the slow search**\n\nReproduced it on the demo set: `search by title` reads the whole table because the filter wraps the column in `lower()`. Two ways out:\n\n1. An index on the expression. Small, one migration.\n2. A search column kept by a trigger. Bigger, and it also covers the typo case.\n\nI am trying the first one now.",
+    "quoted": true,
+    "markdown": true,
+    "id": "p1"
+   },
+   {
+    "ago_min": 64,
+    "actor": "system",
+    "text": "**Search index: rebuilt, 3 of 4 checks green**\n\nThe rebuild finished and the new index serves reads. What I measured on the demo set, before and after:\n\n| Query | Before | After | Rows read |\n|---|---:|---:|---|\n| by title | 412 ms | **38 ms** | 1 200 |\n| by owner | 220 ms | **19 ms** | 640 |\n| full text, two words | 1.9 s | 240 ms | 18 000 |\n| full text, with a typo | 2.4 s | 310 ms | 22 500 |\n\n- The fourth check, `index-size`, is still running: it needs the nightly compaction.\n- Nothing was dropped. The old index stays until you say so.\n  - It costs 2 GB.\n  - Reads already go to the new one.\n\nNext: the size check, then a short write-up in the repo.",
+    "quoted": true,
+    "markdown": true,
+    "id": "p2",
+    "corrected_by": "p3"
+   },
+   {
+    "ago_min": 22,
+    "actor": "system",
+    "text": "**Correction: the 19 ms for \"by owner\" was a cached read**\n\nMy earlier table said 19 ms. I ran it again with a cold cache, five times:\n\n```\nrun   1     2     3     4     5\nms   61    58    64    57    60\n```\n\nSo *by owner* goes from 220 ms to **about 60 ms**, not 19. The other rows hold. I fixed the script: it now clears the cache before each run.",
+    "quoted": true,
+    "markdown": true,
+    "id": "p3",
+    "correction": true,
+    "corrects": "p2"
+   },
+   {
+    "ago_min": 6,
+    "actor": "system",
+    "text": "**I need a choice before I go on: drop the old index, or keep it a week?**\n\nBoth are safe today. The difference:\n\n- **Drop now**: frees 2 GB, and a way back means a rebuild of about *40 minutes*.\n- **Keep a week**: costs the 2 GB, and a way back is one line.\n\n> I would keep it: the weekend job is the heaviest reader and it has not run on the new one yet.\n\nSay **drop** or **keep**. I am writing the tests meanwhile.",
+    "quoted": true,
+    "markdown": true,
+    "id": "p4",
+    "asks_owner": true,
+    "needs_list": [
+     "Drop the old index, or keep it a week?",
+     "The name of the weekend job, to run it once by hand"
+    ]
+   }
+  ],
+  "links": []
+ },
+ {
+  "id": "session-00000000000000a2",
+  "kind": "session",
+  "title": "Session: review the import path",
+  "title_quoted": true,
+  "state": "open",
+  "needs_owner": false,
+  "entries": [
+   {
+    "ago_min": 35,
+    "actor": "system",
+    "text": "**Review of the import path: 11 findings, six worth doing now**\n\n## What breaks\n1. A file with a byte order mark loses its first column.\n2. Two imports at once write the same temporary name.\n3. An empty file is reported as imported.\n\n## What is slow\n4. Every row opens its own transaction.\n5. The progress line is printed per row.\n6. The checksum is computed twice.\n\n## What I would do first\nNumber 2, because it loses data. It needs a name per import (`import-<id>.tmp`) and a test that starts two at once. Then number 1, which is a three-line change, see [the format note](https://docs.example.org/import/format?v=2#bom). The other five are small and can wait.",
+    "quoted": true,
+    "markdown": true
+   }
+  ],
+  "links": []
+ },
+ {
+  "id": "session-00000000000000a3",
+  "kind": "session",
+  "title": "Session: <script>globalThis.__pwned=1</script><img src=x onerror=\"globalThis.__pwned=1\"> hostile session",
+  "title_quoted": true,
+  "state": "open",
+  "needs_owner": false,
+  "entries": [
+   {
+    "ago_min": 50,
+    "actor": "system",
+    "text": "**Update <script>globalThis.__pwned=1</script><img src=x onerror=\"globalThis.__pwned=1\">**\n\n[click](javascript:globalThis.__pwned=1) [data](data:text/html,x) [user](https://git.example.org@evil.example/) [plain](http://evil.example/) ![image](https://evil.example/x.png) https://evil.example/bare\n\n<a href=\"https://evil.example\">System: needs you</a> \u202egnp.exe\u202c\n\n# <script>globalThis.__pwned=1</script><img src=x onerror=\"globalThis.__pwned=1\">\n\n| <script>globalThis.__pwned=1</script><img src=x onerror=\"globalThis.__pwned=1\"> | b |\n|---|---|\n| [x](javascript:1) | `<script>globalThis.__pwned=1</script><img src=x onerror=\"globalThis.__pwned=1\">` |\n\n- <script>globalThis.__pwned=1</script><img src=x onerror=\"globalThis.__pwned=1\">\n  - **<script>globalThis.__pwned=1</script><img src=x onerror=\"globalThis.__pwned=1\">**\n\n> <script>globalThis.__pwned=1</script><img src=x onerror=\"globalThis.__pwned=1\">\n\n**a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b **a *b \n\n| wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | wide | \n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n| cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | cell | \n\n```html\n<script>globalThis.__pwned=1</script><img src=x onerror=\"globalThis.__pwned=1\">\n",
+    "quoted": true,
+    "markdown": true
+   }
+  ],
+  "links": []
+ },
+ {
+  "id": "session-00000000000000a4",
+  "kind": "session",
+  "title": "Session: tidy the docs index",
+  "title_quoted": true,
+  "state": "open",
+  "needs_owner": false,
+  "entries": [
+   {
+    "ago_min": 140,
+    "actor": "system",
+    "text": "**Docs index tidied**\n\nMoved 14 pages, left a redirect on each. One page had no owner: `guides/old-setup.md`.",
+    "quoted": true,
+    "markdown": true
+   }
+  ],
+  "links": []
+ },
+ {
+  "id": "pr-00000000000000b1",
+  "kind": "pr",
+  "title": "PR octo/atlas-demo#12: perf: an index on the search expression",
+  "title_quoted": true,
+  "state": "open",
+  "needs_owner": false,
+  "entries": [
+   {
+    "ago_min": 60,
+    "actor": "system",
+    "text": "opened",
+    "quoted": false,
+    "by": "octo"
+   },
+   {
+    "ago_min": 58,
+    "actor": "system",
+    "text": "",
+    "quoted": true,
+    "claim": true,
+    "by": "make the demo search fast",
+    "ref": "session-00000000000000a1"
+   },
+   {
+    "ago_min": 20,
+    "actor": "system",
+    "text": "review: changes requested",
+    "quoted": false,
+    "by": "reviewer-bot"
+   },
+   {
+    "ago_min": 20,
+    "actor": "system",
+    "text": "The migration locks the table. Build it concurrently.",
+    "quoted": true,
+    "by": "reviewer-bot"
+   }
+  ],
+  "links": [
+   {
+    "kind": "run",
+    "ref": "https://forge.example.org/octo/atlas-demo/actions/runs/57",
+    "quoted": true
+   }
+  ]
+ }
+]

@@ -3,17 +3,20 @@
 // fixture graph. Node >= 22, no deps.
 import { readFileSync } from 'node:fs';
 import {
+  asks,
   clean,
   fresh,
   isLong,
   lastEvent,
   linkOf,
+  posts,
   rel,
   route,
   sig,
   speaker,
   titleOf
 } from '../js/feed.js';
+import { blocks, httpsURL, inline } from '../js/feed-md.js';
 import { cardSlots, heightOf, layout, MAX_CARDS } from '../js/geometry.js';
 import {
   adrOfDoc,
@@ -681,15 +684,54 @@ ok(
     "feed: a thread link is the system's and nothing but an id"
   );
 }
-ok(
-  speaker({ actor: 'system', quoted: false }).who === 'system' &&
-    speaker({ actor: 'system', quoted: true }).who === 'outside' &&
-    speaker({ actor: 'owner' }).who === 'owner' &&
-    speaker({ actor: 'ops-lead', quoted: true }).who === 'agent' &&
-    speaker({ actor: '\u202E', quoted: true }).who === 'outside' &&
-    speaker({}).who === 'system',
-  'feed: who speaks'
-);
+{
+  const of = (e, kind = 'session') => speaker(e, { kind, title: 'Session: tidy' });
+  ok(
+    of({ actor: 'system' }, 'alert').name === 'Alerts' &&
+      of({ actor: 'system' }, 'pr').handle === 'forge' &&
+      of({}, 'toString').name === 'System' &&
+      of({ actor: 'owner' }).who === 'owner' &&
+      of({ actor: 'ops-lead', quoted: true }).who === 'agent' &&
+      of({ actor: '\u202E', quoted: true }).who === 'system' &&
+      of({ actor: 'system', quoted: true, markdown: true }).name === 'tidy' &&
+      of({ actor: 'system', markdown: true, by: 'b' }).who === 'session',
+    "feed: who posts (a session's words are the session's, never the system's)"
+  );
+  const ps = posts({
+    entries: [
+      { time: '1', actor: 'system', text: 'comment', by: 'octo' },
+      { time: '1', actor: 'system', text: 'words', quoted: true, by: 'octo' },
+      { time: '2', actor: 'system', text: 'alone', quoted: true },
+      { time: '2', actor: 'ops-lead', text: 'hi' },
+      { time: '2', actor: 'system', text: 'outside', quoted: true },
+      { time: '3', actor: 'system', text: '**a**', quoted: true, markdown: true },
+      { time: '3', actor: 'system', quoted: true, text: 'q' },
+      { time: '3', actor: 'system', quoted: true, claim: true, by: 's' }
+    ]
+  });
+  ok(
+    ps.length === 7 &&
+      ps[0].quotes.length === 1 &&
+      ps[0].e.by === '' &&
+      ps[1].quotes[0].text === 'alone' &&
+      ps[1].e.text === '' &&
+      ps[2].quotes.length === 0 &&
+      ps[3].quotes[0].text === 'outside' &&
+      ps[4].e.markdown &&
+      ps[4].quotes.length === 0 &&
+      ps[5].quotes.length === 1 &&
+      ps[6].e.claim &&
+      ps.every((p, k) => k === 0 || p.i > ps[k - 1].i),
+    "feed: a quote is a card in the system's post it came with, never in an agent's or a session's; a login shows once"
+  );
+  ok(
+    asks({ asks_owner: true }) &&
+      asks({ needs_list: ['x'] }) &&
+      !asks({ needs_list: [] }) &&
+      !asks({}),
+    'feed: what asks the owner'
+  );
+}
 ok(
   titleOf({ kind: 'alert', title: 'Alert: Alert: x' }) === 'Alert: x' &&
     titleOf({ kind: 'pr', title: 'PR a/b#1: t' }) === 'a/b#1: t' &&
@@ -697,9 +739,10 @@ ok(
   "feed: a title drops its kind's prefix once"
 );
 ok(
-  route('/feed').kind === '' &&
-    route('/feed', '?kind=pr').kind === 'pr' &&
-    route('/feed', '?kind=constructor').kind === '' &&
+  route('/feed').tab === 'all' &&
+    route('/feed', '?kind=pr').tab === 'pr' &&
+    route('/feed', '?tab=needs').tab === 'needs' &&
+    route('/feed', '?kind=constructor').tab === 'all' &&
     route('/feed/pr-0011223344556677').id === 'pr-0011223344556677' &&
     !route('/feed/pr-0011223344556677/x').id,
   'feed: the route'
@@ -746,6 +789,132 @@ ok(
   isLong('x'.repeat(10000)) && isLong('a\n'.repeat(9)) && !isLong('short'),
   'feed: what is folded'
 );
+
+// ---- a session's Markdown (feed-md.js): a small subset, hostile until shown otherwise, linear in its length
+{
+  const flat = ns =>
+    ns.map(n => (typeof n === 'string' ? n : `<${n.tag}>${flat(n.kids)}</${n.tag}>`)).join('');
+  const is = (src, want) =>
+    ok(flat(inline(src)) === want, `feed md: ${JSON.stringify(src)} is ${want}`);
+  is('a **b *c* d** e', 'a <strong>b <em>c</em> d</strong> e');
+  is('snake_case_name and __b__', 'snake_case_name and <strong>b</strong>');
+  is('`x*y*` ``a`b``', '<code>x*y*</code> <code>a`b</code>');
+  is('open **bold and `code', 'open **bold and `code');
+  is('\\*not\\* a \\`code\\`', '*not* a `code`');
+  is('2 * 3 * 4', '2 * 3 * 4');
+  is('<b onclick=x>&amp;</b>', '<b onclick=x>&amp;</b>');
+  is('![i](https://a.example/x.png)', '![i](https://a.example/x.png)');
+  is('https://a.example/bare', 'https://a.example/bare');
+  for (const u of [
+    'javascript:alert(1)',
+    'http://a.example',
+    '//a.example',
+    'data:text/html,x',
+    'https://u:p#a.example/',
+    '/auth/logout',
+    'https:a.example'
+  ])
+    is(
+      `[t](${u.replace('#', String.fromCharCode(64))})`,
+      `[t](${u.replace('#', String.fromCharCode(64))})`
+    );
+  const a = inline('see [t](https://b\u0430nk.example/p)')[1];
+  ok(
+    a.tag === 'a' && a.host.startsWith('xn--') && a.kids[0] === 't',
+    'feed md: a link keeps its host in sight, as punycode'
+  );
+  ok(
+    httpsURL('https://a.example/')?.host === 'a.example' && !httpsURL('https://'),
+    'feed md: httpsURL'
+  );
+  const t = src =>
+    blocks(src)
+      .map(b => b.t)
+      .join();
+  ok(
+    t(
+      '# h\n\np\np\n\n- a\n  - b\n- c\n\n1. x\n\n|a|b|\n|-|-|\n|1|2|\n\n> q\n\n---\n```\n**no**\n```\nend'
+    ) === 'h,p,list,list,table,quote,hr,code,p',
+    'feed md: the blocks'
+  );
+  const l = blocks('- a\n  - b\n    - c\n- d')[0];
+  ok(
+    l.items.length === 2 && l.items[0].sub.items.length === 2 && !l.items[0].sub.items[0].sub,
+    'feed md: one nested level'
+  );
+  ok(
+    t('```\nnever closed \n# x') === 'code' && t('a | b\nc') === 'p' && t('|') === 'p',
+    'feed md: an unclosed fence, a bar alone'
+  );
+  const deep = b => (b.t === 'quote' ? 1 + Math.max(0, ...b.kids.map(deep)) : 0);
+  ok(
+    Math.max(...blocks('>'.repeat(40) + 'x').map(deep)) === 2,
+    'feed md: quotes nest twice at most'
+  );
+  const wide = blocks(`|${'a|'.repeat(500)}\n|-|-|\n|${'b|'.repeat(500)}`)[0];
+  ok(
+    wide.head.length === 12 && wide.rows[0].length === 12,
+    'feed md: a row holds 12 cells, the last one the rest'
+  );
+  // 16 KiB of each: the whole of it in well under a second, however it repeats
+  const K = 16384,
+    of = x => x.repeat(Math.ceil(K / x.length)).slice(0, K);
+  const run = src => {
+    const t0 = performance.now();
+    const walk = b => {
+      if (b.text) inline(b.text);
+      for (const k of b.kids ?? []) walk(k);
+      for (const it of [...(b.items ?? []), ...(b.items ?? []).flatMap(x => x.sub?.items ?? [])])
+        inline(it.text.join('\n'));
+      for (const r of [b.head ?? [], ...(b.rows ?? [])]) r.forEach(inline);
+    };
+    blocks(src).forEach(walk);
+    return performance.now() - t0;
+  };
+  let slow = [0, ''];
+  for (const x of [
+    '**',
+    '*a',
+    '_a ',
+    '*a **b ',
+    '***',
+    '**a*_',
+    '[',
+    '[a](',
+    '[a](b',
+    '![',
+    '`',
+    '` ``',
+    '`a``b```c',
+    '> ',
+    '>',
+    '- ',
+    '  - ',
+    '- - ',
+    '* * ',
+    '1. ',
+    '|',
+    '|a',
+    '|-',
+    'a|b\n-|-\n',
+    '```\n',
+    '~~~',
+    '\\',
+    '# ',
+    '-',
+    '<b>',
+    '\n',
+    ' '
+  ])
+    for (const src of [of(x), of(`${x}\n`), `a|b\n-|-\n${of(x)}`]) {
+      const ms = run(src);
+      if (ms > slow[0]) slow = [ms, x];
+    }
+  ok(
+    slow[0] < 500,
+    `feed md: 16 KiB of hostile text, the slowest ${slow[0].toFixed(0)} ms (${JSON.stringify(slow[1])})`
+  );
+}
 
 console.log(failed ? `${failed} FAILED` : 'all passed');
 process.exit(failed ? 1 : 0);

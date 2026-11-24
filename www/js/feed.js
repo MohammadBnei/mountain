@@ -1,21 +1,39 @@
-// The feed's page (feed.html, cmd/atlas/feed_page.go): /feed is the timeline, /feed/<id> one thread. It polls /api/feed
-// (there is no stream) and never moves what is on screen by itself: a "N new" pill does, when pressed. Everything that
-// comes from an event is text (ui.js el: createElement and textContent); a link is built only from a thread's `links`,
-// and only from an https URL or a thread id (linkOf).
+// The feed's page (feed.html, cmd/atlas/feed_page.go): a timeline of posts and a post's thread, used as X is and drawn
+// as the game's strategy view is (feed.css). One document: a post opens its thread in place (history.pushState) and back
+// finds the timeline where it was. It polls /api/feed (there is no stream) and never moves what is on screen by itself:
+// a "N new posts" pill does, when pressed. Everything that comes from an event is text (ui.js el: createElement and
+// textContent; feed-md.js for a session's Markdown); a link is built only from a thread's `links`, a claim's ref and a
+// post's own Markdown links, and only to an https URL or a thread id.
+import { httpsURL, markdown } from './feed-md.js';
 import { gateLapsed, signedOut } from './socket.js';
 import { el } from './ui.js';
 
+// kind: its word, its tab, the prefix its titles carry, and the system's account that posts about it (name, handle, icon)
 export const KINDS = {
-  alert: ['Alert', 'Alerts', 'Alert: '],
-  deploy: ['Deploy', 'Deploys', 'Deploy: '],
-  pr: ['PR', 'PRs', 'PR '],
-  session: ['Session', 'Sessions', 'Session: '],
-  card: ['Card', 'Cards', 'Card: ']
+  alert: ['Alert', 'Alerts', 'Alert: ', 'Alerts', 'alerts', 'bell'],
+  deploy: ['Deploy', 'Deploys', 'Deploy: ', 'Deploys', 'deploys', 'sync'],
+  pr: ['PR', 'PRs', 'PR ', 'Forge', 'forge', 'repo'],
+  session: ['Session', 'Sessions', 'Session: ', 'Fleet', 'fleet', 'person'],
+  card: ['Card', 'Cards', 'Card: ', 'Fleet', 'fleet', 'inbox']
 };
+// ukubi-game's line icons (cmd/game/websrc/icons.ts): one path each, on a 20 px grid
+const ICONS = {
+  bell: 'M5 14V9a5 5 0 0 1 10 0v5l1 1H4zM8 17h4',
+  sync: 'M15 7a6 6 0 0 0-10 1M5 13a6 6 0 0 0 10-1M15 3v4h-4M5 17v-4h4',
+  repo: 'M7 6l-4 4 4 4M13 6l4 4-4 4M11 4l-2 12',
+  person: 'M10 3a3 3 0 1 0 0 6a3 3 0 1 0 0-6M4 17a6 6 0 0 1 12 0',
+  inbox: 'M3 11h4l1 2h4l1-2h4M5 4h10l2 7v6H3v-6z',
+  logs: 'M4 5h12M4 9h12M4 13h8M4 17h10',
+  town: 'M3 9l7-5 7 5v8H3z',
+  door: 'M5 17V3h10v14M3 17h14M12 10h0',
+  back: 'M12 5l-5 5 5 5'
+};
+const FLEET = 'https://fleet.bnei.dev/';
 const POLL = 15e3; // between reads while the page is visible; doubled after a failure, to a minute
 const STALE = 6 * 3600e3; // no event for this long: the page says so
-const NEEDS_SHOWN = 5;
-const ENTRIES_SHOWN = 100;
+const SIDE_SHOWN = 5;
+const POSTS_SHOWN = 60;
+const VIEWS_KEPT = 20;
 
 // ---- pure (www/dev/core.test.mjs)
 
@@ -33,29 +51,70 @@ export function rel(t, now = Date.now()) {
   return `${Math.floor(s / 86400)}d`;
 }
 
-/** route is what a path shows: the timeline, or one thread. */
+/** route is what a path shows: one thread, or a tab of the timeline (needs, all or a kind). */
 export function route(path, search = '') {
   const id = /^\/feed\/([a-z]{1,16}-[0-9a-f]{16})$/.exec(path)?.[1];
-  const kind = new URLSearchParams(search).get('kind');
-  return id ? { id } : { kind: Object.hasOwn(KINDS, kind ?? '') ? kind : '' };
+  if (id) return { id };
+  const q = new URLSearchParams(search),
+    kind = q.get('kind') ?? '';
+  return { tab: Object.hasOwn(KINDS, kind) ? kind : q.get('tab') === 'needs' ? 'needs' : 'all' };
 }
 
-/** titleOf is a thread's title without the kind its chip already says. */
+const pathOf = tab =>
+  tab === 'all' ? '/feed' : tab === 'needs' ? '/feed?tab=needs' : `/feed?kind=${tab}`;
+const kindOf = id => id.split('-')[0];
+const kindWord = kind => (Object.hasOwn(KINDS, kind) ? KINDS[kind][0] : clean(kind));
+
+/** titleOf is a thread's title without the kind its account already says. */
 export function titleOf(t) {
   const title = clean(t.title),
     prefix = Object.hasOwn(KINDS, t.kind) ? KINDS[t.kind][2] : '';
   return prefix && title.startsWith(prefix) ? title.slice(prefix.length) : title;
 }
 
-/** speaker is who an entry is from. A quoted entry is outside's, whoever relayed it, unless an agent or the owner posted it. */
-export function speaker(e) {
-  const who = clean(e.actor).trim();
-  if (who === 'owner') return { who: 'owner', name: 'You', mark: 'Y' };
+/** speaker is who posted entry e of thread t: the system's account for the kind, an agent by its position's name, the
+ *  owner, or a laptop session (a Markdown entry: its own words). Quoted text has no speaker: it shows inside the post
+ *  that relays it. */
+export function speaker(e, t) {
+  const who = clean(e.actor).trim(),
+    first = s => ([...s][0] ?? '?').toUpperCase();
+  if (e.markdown) {
+    const name = clean(e.by).trim() || titleOf(t) || 'Session';
+    return { who: 'session', name, handle: 'session', mark: first(name) };
+  }
+  if (who === 'owner') return { who, name: 'You', handle: 'owner', mark: 'Y' };
   if (who !== '' && who !== 'system')
-    return { who: 'agent', name: who, mark: [...who][0].toUpperCase() };
-  return e.quoted
-    ? { who: 'outside', name: 'Outside', mark: '”' }
-    : { who: 'system', name: 'System', mark: 'S' };
+    return { who: 'agent', name: who, handle: 'agent', mark: first(who) };
+  const [, , , name, handle, icon] = Object.hasOwn(KINDS, t.kind)
+    ? KINDS[t.kind]
+    : ['', '', '', 'System', 'system', 'logs'];
+  return { who: 'system', name, handle, icon };
+}
+
+/** posts groups a thread's entries: a quoted entry joins the system's post of the same moment it came with (its quoted
+ *  card), else it is a post of the system's account holding only that card. A session's words and a claim stand alone.
+ *  A login shows once: on the words when there are words. */
+export function posts(t) {
+  const out = [];
+  (t.entries ?? []).forEach((e, i) => {
+    const last = out[out.length - 1],
+      system = !e.actor || e.actor === 'system';
+    if (e.claim || e.markdown) out.push({ i, e, quotes: [] });
+    else if (
+      e.quoted &&
+      system &&
+      last &&
+      !last.e.claim &&
+      !last.e.markdown &&
+      last.system &&
+      last.e.time === e.time
+    )
+      last.quotes.push(e);
+    else if (e.quoted) out.push({ i, e: { ...e, text: '', by: '' }, quotes: [e], system });
+    else out.push({ i, e, quotes: [], system });
+  });
+  for (const p of out) if (p.quotes.some(q => q.by && q.by === p.e.by)) p.e = { ...p.e, by: '' };
+  return out;
 }
 
 const LINKS = {
@@ -72,32 +131,19 @@ export function linkOf(l) {
   const ref = clean(l.ref),
     label = Object.hasOwn(LINKS, l.kind) ? LINKS[l.kind] : clean(l.kind);
   if (!l.quoted && /^[a-z]{1,16}-[0-9a-f]{16}$/.test(ref)) {
-    const title = l.title ? titleOf({ kind: ref.split('-')[0], title: l.title }) : '';
+    const title = l.title ? titleOf({ kind: kindOf(ref), title: l.title }) : '';
     return { label, href: `/feed/${ref}`, title, quoted: Boolean(l.title_quoted) };
   }
-  if (/^https:\/\//i.test(ref)) {
-    try {
-      const u = new URL(ref);
-      if (u.protocol === 'https:' && !u.username && !u.password)
-        return {
-          label,
-          href: u.href,
-          out: true,
-          host: u.host,
-          rest: u.pathname === '/' ? '' : u.pathname
-        };
-    } catch {
-      /* not a URL: text */
-    }
-  }
+  const u = httpsURL(ref);
+  if (u)
+    return {
+      label,
+      href: u.href,
+      out: true,
+      host: u.host,
+      rest: u.pathname === '/' ? '' : u.pathname
+    };
   return { label, rest: l.kind === 'revision' ? ref.slice(0, 12) : ref.slice(0, 200) };
-}
-
-/** byOf is who to show on entry i: its login, unless the next entry (the words written with that act) says it. */
-export function byOf(es, i) {
-  const e = es[i],
-    n = es[i + 1];
-  return e.by && !(n?.by === e.by && n.time === e.time && n.quoted) ? clean(e.by).slice(0, 64) : '';
 }
 
 export const sig = t => `${t.last_activity_at}|${t.needs_owner}|${t.state}`;
@@ -120,10 +166,10 @@ export function lastEvent(age, now = Date.now()) {
   return Number.isNaN(newest) ? stored : Math.min(stored, newest);
 }
 
-/** long is whether a text is worth folding. */
+/** isLong is whether a text is worth folding. */
 export const isLong = s => s.length > 480 || s.split('\n').length > 8;
 
-// ---- the page
+// ---- the page's parts
 
 const $ = id => document.getElementById(id);
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -134,374 +180,613 @@ async function get(path) {
   return r.json();
 }
 
-/** when is a relative time; the absolute one shows on hover and focus. Only a thread's are tab stops: a card's shows
- *  while its link has the focus. */
+function icon(name) {
+  const ns = 'http://www.w3.org/2000/svg',
+    s = document.createElementNS(ns, 'svg'),
+    p = document.createElementNS(ns, 'path');
+  s.setAttribute('viewBox', '0 0 20 20');
+  s.setAttribute('class', 'icon');
+  s.setAttribute('aria-hidden', 'true');
+  p.setAttribute('d', ICONS[name]);
+  s.append(p);
+  return s;
+}
+
+/** when is a relative time; the absolute one shows on hover and, in a thread, on focus or a tap. */
 function when(iso, stop = false) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return el('span', { class: 'when' }, '?');
   const abs = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
-  return el(
+  const t = el(
     'time',
     { class: 'when', datetime: d.toISOString(), 'data-abs': abs, tabindex: stop ? '0' : null },
     el('span', { 'aria-hidden': 'true', 'data-t': d.getTime() }, rel(d.getTime())),
     el('span', { class: 'sr' }, abs)
   );
+  if (stop) t.addEventListener('click', () => t.focus()); // a tap does not focus it by itself on iOS
+  return t;
 }
 
-const mark = kind => el('span', { class: 'k', 'data-kind': kind, 'aria-hidden': 'true' });
-const kindName = kind => (Object.hasOwn(KINDS, kind) ? KINDS[kind][0] : clean(kind));
-const badge = t => el('span', { class: 'badge' }, t.state === 'open' ? 'open' : 'closed');
-
-/** text is a paragraph of an event's words, or a quote of them when they are from outside. */
-function text(s, quoted, cls = '') {
-  const p = el('p', { class: `text ${cls}`, dir: 'auto' }, clean(s));
-  return quoted ? el('blockquote', {}, p) : p;
-}
-
-/** folded is text with the rest behind a button, when it is long. */
-function folded(s, quoted) {
-  const t = clean(s);
-  if (!isLong(t)) return text(t, quoted);
-  const box = text(t, quoted, 'clamp'),
-    p = quoted ? box.firstChild : box;
-  const b = el(
-    'button',
-    { type: 'button', class: 'more', 'aria-expanded': 'false' },
-    `Show all ${t.length.toLocaleString()} characters`
+const avatar = s =>
+  el(
+    'span',
+    { class: 'avatar', 'data-who': s.who, 'data-handle': s.handle, 'aria-hidden': 'true' },
+    s.icon ? icon(s.icon) : s.mark
   );
-  b.addEventListener('click', () => {
-    const open = p.classList.toggle('clamp') === false;
-    b.setAttribute('aria-expanded', String(open));
-    b.textContent = open ? 'Show less' : `Show all ${t.length.toLocaleString()} characters`;
-  });
-  return [box, b];
-}
-
-/** title: one from outside looks quoted and is announced as quoted. */
-const title = t => [
-  t.title_quoted ? el('span', { class: 'sr' }, 'quoted: ') : null,
-  el('span', { class: t.title_quoted ? 'qt text clamp' : 'text clamp', dir: 'auto' }, titleOf(t))
-];
-
+const chip = (words, cls = '') => el('span', { class: `tag ${cls}` }, words);
+const sr = words => el('span', { class: 'sr' }, words);
 /** quotedBy is a login, in quotation marks: it is from outside too. */
 const quotedBy = by =>
-  by ? [el('span', { class: 'sr' }, 'by '), el('q', { class: 'by', dir: 'auto' }, by)] : null;
+  by ? [' by ', el('q', { class: 'by', dir: 'auto' }, clean(by).slice(0, 64))] : null;
 
-function card(t) {
-  const last = t.entries?.at(-1);
+/** folded is text with the rest behind a button, when it is long. */
+function folded(s, whole) {
+  const t = clean(s),
+    p = el('p', { class: 'text', dir: 'auto' }, t);
+  if (!isLong(t)) return p;
+  p.classList.add('clamp');
+  return whole ? [p, more(p, 'clamp', `Show all ${t.length.toLocaleString()} characters`)] : p;
+}
+
+/** more is the button that unfolds a node: X's "Show more". */
+function more(node, cls, words = 'Show more') {
+  const b = el('button', { type: 'button', class: 'more', 'aria-expanded': 'false' }, words);
+  b.addEventListener('click', e => {
+    e.preventDefault();
+    const open = node.classList.toggle(cls) === false;
+    b.setAttribute('aria-expanded', String(open));
+    b.textContent = open ? 'Show less' : words;
+  });
+  return b;
+}
+
+/** quoteCard is X's quoted post: what came from outside, as a quote, under whose words it is. */
+function quoteCard(head, quotes, whole, by) {
   return el(
-    'li',
-    { class: 'card', 'data-id': t.id },
+    'blockquote',
+    { class: 'quoted' },
     el(
-      'div',
-      { class: 'line' },
-      mark(t.kind),
-      el('span', {}, kindName(t.kind)),
-      badge(t),
-      when(t.last_activity_at)
+      'p',
+      { class: 'qhead' },
+      head,
+      by ? [' · ', el('q', { class: 'by', dir: 'auto' }, clean(by).slice(0, 64))] : null
     ),
-    el('h3', {}, el('a', { href: `/feed/${encodeURIComponent(t.id)}` }, title(t))),
-    last
+    quotes.map(q => folded(q, whole))
+  );
+}
+
+/** words is a post's body: the system's line, a session's Markdown (its first lines in a timeline), an agent's text. */
+function words(p, whole) {
+  const { e } = p,
+    out = [];
+  if (e.markdown) {
+    const text = clean(e.text),
+      md = el('blockquote', { class: 'own' }, markdown(text));
+    out.push(md);
+    if (!whole && (text.length > 320 || text.split('\n').length > 6)) {
+      md.classList.add('fold');
+      out.push(more(md, 'fold'));
+    }
+  } else if (e.text) {
+    const b = folded(e.text, whole);
+    if (e.by) (Array.isArray(b) ? b[0] : b).append(...quotedBy(e.by));
+    out.push(b);
+  }
+  if (p.quotes.length)
+    out.push(
+      quoteCard(
+        'Quoted',
+        p.quotes.map(q => q.text),
+        whole,
+        p.quotes.find(q => q.by)?.by
+      )
+    );
+  return out.flat();
+}
+
+/** postRef is the id of another post of a thread, as a link may name it. */
+const postRef = id => (/^[\w-]{1,64}$/.test(clean(id)) ? clean(id) : '');
+export const asks = e => Boolean(e.asks_owner || e.needs_list?.length);
+
+/** mark is a chip, a link to another post of thread t when it names one. */
+function mark(words, cls, t, id) {
+  const to = postRef(id);
+  return to
+    ? el('a', { class: `tag ${cls}`, href: `/feed/${encodeURIComponent(t.id)}#${to}` }, words)
+    : chip(words, cls);
+}
+
+function marks(e, t) {
+  return [
+    e.markdown ? chip('laptop session') : null,
+    asks(e) ? chip('asks you', 'hot') : null,
+    e.correction ? mark('correction', 'fix', t, e.corrects) : null,
+    e.corrected_by ? mark('corrected', 'fix', t, e.corrected_by) : null
+  ];
+}
+
+/** asked is who asks the owner, and what for, as the session itself puts it. */
+function asked(e, s) {
+  if (!asks(e)) return null;
+  const list = Array.isArray(e.needs_list) ? e.needs_list.slice(0, 20) : [];
+  return el(
+    'div',
+    { class: 'asked' },
+    el(
+      'p',
+      {},
+      'asked by ',
+      el('q', { class: 'by', dir: 'auto' }, s.name.slice(0, 80)),
+      ', in its own words',
+      list.length ? ':' : ''
+    ),
+    list.length
       ? el(
-          'div',
-          { class: 'last' },
-          ['agent', 'owner'].includes(speaker(last).who)
-            ? el('b', { dir: 'auto' }, speaker(last).name.slice(0, 40))
-            : el('span', { class: 'sr' }, `${speaker(last).name}: `),
-          text(last.text, last.quoted, 'clamp'),
-          last.by ? el('div', { class: 'line' }, quotedBy(byOf([last], 0))) : null
+          'ul',
+          {},
+          list.map(n => el('li', { dir: 'auto' }, clean(n).slice(0, 300)))
         )
       : null
   );
 }
 
-function state(head, body, ...more) {
-  return el('div', { class: 'state' }, el('b', {}, head), body, ...more.map(m => el('div', {}, m)));
-}
-
-function retry(f) {
-  const b = el('button', { type: 'button' }, 'Try again');
-  b.addEventListener('click', f);
-  return b;
-}
-
-// ---- the timeline
-
-const list = { shown: new Map(), needs: [], next: '', tail: '', needsOpen: false };
-
-async function readList(kind, cursor = '') {
-  const q = new URLSearchParams({ needs: '0', limit: '50' });
-  if (kind) q.set('kind', kind);
-  if (cursor) q.set('cursor', cursor);
-  if (cursor) return { rest: await get(`/api/feed?${q}`) };
-  const n = new URLSearchParams({ needs: '1', limit: '200' });
-  if (kind) n.set('kind', kind);
-  const [needs, rest] = await Promise.all([get(`/api/feed?${n}`), get(`/api/feed?${q}`)]);
-  return { needs, rest };
-}
-
-function drawList(kind, { needs, rest }) {
-  list.shown = new Map([...needs.threads, ...rest.threads].map(t => [t.id, sig(t)]));
-  list.needs = needs.threads.map(t => t.id);
-  list.next = rest.next_cursor;
-  list.tail = list.next ? rest.threads.at(-1)?.last_activity_at : '';
-  const n = needs.threads.length,
-    many = `${n}${needs.next_cursor ? '+' : ''}`;
-  document.title = `${n ? `(${many}) ` : ''}${kind ? KINDS[kind][1] : 'Feed'} · ukubi`;
-  const out = [];
-  if (n) {
-    const ol = el(
-      'ol',
-      { class: 'cards needs', role: 'list', 'aria-labelledby': 'needs' },
-      needs.threads.map(card)
-    );
-    out.push(el('h2', { id: 'needs' }, `Needs you · ${many}`), ol);
-    if (n > NEEDS_SHOWN && !list.needsOpen) {
-      const rows = [...ol.children].slice(NEEDS_SHOWN);
-      for (const r of rows) r.hidden = true;
-      const b = el(
-        'button',
-        { type: 'button', class: 'wide' },
-        `Show ${n - NEEDS_SHOWN} more that need you`
-      );
-      b.addEventListener('click', () => {
-        list.needsOpen = true;
-        for (const r of rows) r.hidden = false;
-        b.remove();
-        rows[0].querySelector('a').focus();
-      });
-      out.push(b);
-    }
-  }
-  if (rest.threads.length) {
-    out.push(
-      el('h2', { id: 'latest' }, n ? 'Everything else' : 'Latest'),
-      el(
-        'ol',
-        { class: 'cards', role: 'list', id: 'rows', 'aria-labelledby': 'latest' },
-        rest.threads.map(card)
-      )
-    );
-  } else if (!n) {
-    out.push(
-      state(
-        kind ? `No ${KINDS[kind][1].toLowerCase()} yet` : 'Nothing yet',
-        'What happens shows up here, newest first.'
-      )
-    );
-  } else {
-    out.push(el('p', { class: 'end' }, 'Nothing else.'));
-  }
-  const foot = el('div', { id: 'foot' });
-  out.push(foot);
-  $('view').replaceChildren(
-    el('h1', { class: 'sr' }, kind ? KINDS[kind][1] : 'Feed'),
-    ...out.flat()
+/** head is a post's first line: name, handle, time, and what is marked on it. */
+function head(s, time, tags) {
+  return el(
+    'div',
+    { class: 'head' },
+    el('h3', { class: 'name', dir: 'auto' }, s.name.slice(0, 80)),
+    s.who === 'session' ? sr(', a laptop session,') : null,
+    el('span', { class: 'handle' }, `@${s.handle}`),
+    el('span', { class: 'dotsep', 'aria-hidden': 'true' }, '·'),
+    time,
+    tags
   );
-  drawFoot(kind, rest);
 }
 
-function drawFoot(kind, rest) {
-  const foot = $('foot');
-  if (list.next) {
-    const b = el('button', { type: 'button', class: 'wide' }, 'Load more');
-    b.addEventListener('click', async () => {
-      b.disabled = true;
-      b.textContent = 'Loading…';
-      try {
-        const { rest: more } = await readList(kind, list.next);
-        const at = $('rows').children.length;
-        // a thread that moved while paging is already above: it is not drawn twice
-        const rows = more.threads.filter(t => !list.shown.has(t.id));
-        $('rows').append(...rows.map(card));
-        for (const t of rows) list.shown.set(t.id, sig(t));
-        list.next = more.next_cursor;
-        list.tail = list.next ? more.threads.at(-1)?.last_activity_at : '';
-        drawFoot(kind, more);
-        $('rows').children[at]?.querySelector('a').focus({ preventScroll: true });
-      } catch (e) {
-        b.disabled = false;
-        b.textContent = 'Could not load more. Try again';
-        failed(e);
-      }
-    });
-    return foot.replaceChildren(b);
-  }
-  const held = rest.dropped
-    ? `The feed keeps 30 days at most; ${plural(rest.dropped, 'older event')} made room for newer ones.`
-    : 'That is everything. The feed keeps 30 days at most.';
-  foot.replaceChildren(list.shown.size ? el('p', { class: 'end' }, held) : '');
-}
-
-// ---- one thread
-
-const thread = { shown: 0, all: false, sig: '' };
-
-const keyOf = t => `${sig(t)}|${t.entries.length}|${t.title}|${t.links?.length ?? 0}`;
-
-function entry(es, i) {
-  const e = es[i],
-    s = speaker(e);
+/** post is a thread in the timeline: its newest post, the whole of it opening the thread (through the time's link, as
+ *  on X), but for its own links and buttons. */
+function post(t) {
+  const p = posts({ ...t, entries: (t.entries ?? []).slice(-1) })[0] ?? {
+      e: { actor: 'system', text: '' },
+      quotes: []
+    },
+    s = speaker(p.e, t),
+    title = titleOf(t);
+  const open = el(
+    'a',
+    { class: 'open', href: `/feed/${encodeURIComponent(t.id)}` },
+    sr(`Open ${kindWord(t.kind)} ${title.slice(0, 120)}, `),
+    when(t.last_activity_at)
+  );
+  const body = words(p, false);
+  if (s.who === 'system') {
+    // what it is about: a system title is the post's first line, one from outside its quoted card
+    if (!t.title_quoted) body.unshift(el('p', { class: 'text about', dir: 'auto' }, title));
+    else if (p.quotes.length)
+      body[body.length - 1]
+        .querySelector('.qhead')
+        .after(el('p', { class: 'text about clamp', dir: 'auto' }, title));
+    else body.push(quoteCard('Quoted', [title], false));
+  } else if (s.who !== 'session')
+    body.push(
+      t.title_quoted
+        ? quoteCard('Quoted', [title], false)
+        : el('p', { class: 'text about', dir: 'auto' }, title)
+    );
   return el(
     'li',
-    { class: 'entry', 'data-who': s.who, 'data-i': i, tabindex: '-1' },
-    el('span', { class: 'tile', 'aria-hidden': 'true' }, s.mark),
+    { class: 'post', 'data-id': t.id, 'data-who': s.who },
+    avatar(s),
     el(
       'div',
-      {},
-      el(
-        'div',
-        { class: 'line' },
-        el('b', { dir: 'auto' }, s.name),
-        s.who === 'agent' ? el('span', { class: 'badge' }, 'agent') : null,
-        e.quoted ? el('span', {}, s.who === 'outside' ? 'quoted' : 'quoted text') : null,
-        el('span', { class: 'right' }, quotedBy(byOf(es, i)), when(e.time, true))
-      ),
-      el('div', { class: 'body' }, folded(e.text, e.quoted))
+      { class: 'body' },
+      asked(p.e, s),
+      head(s, open, [
+        t.needs_owner && !asks(p.e) ? chip('needs you', 'hot') : null,
+        ...marks(p.e, t)
+      ]),
+      body
     )
   );
 }
 
-function linkItem(l) {
-  const k = linkOf(l);
-  const parts = [
-    el('b', { dir: 'auto' }, k.label),
-    k.title
+/** reply is one post of a thread's page. */
+function reply(p, t, isNew) {
+  const { e } = p;
+  if (e.claim) {
+    const ref = /^session-[0-9a-f]{16}$/.test(clean(e.ref)) ? `/feed/${clean(e.ref)}` : null,
+      by = el('q', { class: 'by', dir: 'auto' }, clean(e.by || e.text).slice(0, 80));
+    return el(
+      'li',
+      { class: 'post claim', 'data-i': p.i, tabindex: '-1' },
+      el('span', { class: 'bullet', 'aria-hidden': 'true' }),
+      el(
+        'p',
+        { class: 'text' },
+        'mentioned by ',
+        ref ? el('a', { href: ref }, by) : by,
+        ' ',
+        when(e.time, true)
+      )
+    );
+  }
+  const s = speaker(e, t);
+  return el(
+    'li',
+    {
+      class: `post${isNew ? ' fresh' : ''}`,
+      'data-who': s.who,
+      'data-i': p.i,
+      'data-post': postRef(e.id),
+      tabindex: '-1'
+    },
+    avatar(s),
+    el(
+      'div',
+      { class: 'body' },
+      asked(e, s),
+      head(s, when(e.time, true), [s.who === 'agent' ? chip('agent') : null, ...marks(e, t)]),
+      words(p, true)
+    )
+  );
+}
+
+function linkCard(l) {
+  const k = linkOf(l),
+    title = k.title
       ? [
-          k.quoted ? el('span', { class: 'sr' }, 'quoted: ') : null,
+          k.quoted ? sr('quoted: ') : null,
           el('span', { class: k.quoted ? 'to qt' : 'to', dir: 'auto' }, k.title)
         ]
-      : null,
-    k.host ? el('span', { class: 'mono host' }, k.host) : null,
-    k.rest ? el('span', { class: 'mono faint' }, k.rest) : null
+      : null;
+  const inner = [
+    el('span', { class: 'what', dir: 'auto' }, k.label),
+    title,
+    k.host ? el('span', { class: 'host' }, k.host) : null,
+    k.rest ? el('span', { class: 'rest' }, k.rest) : null
   ];
-  if (!k.href) return el('li', {}, el('span', { class: 'ref' }, parts));
+  if (!k.href) return el('li', {}, el('span', { class: 'ref' }, inner));
   return el(
     'li',
     {},
     k.out
       ? el(
           'a',
-          { class: 'out', href: k.href, target: '_blank', rel: 'noopener noreferrer' },
-          parts,
-          el('span', { 'aria-hidden': 'true' }, '↗'),
-          el('span', { class: 'sr' }, '(opens another site)')
+          { class: 'ref', href: k.href, target: '_blank', rel: 'noopener noreferrer' },
+          inner,
+          sr(' (opens another site)'),
+          el('span', { class: 'out', 'aria-hidden': 'true' }, '↗')
         )
-      : el('a', { href: k.href }, parts)
+      : el('a', { class: 'ref', href: k.href }, inner)
   );
 }
 
-function drawThread(t) {
-  const es = t.entries ?? [],
-    from = thread.all ? 0 : Math.max(0, es.length - ENTRIES_SHOWN);
-  const old = thread.shown;
-  thread.shown = es.length;
-  thread.sig = keyOf(t);
-  document.title = `${t.needs_owner ? '(!) ' : ''}${titleOf(t).slice(0, 80)} · Feed`;
-  crumbs(`${kindName(t.kind)} thread`);
-  const rows = es.slice(from).map((_, i) => entry(es, from + i));
-  if (old) for (const r of rows) if (Number(r.dataset.i) >= old) r.classList.add('fresh');
-  let earlier = null;
-  if (from) {
-    earlier = el('button', { type: 'button', class: 'wide' }, `Show ${from} earlier`);
-    earlier.addEventListener('click', () => {
-      thread.all = true;
-      drawThread(t);
-      $('view').querySelector('.entry')?.focus();
-    });
+function state(title, body, ...extra) {
+  return el(
+    'div',
+    { class: 'state' },
+    el('b', {}, title),
+    el('span', {}, body),
+    ...extra.map(m => el('div', {}, m))
+  );
+}
+
+function button(words, f, cls = 'chip') {
+  const b = el('button', { type: 'button', class: cls }, words);
+  b.addEventListener('click', f);
+  return b;
+}
+
+// ---- views: each route's own element and state, kept so that back finds it as it was
+
+const views = new Map(); // path and search -> view
+let cur = null;
+
+function viewOf(url) {
+  const key = url.pathname + url.search;
+  let v = views.get(key);
+  if (!v) {
+    v = {
+      key,
+      ...route(url.pathname, url.search),
+      el: el('div', { class: 'view' }),
+      y: 0,
+      pending: null,
+      drawn: false,
+      over: false
+    };
+    v.el.append(el('p', { class: 'state' }, 'Reading…'));
+    if (v.tab) Object.assign(v, { shown: new Map(), next: '', tail: '' });
+    else Object.assign(v, { n: 0, sig: '', all: false, name: '' });
   }
-  const ttl = titleOf(t);
-  $('view').replaceChildren(
-    el('a', { class: 'back', href: '/feed' }, '← Feed'),
+  views.delete(key); // the newest last
+  views.set(key, v);
+  for (const k of views.keys()) {
+    if (views.size <= VIEWS_KEPT) break;
+    views.delete(k);
+  }
+  return v;
+}
+
+// ---- a tab of the timeline
+
+function listPath(v, cursor = '') {
+  const q = new URLSearchParams({ limit: '50' });
+  if (v.tab === 'needs') q.set('needs', '1');
+  else if (v.tab !== 'all') q.set('kind', v.tab);
+  if (cursor) q.set('cursor', cursor);
+  return `/api/feed?${q}`;
+}
+
+const tabName = tab => (tab === 'needs' ? 'Needs you' : tab === 'all' ? 'All' : KINDS[tab][1]);
+
+function drawList(v, d) {
+  v.shown = new Map(d.threads.map(t => [t.id, sig(t)]));
+  v.next = d.next_cursor;
+  v.tail = v.next ? d.threads[d.threads.length - 1]?.last_activity_at : '';
+  v.drawn = true;
+  if (!d.threads.length) {
+    const what =
+      v.tab === 'needs'
+        ? state('Nothing needs you', 'What waits for your answer shows up here.')
+        : state(
+            v.tab === 'all' ? 'Nothing yet' : `No ${tabName(v.tab).toLowerCase()} yet`,
+            'What happens shows up here, newest first.'
+          );
+    return v.el.replaceChildren(what);
+  }
+  const ol = el(
+      'ol',
+      { class: 'posts', role: 'list', 'aria-label': `Posts: ${tabName(v.tab)}` },
+      d.threads.map(post)
+    ),
+    foot = el('div', { class: 'foot' });
+  v.el.replaceChildren(ol, foot);
+  drawFoot(v, ol, foot, d);
+}
+
+function drawFoot(v, ol, foot, d) {
+  if (!v.next) {
+    return foot.replaceChildren(
+      el(
+        'p',
+        {},
+        d.dropped
+          ? `The feed keeps 30 days at most; ${plural(d.dropped, 'older event')} made room for newer ones.`
+          : 'That is everything. The feed keeps 30 days at most.'
+      )
+    );
+  }
+  const b = button('Load more', async () => {
+    b.disabled = true;
+    b.textContent = 'Loading…';
+    try {
+      const m = await get(listPath(v, v.next)),
+        at = ol.children.length,
+        rows = m.threads.filter(t => !v.shown.has(t.id)); // one that moved while paging is already above
+      ol.append(...rows.map(post));
+      for (const t of rows) v.shown.set(t.id, sig(t));
+      v.next = m.next_cursor;
+      v.tail = v.next ? m.threads[m.threads.length - 1]?.last_activity_at : '';
+      drawFoot(v, ol, foot, m);
+      ol.children[at]?.querySelector('.open').focus({ preventScroll: true });
+    } catch (e) {
+      b.disabled = false;
+      b.textContent = 'Could not load more. Try again';
+      failed(e);
+    }
+  });
+  foot.replaceChildren(b);
+}
+
+// ---- a thread
+
+/** jump goes to the post the address names (#id): a correction's, or the corrected one. */
+function jump(v) {
+  const id = postRef(location.hash.slice(1));
+  if (!id || !v.t) return;
+  const at = () => [...v.el.querySelectorAll('.post')].find(p => p.dataset.post === id);
+  if (!at() && !v.all && (v.t.entries ?? []).some(e => e.id === id)) {
+    v.all = true;
+    drawThread(v, v.t);
+  }
+  at()?.focus({ preventScroll: true });
+  at()?.scrollIntoView({ block: 'center' });
+}
+
+const keyOf = t => `${sig(t)}|${(t.entries ?? []).length}|${t.title}|${t.links?.length ?? 0}`;
+
+function drawThread(v, t) {
+  const ps = posts(t),
+    from = v.all ? 0 : Math.max(0, ps.length - POSTS_SHOWN),
+    old = v.n;
+  v.n = (t.entries ?? []).length;
+  v.sig = keyOf(t);
+  v.t = t;
+  v.drawn = true;
+  v.name = `${t.needs_owner ? '(!) ' : ''}${titleOf(t).slice(0, 80)}`;
+  const isSession = ps.some(p => p.e.markdown),
+    s = speaker({ actor: 'system', markdown: isSession }, t),
+    title = titleOf(t),
+    long = title.length > 160;
+  const name = el('p', { class: 'text about', dir: 'auto' }, title);
+  if (long) name.classList.add('clamp');
+  const main = t.title_quoted && !isSession ? quoteCard('Quoted', [], true) : el('div', {});
+  main.append(
+    name,
+    ...(long
+      ? [more(name, 'clamp', `Whole title, ${title.length.toLocaleString()} characters`)]
+      : [])
+  );
+  let earlier = '';
+  if (from) {
+    earlier = button(
+      `Show ${from} earlier`,
+      () => {
+        v.all = true;
+        drawThread(v, t);
+        v.el.querySelector('.thread .post')?.focus();
+      },
+      'chip wide'
+    );
+  }
+  const links = [...(t.links ?? [])].map(linkCard);
+  if (t.kind === 'session' || t.kind === 'card')
+    links.push(linkCard({ kind: 'Fleet console', ref: FLEET, quoted: false }));
+  const opened = new Date(t.opened_at);
+  v.el.replaceChildren(
     el(
-      'header',
-      { class: 'thead' },
+      'article',
+      { class: 'main', 'aria-label': `${kindWord(t.kind)} thread` },
       el(
         'div',
-        { class: 'line' },
-        mark(t.kind),
-        el('span', {}, kindName(t.kind)),
-        badge(t),
-        t.needs_owner ? el('span', { class: 'badge hot' }, 'needs you') : null,
-        el('span', { class: 'right' }, 'opened ', when(t.opened_at, true))
+        { class: 'mainhead' },
+        avatar(s),
+        el(
+          'div',
+          {},
+          el('h2', { class: 'name', dir: 'auto' }, s.name.slice(0, 80)),
+          el('span', { class: 'handle' }, `@${s.handle}`)
+        ),
+        el(
+          'span',
+          { class: 'tags' },
+          isSession ? chip('laptop session') : null,
+          t.needs_owner ? chip('needs you', 'hot') : null,
+          chip(t.state === 'open' ? 'open' : 'closed')
+        )
       ),
-      el('h1', {}, title(t)),
-      ttl.length > 200
-        ? el(
-            'details',
-            {},
-            el('summary', {}, `Whole title, ${ttl.length.toLocaleString()} characters`),
-            text(ttl, t.title_quoted)
-          )
-        : null,
-      t.links?.length
-        ? el('ul', { class: 'linked', role: 'list', 'aria-label': 'Links' }, t.links.map(linkItem))
-        : null
-    ),
-    earlier ?? '',
-    el('h2', { class: 'sr' }, 'Entries'),
-    rows.length
-      ? el('ol', { class: 'entries', role: 'list' }, rows)
-      : state('No entries', 'This thread holds nothing yet.'),
-    // slice 5 puts the reply box here
-    el(
-      'section',
-      { id: 'reply', 'aria-label': 'Reply' },
-      'Read only for now: replies come here. Sessions and cards are answered in the ',
+      isSession ? null : main,
       el(
-        'a',
-        { href: 'https://fleet.bnei.dev/', target: '_blank', rel: 'noopener noreferrer' },
-        'fleet console ↗'
+        'p',
+        { class: 'abs' },
+        Number.isNaN(opened.getTime())
+          ? 'opened ?'
+          : el(
+              'time',
+              { datetime: opened.toISOString() },
+              `${opened.toLocaleTimeString(undefined, { timeStyle: 'short' })} · ${opened.toLocaleDateString(undefined, { dateStyle: 'medium' })}`
+            ),
+        ` · ${kindWord(t.kind)}`
       ),
-      '.'
-    )
+      links.length ? el('ul', { class: 'links', role: 'list', 'aria-label': 'Links' }, links) : null
+    ),
+    // where the reply box goes (slice 5)
+    el(
+      'div',
+      { class: 'replybox', role: 'group', 'aria-label': 'Reply', 'aria-disabled': 'true' },
+      avatar({ who: 'owner', handle: 'owner', mark: 'Y' }),
+      el('span', {}, 'Replies come later')
+    ),
+    earlier,
+    ps.length
+      ? el(
+          'ol',
+          { class: 'posts thread', role: 'list', 'aria-label': 'Posts in this thread' },
+          ps.slice(from).map(p => reply(p, t, old > 0 && p.i >= old))
+        )
+      : state('No posts', 'This thread holds nothing yet.')
   );
 }
 
-// ---- both
+// ---- the frame: tabs, destinations, the side, the words about freshness
 
-const at = globalThis.location ? route(location.pathname, location.search) : {};
-let pending = null, // what the last read found and the page does not show yet
-  age = null, // the last answer's age, and when it came
+let age = null, // the last answer's age, and when it came
   wait = POLL,
   timer = 0,
   down = null, // the read failure on show
-  over = false, // signed out: nothing more is read
-  drawn = false;
+  stopped = false, // signed out: nothing more is read
+  needs = null; // the last list of what needs the owner
 
-function crumbs(here) {
-  const ol = el('ol', { class: 'crumbs' });
-  const items = [
-    el('a', { href: '/' }, 'ukubi'),
-    here ? el('a', { href: '/feed' }, 'feed') : el('span', { class: 'here' }, 'feed'),
-    here ? el('span', { class: 'here' }, here) : null
-  ].filter(Boolean);
-  items.forEach((c, i) => {
-    ol.append(el('li', {}, i ? el('span', { class: 'sep', 'aria-hidden': 'true' }, '›') : null, c));
-  });
-  $('crumbs').replaceChildren(ol);
+function needsCount() {
+  return needs ? `${needs.threads.length}${needs.next_cursor ? '+' : ''}` : '';
 }
 
-function kinds() {
-  const tab = (k, name) =>
-    el(
-      'li',
-      {},
-      el(
-        'a',
-        { href: k ? `/feed?kind=${k}` : '/feed', 'aria-current': at.kind === k ? 'page' : null },
-        k ? mark(k) : null,
-        name
-      )
+function frame() {
+  const n = needsCount(),
+    some = n !== '' && n !== '0';
+  const tab = k => {
+    const a = el(
+      'a',
+      { href: pathOf(k), 'aria-current': cur.tab === k ? 'page' : null },
+      tabName(k)
     );
-  $('kinds').replaceChildren(
+    if (k === 'needs' && some) a.append(el('span', { class: 'count' }, n));
+    return el('li', {}, a);
+  };
+  $('tabs').hidden = Boolean(cur.id);
+  if (!cur.id) {
+    const at = $('tabs').scrollLeft,
+      first = !$('tabs').firstChild;
+    $('tabs').replaceChildren(
+      el('ul', { role: 'list' }, ['needs', 'all', ...Object.keys(KINDS)].map(tab))
+    );
+    $('tabs').scrollLeft = at;
+    const now = $('tabs').querySelector('[aria-current]');
+    if ((first || $('tabs').dataset.tab !== cur.tab) && now)
+      $('tabs').scrollLeft = now.offsetLeft - ($('tabs').clientWidth - now.offsetWidth) / 2;
+    $('tabs').dataset.tab = cur.tab;
+  }
+  const dest = (href, words, ic, here, out) =>
     el(
-      'ul',
-      {},
-      tab('', 'All'),
-      Object.entries(KINDS).map(([k, v]) => tab(k, v[1]))
-    )
+      'a',
+      {
+        href,
+        'aria-current': here ? 'page' : null,
+        target: out ? '_blank' : null,
+        rel: out ? 'noopener noreferrer' : null
+      },
+      el('span', { class: 'pill' }, icon(ic)),
+      el('span', { class: 'label' }, words),
+      words === 'Needs you' && some ? el('span', { class: 'badge' }, n) : null
+    );
+  $('dest').replaceChildren(
+    dest('/feed', 'Feed', 'logs', cur.tab && cur.tab !== 'needs'),
+    dest('/feed?tab=needs', 'Needs you', 'inbox', cur.tab === 'needs'),
+    dest('/', 'Map', 'town', false),
+    dest(FLEET, 'Fleet', 'door', false, true)
   );
+  $('title').textContent = cur.id ? 'Post' : 'Feed';
+  $('back').hidden = !cur.id;
+  document.title = cur.id
+    ? `${cur.name || 'Post'} · Feed`
+    : `${some ? `(${n}) ` : ''}${cur.tab === 'all' ? 'Feed' : tabName(cur.tab)} · ukubi`;
+  // the side: what needs the owner, but on its own tab
+  const side = [];
+  if (needs && cur.tab !== 'needs') {
+    side.push(el('h2', {}, 'Needs you'));
+    if (some) {
+      side.push(
+        el(
+          'ul',
+          { role: 'list' },
+          needs.threads
+            .slice(0, SIDE_SHOWN)
+            .map(t =>
+              el(
+                'li',
+                {},
+                el(
+                  'a',
+                  { href: `/feed/${encodeURIComponent(t.id)}` },
+                  t.title_quoted ? sr('quoted: ') : null,
+                  el(
+                    'span',
+                    { class: t.title_quoted ? 'qt clamp' : 'clamp', dir: 'auto' },
+                    titleOf(t)
+                  ),
+                  el('small', {}, kindWord(t.kind), ' · ', rel(Date.parse(t.last_activity_at)))
+                )
+              )
+            )
+        )
+      );
+      if (needs.threads.length > SIDE_SHOWN)
+        side.push(el('a', { class: 'all', href: '/feed?tab=needs' }, `Show all ${n}`));
+    } else side.push(el('p', { class: 'unknown' }, 'nothing needs you'));
+  }
+  $('summary').replaceChildren(...side);
 }
 
 const span = ms =>
@@ -511,32 +796,34 @@ const span = ms =>
       ? plural(Math.round(ms / 3600e3), 'hour')
       : plural(Math.round(ms / 86400e3), 'day');
 
-/** banner says what makes the page less than current: a failed read, or a feed that has had nothing for long. Its text
- *  changes by the minute at most, so a screen reader hears it once. */
+const aged = now =>
+  age.v?.last_event_age == null ? null : age.v.last_event_age + (now - age.at) / 1000;
+
+/** banner says what makes the page less than current: a failed read, a feed with nothing in it, one with nothing new
+ *  for long. Its text changes by the minute at most, so a screen reader hears it once. */
 function banner() {
   const now = Date.now(),
     last = age && lastEvent({ ...age.v, last_event_age: aged(now) }, now);
-  let msg = '';
-  if (down && drawn)
+  let msg = '',
+    quiet = false;
+  if (down && cur.drawn)
     msg = `Not updating: the last answer came ${span(now - age.at)} ago. Trying again.`;
   else if (age && last === null)
     msg =
       'The feed has had no event since it started. It may still be reading, or the bridge may be out of reach.';
-  else if (age && now - last > STALE) msg = `Last event ${span(now - last)} ago`;
+  else if (age && now - last > STALE) {
+    msg = `Last event ${span(now - last)} ago`;
+    quiet = true;
+  }
   if ($('banner').dataset.msg !== msg) {
     $('banner').dataset.msg = msg;
-    $('banner').replaceChildren(
-      msg ? el('p', { class: msg.startsWith('Last') ? 'quiet' : '' }, msg) : ''
-    );
+    $('banner').replaceChildren(msg ? el('p', { class: quiet ? 'quiet' : '' }, msg) : '');
   }
   $('fresh').textContent =
     last && now - last <= STALE ? `Last event ${rel(last, now)} ago`.replace('now ago', 'now') : '';
   for (const s of document.querySelectorAll('[data-t]'))
     s.textContent = rel(Number(s.dataset.t), now);
 }
-
-const aged = now =>
-  age.v?.last_event_age == null ? null : age.v.last_event_age + (now - age.at) / 1000;
 
 function failed(e) {
   console.warn('feed:', e.message);
@@ -549,118 +836,180 @@ async function lapsed(e) {
   if (e.status && e.status !== 403 && e.status !== 401) return false;
   const r = await gateLapsed();
   if (r !== 'signed-out' && !(e.status === 403 && (await signedOut()))) return r;
-  over = true;
+  stopped = true;
   $('view').replaceChildren(state('Signed out', 'Reload to sign in again.'));
   $('pill').hidden = true;
   return true;
 }
 
-function pill(n, words = `${n} new`) {
+function pill(words) {
   $('pill').textContent = words;
-  $('pill').hidden = false;
+  $('pill').hidden = !words;
 }
 
+/** show draws what is waiting behind the pill: a timeline from its top, a thread at its first new post. */
 function show() {
-  if (!pending) return;
-  const d = pending;
-  pending = null;
-  $('pill').hidden = true;
-  if (at.id) {
-    const old = thread.shown;
-    drawThread(d);
-    const first = $('view').querySelector(`.entry[data-i="${old}"]`);
-    first?.focus({ preventScroll: true });
-    first?.scrollIntoView({ block: 'center' });
-    return;
+  const v = cur,
+    d = v.pending;
+  if (!d) return;
+  v.pending = null;
+  pill('');
+  if (v.id) {
+    const old = v.n;
+    drawThread(v, d);
+    const at = [...v.el.querySelectorAll('.thread .post')].find(p => Number(p.dataset.i) >= old);
+    at?.focus({ preventScroll: true });
+    at?.scrollIntoView({ block: 'center' });
+  } else {
+    drawList(v, d);
+    toTop();
+    v.el.querySelector('.open')?.focus({ preventScroll: true });
   }
-  drawList(at.kind, d);
-  scrollTo(0, 0);
-  $('view').querySelector('.card h3 a')?.focus({ preventScroll: true });
+  frame();
 }
+
+const toTop = () =>
+  scrollTo({
+    top: 0,
+    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'auto'
+  });
 
 async function read() {
   clearTimeout(timer);
-  if (over) return;
+  if (stopped || !cur || cur.over) return;
+  const v = cur;
   try {
-    const d = at.id ? await get(`/api/feed/${at.id}`) : await readList(at.kind);
-    age = { v: at.id ? d.age : d.rest.age, at: Date.now() };
+    const needsPath = '/api/feed?needs=1&limit=50';
+    const [d, n] = await Promise.all([
+      get(v.id ? `/api/feed/${v.id}` : listPath(v)),
+      v.tab === 'needs' ? null : get(needsPath)
+    ]);
+    if (v !== cur) return; // the reader went on: that view reads for itself
+    needs = n ?? d;
+    age = { v: d.age, at: Date.now() };
     down = null;
     wait = POLL;
-    if (!drawn) {
-      if (at.id) drawThread(d);
-      else drawList(at.kind, d);
-      drawn = true;
-    } else if (at.id) {
-      const n = d.entries.length - thread.shown;
-      pending = keyOf(d) === thread.sig ? null : d;
-      if (!pending) $('pill').hidden = true;
-      else pill(n, n < 1 ? 'Changed · show' : `${n} new · show`); // n < 1: only its head, or older entries evicted
+    if (!v.drawn) {
+      if (v.id) {
+        drawThread(v, d);
+        jump(v);
+      } else drawList(v, d);
+    } else if (v.id) {
+      const more = (d.entries ?? []).length - v.n;
+      v.pending = keyOf(d) === v.sig ? null : d;
+      pill(!v.pending ? '' : more > 0 ? plural(more, 'new post') : 'Changed · show'); // else only its head, or older entries gone
     } else {
-      const now = new Set([...d.needs.threads, ...d.rest.threads].map(t => t.id));
-      const n =
-        fresh(list.shown, d.needs.threads) +
-        fresh(list.shown, d.rest.threads, list.tail || '') +
-        list.needs.filter(id => !now.has(id)).length; // one that needed the owner and went further down
-      pending = n ? d : null;
-      if (!n) $('pill').hidden = true;
-      else if (list.shown.size) pill(n);
-      else show(); // an empty page has nothing to move
+      const now = new Set(d.threads.map(t => t.id)),
+        n = fresh(v.shown, d.threads, v.tail || ''),
+        gone =
+          v.tab === 'needs' ? [...v.shown.keys()].filter(id => !now.has(id) && !v.next).length : 0;
+      v.pending = n + gone ? d : null;
+      if (v.pending && !v.shown.size)
+        show(); // an empty page has nothing to move
+      else pill(n ? plural(n, 'new post') : gone ? 'Changed · show' : '');
     }
+    frame();
     banner();
   } catch (e) {
-    if (await lapsed(e)) return;
+    if (v !== cur || (await lapsed(e))) return;
     wait = Math.min(60e3, wait * 2);
     failed(e);
-    if (e.status === 404 && at.id) {
-      over = true;
-      drawn = true;
+    if (e.status === 404 && v.id) {
+      Object.assign(v, { over: true, drawn: true });
       down = null;
       banner();
-      crumbs('thread');
-      $('view').replaceChildren(
+      v.el.replaceChildren(
         state(
           'Not in the feed',
           'This thread does not exist, or is older than what the feed keeps.',
-          el('a', { href: '/feed' }, 'Back to the feed')
+          el('a', { class: 'chip', href: '/feed' }, 'Back to the feed')
         )
       );
       return;
     }
-    if (!drawn) {
-      $('view').replaceChildren(
-        state('Could not read the feed', 'Trying again by itself.', retry(read))
+    if (!v.drawn)
+      v.el.replaceChildren(
+        state('Could not read the feed', 'Trying again by itself.', button('Try again', read))
       );
-    }
   }
   if (!document.hidden) timer = setTimeout(read, wait);
 }
 
-/** keys: X's. j and k walk the cards or entries, . shows what is new, u goes back; Enter is the link's own. */
+// ---- going from one view to another, without a page load
+
+/** go shows url. On the way back the view is where it was, and the post that was opened has the focus. */
+function go(url, back = false) {
+  const from = cur;
+  if (from) from.y = scrollY;
+  cur = viewOf(url);
+  if (!back) {
+    cur.y = 0;
+    if (cur.tab && cur.pending) drawList(cur, cur.pending); // coming anew, not back: what was waiting shows
+    cur.pending = null;
+  }
+  $('view').replaceChildren(cur.el);
+  pill('');
+  document.body.classList.toggle('inthread', Boolean(cur.id));
+  frame();
+  scrollTo({ top: cur.y, behavior: 'instant' });
+  if (from) {
+    const opened = back && from.id && cur.el.querySelector(`[data-id="${from.id}"] .open`);
+    (opened || $('title')).focus({ preventScroll: true });
+  }
+  read();
+}
+
+function onClick(e) {
+  if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target.closest?.('a[href]');
+  if (!a || a.target) return;
+  const url = new URL(a.href);
+  if (url.origin !== location.origin || !/^\/feed(\/|$)/.test(url.pathname)) return;
+  e.preventDefault();
+  if (url.pathname + url.search === cur.key && url.hash) {
+    history.replaceState(history.state, '', url);
+    return jump(cur);
+  }
+  if (url.pathname + url.search === cur.key) {
+    // the active tab, as on X: to the top, with what is new
+    toTop();
+    return cur.pending ? show() : read();
+  }
+  history.pushState({ in: true }, '', url);
+  go(url);
+}
+
+/** keys: X's. j and k walk the posts, . shows what is new, u goes back; Enter is the link's own. */
 function key(e) {
   if (e.metaKey || e.ctrlKey || e.altKey || e.target.closest?.('input, textarea, select')) return;
-  if (e.key === '.' && pending) return show();
-  if (e.key === 'u' && at.id) return location.assign('/feed');
+  if (e.key === '.' && cur.pending) return show();
+  if (e.key === 'u' && cur.id) return goBack(e);
   if (e.key !== 'j' && e.key !== 'k') return;
-  const all = [...document.querySelectorAll(at.id ? '.entry' : '.card:not([hidden]) h3 a')];
+  const all = [...cur.el.querySelectorAll(cur.id ? '.thread .post' : '.post .open')];
   const i = all.findIndex(x => x === document.activeElement || x.contains(document.activeElement));
   const to = all[i < 0 ? 0 : Math.min(all.length - 1, Math.max(0, i + (e.key === 'j' ? 1 : -1)))];
   to?.focus({ preventScroll: true });
-  to?.scrollIntoView({ block: 'nearest' });
+  (to?.closest('.post') ?? to)?.scrollIntoView({ block: 'nearest' });
+}
+
+function goBack(e) {
+  if (!history.state?.in) return e.type === 'click' ? undefined : $('back').click();
+  e.preventDefault();
+  history.back();
 }
 
 function boot() {
-  document.body.classList.toggle('inthread', Boolean(at.id));
-  crumbs(at.id ? 'thread' : '');
-  kinds();
-  $('kinds')
-    .querySelector('[aria-current]')
-    ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  history.scrollRestoration = 'manual';
+  $('back').append(icon('back'));
+  $('back').addEventListener('click', goBack);
   $('pill').addEventListener('click', show);
+  document.addEventListener('click', onClick);
   document.addEventListener('keydown', key);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) clearTimeout(timer);
     else read();
   });
+  addEventListener('popstate', () => go(new URL(location.href), true));
   addEventListener('pageshow', e => e.persisted && read());
   setInterval(banner, 30e3);
   fetch('/auth/me', { cache: 'no-store' })
@@ -670,6 +1019,6 @@ function boot() {
       $('signout').hidden = !me.enabled;
     })
     .catch(() => {});
-  read();
+  go(new URL(location.href));
 }
 if (globalThis.document) boot();
