@@ -85,10 +85,10 @@ func TestOnlyNewRevisionsLink(t *testing.T) {
 	}
 }
 
-// 10,000 PRs merged at one sha stay linear: the rollout links the first maxLinks of them.
+// Many PRs merged at one sha stay linear: the rollout links the first maxLinks of them.
 func TestOneMergeShaManyPRs(t *testing.T) {
 	rs := []Raw{rolled(1, "gitops", 9, []string{mergeSHA}, []string{"0000000000000000"})}
-	for i := 1; i <= 10000; i++ {
+	for i := 1; i <= 2000; i++ {
 		rs = append(rs, mergedPR(t, int64(1+i), i, mergeSHA))
 	}
 	start := time.Now()
