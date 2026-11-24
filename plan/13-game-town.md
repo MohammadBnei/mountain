@@ -4,7 +4,7 @@
 
 > **Superseded (2026-11-23) by `17-world-disc.md`:** the world is a disc, not islands with civ grouping. Kept as history; its kit and palette material may still be read.
 
-> Status: **draft**. It comes from four owner interview rounds and three doubt cycles (19, 20 and 16 findings). The
+> Status when written: **draft**. It comes from four owner interview rounds and three doubt cycles (19, 20 and 16 findings). The
 > owner's answers below are decisions; the open questions at the end are not: the owner settles them by in-game
 > tests (2026-10-25), so each default below ships tunable. Nothing is built, and each slice gets
 > its own plan and doubt cycle when it starts. It extends `12-world-and-game.md` and amends rows of `00-decisions.md`

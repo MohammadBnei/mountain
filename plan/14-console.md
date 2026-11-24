@@ -2,7 +2,7 @@
 
 > Status: history (2026-11-24). Aim stands; write path superseded. Writes now go through core cards (af ADR-0082, ADR-0086).
 
-> Status: **draft**. It comes from the owner's review of the one-screen wireframes (2026-10-27), one doubt cycle (15
+> Status at 2026-10-27: **draft**. It comes from the owner's review of the one-screen wireframes (2026-10-27), one doubt cycle (15
 > findings, all taken) and the owner's answers after it. Nothing is built, and each slice below gets its own plan
 > and doubt cycle when it starts.
 >

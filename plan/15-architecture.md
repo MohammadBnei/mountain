@@ -2,7 +2,7 @@
 
 > Status: superseded (owner-only plan) (2026-11-24).
 
-> Status: **agreed** with the owner in an architect interview (2026-10-27), then put through one doubt cycle (14
+> Status at 2026-10-27: **agreed** with the owner in an architect interview (2026-10-27), then put through one doubt cycle (14
 > findings). The five findings that touched an owner decision went back to the owner and were answered. It holds
 > for every ukubi app written from here on: atlas (mountain), the game (ukubi-game), the kit (ukubi-kit), and, by
 > convention in their own repos, the bridge and the fleet. Existing code moves to it step by step (the end of this
