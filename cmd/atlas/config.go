@@ -61,7 +61,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	c.Feed, _ = strconv.ParseBool(getenv("FEED_ENABLED")) // unset or malformed: off
 	c.Machine = machineEnv{Cert: getenv("MOUNTAIN_MACHINE_CERT"), Issuer: getenv("MOUNTAIN_MACHINE_ISSUER"),
 		ClientID: getenv("MOUNTAIN_MACHINE_CLIENT_ID"), Sub: getenv("MOUNTAIN_MACHINE_SUB")}
-	if err == nil && (o.GraphFixture != "" || o.LiveFixture != "") && !o.Dev {
+	if err == nil && (o.GraphFixture != "" || o.LiveFixture != "" || o.FeedFixture != "") && !o.Dev {
 		err = errors.New("atlas: fixtures are --dev only")
 	}
 	return c, err
@@ -109,6 +109,7 @@ func serveFlags(o *Opts) *flag.FlagSet {
 	f.BoolVar(&o.Dev, "dev", false, "allow http://127.0.0.1:* origins and serve /dev/; on a loopback address with sign-in unset, admit everyone")
 	f.StringVar(&o.GraphFixture, "graph-fixture", "", "dev: serve this graph (an /api/graph answer) instead of projecting")
 	f.StringVar(&o.LiveFixture, "live-fixture", "", "dev: serve this live state instead of polling Prometheus and Alertmanager, and canned telemetry frames")
+	f.StringVar(&o.FeedFixture, "feed-fixture", "", "dev: turn the feed on over this file of events instead of the bridge")
 	return f
 }
 

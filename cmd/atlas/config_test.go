@@ -51,6 +51,7 @@ func TestConfigDefaults(t *testing.T) {
 		"am-url=http://platform-prometheus-kube-p-alertmanager.monitoring:9093: Alertmanager base URL",
 		"dev=false: allow http://127.0.0.1:* origins and serve /dev/; on a loopback address with sign-in unset, admit everyone",
 		"every=2m0s: how often the tracked heads are checked",
+		"feed-fixture=: dev: turn the feed on over this file of events instead of the bridge",
 		"forge-url=https://git.bnei.dev/api/v1: Forgejo API base URL",
 		"grafana-url=https://grafana.bnei.dev: Grafana base URL for the faces' Explore links",
 		"graph-fixture=: dev: serve this graph (an /api/graph answer) instead of projecting",
@@ -107,7 +108,7 @@ func TestConfigEnv(t *testing.T) {
 		cfg.Machine != (machineEnv{Sub: "s"}) {
 		t.Errorf("env: %+v %v", cfg, err)
 	}
-	for _, args := range [][]string{{"--graph-fixture", "g"}, {"--live-fixture", "l"}} {
+	for _, args := range [][]string{{"--graph-fixture", "g"}, {"--live-fixture", "l"}, {"--feed-fixture", "f"}} {
 		if _, err := loadConfig(args, envOf(nil)); err == nil || err.Error() != "atlas: fixtures are --dev only" {
 			t.Errorf("%v without --dev: %v", args, err)
 		}

@@ -4,7 +4,7 @@
 //
 //	atlas [--listen :8080] [--metrics :9090] [--prom-url URL] [--am-url URL] [--forge-url URL]
 //	      [--loki-url URL] [--tempo-url URL] [--grafana-url URL]
-//	      [--repos dir] [--every 2m] [--dev] [--graph-fixture file] [--live-fixture file]
+//	      [--repos dir] [--every 2m] [--dev] [--graph-fixture file] [--live-fixture file] [--feed-fixture file]
 //	atlas project --repos <dir> [--dsn …] [--drop-repos]   (store one projection from local checkouts)
 //	atlas resolve <name>   (the canonical id(s) of a name, each alias's source and status; JSON on stdout)
 //	atlas state [--prom-url URL] [--pigsty-url URL] [--patroni-url URL]... [--source-budget 1.5s] [--budget 3s] <id|alias>
@@ -36,7 +36,7 @@
 // https://authentik.bnei.dev/application/o/token/) and ATLAS_BRIDGE_AUTH_HOST (the Host the token request carries, for
 // a token URL that is authentik's in-cluster Service; unset = the URL's own), and FEED_ENABLED (true turns on the
 // owner's feed, feed.go: alert and deploy threads rebuilt from the bridge, served on /api/feed; off by default, then
-// those routes answer 404 and nothing runs). All of it is read once, in config.go;
+// those routes answer 404 and nothing runs; --dev --feed-fixture turns it on over a file instead). All of it is read once, in config.go;
 // the libraries' own reads (pgx's PG* defaults, the proxy variables, SSL_CERT_*, client-go's KUBERNETES_SERVICE_HOST
 // and _PORT) are theirs, and so are OpenTelemetry's: the metrics
 // SDK always reads OTEL_RESOURCE_ATTRIBUTES, OTEL_SERVICE_NAME, OTEL_METRICS_EXEMPLAR_FILTER and OTEL_GO_X_* (a
@@ -97,6 +97,7 @@ import (
 // Opts are the command-line flags plus the env the App reads (config.go).
 type Opts struct {
 	Listen, Metrics, PromURL, AMURL, ForgeURL, Repos, GraphFixture, LiveFixture string
+	FeedFixture                                                                 string
 	LokiURL, TempoURL, GrafanaURL                                               string
 	Every                                                                       time.Duration
 	Dev                                                                         bool
@@ -234,7 +235,13 @@ func run(ctx context.Context, c Config) error {
 		publish = newBridgeClient(tc).publish
 	}
 	go runWorld(ctx, a.Graph.db, publish, a.Met, a.worldKick)
-	startFeed(ctx, a, c)
+	if o.FeedFixture != "" {
+		if err := a.loadFeedFixture(o.FeedFixture); err != nil {
+			return err
+		}
+	} else {
+		startFeed(ctx, a, c)
+	}
 
 	pub := &http.Server{Addr: o.Listen, Handler: routes(a, www), ReadHeaderTimeout: 10 * time.Second, ErrorLog: serverLog()}
 	mx := http.NewServeMux()
