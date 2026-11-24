@@ -12,9 +12,11 @@ import {
   posts,
   rel,
   route,
+  said,
   sig,
   speaker,
-  titleOf
+  titleOf,
+  wholeOf
 } from '../js/feed.js';
 import { blocks, httpsURL, inline } from '../js/feed-md.js';
 import { cardSlots, heightOf, layout, MAX_CARDS } from '../js/geometry.js';
@@ -732,6 +734,28 @@ ok(
     'feed: what asks the owner'
   );
 }
+ok(
+  said('health: Progressing -> Degraded') === 'degraded' &&
+    said('reopened: health: Healthy -> Missing') === 'reopened, missing' &&
+    said('firing') === 'firing' &&
+    said('health: x -> y z') === 'health: x -> y z',
+  'feed: a health edge reads as where it went'
+);
+ok(
+  wholeOf(
+    {
+      entries: [
+        { post_id: 'a', claim: true, text: 'no' },
+        { post_id: 'a', text: 'whole' }
+      ]
+    },
+    { post_id: 'a', text: 'wh' }
+  ) === 'whole' &&
+    wholeOf({ entries: [{ time: '1', text: 'abcdef' }] }, { time: '1', text: 'abc' }) ===
+      'abcdef' &&
+    wholeOf({ entries: [] }, { post_id: 'a', text: 'cut' }) === 'cut',
+  'feed: the whole of a post the list cut'
+);
 ok(
   titleOf({ kind: 'alert', title: 'Alert: Alert: x' }) === 'Alert: x' &&
     titleOf({ kind: 'pr', title: 'PR a/b#1: t' }) === 'a/b#1: t' &&

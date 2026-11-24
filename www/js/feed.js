@@ -14,7 +14,8 @@ export const KINDS = {
   deploy: ['Deploy', 'Deploys', 'Deploy: ', 'Deploys', 'deploys', 'sync'],
   pr: ['PR', 'PRs', 'PR ', 'Forge', 'forge', 'repo'],
   session: ['Session', 'Sessions', 'Session: ', 'Fleet', 'fleet', 'person'],
-  card: ['Card', 'Cards', 'Card: ', 'Fleet', 'fleet', 'inbox']
+  card: ['Card', 'Cards', 'Card: ', 'Fleet', 'fleet', 'inbox'],
+  laptop: ['Laptop session', 'Laptop', 'Laptop: ', 'Laptop', 'laptop', 'person']
 };
 // ukubi-game's line icons (cmd/game/websrc/icons.ts): one path each, on a 20 px grid
 const ICONS = {
@@ -146,6 +147,22 @@ export function linkOf(l) {
   return { label, rest: l.kind === 'revision' ? ref.slice(0, 12) : ref.slice(0, 200) };
 }
 
+/** said is a system line as a post says it after its subject: "health: Progressing -> Degraded" is "degraded". */
+export const said = text => {
+  const m = /^(reopened: )?health: \w+ -> (\w+)$/.exec(text);
+  return m ? `${m[1] ? 'reopened, ' : ''}${m[2].toLowerCase()}` : text;
+};
+
+/** wholeOf is the text of entry e in its whole thread t: the same post, else the one of the same moment. */
+export function wholeOf(t, e) {
+  const id = e.post_id,
+    es = t.entries ?? [];
+  const f = id
+    ? es.find(x => x.post_id === id && !x.claim)
+    : es.find(x => x.time === e.time && x.text?.startsWith(e.text.slice(0, 200)));
+  return f?.text ?? e.text;
+}
+
 export const sig = t => `${t.last_activity_at}|${t.needs_owner}|${t.state}`;
 
 /** fresh counts the threads a new read has that the shown ones lack or show differently. A thread that only slid into
@@ -255,22 +272,50 @@ function quoteCard(head, quotes, whole, by) {
   );
 }
 
-/** words is a post's body: the system's line, a session's Markdown (its first lines in a timeline), an agent's text. */
-function words(p, whole) {
+/** words is a post's body: the system's line, a session's Markdown (its first lines in a timeline), an agent's text,
+ *  and the quoted card of what came with it. In a list the server may have cut the text (has_more): "Show more" reads
+ *  the thread for the whole of it. */
+function words(p, whole, t) {
   const { e } = p,
     out = [];
-  if (e.markdown) {
+  const body = (text, all) =>
+    e.markdown
+      ? [el('blockquote', { class: all ? 'own' : 'own fold' }, markdown(clean(text)))]
+      : [folded(text, all)].flat();
+  if (e.text) {
     const text = clean(e.text),
-      md = el('blockquote', { class: 'own' }, markdown(text));
-    out.push(md);
-    if (!whole && (text.length > 320 || text.split('\n').length > 6)) {
-      md.classList.add('fold');
-      out.push(more(md, 'fold'));
+      cut = !whole && e.has_more;
+    if (whole || !(cut || (e.markdown && (text.length > 320 || text.split('\n').length > 6))))
+      out.push(...body(e.text, true));
+    else {
+      const box = el('div', {}, body(e.text, false));
+      let full = cut ? null : body(e.text, true);
+      const b = el(
+        'button',
+        { type: 'button', class: 'more', 'aria-expanded': 'false' },
+        'Show more'
+      );
+      b.addEventListener('click', async ev => {
+        ev.preventDefault();
+        if (b.getAttribute('aria-expanded') === 'true') {
+          box.replaceChildren(...body(e.text, false));
+          b.setAttribute('aria-expanded', 'false');
+          b.textContent = 'Show more';
+          return;
+        }
+        try {
+          full ??= body(wholeOf(await get(`/api/feed/${encodeURIComponent(t.id)}`), e), true);
+        } catch (err) {
+          b.textContent = 'Could not read it. Try again';
+          return failed(err);
+        }
+        box.replaceChildren(...full);
+        b.setAttribute('aria-expanded', 'true');
+        b.textContent = 'Show less';
+      });
+      out.push(box, b);
     }
-  } else if (e.text) {
-    const b = folded(e.text, whole);
-    if (e.by) (Array.isArray(b) ? b[0] : b).append(...quotedBy(e.by));
-    out.push(b);
+    if (e.by && out[0].tagName === 'P') out[0].append(...quotedBy(e.by));
   }
   if (p.quotes.length)
     out.push(
@@ -281,7 +326,17 @@ function words(p, whole) {
         p.quotes.find(q => q.by)?.by
       )
     );
-  return out.flat();
+  return out;
+}
+
+/** subject is what a post is about: its thread's title, bold, in quotation marks (and said to be quoted) when it is
+ *  from outside. */
+function subject(t, max = 160) {
+  const full = titleOf(t),
+    title = full.length > max ? `${full.slice(0, max)}…` : full;
+  return t.title_quoted
+    ? [sr('quoted: '), el('q', { class: 'subject', dir: 'auto' }, title)]
+    : el('strong', { class: 'subject', dir: 'auto' }, title);
 }
 
 /** postRef is the id of another post of a thread, as a link may name it. */
@@ -305,9 +360,10 @@ function marks(e, t) {
   ];
 }
 
-/** asked is who asks the owner, and what for, as the session itself puts it. */
-function asked(e, s) {
-  if (!asks(e)) return null;
+/** asked is who asks the owner, and what for, as the session itself puts it; on a later post of a thread whose ask
+ *  still stands (needs_by), who asks. */
+function asked(e, s, stands = false) {
+  if (!asks(e) && !stands) return null;
   const list = Array.isArray(e.needs_list) ? e.needs_list.slice(0, 20) : [];
   return el(
     'div',
@@ -359,21 +415,27 @@ function post(t) {
     sr(`Open ${kindWord(t.kind)} ${title.slice(0, 120)}, `),
     when(t.last_activity_at)
   );
-  const body = words(p, false);
-  if (s.who === 'system') {
-    // what it is about: a system title is the post's first line, one from outside its quoted card
-    if (!t.title_quoted) body.unshift(el('p', { class: 'text about', dir: 'auto' }, title));
-    else if (p.quotes.length)
-      body[body.length - 1]
-        .querySelector('.qhead')
-        .after(el('p', { class: 'text about clamp', dir: 'auto' }, title));
-    else body.push(quoteCard('Quoted', [title], false));
-  } else if (s.who !== 'session')
+  // it leads with what it is about: "DiskFillingUp firing"; a session's own words are about themselves
+  const stands = t.needs_by === 'session' && !p.e.claim,
+    body = [];
+  if (p.e.claim)
+    body.push(el('p', { class: 'text' }, subject(t), ' mentioned by a laptop session'));
+  else if (s.who === 'system') {
+    const line = clean(said(p.e.text ?? ''));
     body.push(
-      t.title_quoted
-        ? quoteCard('Quoted', [title], false)
-        : el('p', { class: 'text about', dir: 'auto' }, title)
+      el(
+        'p',
+        { class: 'text', dir: 'auto' },
+        subject(t),
+        line ? ` ${line.slice(0, 400)}` : '',
+        quotedBy(p.e.by)
+      ),
+      ...words({ ...p, e: { ...p.e, text: '' } }, false, t)
     );
+  } else {
+    if (s.who !== 'session') body.push(el('p', { class: 'text', dir: 'auto' }, subject(t)));
+    body.push(...words(p, false, t));
+  }
   return el(
     'li',
     { class: 'post', 'data-id': t.id, 'data-who': s.who },
@@ -381,11 +443,11 @@ function post(t) {
     el(
       'div',
       { class: 'body' },
-      asked(p.e, s),
       head(s, open, [
-        t.needs_owner && !asks(p.e) ? chip('needs you', 'hot') : null,
+        t.needs_owner && !asks(p.e) && !stands ? chip('needs you', 'hot') : null,
         ...marks(p.e, t)
       ]),
+      asked(p.e, s, stands),
       body
     )
   );
@@ -395,8 +457,13 @@ function post(t) {
 function reply(p, t, isNew) {
   const { e } = p;
   if (e.claim) {
-    const ref = /^session-[0-9a-f]{16}$/.test(clean(e.ref)) ? `/feed/${clean(e.ref)}` : null,
-      by = el('q', { class: 'by', dir: 'auto' }, clean(e.by || e.text).slice(0, 80));
+    const to = clean(e.thread),
+      ref = /^laptop-[0-9a-f]{16}$/.test(to)
+        ? `/feed/${to}${postRef(e.post_id) ? `#${postRef(e.post_id)}` : ''}`
+        : null,
+      by = e.by
+        ? el('q', { class: 'by', dir: 'auto' }, clean(e.by).slice(0, 80))
+        : 'a laptop session';
     return el(
       'li',
       { class: 'post claim', 'data-i': p.i, tabindex: '-1' },
@@ -418,16 +485,16 @@ function reply(p, t, isNew) {
       class: `post${isNew ? ' fresh' : ''}`,
       'data-who': s.who,
       'data-i': p.i,
-      'data-post': postRef(e.id),
+      'data-post': postRef(e.post_id),
       tabindex: '-1'
     },
     avatar(s),
     el(
       'div',
       { class: 'body' },
-      asked(e, s),
       head(s, when(e.time, true), [s.who === 'agent' ? chip('agent') : null, ...marks(e, t)]),
-      words(p, true)
+      asked(e, s),
+      words(p, true, t)
     )
   );
 }
@@ -587,7 +654,7 @@ function jump(v) {
   const id = postRef(location.hash.slice(1));
   if (!id || !v.t) return;
   const at = () => [...v.el.querySelectorAll('.post')].find(p => p.dataset.post === id);
-  if (!at() && !v.all && (v.t.entries ?? []).some(e => e.id === id)) {
+  if (!at() && !v.all && (v.t.entries ?? []).some(e => e.post_id === id)) {
     v.all = true;
     drawThread(v, v.t);
   }
@@ -610,9 +677,9 @@ function drawThread(v, t) {
     s = speaker({ actor: 'system', markdown: isSession }, t),
     title = titleOf(t),
     long = title.length > 160;
-  const name = el('p', { class: 'text about', dir: 'auto' }, title);
+  const name = el('p', { class: 'text about', dir: 'auto' }, subject(t, Infinity));
   if (long) name.classList.add('clamp');
-  const main = t.title_quoted && !isSession ? quoteCard('Quoted', [], true) : el('div', {});
+  const main = el('div', {});
   main.append(
     name,
     ...(long
@@ -632,8 +699,7 @@ function drawThread(v, t) {
     );
   }
   const links = [...(t.links ?? [])].map(linkCard);
-  // a laptop session is not in the fleet's console
-  if ((t.kind === 'session' && !isSession) || t.kind === 'card')
+  if (t.kind === 'session' || t.kind === 'card')
     links.push(linkCard({ kind: 'Fleet console', ref: FLEET, quoted: false }));
   const opened = new Date(t.opened_at);
   v.el.replaceChildren(

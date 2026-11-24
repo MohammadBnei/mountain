@@ -206,7 +206,9 @@ html.feed {
 
 /* text from events: always text, never wider than its column */
 .text { white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; unicode-bidi: isolate; }
-.about { font-weight: 500; }
+.subject { font-weight: 600; overflow-wrap: anywhere; unicode-bidi: isolate; }
+q.subject { color: var(--text); }
+.feed q { quotes: "\201C" "\201D"; }
 .clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 .thread .clamp { -webkit-line-clamp: 8; line-clamp: 8; }
 q.by { unicode-bidi: isolate; color: var(--text-muted); overflow-wrap: anywhere; }
@@ -214,8 +216,6 @@ q.by { unicode-bidi: isolate; color: var(--text-muted); overflow-wrap: anywhere;
 .quoted { margin: 6px 0 0; padding: var(--space-2) var(--space-3); background: var(--surface-sunken); border: 1px solid var(--edge-strong); border-radius: var(--radius-md); }
 .feed .quoted { margin-top: 6px; padding: var(--space-2) var(--space-3); }
 .quoted .text { font: var(--type-body-sm); }
-.quoted .about { font: 500 13px/20px var(--font-sans); }
-.main .quoted .about { font: var(--type-title-3); }
 .qhead { font: var(--type-overline); letter-spacing: .04em; color: var(--text-muted); }
 .qhead::before { content: "\201D"; margin-right: 4px; font: 600 15px/10px var(--font-sans); vertical-align: -3px; }
 .feed .more { position: relative; z-index: 1; min-height: 32px; padding: 0; color: var(--accent-strong); background: none; border: 0; cursor: pointer; text-align: start; }

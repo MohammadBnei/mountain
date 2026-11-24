@@ -164,7 +164,14 @@ const speakers = {
 };
 // served answers /api/feed and /api/feed/<id> from threads, as the server would: filters, previews, newest first.
 const list = (threads, a = age) => ({ threads, next_cursor: '', dropped: 0, age: a });
-const slim = t => ({ ...t, entries: t.entries.slice(-1), links: null });
+// a list's thread: its preview alone, cut to 400 characters as the server does
+const slim = t => ({
+  ...t,
+  entries: t.entries
+    .slice(-1)
+    .map(e => (e.text.length > 400 ? { ...e, text: e.text.slice(0, 400), has_more: true } : e)),
+  links: null
+});
 const served =
   (threads, a = age) =>
   u => {
@@ -210,7 +217,7 @@ const SCENES = [
   ['list-real', '/feed'],
   ['list-scrolled', '/feed', null, `scrollTo(0, 900)`],
   ['kind-pr', '/feed?kind=pr'],
-  ['kind-session', '/feed?kind=session', served(all)],
+  ['kind-laptop', '/feed?kind=laptop', served(all)],
   ['needs', '/feed?tab=needs', served([asking, ...manyNeeds])],
   ['thread-alert', '@alert'],
   ['thread-deploy', '@deploy'],
@@ -228,7 +235,7 @@ const SCENES = [
   ['thread-claim', `/feed/${told.find(t => t.kind === 'pr').id}`, served(all)],
   [
     'more-open',
-    '/feed?kind=session',
+    '/feed?kind=laptop',
     served(all),
     `[...document.querySelectorAll('.more')].slice(0, 1).map(b => b.click())`
   ],
@@ -503,8 +510,7 @@ try {
         ['listitem', undefined],
         ['blockquote', undefined],
         ['button', 'Show more'],
-        ['table', undefined],
-        ['link', /^Open Session make the demo search fast/]
+        ['link', /^Open Laptop session make the demo search fast/]
       ])
         if (!has(ns, role, name)) fail(`${where}: the timeline has no ${role} ${name ?? ''}`);
       const roles = {};
@@ -524,9 +530,14 @@ try {
         ['list', 'Links'],
         ['group', 'Reply'],
         ['blockquote', undefined],
-        ['link', /make the demo search fast/]
+        ['link', 'a laptop session']
       ])
         if (!has(ns, role, name)) fail(`${where}: a thread has no ${role} ${name ?? ''}`);
+      await page.s('Page.navigate', { url: `${origin}/feed/${asking.id}` });
+      await drawn();
+      const posts = await tree();
+      for (const role of ['table', 'columnheader', 'blockquote', 'listitem'])
+        if (!has(posts, role)) fail(`${where}: a session's thread has no ${role}`);
       const un = ns.filter(n => ['link', 'button'].includes(n.role) && !n.name.trim());
       if (un.length) fail(`${where}: ${un.length} links or buttons without a name`);
     }
@@ -622,11 +633,23 @@ try {
     stub = served(all);
     await page.s('Page.navigate', { url: `${origin}/feed/${asking.id}` });
     await drawn();
-    for (const id of ['p2', 'p3']) {
+    for (const id of [told[0].entries[1].post_id, told[0].entries[2].post_id]) {
       await page.evalJSON(`(document.querySelector('a.tag[href$="#${id}"]').click(), true)`);
       if (!(await waitFor(page, `document.activeElement.dataset.post === '${id}'`, 2000)))
         fail(`${where}: the chip to ${id} did not go there`);
     }
+    // Show more reads the whole of a post the list cut, where it is
+    await page.s('Page.navigate', { url: `${origin}/feed?kind=laptop` });
+    await drawn();
+    await page.evalJSON(`(document.querySelector('.post .more').click(), true)`);
+    if (
+      !(await waitFor(
+        page,
+        `document.querySelector('.post').textContent.includes('I am writing the tests meanwhile.') && document.querySelector('.post .more').getAttribute('aria-expanded') === 'true' && location.pathname === '/feed'`,
+        3000
+      ))
+    )
+      fail(`${where}: Show more did not show the whole post`);
     stub = u => served(ts)(u);
     await page.s('Page.navigate', { url: `${origin}/feed` });
     await drawn();
