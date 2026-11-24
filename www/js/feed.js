@@ -13,7 +13,7 @@ export const KINDS = {
   card: ['Card', 'Cards', 'Card: ']
 };
 const POLL = 15e3; // between reads while the page is visible; doubled after a failure, to a minute
-const STALE = 2 * 3600e3; // no event for this long: the page says so
+const STALE = 6 * 3600e3; // no event for this long: the page says so
 const NEEDS_SHOWN = 5;
 const ENTRIES_SHOWN = 100;
 
@@ -67,11 +67,14 @@ const LINKS = {
   revision: 'Revision'
 };
 
-/** linkOf is a link as the page may show it: {label, href, out, host, rest}; no href means text only. */
+/** linkOf is a link as the page may show it: {label, href, title, quoted, out, host, rest}; no href means text only. */
 export function linkOf(l) {
   const ref = clean(l.ref),
     label = Object.hasOwn(LINKS, l.kind) ? LINKS[l.kind] : clean(l.kind);
-  if (!l.quoted && /^[a-z]{1,16}-[0-9a-f]{16}$/.test(ref)) return { label, href: `/feed/${ref}` };
+  if (!l.quoted && /^[a-z]{1,16}-[0-9a-f]{16}$/.test(ref)) {
+    const title = l.title ? titleOf({ kind: ref.split('-')[0], title: l.title }) : '';
+    return { label, href: `/feed/${ref}`, title, quoted: Boolean(l.title_quoted) };
+  }
   if (/^https:\/\//i.test(ref)) {
     try {
       const u = new URL(ref);
@@ -88,6 +91,13 @@ export function linkOf(l) {
     }
   }
   return { label, rest: l.kind === 'revision' ? ref.slice(0, 12) : ref.slice(0, 200) };
+}
+
+/** byOf is who to show on entry i: its login, unless the next entry (the words written with that act) says it. */
+export function byOf(es, i) {
+  const e = es[i],
+    n = es[i + 1];
+  return e.by && !(n?.by === e.by && n.time === e.time && n.quoted) ? clean(e.by).slice(0, 64) : '';
 }
 
 export const sig = t => `${t.last_activity_at}|${t.needs_owner}|${t.state}`;
@@ -167,8 +177,15 @@ function folded(s, quoted) {
   return [box, b];
 }
 
-const title = t =>
-  el('span', { class: t.title_quoted ? 'qt text clamp' : 'text clamp', dir: 'auto' }, titleOf(t));
+/** title: one from outside looks quoted and is announced as quoted. */
+const title = t => [
+  t.title_quoted ? el('span', { class: 'sr' }, 'quoted: ') : null,
+  el('span', { class: t.title_quoted ? 'qt text clamp' : 'text clamp', dir: 'auto' }, titleOf(t))
+];
+
+/** quotedBy is a login, in quotation marks: it is from outside too. */
+const quotedBy = by =>
+  by ? [el('span', { class: 'sr' }, 'by '), el('q', { class: 'by', dir: 'auto' }, by)] : null;
 
 function card(t) {
   const last = t.entries?.at(-1);
@@ -191,7 +208,8 @@ function card(t) {
           ['agent', 'owner'].includes(speaker(last).who)
             ? el('b', { dir: 'auto' }, speaker(last).name.slice(0, 40))
             : el('span', { class: 'sr' }, `${speaker(last).name}: `),
-          text(last.text, last.quoted, 'clamp')
+          text(last.text, last.quoted, 'clamp'),
+          last.by ? el('div', { class: 'line' }, quotedBy(byOf([last], 0))) : null
         )
       : null
   );
@@ -234,7 +252,7 @@ function drawList(kind, { needs, rest }) {
   if (n) {
     const ol = el(
       'ol',
-      { class: 'cards needs', 'aria-labelledby': 'needs' },
+      { class: 'cards needs', role: 'list', 'aria-labelledby': 'needs' },
       needs.threads.map(card)
     );
     out.push(el('h2', { id: 'needs' }, `Needs you · ${many}`), ol);
@@ -258,7 +276,11 @@ function drawList(kind, { needs, rest }) {
   if (rest.threads.length) {
     out.push(
       el('h2', { id: 'latest' }, n ? 'Everything else' : 'Latest'),
-      el('ol', { class: 'cards', id: 'rows', 'aria-labelledby': 'latest' }, rest.threads.map(card))
+      el(
+        'ol',
+        { class: 'cards', role: 'list', id: 'rows', 'aria-labelledby': 'latest' },
+        rest.threads.map(card)
+      )
     );
   } else if (!n) {
     out.push(
@@ -317,8 +339,9 @@ const thread = { shown: 0, all: false, sig: '' };
 
 const keyOf = t => `${sig(t)}|${t.entries.length}|${t.title}|${t.links?.length ?? 0}`;
 
-function entry(e, i) {
-  const s = speaker(e);
+function entry(es, i) {
+  const e = es[i],
+    s = speaker(e);
   return el(
     'li',
     { class: 'entry', 'data-who': s.who, 'data-i': i, tabindex: '-1' },
@@ -332,7 +355,7 @@ function entry(e, i) {
         el('b', { dir: 'auto' }, s.name),
         s.who === 'agent' ? el('span', { class: 'badge' }, 'agent') : null,
         e.quoted ? el('span', {}, s.who === 'outside' ? 'quoted' : 'quoted text') : null,
-        when(e.time, true)
+        el('span', { class: 'right' }, quotedBy(byOf(es, i)), when(e.time, true))
       ),
       el('div', { class: 'body' }, folded(e.text, e.quoted))
     )
@@ -343,6 +366,12 @@ function linkItem(l) {
   const k = linkOf(l);
   const parts = [
     el('b', { dir: 'auto' }, k.label),
+    k.title
+      ? [
+          k.quoted ? el('span', { class: 'sr' }, 'quoted: ') : null,
+          el('span', { class: k.quoted ? 'to qt' : 'to', dir: 'auto' }, k.title)
+        ]
+      : null,
     k.host ? el('span', { class: 'mono host' }, k.host) : null,
     k.rest ? el('span', { class: 'mono faint' }, k.rest) : null
   ];
@@ -370,7 +399,7 @@ function drawThread(t) {
   thread.sig = keyOf(t);
   document.title = `${t.needs_owner ? '(!) ' : ''}${titleOf(t).slice(0, 80)} · Feed`;
   crumbs(`${kindName(t.kind)} thread`);
-  const rows = es.slice(from).map((e, i) => entry(e, from + i));
+  const rows = es.slice(from).map((_, i) => entry(es, from + i));
   if (old) for (const r of rows) if (Number(r.dataset.i) >= old) r.classList.add('fresh');
   let earlier = null;
   if (from) {
@@ -406,13 +435,13 @@ function drawThread(t) {
           )
         : null,
       t.links?.length
-        ? el('ul', { class: 'linked', 'aria-label': 'Links' }, t.links.map(linkItem))
+        ? el('ul', { class: 'linked', role: 'list', 'aria-label': 'Links' }, t.links.map(linkItem))
         : null
     ),
     earlier ?? '',
     el('h2', { class: 'sr' }, 'Entries'),
     rows.length
-      ? el('ol', { class: 'entries' }, rows)
+      ? el('ol', { class: 'entries', role: 'list' }, rows)
       : state('No entries', 'This thread holds nothing yet.'),
     // slice 5 puts the reply box here
     el(
@@ -493,13 +522,15 @@ function banner() {
   else if (age && last === null)
     msg =
       'The feed has had no event since it started. It may still be reading, or the bridge may be out of reach.';
-  else if (age && now - last > STALE)
-    msg = `No event for ${span(now - last)}. This may be out of date: the bridge may have stopped sending.`;
+  else if (age && now - last > STALE) msg = `Last event ${span(now - last)} ago`;
   if ($('banner').dataset.msg !== msg) {
     $('banner').dataset.msg = msg;
-    $('banner').replaceChildren(msg ? el('p', {}, msg) : '');
+    $('banner').replaceChildren(
+      msg ? el('p', { class: msg.startsWith('Last') ? 'quiet' : '' }, msg) : ''
+    );
   }
-  $('fresh').textContent = last ? `Last event ${rel(last, now)} ago`.replace('now ago', 'now') : '';
+  $('fresh').textContent =
+    last && now - last <= STALE ? `Last event ${rel(last, now)} ago`.replace('now ago', 'now') : '';
   for (const s of document.querySelectorAll('[data-t]'))
     s.textContent = rel(Number(s.dataset.t), now);
 }

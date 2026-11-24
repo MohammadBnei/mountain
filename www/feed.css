@@ -40,7 +40,7 @@ kbd { padding: 0 5px; border: 1px solid var(--line-strong); border-radius: 2px; 
 .state b { display: block; color: var(--ink); font-size: 17px; line-height: 28px; }
 .state button, .state a { margin-top: 12px; }
 #banner > p { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--line); border-left: 3px solid var(--warning); background: var(--raised); }
-#banner button { margin-left: 8px; }
+#banner > p.quiet { border-left: 1px solid var(--line); color: var(--muted); font-size: 13px; line-height: 20px; text-align: center; }
 .pillbar { position: sticky; top: 72px; z-index: 2; height: 0; display: flex; justify-content: center; }
 #pill { align-self: flex-start; min-height: 36px; padding: 0 18px; border: 0; border-radius: 18px; background: var(--ochre); color: var(--on-ochre); font-weight: 600; box-shadow: 0 2px 10px rgba(0, 0, 0, .35); }
 
@@ -56,6 +56,8 @@ kbd { padding: 0 5px; border: 1px solid var(--line-strong); border-radius: 2px; 
 .needs.cards { border-color: var(--warning); }
 .line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; color: var(--muted); font-size: 13px; line-height: 20px; }
 .line > .right, .line > .when { margin-left: auto; }
+.right { display: inline-flex; gap: 8px; min-width: 0; max-width: 100%; }
+q.by { min-width: 0; max-width: 20ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: isolate; color: var(--muted); }
 .badge { padding: 0 6px; border: 1px solid var(--line-strong); border-radius: 2px; font-size: 12px; line-height: 18px; color: var(--muted); }
 .badge.hot { border-color: var(--warning); color: var(--warning); font-weight: 600; }
 .card .last b { float: left; margin-right: 6px; font-weight: 600; color: var(--ink); }
@@ -85,6 +87,8 @@ kbd { padding: 0 5px; border: 1px solid var(--line-strong); border-radius: 2px; 
 .linked b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .linked .out b, .linked .ref b { flex: none; max-width: 60%; }
 .linked .out b { max-width: 45%; }
+/* a thread's link says its title; quoted as anywhere when it is from outside */
+.linked .to { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); unicode-bidi: isolate; }
 /* the whole host always shows (its end is the part that says whose it is); the path may be cut */
 .linked .host { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
 .linked .mono.faint { flex: 1 1 0; min-width: 0; max-width: max-content; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
