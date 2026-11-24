@@ -65,6 +65,9 @@ Main thread:
   a fan-out: the host is shared.
 - **Every new test gets a mutation:** disable the code it guards and see it fail for that reason. A test needs a
   positive control (a gate that only checks refusals passes on one that refuses everything).
+- **Node IDs:** every PR body, commit subject scope or branch name cites the master-plan node ID it serves, for example
+  `T-DOCS/LINT`. Public repos (agent-fleet, ukubi-bridge, mountain, ukubi-kit) never cite a `T-SEC*` or `T-SECRETS*` ID:
+  they cite the parent track or no ID.
 - **CI** is Forgejo Actions; workflow files still live in `.github/workflows/`. PR checks run on `k8s-ubuntu-latest`
   (Talos, ib:ADR-0089). A job that needs `services:`, `container:` or root runs on `ubuntu-latest` (LXC podman runners,
   ib:ADR-0082), and image builds and deploys run on `ukubi-build` (the build-runner LXC). CI watch deadlines: see the
