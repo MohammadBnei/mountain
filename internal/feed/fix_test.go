@@ -1,8 +1,11 @@
 package feed
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -360,7 +363,7 @@ func TestSingleFlight(t *testing.T) {
 	f.gen++
 	f.mu.Unlock()
 	got := make(chan *folded)
-	go func() { got <- f.threads() }()
+	go func() { c, _ := f.threads(context.Background()); got <- c }()
 	if c := <-got; c != f.cache {
 		t.Error("a read during a fold did not take the last result")
 	}
@@ -422,5 +425,132 @@ func TestEvictionPicksByTheCapThatIsOver(t *testing.T) {
 	f.Ingest(alertRaw(50, "firing", "fp9", sa, 0, 20, ""))
 	if f.count["alert"] != 7 || f.count["forge"] != 3 {
 		t.Errorf("byte cap: alerts %d, forge %d", f.count["alert"], f.count["forge"])
+	}
+}
+
+// A Fold that panics ends its flight like any other: 50 readers and Stats return (the waiters with the last good
+// result or errFold), the panic is counted once as bad, no goroutine is left, and the next read folds again.
+func TestFoldPanicEndsTheFlight(t *testing.T) {
+	f := New(1000, 1<<20)
+	for _, r := range prLife(t) {
+		f.Ingest(r)
+	}
+	release := make(chan struct{})
+	f.SetFold(func([]Event, time.Time) []Thread {
+		<-release
+		panic("boom")
+	})
+	before := runtime.NumGoroutine()
+	var wg sync.WaitGroup
+	errs := make(chan error, 51)
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, err := f.List(10, "")
+			errs <- err
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		f.Stats()
+		errs <- nil
+	}()
+	time.Sleep(50 * time.Millisecond) // the readers pile up behind the one flight
+	close(release)
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("readers hang behind a fold that panicked")
+	}
+	close(errs)
+	failed := 0
+	for err := range errs {
+		if errors.Is(err, errFold) {
+			failed++
+		}
+	}
+	if failed == 0 {
+		t.Error("no reader saw the failure")
+	}
+	if f.Stats().Bad == 0 || f.folding != nil {
+		t.Errorf("bad %d, folding %v", f.Stats().Bad, f.folding)
+	}
+	// a later good fold works, and a failed one after it falls back to that result
+	f.SetFold(Fold)
+	if th, _, err := f.List(10, ""); err != nil || len(th) == 0 {
+		t.Fatalf("after: %v %v", th, err)
+	}
+	f.SetFold(func([]Event, time.Time) []Thread { panic("again") })
+	f.Ingest(forge(t, 30, "pull_request_comment_created", "issue_comment.created", prSubj, "c30", 40))
+	if th, _, err := f.List(10, ""); err != nil || len(th) == 0 {
+		t.Errorf("a failed fold after a good one: %v %v", th, err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if after := runtime.NumGoroutine(); after > before+1 {
+		t.Errorf("goroutines %d -> %d", before, after)
+	}
+}
+
+// A waiter leaves when its request ends.
+func TestWaiterHonoursContext(t *testing.T) {
+	f := New(1000, 1<<20)
+	f.Ingest(prLife(t)[0])
+	release := make(chan struct{})
+	started := make(chan struct{})
+	f.SetFold(func(evs []Event, now time.Time) []Thread {
+		close(started)
+		<-release
+		return Fold(evs, now)
+	})
+	go f.List(10, "") //nolint:errcheck // holds the flight
+	<-started
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, _, err := f.ListCtx(ctx, 10, ""); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("a waiter outlived its request: %v", err)
+	}
+	if _, _, err := f.GetCtx(ctx, "x"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("get: %v", err)
+	}
+	close(release)
+}
+
+// An evicted event's slot is zeroed, so its strings are not held by the array; a front that is mostly dead is released.
+func TestEvictionReleasesTheFront(t *testing.T) {
+	f := New(100, 1<<30)
+	for i := 0; i < 100; i++ {
+		f.Ingest(alertRaw(int64(1+i), "firing", fmt.Sprintf("fp%d", i), sa, 0, i, ""))
+	}
+	held := f.evs["alert"]
+	f.Ingest(alertRaw(500, "firing", "fpx", sa, 0, 500, ""))
+	if held[0].ID != "" || held[0].Key != "" || held[0].Name != "" {
+		t.Errorf("the evicted slot still holds %+v", held[0])
+	}
+	// the forge events push the alerts out from the front, with no append to the alerts to move their array
+	old := f.evs["alert"]
+	f.maxEvents = 10
+	f.Ingest(forge(t, 2000, "pull_request_synchronized", "pull_request.synchronized", prSubj, "s0", 700))
+	s := f.evs["alert"]
+	if len(s) == 0 || len(s) > 20 {
+		t.Fatalf("setup: %d alerts left", len(s))
+	}
+	if &s[0] == &old[len(old)-len(s)] {
+		t.Errorf("%d alerts still live in the array that held 100", len(s))
+	}
+}
+
+// List's last entry is capped at its length: an append by a caller cannot write into the fold's array.
+func TestListEntriesAreCapped(t *testing.T) {
+	f := New(1000, 1<<20)
+	for _, r := range prLife(t) {
+		f.Ingest(r)
+	}
+	page, _, _ := f.List(10, "")
+	if e := page[0].Entries; len(e) != 1 || cap(e) != 1 {
+		t.Errorf("entries len %d cap %d", len(e), cap(e))
 	}
 }

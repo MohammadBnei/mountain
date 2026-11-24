@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -609,8 +610,8 @@ func TestUnsortedInsert(t *testing.T) {
 	f.Ingest(fire(1, "c", 3))
 	f.Ingest(fire(2, "a", 1))
 	f.Ingest(fire(3, "b", 2))
-	if f.n != 2 || f.all()[0].Time != at(2) || f.all()[1].Time != at(3) || f.Stats().Dropped != 1 {
-		t.Errorf("%+v", f.all())
+	if f.n != 2 || sortedEvents(f)[0].Time != at(2) || sortedEvents(f)[1].Time != at(3) || f.Stats().Dropped != 1 {
+		t.Errorf("%+v", sortedEvents(f))
 	}
 }
 
@@ -629,4 +630,10 @@ func TestCacheTTL(t *testing.T) {
 	if p, _, _ := f.List(1, ""); p[0].State != StateClosed {
 		t.Error("the cache outlived its TTL")
 	}
+}
+
+func sortedEvents(f *Feed) []Event {
+	evs := f.all()
+	slices.SortFunc(evs, less)
+	return evs
 }

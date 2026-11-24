@@ -273,9 +273,9 @@ func (a *App) serveFeed(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
-	page, next, err := a.Feed.List(limit, r.URL.Query().Get("cursor"))
+	page, next, err := a.Feed.ListCtx(r.Context(), limit, r.URL.Query().Get("cursor"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		feedErr(w, r, err)
 		return
 	}
 	if page == nil {
@@ -289,12 +289,28 @@ func (a *App) serveFeedThread(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	t, ok := a.Feed.Get(r.PathValue("id"))
+	t, ok, err := a.Feed.GetCtx(r.Context(), r.PathValue("id"))
+	if err != nil {
+		feedErr(w, r, err)
+		return
+	}
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 	feedJSON(w, t)
+}
+
+// feedErr answers a failed read: a bad cursor is the caller's, a fold that failed or a request that ended is not.
+func feedErr(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case r.Context().Err() != nil:
+		// the client left: nothing to say
+	case errors.Is(err, feed.ErrBadCursor):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	default:
+		http.Error(w, "feed unavailable", http.StatusInternalServerError)
+	}
 }
 
 func feedJSON(w http.ResponseWriter, v any) {
