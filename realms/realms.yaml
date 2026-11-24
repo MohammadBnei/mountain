@@ -137,6 +137,7 @@ components:
   vm:esprimo-1: { realm: platform, group: nodes }
   vm:esprimo-2: { realm: platform, group: nodes }
   vm:talos-cp-3: { realm: platform, group: nodes }
+  vm:talos-gpu-1: { realm: platform, group: nodes }
   app:platform-longhorn: { realm: platform, group: storage }
   app:platform-local-path-provisioner: { realm: platform, group: storage }
   app:platform-csi-driver-nfs: { realm: platform, group: storage }
@@ -163,16 +164,23 @@ components:
   # Operations: deliver, build, observe, the events bridge, and atlas (the game's town centre)
   ct:build-runner: { realm: operations, group: build }
   app:platform-actions-runner: { realm: operations, group: build }
+  ct:build-runner-laptop: { realm: operations, group: build }
+  app:platform-forgejo-ci: { realm: operations, group: build }
+  app:platform-dev-services: { realm: operations, group: build } # the databases, caches and IdP tests and CI run against
   app:argocd: { realm: operations, group: delivery }
   app:bootstrap: { realm: operations, group: delivery }
   app:zot: { realm: operations, group: delivery }
+  ct:forgejo: { realm: operations, group: delivery }
+  ct:forgejo-drill: { realm: operations, group: delivery } # restore drills of ct:forgejo
   app:platform-prometheus: { realm: operations, group: observability }
   app:platform-grafana: { realm: operations, group: observability }
   app:platform-loki: { realm: operations, group: observability }
+  app:platform-tempo: { realm: operations, group: observability }
   app:platform-alloy: { realm: operations, group: observability }
   app:platform-blackbox-exporter: { realm: operations, group: observability, function: defence }
   app:mountain: { realm: operations, group: atlas, paths: [mountain/] }
   app:ukubi-bridge: { realm: operations, group: events, paths: [ukubi-bridge/] }
+  app:ukubi-bridge-kwatch: { realm: operations, group: events }
 
   # Guard: identity, secrets, the mesh, access grants
   app:platform-authentik: { realm: guard, group: authentik }
@@ -183,6 +191,11 @@ components:
   app:netbird-dashboard: { realm: guard, group: mesh }
   app:platform-ukubi-game-bounds: { realm: guard, group: access } # the game's ServiceAccount, read RBAC and egress fence (ADR-0069)
   app:platform-ukubi-realm-bounds: { realm: guard, group: access } # the realm's CiliumNetworkPolicy fence (plan/21 phase 0b)
+  app:platform-livekit-bounds: { realm: guard, group: access }
+  app:platform-mountain-bounds: { realm: guard, group: access }
+  app:platform-ukubi-bridge-kwatch-bounds: { realm: guard, group: access }
+  app:platform-ukubi-meet-bounds: { realm: guard, group: access }
+  app:platform-tcb-check: { realm: guard, group: access }
 
   # Fleet
   app:agent-fleet-core: { realm: fleet, group: control }
@@ -216,7 +229,10 @@ components:
   app:ukubi-game: { realm: apps, group: products } # game.bnei.dev
   app:ukubi-game-public: { realm: apps, group: products } # world.bnei.dev, the public build
   app:ukubi-realm: { realm: apps, group: products } # realm.bnei.dev, the shared world server (plan/21)
+  app:ukubi-meet: { realm: apps, group: products }
+  app:livekit: { realm: apps, group: tools } # the media server behind the game's voice and ukubi-meet
   app:ukubi-stt: { realm: apps, group: ai }
+  app:platform-llm-gateway: { realm: apps, group: ai }
 
 # Watchtowers (plan/13 §3 Defence; owner 2026-10-26: only a rule that names a building watches it): node -> its alert
 # rules, by where they are evaluated: prometheus (alert names: they reach Alertmanager, so atlas and the sim see them
@@ -225,18 +241,21 @@ components:
 # (the guest probes) is not a watchtower: its node says so.
 watch:
   app:platform-traefik: { prometheus: [TraefikCertExpiringSoon, TraefikCertMetricsMissing] }
-  app:platform-longhorn: { prometheus: [LonghornVolumeDegraded, LonghornVolumeFaulted, LonghornNodeNotReady, LonghornDiskAlmostFull, LonghornManagerDown, LonghornMetricsAbsent] }
+  app:platform-longhorn: { prometheus: [LonghornVolumeDegraded, LonghornVolumeFaulted, LonghornNodeNotReady, LonghornDiskAlmostFull, LonghornManagerDown, LonghornMetricsAbsent, LonghornBackupFailed, LonghornBackupMetricsMissing, LonghornOrphanedBackupVolume] }
   app:netbird: { prometheus: [NetBirdUnreachable, NetBirdServerDown] }
-  app:mountain: { prometheus: [MountainSourceStale, MountainUnassigned] }
+  app:mountain: { prometheus: [MountainSourceStale, MountainUnassigned, MountainWorldOff, MountainWorldOutboxStuck] }
+  app:platform-llm-gateway: { prometheus: [LLMGatewayConfigNotApplied, LLMGatewayDown, LLMGatewayFleetBudgetBlocks, LLMGatewayFleetUpstreamErrors], grafana: [llm-gateway-fleet-upstream-error] }
+  app:platform-tcb-check: { prometheus: [TrustedBaseCheckFailing, TrustedBaseCheckMissing] }
+  ct:garage-storage: { prometheus: [GarageDiskFilling, GarageMetricsMissing] }
   host:bnei: { prometheus: [PVEHostUnreachable, PVEHostProbeStale] }
   host:server1: { prometheus: [PVEHostUnreachable, PVEHostProbeStale] }
   host:ex-laptop: { prometheus: [PVEHostUnreachable, PVEHostProbeStale] }
   db:pg-proxmox: { grafana: [postgres-replica-not-streaming] }
-  app:platform-prometheus: { grafana: [monitoring-blind] }
-  app:agent-fleet-core: { grafana: [high-error-log-rate] }
-  app:ukubi-bridge: { grafana: [dead-letter-uncleared, retention-failing] }
-# The town's general watch: rules over every namespace at once (not a building's watchtower).
-general: { grafana: [log-error-rate-spike] }
+  app:platform-prometheus: { grafana: [monitoring-blind, alertmanager-unreachable] }
+  app:agent-fleet-core: { prometheus: [CardEventsOff, CardEventsParked, CardEventsStuck, CharacterTurnBudgetPace], grafana: [high-error-log-rate] }
+  app:ukubi-bridge: { prometheus: [BridgeForgejoRelistErrors, BridgeForgejoRelistOff, BridgeForgejoWebhookOff], grafana: [dead-letter-uncleared, retention-failing, event-contract-not-loaded, event-contract-not-reloaded, event-type-uncontracted] }
+# The town's general watch: rules over every namespace, or every repo's deploy pipeline, at once (not a building's watchtower).
+general: { grafana: [log-error-rate-spike, deploy-gate-failed-main] }
 
 # Supply lines (plan/13 §3; owner 2026-10-26: curated, checked): node -> what it depends on, each written as the
 # evidence that proves it: oidc (its OIDC client's redirect URL is one of its hostnames), forwardauth (its ingress
