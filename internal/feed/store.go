@@ -164,7 +164,7 @@ func (f *Feed) List(limit int, cursor string) (page []Thread, next string, err e
 		id = i
 	}
 	for _, t := range f.folded() {
-		if cursor != "" && !(t.LastActivityAt.UnixNano() < at || (t.LastActivityAt.UnixNano() == at && t.ID < id)) {
+		if cursor != "" && t.LastActivityAt.UnixNano() >= at && (t.LastActivityAt.UnixNano() != at || t.ID >= id) {
 			continue
 		}
 		if len(page) == limit {
