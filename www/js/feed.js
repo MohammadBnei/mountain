@@ -999,6 +999,8 @@ function signedOutView() {
   pill('');
   $('banner').replaceChildren();
   $('banner').dataset.msg = '';
+  $('fresh').textContent = '';
+  scrollTo({ top: 0, behavior: 'instant' });
 }
 
 /** pill is the "N new posts" button. Its live region speaks when its words change, not at every poll. */
