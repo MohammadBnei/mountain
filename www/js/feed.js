@@ -77,15 +77,21 @@ export function titleOf(t) {
  *  owner, or a laptop session (a Markdown entry: its own words). Quoted text has no speaker: it shows inside the post
  *  that relays it. */
 export function speaker(e, t) {
-  const who = clean(e.actor).trim(),
+  const raw = typeof e.actor === 'string' ? e.actor : '',
     first = s => ([...s][0] ?? '?').toUpperCase();
+  if (e.claim) {
+    const name = clean(e.session_label).trim().slice(0, 80) || 'a laptop session';
+    return { who: 'session', name, handle: 'session', mark: first(name) };
+  }
   if (e.markdown) {
     const name = clean(e.by).trim() || titleOf(t) || 'Session';
     return { who: 'session', name, handle: 'session', mark: first(name) };
   }
-  if (who === 'owner') return { who, name: 'You', handle: 'owner', mark: 'Y' };
-  if (who !== '' && who !== 'system')
-    return { who: 'agent', name: who, handle: 'agent', mark: first(who) };
+  if (raw === 'owner') return { who: 'owner', name: 'You', handle: 'owner', mark: 'Y' };
+  if (raw !== '' && raw !== 'system') {
+    const name = clean(raw).trim() || '?';
+    return { who: 'agent', name, handle: 'agent', mark: first(name) };
+  }
   const [, , , name, handle, icon] = Object.hasOwn(KINDS, t.kind)
     ? KINDS[t.kind]
     : ['', '', '', 'System', 'system', 'logs'];
@@ -191,8 +197,10 @@ export const isLong = s => s.length > 480 || s.split('\n').length > 8;
 const $ = id => document.getElementById(id);
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-async function get(path) {
-  const r = await fetch(path, { cache: 'no-store' });
+const DEADLINE = 10e3; // a read that takes longer has failed
+
+async function get(path, signal = AbortSignal.timeout(DEADLINE)) {
+  const r = await fetch(path, { cache: 'no-store', signal });
   if (!r.ok) throw Object.assign(new Error(`${path}: ${r.status}`), { status: r.status });
   return r.json();
 }
@@ -232,9 +240,17 @@ const avatar = s =>
   );
 const chip = (words, cls = '') => el('span', { class: `tag ${cls}` }, words);
 const sr = words => el('span', { class: 'sr' }, words);
-/** quotedBy is a login, in quotation marks: it is from outside too. */
-const quotedBy = by =>
-  by ? [' by ', el('q', { class: 'by', dir: 'auto' }, clean(by).slice(0, 64))] : null;
+/** outside is words from outside inside a system sentence: framed apart, and said to be quoted, so that they can never
+ *  read as the system's own ("x” merged by “y" stays two framed names). */
+export const outside = (words, cls = '') =>
+  el(
+    'span',
+    { class: `qchip ${cls}`, dir: 'auto' },
+    el('span', { class: 'sr' }, 'quoted: '),
+    words
+  );
+/** quotedBy is a login: from outside too. */
+const quotedBy = by => (by ? [' by ', outside(clean(by).slice(0, 64), 'by')] : null);
 
 /** folded is text with the rest behind a button, when it is long. */
 function folded(s, whole) {
@@ -335,7 +351,7 @@ function subject(t, max = 160) {
   const full = titleOf(t),
     title = full.length > max ? `${full.slice(0, max)}…` : full;
   return t.title_quoted
-    ? [sr('quoted: '), el('q', { class: 'subject', dir: 'auto' }, title)]
+    ? outside(title, 'subject')
     : el('strong', { class: 'subject', dir: 'auto' }, title);
 }
 
@@ -372,7 +388,7 @@ function asked(e, s, stands = false) {
       'p',
       {},
       'asked by ',
-      el('q', { class: 'by', dir: 'auto' }, s.name.slice(0, 80)),
+      outside(s.name.slice(0, 80), 'by'),
       ', in its own words',
       list.length ? ':' : ''
     ),
@@ -430,7 +446,7 @@ function post(t) {
         subject(t),
         ' mentioned by ',
         clean(p.e.session_label).trim()
-          ? el('q', { class: 'by', dir: 'auto' }, clean(p.e.session_label).trim().slice(0, 80))
+          ? outside(clean(p.e.session_label).trim().slice(0, 80), 'by')
           : 'a laptop session'
       )
     );
@@ -472,15 +488,15 @@ function reply(p, t, isNew) {
   const { e } = p;
   if (e.claim) {
     const to = clean(e.thread),
+      s = speaker(e, t),
       ref = /^laptop-[0-9a-f]{16}$/.test(to)
         ? `/feed/${to}${postRef(e.post_id) ? `#${postRef(e.post_id)}` : ''}`
         : null,
-      label = clean(e.session_label || e.by).trim(),
-      by = label ? el('q', { class: 'by', dir: 'auto' }, label.slice(0, 80)) : 'a laptop session';
+      by = s.name === 'a laptop session' ? s.name : outside(s.name, 'by');
     return el(
       'li',
       { class: 'post claim', 'data-i': p.i, tabindex: '-1' },
-      el('span', { class: 'bullet', 'aria-hidden': 'true' }),
+      avatar(s),
       el(
         'p',
         { class: 'text' },
@@ -783,22 +799,24 @@ function needsCount() {
   return needs ? `${needs.threads.length}${needs.next_cursor ? '+' : ''}` : '';
 }
 
+let tabsFor = ''; // the route #tabs was built for
+
+/** frame is built when the route changes: the tabs, which destination is current, the title. */
 function frame() {
-  const n = needsCount(),
-    some = n !== '' && n !== '0';
-  const tab = k => {
-    const a = el(
-      'a',
-      { href: pathOf(k), 'aria-current': cur.tab === k ? 'page' : null },
-      tabName(k)
-    );
-    if (k === 'needs' && some) a.append(el('span', { class: 'count' }, n));
-    return el('li', {}, a);
-  };
-  $('tabs').hidden = Boolean(cur.id);
-  if (!cur.id) {
-    const at = $('tabs').scrollLeft,
-      first = !$('tabs').firstChild;
+  if (!cur.id && tabsFor !== cur.key) {
+    const tab = k =>
+      el(
+        'li',
+        {},
+        el(
+          'a',
+          { href: pathOf(k), 'aria-current': cur.tab === k ? 'page' : null },
+          tabName(k),
+          k === 'needs' ? el('span', { class: 'count', hidden: true }) : null
+        )
+      );
+    const first = !$('tabs').firstChild,
+      at = $('tabs').scrollLeft;
     $('tabs').replaceChildren(
       el('ul', { role: 'list' }, ['needs', 'all', ...Object.keys(KINDS)].map(tab))
     );
@@ -807,34 +825,71 @@ function frame() {
     if ((first || $('tabs').dataset.tab !== cur.tab) && now)
       $('tabs').scrollLeft = now.offsetLeft - ($('tabs').clientWidth - now.offsetWidth) / 2;
     $('tabs').dataset.tab = cur.tab;
+    tabsFor = cur.key;
   }
-  const dest = (href, words, ic, here, out) =>
+  $('tabs').hidden = Boolean(cur.id);
+  const here = { feed: cur.tab && cur.tab !== 'needs', needs: cur.tab === 'needs' };
+  for (const a of $('dest').querySelectorAll('a[data-dest]')) {
+    if (here[a.dataset.dest]) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  }
+  $('title').textContent = cur.id ? 'Post' : 'Feed';
+  $('back').hidden = !cur.id;
+  counts(true);
+}
+
+/** dest builds the destinations once: the rail on a desktop, the bottom bar on a phone. */
+function dest() {
+  const a = (href, words, ic, key, out) =>
     el(
       'a',
       {
         href,
-        'aria-current': here ? 'page' : null,
+        'data-dest': key,
         target: out ? '_blank' : null,
         rel: out ? 'noopener noreferrer' : null
       },
       el('span', { class: 'pill' }, icon(ic)),
       el('span', { class: 'label' }, words),
-      words === 'Needs you' && some ? el('span', { class: 'badge' }, n) : null
+      key === 'needs' ? el('span', { class: 'badge', hidden: true }) : null
     );
   $('dest').replaceChildren(
-    dest('/feed', 'Feed', 'logs', cur.tab && cur.tab !== 'needs'),
-    dest('/feed?tab=needs', 'Needs you', 'inbox', cur.tab === 'needs'),
-    dest('/', 'Map', 'town', false),
-    dest(FLEET, 'Fleet', 'door', false, true)
+    a('/feed', 'Feed', 'logs', 'feed'),
+    a('/feed?tab=needs', 'Needs you', 'inbox', 'needs'),
+    a('/', 'Map', 'town', 'map'),
+    a(FLEET, 'Fleet', 'door', 'fleet', true)
   );
-  $('title').textContent = cur.id ? 'Post' : 'Feed';
-  $('back').hidden = !cur.id;
-  document.title = cur.id
+}
+
+let sideSig = null;
+
+/** counts puts what needs the owner where it shows, changing only words and only what changed: a poll never takes the
+ *  focus or a click in flight away. The side's list is drawn again when it changed and has no focus in it. */
+function counts(routed = false) {
+  const n = needsCount(),
+    some = n !== '' && n !== '0';
+  const set = (node, words) => {
+    if (!node) return;
+    if (node.textContent !== words) node.textContent = words;
+    node.hidden = !words;
+  };
+  set($('tabs').querySelector('.count'), some ? n : '');
+  set($('dest').querySelector('.badge'), some ? n : '');
+  const title = cur.id
     ? `${cur.name || 'Post'} · Feed`
     : `${some ? `(${n}) ` : ''}${cur.tab === 'all' ? 'Feed' : tabName(cur.tab)} · ukubi`;
-  // the side: what needs the owner, but on its own tab
+  if (document.title !== title) document.title = title;
+  const wanted = needs && cur.tab !== 'needs',
+    sig = wanted
+      ? `${n}|${needs.threads
+          .slice(0, SIDE_SHOWN)
+          .map(t => `${t.id}:${t.title}:${t.last_activity_at}`)
+          .join(',')}`
+      : '';
+  if (sig === sideSig || (!routed && $('summary').contains(document.activeElement))) return;
+  sideSig = sig;
   const side = [];
-  if (needs && cur.tab !== 'needs') {
+  if (wanted) {
     side.push(el('h2', {}, 'Needs you'));
     if (some) {
       side.push(
@@ -856,7 +911,17 @@ function frame() {
                     { class: t.title_quoted ? 'qt clamp' : 'clamp', dir: 'auto' },
                     titleOf(t)
                   ),
-                  el('small', {}, kindWord(t.kind), ' · ', rel(Date.parse(t.last_activity_at)))
+                  el(
+                    'small',
+                    {},
+                    kindWord(t.kind),
+                    ' · ',
+                    el(
+                      'span',
+                      { 'data-t': Date.parse(t.last_activity_at) },
+                      rel(Date.parse(t.last_activity_at))
+                    )
+                  )
                 )
               )
             )
@@ -917,13 +982,28 @@ async function lapsed(e) {
   const r = await gateLapsed();
   if (r !== 'signed-out' && !(e.status === 403 && (await signedOut()))) return r;
   stopped = true;
-  $('view').replaceChildren(state('Signed out', 'Reload to sign in again.'));
-  $('pill').hidden = true;
+  signedOutView();
   return true;
 }
 
+/** signedOutView is what every route shows once the sign-in is gone: the way back in, never old posts. */
+function signedOutView() {
+  const back = `/auth/login?return=${encodeURIComponent(location.pathname + location.search)}`;
+  $('view').replaceChildren(
+    state(
+      'Signed out',
+      'Sign in again to read the feed.',
+      el('a', { class: 'chip', href: back }, 'Sign in')
+    )
+  );
+  pill('');
+  $('banner').replaceChildren();
+  $('banner').dataset.msg = '';
+}
+
+/** pill is the "N new posts" button. Its live region speaks when its words change, not at every poll. */
 function pill(words) {
-  $('pill').textContent = words;
+  if ($('pill').textContent !== words) $('pill').textContent = words;
   $('pill').hidden = !words;
 }
 
@@ -954,15 +1034,32 @@ const toTop = () =>
     behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'auto'
   });
 
+let flight = null; // the read in flight: {v, ctl}
+
+/** stop ends the read in flight, for why: the page is hidden, or the reader went to another view. */
+function stop(why) {
+  if (flight) flight.ctl.abort(why);
+  flight = null;
+}
+
 async function read() {
   clearTimeout(timer);
-  if (stopped || !cur || cur.over) return;
-  const v = cur;
+  if (stopped || !cur || document.hidden) return;
+  if (flight?.v === cur) return; // that one reschedules
+  stop('moved');
+  const v = cur,
+    ctl = new AbortController(),
+    me = { v, ctl };
+  flight = me;
+  const deadline = setTimeout(
+    () => ctl.abort(new DOMException('the feed did not answer in 10 s', 'TimeoutError')),
+    DEADLINE
+  );
   try {
     const needsPath = '/api/feed?needs=1&limit=50';
     const [d, n] = await Promise.all([
-      get(v.id ? `/api/feed/${v.id}` : listPath(v)),
-      v.tab === 'needs' ? null : get(needsPath)
+      get(v.id ? `/api/feed/${v.id}` : listPath(v), ctl.signal),
+      v.tab === 'needs' ? null : get(needsPath, ctl.signal)
     ]);
     if (v !== cur) return; // the reader went on: that view reads for itself
     needs = n ?? d;
@@ -988,14 +1085,15 @@ async function read() {
         show(); // an empty page has nothing to move
       else pill(n ? plural(n, 'new post') : gone ? 'Changed · show' : '');
     }
-    frame();
+    counts();
     banner();
   } catch (e) {
+    if (ctl.signal.aborted && typeof ctl.signal.reason === 'string') return; // hidden or moved: nothing failed
     if (v !== cur || (await lapsed(e))) return;
     wait = Math.min(60e3, wait * 2);
-    failed(e);
     if (e.status === 404 && v.id) {
-      Object.assign(v, { over: true, drawn: true });
+      // not (or no longer) in the feed: said, and asked again on the next poll and on the way back
+      v.drawn = false;
       down = null;
       banner();
       v.el.replaceChildren(
@@ -1005,14 +1103,18 @@ async function read() {
           el('a', { class: 'chip', href: '/feed' }, 'Back to the feed')
         )
       );
-      return;
+    } else {
+      failed(e);
+      if (!v.drawn)
+        v.el.replaceChildren(
+          state('Could not read the feed', 'Trying again by itself.', button('Try again', read))
+        );
     }
-    if (!v.drawn)
-      v.el.replaceChildren(
-        state('Could not read the feed', 'Trying again by itself.', button('Try again', read))
-      );
+  } finally {
+    clearTimeout(deadline);
+    if (flight === me) flight = null;
   }
-  if (!document.hidden) timer = setTimeout(read, wait);
+  if (!document.hidden && v === cur && !stopped) timer = setTimeout(read, wait);
 }
 
 // ---- going from one view to another, without a page load
@@ -1027,6 +1129,7 @@ function go(url, back = false) {
     if (cur.tab && cur.pending) drawList(cur, cur.pending); // coming anew, not back: what was waiting shows
     cur.pending = null;
   }
+  if (stopped) return signedOutView();
   $('view').replaceChildren(cur.el);
   pill('');
   document.body.classList.toggle('inthread', Boolean(cur.id));
@@ -1036,13 +1139,14 @@ function go(url, back = false) {
     const opened = back && from.id && cur.el.querySelector(`[data-id="${from.id}"] .open`);
     (opened || $('title')).focus({ preventScroll: true });
   }
+  if (cur.drawn && location.hash) jump(cur);
   read();
 }
 
 function onClick(e) {
   if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   const a = e.target.closest?.('a[href]');
-  if (!a || a.target) return;
+  if (!a || a.target || a.getAttribute('href').startsWith('#')) return; // the skip link is the browser's
   const url = new URL(a.href);
   if (url.origin !== location.origin || !/^\/feed(\/|$)/.test(url.pathname)) return;
   e.preventDefault();
@@ -1061,6 +1165,7 @@ function onClick(e) {
 
 /** keys: X's. j and k walk the posts, . shows what is new, u goes back; Enter is the link's own. */
 function key(e) {
+  if (!keysOn) return;
   if (e.metaKey || e.ctrlKey || e.altKey || e.target.closest?.('input, textarea, select')) return;
   if (e.key === '.' && cur.pending) return show();
   if (e.key === 'u' && cur.id) return goBack(e);
@@ -1070,6 +1175,31 @@ function key(e) {
   const to = all[i < 0 ? 0 : Math.min(all.length - 1, Math.max(0, i + (e.key === 'j' ? 1 : -1)))];
   to?.focus({ preventScroll: true });
   (to?.closest('.post') ?? to)?.scrollIntoView({ block: 'nearest' });
+}
+
+let keysOn = true;
+try {
+  keysOn = localStorage.getItem('feed.keys') !== 'off';
+} catch {
+  /* storage off: the default */
+}
+
+/** keysButton says whether the single-key shortcuts are on, and turns them off or on. */
+function keysButton(b) {
+  const draw = () => {
+    b.setAttribute('aria-pressed', String(keysOn));
+    b.textContent = `Single-key shortcuts: ${keysOn ? 'on' : 'off'}`;
+  };
+  b.addEventListener('click', () => {
+    keysOn = !keysOn;
+    try {
+      localStorage.setItem('feed.keys', keysOn ? 'on' : 'off');
+    } catch {
+      /* not kept: this page view only */
+    }
+    draw();
+  });
+  draw();
 }
 
 function goBack(e) {
@@ -1086,10 +1216,22 @@ function boot() {
   document.addEventListener('click', onClick);
   document.addEventListener('keydown', key);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) clearTimeout(timer);
-    else read();
+    if (document.hidden) {
+      clearTimeout(timer);
+      stop('hidden');
+    } else read();
   });
-  addEventListener('popstate', () => go(new URL(location.href), true));
+  addEventListener('popstate', () => {
+    const url = new URL(location.href);
+    if (cur && url.pathname + url.search === cur.key) return jump(cur); // only the #post changed
+    go(url, true);
+  });
+  document.querySelector('.skip').addEventListener('click', e => {
+    e.preventDefault();
+    $('feed').focus();
+  });
+  keysButton($('keys'));
+  dest();
   addEventListener('pageshow', e => e.persisted && read());
   setInterval(banner, 30e3);
   fetch('/auth/me', { cache: 'no-store' })

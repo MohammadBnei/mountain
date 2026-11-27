@@ -18,6 +18,7 @@
 <div class="left">
 <nav id="dest" class="glass" aria-label="Main"></nav>
 <form id="signout" method="post" action="/auth/logout" hidden><span id="who"></span><button type="submit" class="chip">Sign out</button></form>
+<button id="keys" type="button" class="chip" aria-pressed="true">Single-key shortcuts: on</button>
 </div>
 <main id="feed" class="glass" tabindex="-1">
 <header class="top"><div class="zone-head"><a id="back" class="chip" href="/feed" aria-label="Back to the feed" hidden></a><h1 id="title" tabindex="-1">Feed</h1><span id="fresh" class="meta"></span></div>
@@ -27,7 +28,7 @@
 <div id="view"><p class="state">Reading…</p></div>
 </main>
 <aside class="side glass" aria-label="Needs you"><div id="summary"></div>
-<p class="keys"><kbd>j</kbd> <kbd>k</kbd> next, previous · <kbd>Enter</kbd> open · <kbd>.</kbd> show new · <kbd>u</kbd> back</p></aside>
+<p class="keys"><kbd>j</kbd> <kbd>k</kbd> next, previous · <kbd>Enter</kbd> open · <kbd>.</kbd> show new · <kbd>u</kbd> back (the switch is in the menu)</p></aside>
 </div>
 <noscript><p class="state">The feed needs JavaScript.</p></noscript>
 </body>

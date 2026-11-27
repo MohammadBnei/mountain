@@ -694,10 +694,15 @@ ok(
       of({}, 'toString').name === 'System' &&
       of({ actor: 'owner' }).who === 'owner' &&
       of({ actor: 'ops-lead', quoted: true }).who === 'agent' &&
-      of({ actor: '\u202E', quoted: true }).who === 'system' &&
+      of({ actor: '\u202E', quoted: true }).who === 'agent' &&
+      of({ actor: 'owner\u200B' }).who === 'agent' &&
+      of({ actor: '\u202Esystem' }).who === 'agent' &&
+      of({ actor: 'owner' }).name === 'You' &&
+      of({ actor: 'session', claim: true, session_label: 'tidy' }).name === 'tidy' &&
+      of({ claim: true }).who === 'session' &&
       of({ actor: 'system', quoted: true, markdown: true }).name === 'tidy' &&
       of({ actor: 'system', markdown: true, by: 'b' }).who === 'session',
-    "feed: who posts (a session's words are the session's, never the system's)"
+    "feed: who posts (a session's words are the session's, never the system's; only the raw owner is You)"
   );
   const ps = posts({
     entries: [
