@@ -339,8 +339,8 @@ const AUDIT = `(() => {
   const focus = Math.min(...rings.map(g => ratio(ring, g)));
   probe.remove();
   const small = [];
-  if (matchMedia('(pointer: coarse)').matches || innerWidth < 720)
-    for (const e of document.querySelectorAll('a, button, summary, [tabindex="0"]')) {
+  // every width: a mouse misses as a finger does
+  for (const e of document.querySelectorAll('a, button, summary, [tabindex="0"]')) {
       if (!shown(e) || e.closest('.md p, .md li, .md td, .md th, .claim .text, .side') || e.matches('.open, .mdtable, pre, .skip')) continue; // a link in a sentence is exempt (WCAG 2.5.8)
       let { width, height } = e.getBoundingClientRect();
       for (const part of ['::before', '::after']) { // a finger's worth, drawn around it
@@ -355,6 +355,8 @@ const AUDIT = `(() => {
     made: document.querySelectorAll('#view img, #view script, #view iframe, #view [onerror], #view [style]').length,
     links: [...document.querySelectorAll('#view a')].map(a => a.getAttribute('href')).filter(h => !/^(\\/feed(\\/[a-z]+-[0-9a-f]{16}(#[\\w-]{1,64})?)?|https:\\/\\/(fleet\\.bnei\\.dev|(forge|prometheus|docs)\\.example\\.org)\\/.*)$/.test(h)),
     rel: [...document.querySelectorAll('#view a[href^="https:"]')].filter(a => a.rel !== 'noopener noreferrer' || !a.target).length,
+    // a link out says where it goes: a Markdown link and a link card show their URL's host, as it is
+    hosts: [...document.querySelectorAll('#view .md a, #view a.ref[href^="https:"]')].filter(a => a.querySelector('.host')?.textContent.trim() !== new URL(a.href).host).map(a => a.href),
     bidi: /[\\u202A-\\u202E\\u2066-\\u2069]/.test(document.body.textContent + document.title),
     inputs: [...document.querySelectorAll('input, textarea, select')].filter(e => parseFloat(getComputedStyle(e).fontSize) < 16).length,
     text, edges, focus, small
@@ -409,8 +411,14 @@ try {
       where = '';
     page.on(({ method, params }) => {
       if (method === 'Fetch.requestPaused') {
-        const u = new URL(params.request.url),
-          body = stub && u.pathname.startsWith('/api/feed') ? stub(u) : null;
+        const u = new URL(params.request.url);
+        if (u.pathname.startsWith('/api/feed')) asked++;
+        const body =
+          u.pathname === '/auth/me'
+            ? me
+            : stub && u.pathname.startsWith('/api/feed')
+              ? stub(u)
+              : null;
         if (body === 'wait') return; // never answered
         if (body === null) return page.s('Fetch.continueRequest', { requestId: params.requestId });
         return page.s('Fetch.fulfillRequest', {
@@ -433,7 +441,11 @@ try {
     });
     for (const m of ['Runtime.enable', 'Network.enable', 'Page.enable', 'Log.enable'])
       await page.s(m);
-    await page.s('Fetch.enable', { patterns: [{ urlPattern: `${origin}/api/*` }] });
+    let me = null, // /auth/me's answer, when a scene gives one
+      asked = 0; // /api/feed reads asked for
+    await page.s('Fetch.enable', {
+      patterns: [{ urlPattern: `${origin}/api/*` }, { urlPattern: `${origin}/auth/me` }]
+    });
     const shoot = async name => {
       const s = await page.s('Page.captureScreenshot', { format: 'png' });
       await writeFile(join(OUT, `${name}.png`), Buffer.from(s.data, 'base64'));
@@ -448,7 +460,9 @@ try {
       await page.s('Emulation.setEmulatedMedia', {
         features: [{ name: 'prefers-color-scheme', value: scheme }]
       });
-      for (const [name, at, st, step] of SCENES) {
+      for (const [name, at, st, step] of SCENES.filter(
+        ([n]) => !process.env.FEED_ONLY || n === process.env.FEED_ONLY
+      )) {
         where = `${name} ${w} ${scheme}`;
         stub = st || null;
         await page.s('Page.navigate', { url: origin + (at[0] === '@' ? first[at.slice(1)] : at) });
@@ -458,7 +472,7 @@ try {
         await sleep(300);
         const i = await page.evalJSON(AUDIT);
         if (i.wide > 0) fail(`${where}: ${i.wide}px of horizontal scroll`);
-        if (i.pwned || i.made || i.links.length || i.rel || i.bidi || i.inputs)
+        if (i.pwned || i.made || i.links.length || i.rel || i.bidi || i.inputs || i.hosts.length)
           fail(`${where}: ${JSON.stringify({ ...i, text: 0, edges: 0 })}`);
         if (i.small.length)
           fail(`${where}: targets under 44 px ${JSON.stringify(i.small.slice(0, 4))}`);
@@ -662,6 +676,131 @@ try {
     stub = u => served(ts)(u);
     await page.s('Page.navigate', { url: `${origin}/feed` });
     await drawn();
+    if (w === 390) {
+      // a poll leaves the frame alone: the focused tab, the bar's links and the side keep their elements
+      where = 'poll';
+      await page.evalJSON(
+        `(globalThis.__tab = document.querySelectorAll('#tabs a')[2], __tab.focus(), globalThis.__dest = document.querySelector('#dest a'), true)`
+      );
+      await reread();
+      await sleep(700);
+      if (
+        !(await page.evalJSON(
+          `document.activeElement === __tab && __tab.isConnected && __dest.isConnected`
+        ))
+      )
+        fail(`${where}: a poll rebuilt the tabs or the bar, or took the focus`);
+      // the skip link goes to the posts
+      where = 'skip';
+      await page.s('Page.navigate', { url: `${origin}/feed` });
+      await drawn();
+      await page.s('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'Tab',
+        code: 'Tab',
+        windowsVirtualKeyCode: 9
+      });
+      await page.s('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: 'Tab',
+        code: 'Tab',
+        windowsVirtualKeyCode: 9
+      });
+      if (!(await page.evalJSON(`document.activeElement.classList.contains('skip')`)))
+        fail(`${where}: the first Tab is not the skip link`);
+      await page.s('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'Enter',
+        code: 'Enter',
+        windowsVirtualKeyCode: 13,
+        text: '\r'
+      });
+      await page.s('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: 'Enter',
+        code: 'Enter',
+        windowsVirtualKeyCode: 13
+      });
+      if (
+        !(await waitFor(page, `document.activeElement.id === 'feed' && location.hash === ''`, 2000))
+      )
+        fail(`${where}: the skip link did not reach the posts`);
+      // the single-key shortcuts can be turned off
+      where = 'keys';
+      await page.evalJSON(
+        `(document.getElementById('keys').click(), document.querySelector('.post .open').focus(), true)`
+      );
+      await press('j', 'KeyJ');
+      const still = await page.evalJSON(
+        `document.activeElement === document.querySelector('.post .open')`
+      );
+      await page.evalJSON(`(document.getElementById('keys').click(), true)`);
+      if (!still) fail(`${where}: j moved with the shortcuts off`);
+      // one read at a time, and one that never answers fails after 10 s, said in the banner
+      where = 'deadline';
+      stub = () => 'wait';
+      asked = 0;
+      await reread();
+      await reread();
+      await reread();
+      await sleep(400);
+      const inFlight = asked;
+      const late = await waitFor(
+        page,
+        `document.getElementById('banner').textContent.startsWith('Not updating')`,
+        13000
+      );
+      if (inFlight > 2 || !late) fail(`${where}: ${inFlight} reads in flight, banner ${late}`);
+      // a thread not in the feed is asked again on the next read, and shows once it is there
+      where = 'gone';
+      const later = told[1];
+      stub = u => (u.pathname.endsWith(later.id) ? 404 : served(all)(u));
+      await page.s('Page.navigate', { url: `${origin}/feed/${later.id}` });
+      await waitFor(
+        page,
+        `document.querySelector('#view .state b')?.textContent === 'Not in the feed'`,
+        5000
+      );
+      stub = served(all);
+      await reread();
+      if (!(await waitFor(page, `document.querySelector('#view .main')`, 5000)))
+        fail(`${where}: the thread did not show once the feed had it`);
+      // a #post on a view kept from before still goes to that post
+      where = 'revisit';
+      const pid = told[0].entries[1].post_id;
+      await page.s('Page.navigate', { url: `${origin}/feed/${told[0].id}` });
+      await drawn();
+      await page.evalJSON(`(document.querySelector('.back, #back').click(), true)`);
+      await waitFor(page, `location.pathname === '/feed'`, 3000);
+      await page.evalJSON(
+        `((a) => (a.href = '/feed/${told[0].id}#${pid}', document.body.append(a), a.click(), true))(document.createElement('a'))`
+      );
+      if (!(await waitFor(page, `document.activeElement.dataset?.post === '${pid}'`, 3000)))
+        fail(`${where}: the #post of a kept thread was not reached`);
+      // signed out: every route shows the way back in, never old posts
+      where = 'signed-out';
+      me = { enabled: true, admin: false, signedOut: true };
+      stub = () => 403;
+      await sleep(600); // the read in flight lands first
+      await reread();
+      const out = await waitFor(
+        page,
+        `document.querySelector('#view .state a[href^="/auth/login?return="]') && !document.querySelector('#view .post')`,
+        5000
+      );
+      await page.evalJSON(`(history.back(), true)`);
+      await sleep(400);
+      const still2 = await page.evalJSON(
+        `!!document.querySelector('#view .state a[href^="/auth/login"]') && !document.querySelector('#view .post')`
+      );
+      if (!out || !still2) fail(`${where}: ${out} / ${still2}`);
+      await shoot(`signedout-${w}x${h}-dark`);
+      me = null;
+      stub = u => served(ts)(u);
+      await page.s('Page.navigate', { url: `${origin}/feed` });
+      await drawn();
+      where = `pill ${w}`;
+    }
     // a failed read says so and keeps what is on screen
     stub = () => 502;
     await reread();
