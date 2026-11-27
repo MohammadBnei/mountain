@@ -78,6 +78,9 @@ env:
     value: http://ukubi-bridge.ukubi-bridge.svc.cluster.local:8080
   - name: ATLAS_BRIDGE_TOKEN_FILE
     value: /var/run/secrets/ukubi-bridge/token
+  # The feed (ukubi-docs plans/2026-11-24-feed.md): its page, API and bridge subscription. Off: remove this.
+  - name: FEED_ENABLED
+    value: "true"
   - name: MOUNTAIN_MACHINE_ISSUER
     value: https://authentik.bnei.dev/application/o/atlas-api/
   - name: MOUNTAIN_MACHINE_CLIENT_ID
