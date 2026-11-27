@@ -169,7 +169,16 @@ const slim = t => ({
   ...t,
   entries: t.entries
     .slice(-1)
-    .map(e => (e.text.length > 400 ? { ...e, text: e.text.slice(0, 400), has_more: true } : e)),
+    .map(e => (e.text.length > 400 ? { ...e, text: e.text.slice(0, 400), has_more: true } : e))
+    .map(e =>
+      e.needs_list?.length > 3 || e.needs_list?.some(n => n.length > 120)
+        ? {
+            ...e,
+            needs_list: e.needs_list.slice(0, 3).map(n => n.slice(0, 120)),
+            needs_count: e.needs_list.length
+          }
+        : e
+    ),
   links: null
 });
 const served =
@@ -530,7 +539,7 @@ try {
         ['list', 'Links'],
         ['group', 'Reply'],
         ['blockquote', undefined],
-        ['link', 'a laptop session']
+        ['link', 'make the demo search fast']
       ])
         if (!has(ns, role, name)) fail(`${where}: a thread has no ${role} ${name ?? ''}`);
       await page.s('Page.navigate', { url: `${origin}/feed/${asking.id}` });

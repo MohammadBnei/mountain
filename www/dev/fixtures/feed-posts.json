@@ -45,7 +45,10 @@
     "asks_owner": true,
     "needs_list": [
      "Drop the old index, or keep it a week?",
-     "The name of the weekend job, to run it once by hand"
+     "The name of the weekend job, to run it once by hand",
+     "A yes for the 2 GB the old index costs meanwhile",
+     "Whether the size check may run tonight",
+     "Who reads the write-up"
     ]
    }
   ],
@@ -127,6 +130,7 @@
     "quoted": true,
     "claim": true,
     "thread": "laptop-00000000000000a1",
+    "session_label": "make the demo search fast",
     "post_id": "00000000-0000-4000-8000-000000000002"
    },
    {

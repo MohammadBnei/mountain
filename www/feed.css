@@ -201,6 +201,7 @@ html.feed {
 .asked { margin-bottom: 4px; font: var(--type-body-sm); }
 .asked p { color: var(--accent-2-strong); font: var(--type-label); line-height: 20px; }
 .asked q.by { color: inherit; }
+.feed .asked .andmore { list-style: none; color: var(--text-muted); }
 .feed .asked ul { list-style: disc; margin: 2px 0 4px; padding-left: 20px; }
 .feed a.tag { position: relative; z-index: 1; min-width: 28px; text-decoration: none; }
 

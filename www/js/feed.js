@@ -380,7 +380,11 @@ function asked(e, s, stands = false) {
       ? el(
           'ul',
           {},
-          list.map(n => el('li', { dir: 'auto' }, clean(n).slice(0, 300)))
+          list.map(n => el('li', { dir: 'auto' }, clean(n).slice(0, 300))),
+          // the list answer holds the first few: the count says how many there are
+          e.needs_count > list.length
+            ? el('li', { class: 'andmore' }, `and ${e.needs_count - list.length} more`)
+            : null
         )
       : null
   );
@@ -419,7 +423,17 @@ function post(t) {
   const stands = t.needs_by === 'session' && !p.e.claim,
     body = [];
   if (p.e.claim)
-    body.push(el('p', { class: 'text' }, subject(t), ' mentioned by a laptop session'));
+    body.push(
+      el(
+        'p',
+        { class: 'text' },
+        subject(t),
+        ' mentioned by ',
+        clean(p.e.session_label).trim()
+          ? el('q', { class: 'by', dir: 'auto' }, clean(p.e.session_label).trim().slice(0, 80))
+          : 'a laptop session'
+      )
+    );
   else if (s.who === 'system') {
     const line = clean(said(p.e.text ?? ''));
     body.push(
@@ -461,9 +475,8 @@ function reply(p, t, isNew) {
       ref = /^laptop-[0-9a-f]{16}$/.test(to)
         ? `/feed/${to}${postRef(e.post_id) ? `#${postRef(e.post_id)}` : ''}`
         : null,
-      by = e.by
-        ? el('q', { class: 'by', dir: 'auto' }, clean(e.by).slice(0, 80))
-        : 'a laptop session';
+      label = clean(e.session_label || e.by).trim(),
+      by = label ? el('q', { class: 'by', dir: 'auto' }, label.slice(0, 80)) : 'a laptop session';
     return el(
       'li',
       { class: 'post claim', 'data-i': p.i, tabindex: '-1' },
