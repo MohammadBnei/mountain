@@ -221,7 +221,7 @@ func (l *laptops) claims(pr *prs) {
 					cut += "…"
 				}
 			}
-			kept[t] = append(kept[t], Entry{Time: p.e.Time, Actor: "session", Text: cut, Quoted: true, Claim: true, Thread: p.t.ID, PostID: p.e.PostID, seq: p.e.Seq})
+			kept[t] = append(kept[t], Entry{Time: p.e.Time, Actor: "session", Text: cut, Quoted: true, Claim: true, Thread: p.t.ID, PostID: p.e.PostID, SessionLabel: clean(p.e.Title, 80), seq: p.e.Seq})
 		}
 	}
 	for t, cl := range kept {

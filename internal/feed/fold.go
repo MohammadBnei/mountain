@@ -52,8 +52,9 @@ type Entry struct {
 	Thread      string   `json:"thread,omitempty"`
 	HasMore     bool     `json:"has_more,omitempty"` // the list answer cut Text; the thread has it whole
 
-	seq int64  // laptop: the event's seq, for ordering what the clock cannot
-	By  string `json:"by,omitempty"` // a login from the event: outside text, whatever Quoted says of Text
+	seq          int64  // laptop: the event's seq, for ordering what the clock cannot
+	By           string `json:"by,omitempty"`            // a login from the event: outside text, whatever Quoted says of Text
+	SessionLabel string `json:"session_label,omitempty"` // a claim: the session's name for itself, from outside (quoted)
 }
 
 // Link is a reference out of a thread: Ref is a thread id (kind "previous"), a revision, or a URL taken from an

@@ -367,3 +367,15 @@ func TestLaptopPostPayload(t *testing.T) {
 		t.Errorf("%v %+v", ok, empty)
 	}
 }
+
+// A claim carries the session's name for itself, as the post gave it: from outside, clamped; none when it gave none.
+func TestLaptopClaimLabel(t *testing.T) {
+	long := strings.Repeat("n", 200)
+	rs := []Raw{prOpened(t, "demo-a", 7, 1),
+		laptopRaw(10, "s1", 2, "about it", map[string]any{"about": about{{"repo": "acme/demo-a", "number": 7}}, "session_label": "tidy\u202e the docs " + long}),
+		laptopRaw(11, "s2", 3, "and this", map[string]any{"about": about{{"repo": "acme/demo-a", "number": 7}}})}
+	cl := claimsOf(fold(t, 10, rs...), KindPR)
+	if len(cl) != 2 || !strings.HasPrefix(cl[0].SessionLabel, "tidy the docs n") || len([]rune(cl[0].SessionLabel)) != 81 || !cl[0].Quoted || cl[1].SessionLabel != "" {
+		t.Errorf("%+v", cl)
+	}
+}

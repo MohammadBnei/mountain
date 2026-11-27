@@ -254,7 +254,7 @@ func (w *feedWire) Close() error { return w.s.Close() }
 // card, laptop. A laptop thread is one session's posts, each an entry that is quoted and markdown with its post_id (a
 // correction has correction and corrects, the corrected post corrected_by; the post whose needs_you list stands has
 // asks_owner and needs_list), closed 24 h after the last. needs_by is "session" while that list stands, 7 days and
-// beyond the close. A PR thread also holds claim entries for posts about it (claim, thread); the list never shows one
+// beyond the close. A PR thread also holds claim entries for posts about it (claim, thread, post_id, session_label: the post's own name for its session, quoted); the list never shows one
 // as a thread's entry. In the list an entry's text is cut to 400 characters with has_more set; the thread has it whole.
 // State is open or closed. Entries are {time, actor, text, quoted, by} (by: a login from the event, outside text too): a quoted entry or title holds text from
 // outside (a PR's title, branch, comment or review, an agent's session title, a card's subject, an alert's words),
