@@ -539,7 +539,7 @@ try {
         ['list', 'Links'],
         ['group', 'Reply'],
         ['blockquote', undefined],
-        ['link', 'make the demo search fast']
+        ['link', /make the demo search fast/]
       ])
         if (!has(ns, role, name)) fail(`${where}: a thread has no ${role} ${name ?? ''}`);
       await page.s('Page.navigate', { url: `${origin}/feed/${asking.id}` });
